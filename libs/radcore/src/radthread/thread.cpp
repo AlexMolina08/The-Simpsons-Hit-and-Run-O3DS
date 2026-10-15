@@ -31,6 +31,8 @@
 #include "thread.hpp"
 
 #include <SDL.h>
+#include <stdio.h>
+#include <stdlib.h>
 
 #ifdef RAD_3DS
 #include <3ds.h>
@@ -571,7 +573,21 @@ radThread::radThread
     m_Priority = priority;
 
 #if SDL_MAJOR_VERSION < 3
+#ifdef RAD_3DS
+    // radThread stack sizes are bytes, as are SDL's. Multiplying the loader's
+    // 65536-byte request by 1024 silently prevents its thread from starting.
+    // Keep headroom for the native file decoder and C++ call chains.
+    const size_t nativeStackSize = stackSize < 128 * 1024 ? 128 * 1024 : stackSize;
+    m_ThreadHandle = SDL_CreateThreadWithStackSize(InternalThreadEntry, /*name*/nullptr, nativeStackSize, this);
+    if(m_ThreadHandle == NULL)
+    {
+        fprintf(stderr, "radThread: cannot create %lu-byte stack: %s\n",
+            (unsigned long)nativeStackSize, SDL_GetError());
+        abort();
+    }
+#else
     m_ThreadHandle = SDL_CreateThreadWithStackSize(InternalThreadEntry, /*name*/nullptr, stackSize * 1024, this);
+#endif
 #else
     SDL_PropertiesID props = SDL_CreateProperties();
     SDL_SetPointerProperty(props, SDL_PROP_THREAD_CREATE_ENTRY_FUNCTION_POINTER, (void*)InternalThreadEntry);

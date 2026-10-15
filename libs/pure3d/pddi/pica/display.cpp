@@ -22,6 +22,9 @@ static void picaWriteEye(float shift)
 }
 
 extern "C" int      g_picaInFrame        = 0;
+#ifdef SRR2_OLD_3DS
+extern "C" unsigned g_picaPresentedFrames = 0;
+#endif
 static int s_c3dRefCount = 0;
 
 extern "C" void (*g_picaYieldHook)(void) = 0;
@@ -147,6 +150,7 @@ bool picaDisplay::InitDisplay(const pddiDisplayInit* init)
             GX_TRANSFER_SCALING(GX_TRANSFER_SCALE_NO);
         C3D_RenderTargetSetOutput(target, GFX_TOP, GFX_LEFT, transferFlags);
 
+#ifndef SRR2_OLD_3DS
         targetRight = C3D_RenderTargetCreate(winHeight, winWidth,
                                              GPU_RB_RGBA8, GPU_RB_DEPTH24_STENCIL8);
         if(targetRight != NULL)
@@ -154,6 +158,11 @@ bool picaDisplay::InitDisplay(const pddiDisplayInit* init)
             C3D_RenderTargetSetOutput(targetRight, GFX_TOP, GFX_RIGHT, transferFlags);
             gfxSet3D(true);
         }
+#else
+        // Keep the full 400x240 image. A second eye costs render memory and GPU
+        // work that the original hardware needs for the game itself.
+        gfxSet3D(false);
+#endif
 
         targetBottom = C3D_RenderTargetCreate(PICA_BOTTOM_HEIGHT, PICA_BOTTOM_WIDTH,
                                               GPU_RB_RGBA8, GPU_RB_DEPTH24_STENCIL8);
@@ -281,6 +290,9 @@ void picaDisplay::EndFrame(void)
 
         C3D_FrameEnd(0);
         inFrame = false;
+#ifdef SRR2_OLD_3DS
+        ++g_picaPresentedFrames;
+#endif
     }
 }
 

@@ -45,6 +45,11 @@ unsigned int __stacksize__
 __attribute__((used, retain, section(".data.__stacksize__")))
 = 2 * 1024 * 1024;
 u32 __ctru_linear_heap_size = 28 * 1024 * 1024;
+#ifdef SRR2_OLD_3DS
+// Bound emulation to a 64 MiB application budget, including executable and
+// linear memory. Do not let an emulator's larger homebrew region hide overflow.
+u32 __ctru_heap_size = 30 * 1024 * 1024;
+#endif
 }
 #endif
 
@@ -100,10 +105,24 @@ extern "C" int main( int argc, char *argv[] )
 	chdir( "ux0:data/simpsons" );
 #endif
 #ifdef RAD_3DS
+#ifdef SRR2_OLD_3DS
+    osSetSpeedupEnable( false );
+#else
     osSetSpeedupEnable( true );
+#endif
     gfxInitDefault();
     romfsInit();
     chdir( SRR2_3DS_DATA_PATH );
+#ifdef SRR2_OLD_3DS
+    freopen("old3ds.log", "w", stdout);
+    setvbuf(stdout, NULL, _IOLBF, 0);
+    bool isNew3DS = false;
+    APT_CheckNew3DS(&isNew3DS);
+    printf("OLD3DS_BOOT model=%s loader_region=%lu heap_limit=%lu linear_limit=%lu linear_free=%lu\n",
+        isNew3DS ? "new" : "old", (unsigned long)osGetMemRegionSize(MEMREGION_APPLICATION),
+        (unsigned long)__ctru_heap_size, (unsigned long)__ctru_linear_heap_size,
+        (unsigned long)linearSpaceFree());
+#endif
 #endif
 
     //
@@ -112,14 +131,24 @@ extern "C" int main( int argc, char *argv[] )
     CommandLineOptions::InitDefaults();
     ProcessCommandLineArguments( argc, argv );
     ProcessCommandLineArgumentsFromFile();
+#ifdef SRR2_OLD_3DS
+    printf("OLD3DS_INIT commandline_complete\n");
+#endif
 
     //
     // Initialize SDL subsystems
     //
 #if defined RAD_3DS
     SDL_Init( SDL_INIT_EVENTS | SDL_INIT_GAMECONTROLLER );
+#ifdef SRR2_OLD_3DS
+    printf("OLD3DS_INIT sdl_complete error=%s\n", SDL_GetError());
+#endif
 
     SDL_LogSetOutputFunction( LogOutputFunction, NULL );
+#ifdef SRR2_OLD_3DS
+    extern bool g_AllowDebugOutput;
+    g_AllowDebugOutput = true;
+#endif
 #elif SDL_MAJOR_VERSION < 3
     SDL_Init( SDL_INIT_EVENTS | SDL_INIT_VIDEO | SDL_INIT_GAMECONTROLLER );
 
@@ -140,6 +169,9 @@ extern "C" int main( int argc, char *argv[] )
         return 0;
     }
     Win32Platform::InitializeFoundation();
+#ifdef SRR2_OLD_3DS
+    printf("OLD3DS_INIT foundation_complete\n");
+#endif
 
     srand (Game::GetRandomSeed ());
 
@@ -159,6 +191,9 @@ extern "C" int main( int argc, char *argv[] )
     // Instantiate all the singletons before doing anything else.
     //
     CreateSingletons();
+#ifdef SRR2_OLD_3DS
+    printf("OLD3DS_INIT singletons_complete\n");
+#endif
 
     //
     // Construct the platform object.
@@ -177,6 +212,9 @@ extern "C" int main( int argc, char *argv[] )
     // Initialize the game.
     //
     pGame->Initialize();
+#ifdef SRR2_OLD_3DS
+    printf("OLD3DS_INIT game_complete\n");
+#endif
 
     HeapMgr()->PopHeap (GMA_PERSISTENT);
 

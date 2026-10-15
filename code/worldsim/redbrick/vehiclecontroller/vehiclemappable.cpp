@@ -121,7 +121,11 @@ void VehicleMappable::LoadControllerMappings( unsigned int controllerId )
 	Map( "X", HandBrake, 0, controllerId );
     Map( "White", HandBrake, 0, controllerId );
 
+#ifdef SRR2_OLD_3DS
+    Map( "Horn", Horn, 0, controllerId );
+#else
     Map( "LeftTrigger", Horn, 0, controllerId );
+#endif
 #else
     Map( "LeftTrigger", Brake, 0, controllerId );
 

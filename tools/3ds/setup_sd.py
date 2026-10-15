@@ -219,12 +219,15 @@ def main():
     ap.add_argument("--no-romfs", action="store_true", help="leave romfs/ alone")
     ap.add_argument("--3dsx", dest="dsx", type=pathlib.Path, help="a built SimpsonsNTSC.3dsx to copy in")
     ap.add_argument("--no-movies", action="store_true", help="skip the movies (for a build without them)")
+    ap.add_argument("--old3ds", action="store_true", help="prepare the experimental Old 3DS build without movies")
     ap.add_argument("--force-movies", action="store_true", help="convert every movie again")
     ap.add_argument("--jobs", type=int, default=min(4, os.cpu_count() or 1),
                     help="movies converted at once (default: up to 4)")
     ap.add_argument("--ffmpeg", help="path to ffmpeg (default: imageio-ffmpeg, then PATH)")
     ap.add_argument("--allow-leak", action="store_true", help=argparse.SUPPRESS)
     args = ap.parse_args()
+    if args.old3ds:
+        args.no_movies = True
 
     game = args.game.resolve()
     check_game(game, args.allow_leak)
@@ -271,7 +274,23 @@ def main():
     elif not (sd / "SimpsonsNTSC.3dsx").exists():
         log("no SimpsonsNTSC.3dsx yet: build it and copy it in, or pass --3dsx")
 
-    (args.out.resolve() / "README.txt").write_text(README)
+    old_readme = """The Simpsons Hit & Run - experimental Old Nintendo 3DS build
+
+Copy the 3ds folder to the root of your SD card. Launch
+sd:/3ds/simpsons/SimpsonsNTSC.3dsx with the Homebrew Launcher.
+Audio requires your console's DSP firmware at sd:/3ds/dspfirm.cdc.
+
+Circle Pad: move/steer. Hold L + Circle Pad: camera.
+L + Select: cycle camera. Select alone: reset vehicle.
+R: handbrake. L + R: horn. Start: pause.
+A: jump/accelerate. B: run/brake. X: action/enter/exit vehicle.
+Y: attack/handbrake. D-pad: move/steer while using the camera.
+
+Movies and stereoscopic rendering are disabled. The image remains 400x240.
+Physical Old 3DS performance has not yet been verified. See docs/OLD3DS.md
+in the source checkout for the exact test scope and remaining checks.
+"""
+    (args.out.resolve() / "README.txt").write_text(old_readme if args.old3ds else README)
     log("done")
 
 

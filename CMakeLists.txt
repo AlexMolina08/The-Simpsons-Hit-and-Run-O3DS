@@ -20,7 +20,16 @@ if(VITA)
 	set_property(CACHE SRR2_P3D_PDDI PROPERTY STRINGS "OpenGL" "GLES1" "GLES2" "GXM")
 elseif(NINTENDO_3DS)
 	set(SRR2_P3D_PDDI "PICA" CACHE STRING "Pure3D PDDI implementation" FORCE)
+	option(SRR2_OLD_3DS "Target original 3DS hardware (no New 3DS features)" OFF)
 	option(SRR2_3DS_MOVIES "Play movies on New 3DS (hardware H.264 decoder)" ON)
+	if(SRR2_OLD_3DS)
+		set(SRR2_3DS_MOVIES OFF CACHE BOOL "Old 3DS has no hardware H.264 decoder" FORCE)
+		add_definitions(-DSRR2_OLD_3DS)
+		# Retain the normal 3DSX startup/linker script, using ARM11 barriers.
+		string(REPLACE "-specs=3dsx.specs"
+			"-specs=\"${CMAKE_CURRENT_SOURCE_DIR}/tools/3ds/old3ds.specs\""
+			CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS}")
+	endif()
 else()
 	set_property(CACHE SRR2_P3D_PDDI PROPERTY STRINGS "OpenGL" "GLES1" "GLES2")
 endif()

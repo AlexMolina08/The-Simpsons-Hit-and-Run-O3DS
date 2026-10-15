@@ -35,6 +35,9 @@
 #include "radcontrollerbuffer.hpp"
 
 #include <SDL.h>
+#ifdef SRR2_OLD_3DS
+#include "old3dsinput.hpp"
+#endif
 
 //============================================================================
 // Internal Interfaces
@@ -107,6 +110,10 @@ static SDLInputPoint g_SDLPoints[] =
 #endif
     { g_Sdlipt[ 0 ], "Black",            SDL_CONTROLLER_BUTTON_LEFTSHOULDER },
     { g_Sdlipt[ 0 ], "White",            SDL_CONTROLLER_BUTTON_RIGHTSHOULDER },
+#ifdef SRR2_OLD_3DS
+    { g_Sdlipt[ 0 ], "CameraCycle",      SDL_CONTROLLER_BUTTON_BACK },
+    { g_Sdlipt[ 0 ], "Horn",             SDL_CONTROLLER_BUTTON_RIGHTSHOULDER },
+#endif
     { g_Sdlipt[ 1 ], "LeftTrigger",      SDL_CONTROLLER_AXIS_TRIGGERLEFT },
     { g_Sdlipt[ 1 ], "RightTrigger",     SDL_CONTROLLER_AXIS_TRIGGERRIGHT },
     { g_Sdlipt[ 2 ], "LeftStickX",       SDL_CONTROLLER_AXIS_LEFTX },
@@ -256,6 +263,9 @@ class radControllerInputPointSDL
     public IRadControllerInputPointSDL,
     public radRefCount
 {
+#ifdef SRR2_OLD_3DS
+    Old3DSInput::SelectChord m_SelectChord;
+#endif
     public:
 
     IMPLEMENT_REFCOUNTED( "radControllerInputPointSDL" )
@@ -295,6 +305,18 @@ class radControllerInputPointSDL
             {
 #if SDL_MAJOR_VERSION < 3
                 newValue = SDL_GameControllerGetButton( m_pController, (SDL_GameControllerButton)m_Identifier ) ? 1.0f : 0.0f;
+#ifdef SRR2_OLD_3DS
+                // L is reserved for camera movement. L+Select cycles camera modes;
+                // Select alone retains the vehicle reset binding.
+                const bool cameraHeld = SDL_GameControllerGetButton(m_pController, SDL_CONTROLLER_BUTTON_LEFTSHOULDER) != 0;
+                if(m_Identifier == SDL_CONTROLLER_BUTTON_LEFTSHOULDER)
+                    newValue = 0.0f;
+                else if(m_Identifier == SDL_CONTROLLER_BUTTON_BACK)
+                    newValue = m_SelectChord.Value(newValue > 0.0f, cameraHeld,
+                        strcmp(m_pName, "CameraCycle") == 0) ? 1.0f : 0.0f;
+                else if(m_Identifier == SDL_CONTROLLER_BUTTON_RIGHTSHOULDER)
+                    newValue = (cameraHeld == (strcmp(m_pName, "Horn") == 0)) ? newValue : 0.0f;
+#endif
 #else
                 newValue = SDL_GetGamepadButton( m_pController, (SDL_GamepadButton)m_Identifier ) ? 1.0f : 0.0f;
 #endif
@@ -303,6 +325,7 @@ class radControllerInputPointSDL
             {
 #if SDL_MAJOR_VERSION < 3
                 newValue = SDL_GameControllerGetAxis( m_pController, (SDL_GameControllerAxis)m_Identifier );
+
 #else
                 newValue = SDL_GetGamepadAxis( m_pController, (SDL_GamepadAxis)m_Identifier );
 #endif
@@ -312,6 +335,18 @@ class radControllerInputPointSDL
             {
 #if SDL_MAJOR_VERSION < 3
                 newValue = SDL_GameControllerGetAxis( m_pController, (SDL_GameControllerAxis)m_Identifier );
+#ifdef SRR2_OLD_3DS
+                const bool cameraHeld = SDL_GameControllerGetButton(m_pController, SDL_CONTROLLER_BUTTON_LEFTSHOULDER) != 0;
+                if(m_Identifier == SDL_CONTROLLER_AXIS_LEFTX || m_Identifier == SDL_CONTROLLER_AXIS_LEFTY)
+                    newValue = Old3DSInput::MovementAxis(cameraHeld, (int)newValue);
+                else if(m_Identifier == SDL_CONTROLLER_AXIS_RIGHTX || m_Identifier == SDL_CONTROLLER_AXIS_RIGHTY)
+                {
+                    const SDL_GameControllerAxis source = m_Identifier == SDL_CONTROLLER_AXIS_RIGHTX
+                        ? SDL_CONTROLLER_AXIS_LEFTX : SDL_CONTROLLER_AXIS_LEFTY;
+                    newValue = Old3DSInput::CameraAxis(cameraHeld,
+                        SDL_GameControllerGetAxis(m_pController, source), (int)newValue);
+                }
+#endif
 #else
                 newValue = SDL_GetGamepadAxis( m_pController, (SDL_GamepadAxis)m_Identifier );
 #endif

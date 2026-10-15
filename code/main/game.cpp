@@ -33,6 +33,11 @@
 
 #ifdef RAD_3DS
 #include <3ds.h>
+#ifdef SRR2_OLD_3DS
+#include <citro3d.h>
+#include <malloc.h>
+extern "C" unsigned g_picaPresentedFrames;
+#endif
 
 extern "C" int      srr2SuspendFiles( void );
 extern "C" int      srr2ResumeFiles( void );
@@ -476,6 +481,9 @@ const unsigned PROFILE_CHANNEL_LOAD = 3;
 
 void Game::Run() 
 {
+#ifdef SRR2_OLD_3DS
+    printf("OLD3DS_RUN enter\n");
+#endif
     extern bool g_AllowDebugOutput;
     
 #ifdef DEMO_MODE_PROFILER
@@ -514,6 +522,10 @@ void Game::Run()
     unsigned time = radTimeGetMilliseconds();
     while( !mExitNow )
     {
+#ifdef SRR2_OLD_3DS
+        const u64 frameStartTick = svcGetSystemTick();
+        if(mFrameCount == 0) printf("OLD3DS_RUN loop\n");
+#endif
 #ifdef RAD_3DS
         if( !aptMainLoop() )
         {
@@ -522,8 +534,29 @@ void Game::Run()
         }
 
         hidScanInput();
+#ifdef SRR2_OLD_3DS
+        if(mFrameCount == 0) printf("OLD3DS_RUN input\n");
+#endif
 
         const ContextEnum ctx = GetGameFlow() ? GetGameFlow()->GetCurrentContext() : CONTEXT_ENTRY;
+#ifdef SRR2_OLD_3DS
+        static u64 lastDiagnosticTick = svcGetSystemTick();
+        static unsigned lastPresented = g_picaPresentedFrames;
+        const u64 diagnosticTick = svcGetSystemTick();
+        const u64 sampleTicks = diagnosticTick - lastDiagnosticTick;
+        if(sampleTicks >= (u64)SYSCLOCK_ARM11 * 5)
+        {
+            const unsigned presented = g_picaPresentedFrames;
+            const struct mallinfo heap = mallinfo();
+            printf("OLD3DS_FRAME context=%d frame=%u fps=%.2f paused=%d linear_free=%lu heap_used=%d cpu_ms=%.2f gpu_ms=%.2f\n",
+                (int)ctx, mFrameCount, (presented - lastPresented) * (double)SYSCLOCK_ARM11 / sampleTicks,
+                mpPlatform->PausedForErrors(), (unsigned long)linearSpaceFree(), heap.uordblks,
+                C3D_GetProcessingTime(), C3D_GetDrawingTime());
+            fflush(stdout);
+            lastDiagnosticTick = diagnosticTick;
+            lastPresented = presented;
+        }
+#endif
         g_picaMipmapsAllowed =
             ( ctx == CONTEXT_LOADING_GAMEPLAY || ctx == CONTEXT_GAMEPLAY || ctx == CONTEXT_PAUSE ||
               ctx == CONTEXT_LOADING_SUPERSPRINT || ctx == CONTEXT_SUPERSPRINT ||
@@ -579,9 +612,15 @@ void Game::Run()
 
         if ( !mpPlatform->PausedForErrors() )
         {
+#ifdef SRR2_OLD_3DS
+            if(mFrameCount == 0) printf("OLD3DS_RUN flow\n");
+#endif
             DEMOPROFILE( g_DemoProfiler.Start(PROFILE_CHANNEL_AI); )
             mpTimerList->Service(); //nv
             mpGameFlow->OnTimerDone(elapsed, NULL);
+#ifdef SRR2_OLD_3DS
+            if(mFrameCount == 0) printf("OLD3DS_RUN render\n");
+#endif
             DEMOPROFILE( g_DemoProfiler.Stop(PROFILE_CHANNEL_AI); )
 
             if( !mExitNow )
@@ -609,6 +648,9 @@ void Game::Run()
         // Service FTech subsystems.
         //
         ::radFileService();
+#ifdef SRR2_OLD_3DS
+        if(mFrameCount == 0) printf("OLD3DS_RUN files\n");
+#endif
         ::radDbgComService();
         ::radDebugConsoleService();
         
@@ -621,6 +663,9 @@ void Game::Run()
         // Service the sound renderer.
         //
         SoundManager::GetInstance()->Update();
+#ifdef SRR2_OLD_3DS
+        if(mFrameCount == 0) printf("OLD3DS_RUN sound\n");
+#endif
 
         if ( mpPlatform->PausedForErrors() )
         {
@@ -640,6 +685,15 @@ void Game::Run()
         DEMOPROFILE( g_DemoProfiler.Stop(PROFILE_CHANNEL_LOAD); )
 
         ++mFrameCount;
+#ifdef SRR2_OLD_3DS
+        // The original backend can spin while FrameBegin skips a busy GPU.
+        // A 30 Hz deadline gives simulation, loading and input one bounded frame
+        // budget and lets other threads run on the original ARM11 hardware.
+        const u64 frameBudgetTicks = (u64)SYSCLOCK_ARM11 / 30;
+        const u64 frameTicks = svcGetSystemTick() - frameStartTick;
+        if(frameTicks < frameBudgetTicks)
+            svcSleepThread((s64)((frameBudgetTicks - frameTicks) * 1000000000ULL / SYSCLOCK_ARM11));
+#endif
 
         DEMOPROFILE( g_DemoProfiler.Stop(PROFILE_CHANNEL_ALL); )
 

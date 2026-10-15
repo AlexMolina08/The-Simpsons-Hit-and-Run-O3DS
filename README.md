@@ -1,6 +1,12 @@
 # The Simpsons Hit & Run - New Nintendo 3DS
 
-A port of The Simpsons Hit & Run to the New Nintendo 3DS, using the data from the PC version of the game.
+
+
+An experimental original 3DS build Based on the New 3ds project.
+
+[Old 3DS build and validation](docs/OLD3DS.md) for controls, build instructions,
+and the distinction between emulator checks and physical hardware performance.
+
 
 <img src="images/game.jpg" width="320">
 
