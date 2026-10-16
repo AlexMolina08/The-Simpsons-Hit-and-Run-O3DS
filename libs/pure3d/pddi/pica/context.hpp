@@ -137,6 +137,10 @@ private:
     void CaptureEyeLight(int handle);
     void RebuildLightArray(void);
 
+#ifdef SRR2_OLD_3DS
+    bool       modelViewUploaded;
+    pddiMatrix lastModelView;
+#endif
     bool       projUploaded;
     bool       lightsUploaded;
     bool       matUploaded;

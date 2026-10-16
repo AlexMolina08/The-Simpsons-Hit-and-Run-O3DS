@@ -241,3 +241,14 @@ physical Old 3DS performance measurements.
 The FFmpeg source revision, build flags, newlib patch and LGPL license are
 recorded in `libs/radmovie/src/ctr/third_party/`. The build verifies final
 ARMv6K/VFPv2 attributes and keeps FFmpeg's 32-bit enum ABI inside its adapter.
+
+
+## Repeated transform uploads
+
+The Old 3DS renderer now reuses an uploaded model-view matrix when all its bits
+match the next draw. Material, lighting and projection updates remain independent.
+Frame boundaries, bottom-screen passes, world upscaling and context restoration
+invalidate the cache. This removes redundant matrix transposition and uniform
+updates without changing geometry, textures, traffic or simulation frequency.
+`OLD3DS_RENDER` reports actual uploads and exact reuses per diagnostic interval.
+Counter savings are not themselves a measured physical frame-rate improvement.

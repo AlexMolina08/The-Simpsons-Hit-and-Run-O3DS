@@ -2,6 +2,11 @@
 #include <pddi/pica/context.hpp>
 #include <pddi/pica/statecache.hpp>
 extern "C" void C3Di_UpdateContext(void);
+#ifdef SRR2_OLD_3DS
+// Interval counters consumed by the game loop diagnostics.
+unsigned g_old3dsModelViewUploads = 0;
+unsigned g_old3dsModelViewReuses = 0;
+#endif
 static const u32 PICA_BUFINFO_BASE = 0x18000000;
 #include <pddi/pica/device.hpp>
 #include <pddi/pica/display.hpp>
@@ -681,6 +686,9 @@ void picaContext::SetAmbientLight(pddiColour col)
 
 void picaContext::InvalidateUniformCache(void)
 {
+#ifdef SRR2_OLD_3DS
+    modelViewUploaded = false;
+#endif
     projUploaded   = false;
     lightsUploaded = false;
     matUploaded    = false;
@@ -815,14 +823,6 @@ void picaContext::SetVertexUniforms(bool lit, pddiColour ambient, pddiColour dif
     }
 
     pddiMatrix* mv = state.matrixStack[PDDI_MATRIX_MODELVIEW]->Top();
-    C3D_Mtx hwModelView;
-    for(int row = 0; row < 4; row++)
-    {
-        hwModelView.r[row].x = mv->Row4(0)[row];
-        hwModelView.r[row].y = mv->Row4(1)[row];
-        hwModelView.r[row].z = mv->Row4(2)[row];
-        hwModelView.r[row].w = mv->Row4(3)[row];
-    }
 
     if(!projUploaded)
     {
@@ -832,7 +832,29 @@ void picaContext::SetVertexUniforms(bool lit, pddiColour ambient, pddiColour dif
         projUploaded = true;
     }
 
+#ifdef SRR2_OLD_3DS
+    // Material changes often draw the same transform repeatedly. Preserve exact
+    // matrix bits and invalidate at every frame and render-target transition.
+    if(!modelViewUploaded || memcmp(&lastModelView, mv, sizeof(lastModelView)) != 0)
+    {
+        memcpy(&lastModelView, mv, sizeof(lastModelView));
+        modelViewUploaded = true;
+        ++g_old3dsModelViewUploads;
+#endif
+    C3D_Mtx hwModelView;
+    for(int row = 0; row < 4; row++)
+    {
+        hwModelView.r[row].x = mv->Row4(0)[row];
+        hwModelView.r[row].y = mv->Row4(1)[row];
+        hwModelView.r[row].z = mv->Row4(2)[row];
+        hwModelView.r[row].w = mv->Row4(3)[row];
+    }
+
     C3D_FVUnifMtx4x4(GPU_VERTEX_SHADER, VSH_FVEC_u_mv, &hwModelView);
+#ifdef SRR2_OLD_3DS
+    }
+    else ++g_old3dsModelViewReuses;
+#endif
 
     if(!miscUploaded || lit != lastLit)
     {

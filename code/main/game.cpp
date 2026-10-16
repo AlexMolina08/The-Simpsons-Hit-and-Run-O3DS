@@ -37,6 +37,8 @@
 #include <citro3d.h>
 #include <malloc.h>
 extern "C" unsigned g_picaPresentedFrames;
+extern unsigned g_old3dsModelViewUploads;
+extern unsigned g_old3dsModelViewReuses;
 // Physics includes character simulation. The other counters are disjoint
 // update stages; all are subsets of update_ms in OLD3DS_PROFILE.
 double g_old3dsUpdateStages[4] = {};
@@ -576,6 +578,9 @@ void Game::Run()
                     g_old3dsUpdateStages[1] / profileFrames,
                     g_old3dsUpdateStages[2] / profileFrames,
                     g_old3dsUpdateStages[3] / profileFrames);
+            printf("OLD3DS_RENDER mv_uploads=%u mv_reuses=%u\n",
+                g_old3dsModelViewUploads, g_old3dsModelViewReuses);
+            g_old3dsModelViewUploads = g_old3dsModelViewReuses = 0;
             memset(g_old3dsUpdateStages, 0, sizeof(g_old3dsUpdateStages));
             updateMs = renderMs = serviceMs = loadMs = 0.0;
             g_picaFrameWaitMs = g_picaFrameSubmitMs = 0.0;
