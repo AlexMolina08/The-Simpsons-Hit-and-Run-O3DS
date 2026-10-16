@@ -14,6 +14,9 @@
 //========================================
 // Standard Library
 #include <stdlib.h>
+#ifdef SRR2_OLD3DS_GPU_SKIN_SUPPORT
+#include <pddi/pica/skinning.hpp>
+#endif
 #include <string.h>
 // Foundation Tech
 #include <raddebug.hpp>
@@ -816,6 +819,9 @@ void Game::Run()
 
 #ifdef SRR2_OLD_3DS
         u64 phaseTick = svcGetSystemTick();
+#ifdef SRR2_OLD3DS_GPU_SKIN_SUPPORT
+        u64 skinUpdateTicks=0, skinRenderTicks=0;
+#endif
 #endif
         if ( !mpPlatform->PausedForErrors() )
         {
@@ -826,7 +832,11 @@ void Game::Run()
             mpTimerList->Service(); //nv
             mpGameFlow->OnTimerDone(elapsed, NULL);
 #ifdef SRR2_OLD_3DS
-            updateMs += (svcGetSystemTick() - phaseTick) * 1000.0 / SYSCLOCK_ARM11;
+            const u64 updateTicks=svcGetSystemTick()-phaseTick;
+            updateMs += updateTicks * 1000.0 / SYSCLOCK_ARM11;
+#ifdef SRR2_OLD3DS_GPU_SKIN_SUPPORT
+            skinUpdateTicks=updateTicks;
+#endif
             phaseTick = svcGetSystemTick();
 #endif
 #ifdef SRR2_OLD_3DS
@@ -859,7 +869,11 @@ void Game::Run()
         // Service FTech subsystems.
         //
 #ifdef SRR2_OLD_3DS
-        renderMs += (svcGetSystemTick() - phaseTick) * 1000.0 / SYSCLOCK_ARM11;
+        const u64 renderTicks=svcGetSystemTick()-phaseTick;
+        renderMs += renderTicks * 1000.0 / SYSCLOCK_ARM11;
+#ifdef SRR2_OLD3DS_GPU_SKIN_SUPPORT
+        skinRenderTicks=renderTicks;
+#endif
         phaseTick = svcGetSystemTick();
 #endif
         ::radFileService();
@@ -915,6 +929,9 @@ void Game::Run()
         const u64 frameBudgetTicks = (u64)SYSCLOCK_ARM11 / 30;
         const u64 frameTicks = svcGetSystemTick() - frameStartTick;
         const double currentWorkMs = frameTicks * 1000.0 / SYSCLOCK_ARM11;
+#ifdef SRR2_OLD3DS_GPU_SKIN_SUPPORT
+        picaSkinEndFrame(frameTicks,skinUpdateTicks,skinRenderTicks,ctx==CONTEXT_GAMEPLAY);
+#endif
         workMs += currentWorkMs;
         if(currentWorkMs > peakWorkMs) peakWorkMs = currentWorkMs;
         if(frameTicks > frameBudgetTicks) ++overBudgetFrames;

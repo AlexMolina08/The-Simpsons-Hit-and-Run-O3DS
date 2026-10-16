@@ -21,7 +21,7 @@
 #endif
 
 #include <string.h>
-#ifdef SRR2_OLD3DS_SKIN_DIRECT
+#if defined(SRR2_OLD3DS_SKIN_DIRECT) || defined(SRR2_OLD3DS_GPU_SKIN_SUPPORT)
 #include <pddi/pica/context.hpp>
 #endif
 
@@ -506,6 +506,9 @@ bool tPrimGroupSkinnedPC::GetVertices(unsigned start, unsigned count, rmt::Vecto
 
 bool tPrimGroupSkinnedPC::SetVertices(unsigned start, unsigned count, rmt::Vector* v)
 {
+#ifdef SRR2_OLD3DS_GPU_SKIN_SUPPORT
+    static_cast<picaPrimBuffer*>(mBuffer)->MutateGpuSkin();
+#endif
     for(unsigned i = start; i < start + count; i++)
     {
         mVertices[i].position = *v++;
@@ -513,8 +516,21 @@ bool tPrimGroupSkinnedPC::SetVertices(unsigned start, unsigned count, rmt::Vecto
     return true;
 }
 
+#ifdef SRR2_OLD3DS_GPU_SKIN_SUPPORT
+void tPrimGroupSkinnedPC::PrepareGpuSkin(bool selected)
+{
+    static_assert(sizeof(SkinVertex)==sizeof(picaSkin::Source), "Skin source layout");
+    static_cast<picaPrimBuffer*>(mBuffer)->PrepareGpuSkin(mVertices,mVertexCount,nMatrices,selected);
+}
+#endif
+
 void tPrimGroupSkinnedPC::Display(void)
 {
+#ifdef SRR2_OLD3DS_GPU_SKIN_SUPPORT
+    if(static_cast<picaPrimBuffer*>(mBuffer)->TryGpuSkin(mShader->GetShader(),
+        reinterpret_cast<const pddiMatrix* const*>(matrixPalette), nMatrices)) return;
+    const u64 gpuSkinCpuStart=static_cast<picaPrimBuffer*>(mBuffer)->skinReason==picaSkin::Ready ? svcGetSystemTick() : 0;
+#endif
 #ifdef SRR2_OLD3DS_SKIN_DIRECT
     unsigned char* direct = NULL;
 #endif
@@ -660,6 +676,12 @@ void tPrimGroupSkinnedPC::Display(void)
     if(direct) mBuffer->Unlock(NULL);
 #endif
     }
+#ifdef SRR2_OLD3DS_GPU_SKIN_SUPPORT
+    if(gpuSkinCpuStart) {
+        g_picaSkinMetrics.cpuReferenceTicks+=svcGetSystemTick()-gpuSkinCpuStart;
+        g_picaSkinMetrics.cpuReferenceVertices+=mVertexCount;
+    }
+#endif
 	//buffer rendering
 	p3d::pddi->DrawPrimBuffer(mShader->GetShader(), mBuffer);
 

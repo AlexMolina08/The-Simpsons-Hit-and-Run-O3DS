@@ -195,6 +195,14 @@ tEntity* tPolySkinLoader::LoadObject(tChunkFile* f, tEntityStore* store)
                 P3DASSERT(index < nPrimGroup);
                 tPrimGroupLoader pgLoader;                
                 skin->primGroup[index] = pgLoader.Load(f, store, skin->boneMatrix, optimise, true);
+#ifdef SRR2_OLD3DS_GPU_SKIN_SUPPORT
+                tPrimGroupSkinnedPC* pcSkin=dynamic_cast<tPrimGroupSkinnedPC*>(skin->primGroup[index]);
+                bool selected=strcmp(name,"homer_h_merged")==0 && strcmp(skelName,"homer")==0;
+#ifdef SRR2_OLD3DS_GPU_SKIN_PLAYERS
+                selected=selected || (strcmp(name,"bart_h_merged")==0 && strcmp(skelName,"bart")==0);
+#endif
+                if(pcSkin) pcSkin->PrepareGpuSkin(selected);
+#endif
                 skin->primGroup[index]->AddRef();
                 index++;
             }

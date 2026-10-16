@@ -2,6 +2,7 @@
 #define PDDI_PICA_CONTEXT_HPP
 
 #include <pddi/pica/pica.hpp>
+#include <pddi/pica/skinning.hpp>
 #ifdef SRR2_OLD3DS_MATERIAL_QUEUE
 #include <pddi/pica/materialqueue.hpp>
 #endif
@@ -36,6 +37,12 @@ public:
     void EndPrims(pddiPrimStream* stream);
 
     void DrawPrimBuffer(pddiShader* material, pddiPrimBuffer* buffer);
+#ifdef SRR2_OLD3DS_GPU_SKIN
+    bool BindSkinProgram(bool enabled);
+    DVLB_s* skinBinary;
+    shaderProgram_s skinProgram;
+    C3D_AttrInfo skinAttrInfo;
+#endif
 #ifdef SRR2_OLD3DS_MATERIAL_QUEUE
     struct Submission
     {
@@ -222,6 +229,15 @@ public:
 
     unsigned GetVertexFormat() { return vertexType; }
     void Display(void);
+#ifdef SRR2_OLD3DS_GPU_SKIN_SUPPORT
+    void PrepareGpuSkin(const void* source, unsigned count, unsigned bones, bool selected);
+    bool TryGpuSkin(pddiShader* material, const pddiMatrix* const* matrices, unsigned count);
+    void MutateGpuSkin();
+    picaSkinAllocation* skinAllocation;
+    picaSkin::Reason skinReason;
+    unsigned skinBoneCount;
+    bool skinDrawing;
+#endif
 #ifdef SRR2_OLD3DS_MATERIAL_QUEUE
 #ifdef SRR2_OLD3DS_MATERIAL_QUEUE_SORT
     bool QueueBounds(float* low, float* high);

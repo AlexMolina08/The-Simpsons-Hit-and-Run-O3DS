@@ -141,8 +141,12 @@ elseif(SRR2_P3D_PDDI STREQUAL "GLES2")
 		)
 	endif()
 elseif(SRR2_P3D_PDDI STREQUAL "PICA")
+	find_program(PICASSO_EXE picasso
+		HINTS "$ENV{DEVKITPRO}/tools/bin" "/opt/devkitpro/tools/bin" "C:/devkitPro/tools/bin"
+		REQUIRED)
 	list(APPEND PDDI_SOURCES
 		"pddi/pica/context.cpp"
+		"pddi/pica/skinning.cpp"
 		"pddi/pica/device.cpp"
 		"pddi/pica/display.cpp"
 		"pddi/pica/material.cpp"
@@ -170,10 +174,20 @@ else()
 endif()
 
 if(SRR2_P3D_PDDI STREQUAL "PICA")
+	if(SRR2_OLD3DS_GPU_SKIN)
+        list(APPEND PDDI_SOURCES "${CMAKE_CURRENT_BINARY_DIR}/skin_shbin.c")
+        add_custom_command(OUTPUT "${CMAKE_CURRENT_BINARY_DIR}/skin.shbin" "${CMAKE_CURRENT_BINARY_DIR}/skin_shbin.h"
+            COMMAND "${PICASSO_EXE}" -o "${CMAKE_CURRENT_BINARY_DIR}/skin.shbin"
+                -h "${CMAKE_CURRENT_BINARY_DIR}/skin_shbin.h" "${CMAKE_CURRENT_SOURCE_DIR}/pddi/pica/shaders/skin.v.pica"
+            DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/pddi/pica/shaders/skin.v.pica" VERBATIM)
+        add_custom_command(OUTPUT "${CMAKE_CURRENT_BINARY_DIR}/skin_shbin.c"
+            COMMAND "${CMAKE_COMMAND}" "-DINPUT=${CMAKE_CURRENT_BINARY_DIR}/skin.shbin"
+                "-DOUTPUT=${CMAKE_CURRENT_BINARY_DIR}/skin_shbin.c" "-DSYMBOL=pddi_skin_shbin"
+                -P "${CMAKE_SOURCE_DIR}/cmake/bin2c.cmake"
+            DEPENDS "${CMAKE_CURRENT_BINARY_DIR}/skin.shbin" "${CMAKE_SOURCE_DIR}/cmake/bin2c.cmake" VERBATIM)
+    endif()
 	set(PICA_SHADER_SRC "${CMAKE_CURRENT_SOURCE_DIR}/pddi/pica/shaders/pddi.v.pica")
-	find_program(PICASSO_EXE picasso
-		HINTS "$ENV{DEVKITPRO}/tools/bin" "/opt/devkitpro/tools/bin" "C:/devkitPro/tools/bin"
-		REQUIRED)
+
 
 	add_custom_command(
 		OUTPUT  "${CMAKE_CURRENT_BINARY_DIR}/pddi.shbin"

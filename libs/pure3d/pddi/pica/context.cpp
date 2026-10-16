@@ -26,6 +26,12 @@ static const u32 PICA_BUFINFO_BASE = 0x18000000;
 
 extern "C" const unsigned char pddi_pica_shbin[];
 extern "C" const unsigned int  pddi_pica_shbin_size;
+#ifdef SRR2_OLD3DS_GPU_SKIN
+#include "skin_shbin.h"
+static_assert(VSH_FVEC_u_bones == 27 && VSH_ULEN_u_bones == 69, "Skin shader register contract");
+extern "C" const unsigned char pddi_skin_shbin[];
+extern "C" const unsigned int pddi_skin_shbin_size;
+#endif
 
 static const GPU_Primitive_t primTypeTable[5] =
 {
@@ -118,6 +124,9 @@ picaContext::picaContext(picaDevice* dev, picaDisplay* disp)
     worldQuad = NULL;
 #endif
 
+#ifdef SRR2_OLD3DS_GPU_SKIN
+    skinBinary = NULL;
+#endif
     defaultShader = NULL;
     clearShader   = NULL;
     matWriteMask  = PDDI_WRITE_ALL;
@@ -150,6 +159,16 @@ picaContext::picaContext(picaDevice* dev, picaDisplay* disp)
     AttrInfo_AddLoader(&attrInfo, 2, GPU_FLOAT, 2);
     AttrInfo_AddLoader(&attrInfo, 3, GPU_UNSIGNED_BYTE, 4);
     C3D_SetAttrInfo(&attrInfo);
+#ifdef SRR2_OLD3DS_GPU_SKIN
+    skinBinary = DVLB_ParseFile((u32*)pddi_skin_shbin, pddi_skin_shbin_size);
+    if(skinBinary) {
+        shaderProgramInit(&skinProgram);
+        shaderProgramSetVsh(&skinProgram, &skinBinary->DVLE[0]);
+        skinAttrInfo = attrInfo;
+        AttrInfo_AddLoader(&skinAttrInfo, 4, GPU_FLOAT, 4);
+        AttrInfo_AddLoader(&skinAttrInfo, 5, GPU_BYTE, 4);
+    }
+#endif
 
     C3D_DepthMap(true, -1.0f, 0.0f);
     C3D_FragOpMode(GPU_FRAGOPMODE_GL);
@@ -228,6 +247,9 @@ picaContext::~picaContext()
     immVertices = NULL;
     immIndices  = NULL;
 
+#ifdef SRR2_OLD3DS_GPU_SKIN
+    if(skinBinary) { shaderProgramFree(&skinProgram); DVLB_Free(skinBinary); }
+#endif
     if(shaderBinary)
     {
         shaderProgramFree(&shaderProgram);
@@ -249,6 +271,9 @@ void picaContext::BeginFrame()
     picaStateInvalidate();
 
     display->BeginFrame();
+#ifdef SRR2_OLD3DS_GPU_SKIN_SUPPORT
+    if(g_picaInFrame) picaSkinBeginFrame();
+#endif
 
     InvalidateUniformCache();
 
@@ -302,6 +327,7 @@ void picaContext::EndFrame()
         GSPGPU_FlushDataCache(immIndices, immIndexUsed);
 
     display->EndFrame();
+
 #ifdef SRR2_OLD3DS_QUEUE_METRICS
     g_picaQueueMetrics.commandWords += (u64)(C3D_GetCmdBufUsage() * (640u * 1024u / 4u));
     picaQueueCapture();
@@ -1470,6 +1496,9 @@ public:
 picaPrimBuffer::picaPrimBuffer(picaContext* c, pddiPrimType type, unsigned vertexFormat, int nVertex, int nIndex)
     : context(c)
 {
+#ifdef SRR2_OLD3DS_GPU_SKIN_SUPPORT
+    skinAllocation = NULL; skinReason = picaSkin::NotSelected; skinBoneCount = 0; skinDrawing = false;
+#endif
     stream = new picaPrimBufferStream(this);
 
     total = allocated = 0;
@@ -1528,6 +1557,14 @@ picaPrimBuffer::picaPrimBuffer(picaContext* c, pddiPrimType type, unsigned verte
 
 picaPrimBuffer::~picaPrimBuffer()
 {
+#ifdef SRR2_OLD3DS_GPU_SKIN_SUPPORT
+    if(skinAllocation) {
+        // The GPU skin uses the original index allocation. Retire both together.
+        skinAllocation->nativeBuffer=buffer; buffer=NULL;
+        skinAllocation->expandedBuffer=expanded; expanded=NULL;
+        picaSkinRetire(skinAllocation);
+    }
+#endif
     delete stream;
 
     if(!transient)
@@ -1546,6 +1583,9 @@ picaPrimBuffer::~picaPrimBuffer()
 
 void picaPrimBuffer::SetFormat(pddiPrimType type, unsigned vertexFormat)
 {
+#ifdef SRR2_OLD3DS_GPU_SKIN_SUPPORT
+    if(type!=primType || vertexFormat!=vertexType) MutateGpuSkin();
+#endif
     primType   = type;
     if(vertexType != vertexFormat) defaultsValid = false;
     vertexType = vertexFormat;
@@ -1672,6 +1712,9 @@ unsigned char* picaPrimBuffer::LockIndexBuffer()
 
 void picaPrimBuffer::UnlockIndexBuffer(int count)
 {
+#ifdef SRR2_OLD3DS_GPU_SKIN_SUPPORT
+    MutateGpuSkin();
+#endif
     if(count > 0)
         indexCount = (unsigned)count;
 
@@ -1796,6 +1839,9 @@ void picaPrimBuffer::Display(void)
     }
 
     const unsigned char* vertexData = buffer;
+#ifdef SRR2_OLD3DS_GPU_SKIN_SUPPORT
+    if(skinDrawing) vertexData = (const unsigned char*)(skinAllocation + 1);
+#endif
     unsigned count;
 
     bool useElements = false;
@@ -1871,6 +1917,10 @@ void picaPrimBuffer::Display(void)
     {
         C3D_BufInfo bufInfo;
         BufInfo_Init(&bufInfo);
+#ifdef SRR2_OLD3DS_GPU_SKIN_SUPPORT
+        if(skinDrawing) BufInfo_Add(&bufInfo, vertexData, picaSkin::VertexStride, 6, 0x543210);
+        else
+#endif
         BufInfo_Add(&bufInfo, vertexData, PICA_VERTEX_STRIDE, 4, 0x3210);
         C3D_SetBufInfo(&bufInfo);
         C3Di_UpdateContext();
@@ -1883,6 +1933,9 @@ void picaPrimBuffer::Display(void)
 #ifdef SRR2_OLD3DS_QUEUE_METRICS
     ++g_picaQueueMetrics.draws;
     g_picaQueueMetrics.vertices += count;
+#endif
+#ifdef SRR2_OLD3DS_GPU_SKIN_SUPPORT
+    ++g_picaSkinMetrics.draws; g_picaSkinMetrics.submittedVertices+=count;
 #endif
     ++g_old3dsDrawCalls;
     g_old3dsDrawVerts += count;
@@ -2129,5 +2182,147 @@ void picaQueueDump()
     }
     queueDumped = fflush(file) == 0;
     if(fclose(file) != 0) queueDumped = false;
+}
+#endif
+
+#ifdef SRR2_OLD3DS_GPU_SKIN
+bool picaContext::BindSkinProgram(bool enabled)
+{
+    if (enabled && !skinBinary)
+        return false;
+    C3D_BindProgram(enabled ? &skinProgram : &shaderProgram);
+    C3D_SetAttrInfo(enabled ? &skinAttrInfo : &attrInfo);
+    g_picaState.bufInfoSet = false;
+    InvalidateUniformCache();
+    ++g_picaSkinMetrics.switches;
+    return true;
+}
+#endif
+#ifdef SRR2_OLD3DS_GPU_SKIN_SUPPORT
+void picaPrimBuffer::PrepareGpuSkin(const void *source, unsigned count, unsigned bones,
+                                    bool selected)
+{
+    if (!selected)
+        return;
+    if (!bones || bones > picaSkin::MaxBones)
+    {
+        skinReason = picaSkin::Palette;
+        return;
+    }
+    if (transient || !buffer || count != allocated || !PrimIsDrawable(primType) ||
+        !IndicesInRange() || !(vertexType & PDDI_V_NORMAL))
+    {
+        skinReason = picaSkin::Topology;
+        return;
+    }
+    const unsigned char *src = (const unsigned char *)source;
+    picaSkin::Vertex probe;
+    for (unsigned i = 0; i < count; ++i)
+    {
+        picaSkin::Source vertex;
+        memcpy(&vertex, src + i * sizeof(vertex), sizeof(vertex));
+        if (!picaSkin::PackVertex(probe, vertex, buffer + 36 * i, bones))
+        {
+            skinReason = picaSkin::SourceInvalid;
+            return;
+        }
+    }
+    skinBoneCount = bones;
+    skinReason = picaSkin::Ready;
+#ifdef SRR2_OLD3DS_GPU_SKIN
+    const unsigned bytes = count * picaSkin::VertexStride;
+    // A failed load-time allocation is sticky: never retry allocation in gameplay.
+    skinAllocation = picaSkinAllocate(bytes);
+    if (!skinAllocation)
+    {
+        skinReason = g_picaSkinAllocationReason;
+        return;
+    }
+    picaSkin::Vertex *dst = (picaSkin::Vertex *)(skinAllocation + 1);
+    for (unsigned i = 0; i < count; ++i)
+    {
+        picaSkin::Source vertex;
+        memcpy(&vertex, src + i * sizeof(vertex), sizeof(vertex));
+        picaSkin::PackVertex(dst[i], vertex, buffer + 36 * i, bones);
+    }
+    GSPGPU_FlushDataCache(dst, bytes);
+#endif
+}
+void picaPrimBuffer::MutateGpuSkin()
+{
+    if (skinReason != picaSkin::NotSelected)
+    {
+        skinReason = picaSkin::Mutated;
+        ++g_picaSkinMetrics.mutations;
+        // Keep the allocation until destruction; no writes or frees while GPU reads
+        // may still be pending. Mutation fallback remains sticky for this lifetime.
+    }
+}
+bool picaPrimBuffer::TryGpuSkin(pddiShader *material, const pddiMatrix *const *matrices,
+                                unsigned count)
+{
+    picaSkin::Reason reason = skinReason;
+    if (reason == picaSkin::Ready)
+    {
+        ++g_picaSkinMetrics.eligibleGroups;
+        g_picaSkinMetrics.eligibleVertices += allocated;
+        if (!picaSkinEnabled())
+            reason = picaSkin::Disabled;
+    }
+#ifdef SRR2_OLD3DS_GPU_SKIN
+    if (reason == picaSkin::Ready && !g_picaInFrame)
+        reason = picaSkin::NoFrame;
+    if (reason == picaSkin::Ready && (!skinAllocation || !context->skinBinary))
+        reason = picaSkin::NoShader;
+    if (reason == picaSkin::Ready)
+    {
+        u64 start = svcGetSystemTick();
+        float packed[picaSkin::MaxBones][3][4];
+        if (count != skinBoneCount)
+            reason = picaSkin::MatrixInvalid;
+        for (unsigned i = 0; reason == picaSkin::Ready && i < count; ++i)
+        {
+            // Copy values immediately; Pure3D's matrix palette points into shared scratch.
+            float m[4][4];
+            for (unsigned r = 0; r < 4; ++r)
+                for (unsigned c = 0; c < 4; ++c)
+                    m[r][c] = matrices[i]->Row4(r)[c];
+            if (!picaSkin::PackMatrix(packed[i], m))
+                reason = picaSkin::MatrixInvalid;
+        }
+        if (reason == picaSkin::Ready)
+        {
+            context->BindSkinProgram(true);
+            C3D_FVec *dst = C3D_FVUnifWritePtr(GPU_VERTEX_SHADER, VSH_FVEC_u_bones, 3 * count);
+            for (unsigned i = 0; i < count; ++i)
+                for (unsigned r = 0; r < 3; ++r)
+                {
+                    dst[3 * i + r].x = packed[i][r][0];
+                    dst[3 * i + r].y = packed[i][r][1];
+                    dst[3 * i + r].z = packed[i][r][2];
+                    dst[3 * i + r].w = packed[i][r][3];
+                }
+            g_picaSkinMetrics.vectors += 3 * count;
+            g_picaSkinMetrics.paletteTicks += svcGetSystemTick() - start;
+            skinDrawing = true;
+            context->DrawPrimBuffer(material, this);
+            skinDrawing = false;
+            context->BindSkinProgram(false);
+            ++g_picaSkinMetrics.gpuGroups;
+            g_picaSkinMetrics.gpuVertices += allocated;
+            g_picaSkinMetrics.avoidedWriteBytes += (u64)allocated * 24;
+            g_picaSkinMetrics.avoidedFlushBytes += mem;
+            u32 *commands;
+            u32 size, offset;
+            GPUCMD_GetBuffer(&commands, &size, &offset);
+            if (offset > g_picaSkinMetrics.maxCommand)
+                g_picaSkinMetrics.maxCommand = offset;
+            return true;
+        }
+        g_picaSkinMetrics.paletteTicks += svcGetSystemTick() - start;
+    }
+#endif
+    ++g_picaSkinMetrics.fallback[reason];
+    return false;
 }
 #endif

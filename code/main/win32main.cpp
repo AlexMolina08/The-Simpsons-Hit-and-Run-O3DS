@@ -226,6 +226,10 @@ extern "C" int main( int argc, char *argv[] )
     // Run it!  Control will not return from here until the game is stopped.
     //
     pGame->Run();
+#ifdef SRR2_OLD3DS_GPU_SKIN_SUPPORT
+    extern void picaSkinDump();
+    picaSkinDump();
+#endif
 #ifdef SRR2_OLD3DS_QUEUE_METRICS
     // The 3DS shutdown uses _exit, which bypasses renderer destructors/atexit.
     // Write the independent graphics experiment buffer only after gameplay ends.

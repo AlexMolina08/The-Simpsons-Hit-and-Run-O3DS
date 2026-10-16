@@ -178,6 +178,11 @@ protected:
 #ifndef RAD_PS2
 class tPrimGroupSkinnedPC : public tPrimGroupSkinnedOptimised
 {
+#ifdef SRR2_OLD3DS_GPU_SKIN_SUPPORT
+public:
+    void PrepareGpuSkin(bool selected);
+private:
+#endif
     tPrimGroupSkinnedPC(int nVertex, unsigned format, int nIndex, bool allocate = false);
     virtual ~tPrimGroupSkinnedPC();
 
