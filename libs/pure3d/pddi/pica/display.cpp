@@ -1,6 +1,7 @@
 #include <pddi/pica/display.hpp>
 #include <pddi/pica/context.hpp>
 #include <pddi/base/debug.hpp>
+#include <main/old3dsdiag.h>
 #include <stdio.h>
 #include "pddi_shbin.h"
 
@@ -256,6 +257,10 @@ void picaDisplay::BeginFrame(void)
         const bool frameOk = C3D_FrameBegin(0);
 #ifdef SRR2_OLD_3DS
         g_picaFrameWaitMs += (svcGetSystemTick() - waitTick) * 1000.0 / SYSCLOCK_ARM11;
+        // A failed begin submits no frame at all. The old code discarded this
+        // result, so a busy GPU was invisible in the diagnostics.
+        if(frameOk) ++g_old3dsFrameBeginOk;
+        else        ++g_old3dsFrameBeginBusy;
 #endif
 
         if(g_picaGpuWaitHook) g_picaGpuWaitHook(0);
@@ -267,6 +272,9 @@ void picaDisplay::BeginFrame(void)
 
         if(!C3D_FrameDrawOn(target))
         {
+#ifdef SRR2_OLD_3DS
+            ++g_old3dsFrameBeginNoDraw;
+#endif
             C3D_FrameEnd(0);
             return;
         }
@@ -357,6 +365,7 @@ void picaDisplay::EndFrame(void)
 #ifdef SRR2_OLD_3DS
         g_picaFrameSubmitMs += (svcGetSystemTick() - submitTick) * 1000.0 / SYSCLOCK_ARM11;
         ++g_picaPresentedFrames;
+        ++g_old3dsFramePresented;
 #endif
     }
 }

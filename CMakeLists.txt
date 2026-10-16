@@ -24,6 +24,9 @@ elseif(NINTENDO_3DS)
 	option(SRR2_3DS_MOVIES "Play converted movies (software MPEG-1 on Old 3DS, hardware H.264 on New 3DS)" ON)
 	if(SRR2_OLD_3DS)
 		add_definitions(-DSRR2_OLD_3DS)
+		# Stamped into the boot log so a captured log can be matched to the
+		# executable that produced it. Bump this when the build changes.
+		add_definitions(-DSRR2_OLD3DS_BUILD_ID="diag-1")
 		# Retain the normal 3DSX startup/linker script, using ARM11 barriers.
 		string(REPLACE "-specs=3dsx.specs"
 			"-specs=\"${CMAKE_CURRENT_SOURCE_DIR}/tools/3ds/old3ds.specs\""

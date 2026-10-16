@@ -18,6 +18,7 @@
 #include <simcommon/simstatearticulated.hpp>         
 #include <simcommon/simenvironment.hpp>         
 #include <simcollision/collisionmanager.hpp>
+#include <main/old3dsdiag.h>
 #include <simcommon/physicsproperties.hpp>
 
 #include <simcollision/collisionvolume.hpp>
@@ -1204,6 +1205,18 @@ void WorldPhysicsManager::Update(unsigned int timeDeltaMilliSeconds)
         numSubsteps = (timeDeltaMilliSeconds + 34) / 35;
     }
 
+#ifdef SRR2_OLD_3DS
+    // Record the substep count this update selected. mLastTime is not yet
+    // updated, so this mirrors the threshold above exactly.
+    {
+        unsigned bucket = 0;
+        if(numSubsteps >= 3)      bucket = 2;
+        else if(numSubsteps == 2) bucket = 1;
+        ++g_old3dsPhysicsFrames[bucket];
+        g_old3dsPhysicsSubsteps += numSubsteps;
+    }
+#endif
+
     mLastTime = timeDeltaMilliSeconds;
 
     float substep = (float(timeDeltaMilliSeconds) * 0.001f) / float(numSubsteps);
@@ -1508,6 +1521,12 @@ void WorldPhysicsManager::WorldSimSubstepGuts(float dt, bool firstSubstep)
 
 BEGIN_PROFILE("DetectCollisions")
     bool printOut = false;
+#ifdef SRR2_OLD_3DS
+    // Record the collision workload this substep was handed, so cost can be
+    // related to scene complexity rather than only to elapsed time.
+    g_old3dsPhysicsAreas += (unsigned)mCollisionManager->GetActivatedAreaCount();
+    g_old3dsCollisionPairs += mCollisionManager->GetActivatedPairCount();
+#endif
     mCollisionManager->ClearCollisions();
     mCollisionManager->DetectCollision(dt, mTotalTime, printOut );
     mCollisionManager->SolveCollision(dt, mTotalTime);

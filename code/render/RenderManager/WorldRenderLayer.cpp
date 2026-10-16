@@ -13,6 +13,10 @@
 //========================================
 #include <raddebugwatch.hpp>
 #include <radtime.hpp>
+#include <main/old3dsdiag.h>
+#ifdef SRR2_OLD_3DS
+#include <3ds.h>
+#endif
 #include <p3d/billboardobject.hpp>
 
 //========================================
@@ -261,7 +265,21 @@ void WorldRenderLayer::Render()
 
 
             BEGIN_PROFILE( "Render WorldScene" );
+#ifdef SRR2_OLD_3DS
+            // Render sub-phase timing. render_ms covers the whole render flow as
+            // one blob; these split the largest part of it. Slots are
+            // 0 traversal/sort, 1 opaque, 2 translucent, 3 billboards,
+            // 4 sparkles, 5 guts.
+            u64 wrlPhaseTick = svcGetSystemTick();
+#endif
             mpWorldScene->Render( view );
+#ifdef SRR2_OLD_3DS
+            {
+                const u64 now = svcGetSystemTick();
+                g_old3dsRenderPhases[0] += (now - wrlPhaseTick) * 1000.0 / SYSCLOCK_ARM11;
+                wrlPhaseTick = now;
+            }
+#endif
     #ifdef DEBUGWATCH
         mDebugInnerRenderTime = radTimeGetMicroseconds()-mDebugInnerRenderTime;
     #endif
@@ -271,6 +289,13 @@ void WorldRenderLayer::Render()
             //p3d::inventory->SelectSection("Default");
 
             mpWorldScene->RenderOpaque();
+#ifdef SRR2_OLD_3DS
+            {
+                const u64 now = svcGetSystemTick();
+                g_old3dsRenderPhases[1] += (now - wrlPhaseTick) * 1000.0 / SYSCLOCK_ARM11;
+                wrlPhaseTick = now;
+            }
+#endif
 
             BEGIN_PROFILE( "Render coins" );
             GetCoinManager()->Render();
@@ -302,6 +327,13 @@ void WorldRenderLayer::Render()
             BEGIN_PROFILE( "RenderTranslucent" );
             mpWorldScene->RenderTranslucent();
             END_PROFILE( "RenderTranslucent" );
+#ifdef SRR2_OLD_3DS
+            {
+                const u64 now = svcGetSystemTick();
+                g_old3dsRenderPhases[2] += (now - wrlPhaseTick) * 1000.0 / SYSCLOCK_ARM11;
+                wrlPhaseTick = now;
+            }
+#endif
 
 
         BillboardQuadManager::Enable();
@@ -309,6 +341,13 @@ void WorldRenderLayer::Render()
         GetBillboardQuadManager()->DisplayAll();
 		END_PROFILE( "BBQ Display All" );
         BillboardQuadManager::Disable();
+#ifdef SRR2_OLD_3DS
+        {
+            const u64 now = svcGetSystemTick();
+            g_old3dsRenderPhases[3] += (now - wrlPhaseTick) * 1000.0 / SYSCLOCK_ARM11;
+            wrlPhaseTick = now;
+        }
+#endif
 
         BEGIN_PROFILE( "RenderSparkles" );
         // Render the procedural particle effects:
@@ -316,6 +355,13 @@ void WorldRenderLayer::Render()
         GetSparkleManager()->Render( Sparkle::SRM_ExcludeSorted );
 
             END_PROFILE( "RenderSparkles" );
+#ifdef SRR2_OLD_3DS
+            {
+                const u64 now = svcGetSystemTick();
+                g_old3dsRenderPhases[4] += (now - wrlPhaseTick) * 1000.0 / SYSCLOCK_ARM11;
+                wrlPhaseTick = now;
+            }
+#endif
             //p3d::inventory->PopSection();
             
             //Drawing the characters and stuff after the shadows to attempt to 
@@ -326,6 +372,13 @@ void WorldRenderLayer::Render()
                 mpGuts[i]->Display();
             }
             END_PROFILE( "Render Guts" );
+#ifdef SRR2_OLD_3DS
+            {
+                const u64 now = svcGetSystemTick();
+                g_old3dsRenderPhases[5] += (now - wrlPhaseTick) * 1000.0 / SYSCLOCK_ARM11;
+                wrlPhaseTick = now;
+            }
+#endif
             
             BEGIN_PROFILE( "Render Trigger Volume Tracker" );
             GetTriggerVolumeTracker()->Render();

@@ -1,6 +1,7 @@
 #include <pddi/pica/pica.hpp>
 #include <pddi/pica/context.hpp>
 #include <pddi/pica/statecache.hpp>
+#include <main/old3dsdiag.h>
 extern "C" void C3Di_UpdateContext(void);
 #ifdef SRR2_OLD_3DS
 // Interval counters consumed by the game loop diagnostics.
@@ -1456,7 +1457,15 @@ bool picaPrimBuffer::BuildExpanded(void)
     {
         expanded = (unsigned char*)linearAlloc(needed);
         if(expanded == NULL)
+        {
+#ifdef SRR2_OLD_3DS
+            // Linear failures are reported separately from the ordinary heap.
+            ++g_old3dsLinearFailures;
+            if(needed > g_old3dsLinearFailureBytes)
+                g_old3dsLinearFailureBytes = needed;
+#endif
             return false;
+        }
         expandedBytes = needed;
     }
 
@@ -1479,11 +1488,17 @@ void picaPrimBuffer::Display(void)
 {
     if(!g_picaInFrame)
     {
+#ifdef SRR2_OLD_3DS
+        ++g_old3dsDrawDroppedNoFrame;
+#endif
         return;
     }
 
     if(!buffer || !PrimIsDrawable(primType))
     {
+#ifdef SRR2_OLD_3DS
+        ++g_old3dsDrawDroppedNotDrawable;
+#endif
         return;
     }
 
@@ -1529,8 +1544,21 @@ void picaPrimBuffer::Display(void)
 
         const u32 headroom = 2048;
 
+#ifdef SRR2_OLD_3DS
+        // Track command-buffer pressure so a full buffer cannot be mistaken for
+        // an optimization. A dropped draw is missing geometry, not saved work.
+        if(cmdBuf != NULL)
+        {
+            if(cmdOffset > g_old3dsCmdHighWater) g_old3dsCmdHighWater = cmdOffset;
+            g_old3dsCmdSize = cmdSize;
+        }
+#endif
+
         if(cmdBuf == NULL || (cmdOffset + headroom) > cmdSize)
         {
+#ifdef SRR2_OLD_3DS
+            ++g_old3dsDrawDroppedNoRoom;
+#endif
             return;
         }
     }
@@ -1546,6 +1574,11 @@ void picaPrimBuffer::Display(void)
     }
     GPUCMD_AddWrite(GPUREG_ATTRIBBUFFER0_OFFSET,
                     osConvertVirtToPhys(vertexData) - PICA_BUFINFO_BASE);
+
+#ifdef SRR2_OLD_3DS
+    ++g_old3dsDrawCalls;
+    g_old3dsDrawVerts += count;
+#endif
 
     if(useElements)
         C3D_DrawElements(primTypeTable[primType], (int)count, C3D_UNSIGNED_SHORT, indices);

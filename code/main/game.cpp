@@ -42,6 +42,27 @@ extern unsigned g_old3dsModelViewReuses;
 // Physics includes character simulation. The other counters are disjoint
 // update stages; all are subsets of update_ms in OLD3DS_PROFILE.
 double g_old3dsUpdateStages[4] = {};
+
+// Old 3DS instrumentation counters. See code/main/old3dsdiag.h. Each is read
+// and cleared once per diagnostic interval by Game::Run().
+unsigned g_old3dsPhysicsFrames[3] = {};
+unsigned g_old3dsPhysicsSubsteps = 0;
+unsigned g_old3dsPhysicsAreas = 0;
+unsigned g_old3dsCollisionPairs = 0;
+unsigned g_old3dsFrameBeginOk = 0;
+unsigned g_old3dsFrameBeginBusy = 0;
+unsigned g_old3dsFrameBeginNoDraw = 0;
+unsigned g_old3dsFramePresented = 0;
+unsigned g_old3dsDrawCalls = 0;
+unsigned g_old3dsDrawVerts = 0;
+unsigned g_old3dsDrawDroppedNoFrame = 0;
+unsigned g_old3dsDrawDroppedNotDrawable = 0;
+unsigned g_old3dsDrawDroppedNoRoom = 0;
+unsigned g_old3dsCmdHighWater = 0;
+unsigned g_old3dsCmdSize = 0;
+double   g_old3dsRenderPhases[6] = {};
+unsigned g_old3dsLinearFailures = 0;
+unsigned g_old3dsLinearFailureBytes = 0;
 extern "C" int g_picaWorldScaleAllowed;
 extern "C" double g_picaFrameWaitMs;
 extern "C" double g_picaFrameSubmitMs;
@@ -581,6 +602,55 @@ void Game::Run()
             printf("OLD3DS_RENDER mv_uploads=%u mv_reuses=%u\n",
                 g_old3dsModelViewUploads, g_old3dsModelViewReuses);
             g_old3dsModelViewUploads = g_old3dsModelViewReuses = 0;
+
+            // Substeps are bucketed by the elapsed milliseconds the physics
+            // update received, using the same threshold that selects the count.
+            // This is the distribution of the selected count, not a count of
+            // substeps executed.
+            printf("OLD3DS_PHYS substep_frames_1=%u substep_frames_2=%u substep_frames_3plus=%u"
+                   " substeps_total=%u areas=%u pairs=%u\n",
+                g_old3dsPhysicsFrames[0], g_old3dsPhysicsFrames[1], g_old3dsPhysicsFrames[2],
+                g_old3dsPhysicsSubsteps, g_old3dsPhysicsAreas, g_old3dsCollisionPairs);
+
+            // begin_ok + begin_busy should equal the loops that attempted a
+            // frame; presented counts frames actually submitted to the GPU.
+            printf("OLD3DS_PRESENT begin_ok=%u begin_busy=%u begin_nodraw=%u presented=%u\n",
+                g_old3dsFrameBeginOk, g_old3dsFrameBeginBusy,
+                g_old3dsFrameBeginNoDraw, g_old3dsFramePresented);
+
+            // dropped_* must stay at zero. Any non-zero value means geometry was
+            // silently omitted, which would inflate FPS without being an
+            // improvement. cmd_high_water is bytes used against cmd_size.
+            printf("OLD3DS_DRAW calls=%u verts=%u dropped_noframe=%u dropped_notdrawable=%u"
+                   " dropped_noroom=%u cmd_high_water=%u cmd_size=%u\n",
+                g_old3dsDrawCalls, g_old3dsDrawVerts,
+                g_old3dsDrawDroppedNoFrame, g_old3dsDrawDroppedNotDrawable,
+                g_old3dsDrawDroppedNoRoom, g_old3dsCmdHighWater, g_old3dsCmdSize);
+
+            // Slots: 0 traversal/sort, 1 opaque, 2 translucent, 3 billboards,
+            // 4 sparkles, 5 guts. These are subsets of render_ms.
+            if(profileFrames)
+                printf("OLD3DS_RPHASE traversal_ms=%.2f opaque_ms=%.2f translucent_ms=%.2f"
+                       " billboards_ms=%.2f sparkles_ms=%.2f guts_ms=%.2f\n",
+                    g_old3dsRenderPhases[0] / profileFrames, g_old3dsRenderPhases[1] / profileFrames,
+                    g_old3dsRenderPhases[2] / profileFrames, g_old3dsRenderPhases[3] / profileFrames,
+                    g_old3dsRenderPhases[4] / profileFrames, g_old3dsRenderPhases[5] / profileFrames);
+
+            if(g_old3dsLinearFailures)
+                printf("OLD3DS_LINEARFAIL count=%u largest_bytes=%u\n",
+                    g_old3dsLinearFailures, g_old3dsLinearFailureBytes);
+
+            memset(g_old3dsPhysicsFrames, 0, sizeof(g_old3dsPhysicsFrames));
+            g_old3dsPhysicsSubsteps = g_old3dsPhysicsAreas = g_old3dsCollisionPairs = 0;
+            g_old3dsFrameBeginOk = g_old3dsFrameBeginBusy = g_old3dsFrameBeginNoDraw = 0;
+            g_old3dsFramePresented = 0;
+            g_old3dsDrawCalls = g_old3dsDrawVerts = 0;
+            g_old3dsDrawDroppedNoFrame = g_old3dsDrawDroppedNotDrawable = 0;
+            g_old3dsDrawDroppedNoRoom = 0;
+            g_old3dsCmdHighWater = g_old3dsCmdSize = 0;
+            memset(g_old3dsRenderPhases, 0, sizeof(g_old3dsRenderPhases));
+            g_old3dsLinearFailures = g_old3dsLinearFailureBytes = 0;
+
             memset(g_old3dsUpdateStages, 0, sizeof(g_old3dsUpdateStages));
             updateMs = renderMs = serviceMs = loadMs = 0.0;
             g_picaFrameWaitMs = g_picaFrameSubmitMs = 0.0;

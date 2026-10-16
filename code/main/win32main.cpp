@@ -122,6 +122,10 @@ extern "C" int main( int argc, char *argv[] )
         isNew3DS ? "new" : "old", (unsigned long)osGetMemRegionSize(MEMREGION_APPLICATION),
         (unsigned long)__ctru_heap_size, (unsigned long)__ctru_linear_heap_size,
         (unsigned long)linearSpaceFree());
+    // Tie a log to the executable that produced it. The earlier hardware log
+    // carried no build identifier, so it could not be matched to a binary.
+    printf("OLD3DS_BUILD id=%s date=%s time=%s\n",
+        SRR2_OLD3DS_BUILD_ID, __DATE__, __TIME__);
 #endif
 #endif
 
