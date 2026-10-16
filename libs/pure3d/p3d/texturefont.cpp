@@ -248,6 +248,7 @@ tTextureFont::DisplayLine(const P3D_UNICODE* text, int formatting) const
 
     if (!stream)
     {
+        p3d::stack->Pop();
         return;
     }
     while ((text[currChar]) && (text[currChar]!=(P3D_UNICODE)'\n'))

@@ -104,12 +104,19 @@ CGuiScreenTutorial::CGuiScreenTutorial
     {
         disableTutorial->SetDisplayOutline( true );
         disableTutorial->SetTextMode( Scrooby::TEXT_WRAP );
+#ifdef SRR2_OLD_3DS
+        disableTutorial->SetString(0, "X: Hide tutorials");
+#endif
     }
 #ifdef RAD_WIN32
     Scrooby::Sprite* disableTutorialIcon = m_disableTutorial->GetSprite( "DisableTutorial" );
     if( disableTutorialIcon != NULL )
     {
+#ifdef SRR2_OLD_3DS
+        disableTutorialIcon->SetVisible(false);
+#else
         disableTutorialIcon->ScaleAboutCenter( 0.375f );
+#endif
     }
 #endif
 

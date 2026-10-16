@@ -47,8 +47,7 @@ every physical Homebrew Launcher entry method supplies sufficient memory.
 
 The camera-cycle chord latches L when Select is pressed. Releasing L before
 Select cannot turn the chord into a vehicle reset. An optional right stick
-remains usable when L is not held. Original PC assets still show PC keyboard
-instructions in some screens.
+remains usable when L is not held. The English tutorial text and HUD interaction hint use the actual 3DS controls.
 
 ## Changes
 
@@ -252,3 +251,32 @@ invalidate the cache. This removes redundant matrix transposition and uniform
 updates without changing geometry, textures, traffic or simulation frequency.
 `OLD3DS_RENDER` reports actual uploads and exact reuses per diagnostic interval.
 Counter savings are not themselves a measured physical frame-rate improvement.
+
+
+## Native button prompts
+
+English control instructions are replaced once when the text bible loads. The
+walking, driving, jumping, running, kicking, vehicle, phone-booth and interior
+prompts use Circle Pad and A/B/X/Y/R. Camera instructions describe L + Circle
+Pad. Interaction is X; attacks are Y, including the box tutorial whose PC mouse
+instruction differed from entering a car. Exact catalog keys and exact keycap
+captions are replaced; mission narrative is preserved. Other languages retain
+their source translations and still require a separate localization pass.
+
+The HUD's baked PC action-key sprite is replaced by outlined `X Interact` text.
+The original visibility and pulse logic remains, with the extra console half-
+scale removed for this native label. The tutorial's disable hint says
+`X: Hide tutorials`. The controller reference uses a fixed native guide with
+button names and camera/reset/horn chords. It replaces the inherited controller page, including
+the Xbox picture and unsupported vibration/configuration options. START remains
+a valid physical 3DS button.
+These changes require only an executable update, not edited asset files.
+
+The host prompt check reads the actual supplied PC text bibles under address
+and undefined-behavior sanitizers. It checks replacement coverage, the attack/
+interaction distinction, and preservation of unrelated narrative text.
+
+The guide uses plain text against its solid background to keep vertex usage
+within the fixed immediate buffer. Texture-font allocation failure now balances
+the matrix stack before returning, preventing subsequent GUI draws from moving
+off screen when that buffer fills.

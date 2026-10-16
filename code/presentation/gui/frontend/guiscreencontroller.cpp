@@ -85,6 +85,41 @@ CGuiScreenController::CGuiScreenController
     m_currentDisplay( 0 ),
     m_currentControllerID( 0 )
 {
+#ifdef SRR2_OLD_3DS
+    // Reuse the three text fields present in the supplied PC Controller page.
+    // Its configuration widgets and console pad artwork do not match this port.
+    Scrooby::Group* nativeMenu = m_pScroobyScreen->GetPage("Controller")->GetGroup("Menu");
+    // Existing groups may already have converted children to local offsets.
+    nativeMenu->SetVisible(true);
+    nativeMenu->ResetTransformation();
+    nativeMenu->SetPosition(0, 0);
+    const char* names[] = {"Vibration", "Vibration_Value", "Display_Value"};
+    const char* guide[] = {
+        "NINTENDO 3DS CONTROLS",
+        "A: Jump / gas\nB: Run / brake\nX: Interact / car\nY: Attack\nR: Handbrake\nPad: Move / steer",
+        "L + Pad: Camera\nD-pad: Move / steer\nSELECT: Reset car\nL + SELECT: View\nL + R: Horn\nSTART: Pause"
+    };
+    for(unsigned child = 0; child < nativeMenu->Size(); ++child)
+        nativeMenu->GetChildDrawable(child)->SetVisible(false);
+    for(unsigned i = 0; i < 3; ++i)
+    {
+        Scrooby::Text* text = nativeMenu->GetText(names[i]);
+        if(!text) continue;
+        text->SetVisible(true);
+        text->SetString(0, guide[i]);
+        text->SetIndex(0);
+        text->ResetTransformation();
+        text->SetPosition(i == 2 ? 340 : 45, i == 0 ? 410 : 340);
+        text->SetBoundingBoxSize(i == 0 ? 550 : 280, i == 0 ? 45 : 280);
+        text->SetHorizontalJustification(Scrooby::Left);
+        text->SetVerticalJustification(Scrooby::Top);
+        text->SetTextMode(Scrooby::TEXT_OVERLAP);
+        text->SetDisplayOutline(false);
+        text->SetDisplayShadow(false);
+        text->SetColour(i == 0 ? tColour(255,235,0) : tColour(255,255,255));
+    }
+    return;
+#endif
     // Retrieve the Scrooby drawing elements.
     //
     Scrooby::Page* pPage;
@@ -367,6 +402,19 @@ void CGuiScreenController::HandleMessage
 //===========================================================================
 void CGuiScreenController::InitIntro()
 {
+#ifdef SRR2_OLD_3DS
+    const char* pages[] = {"Controller", "ControllerImage", "ControllerXBOX", "ControllerPS2",
+        "ControllerGC", "ControllerPC", "PCGamepadConfig", "PCKeyboardConfig",
+        "CharacterControls", "VehicleControls", "GameSettings"};
+    for(unsigned i = 0; i < sizeof(pages) / sizeof(pages[0]); ++i)
+    {
+        Scrooby::Page* page = m_pScroobyScreen->GetPage(pages[i]);
+        if(page) for(int layer = 0; layer < page->GetNumberOfLayers(); ++layer)
+            page->GetLayerByIndex(layer)->SetVisible(i == 0);
+    }
+    return;
+#endif
+
     // update controller settings on menu
     //
     bool vibrationOn = GetInputManager()->IsRumbleEnabled();
@@ -406,6 +454,10 @@ void CGuiScreenController::InitRunning()
 //===========================================================================
 void CGuiScreenController::InitOutro()
 {
+#ifdef SRR2_OLD_3DS
+    return;
+#endif
+
     bool vibrationOn = (m_pMenu->GetSelectionValue( MENU_ITEM_VIBRATION ) == 0);
     GetInputManager()->SetRumbleEnabled( vibrationOn );
 }
