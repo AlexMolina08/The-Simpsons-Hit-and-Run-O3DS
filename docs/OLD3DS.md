@@ -289,3 +289,21 @@ A Continue dismisses a tutorial and stops its speech through the existing skip
 event. It does not wait for an audio completion callback, which can remain
 pending when sound is muted or DSP playback is unavailable. Other platforms
 retain their original tutorial confirmation behavior.
+
+## Static mission review
+
+`tools/3ds/audit_missions.py GAME --out REPORT.json` inventories the seven levels,
+mission scripts, objective types, direct P3D/car loads and movie references.
+This is dependency review, not mission playthrough validation. The supplied PC
+data has 90 declarations and 17 used objective types. Checked direct asset loads
+resolve; eight mission/gag movies have converted files. The unused `ismovie`
+declaration has no scripts; the cinema uses `InteriorManager` special gag logic.
+
+The Lenny conversation is in Level 1's `m3sdi.mfk`. It leads into the locked
+Plow King vehicle stage. Save-capacity checks belong to `MemoryCardManager`,
+independent of this mission. The SDL drive currently reports placeholder free
+space, so an inherited memory-card warning does not establish actual SD capacity.
+
+Mission briefing and conversation prompts now name A/B explicitly. Native
+button restoration also avoids scaling an arbitrary second child, which can
+be a text label rather than the original PC keycap sprite.
