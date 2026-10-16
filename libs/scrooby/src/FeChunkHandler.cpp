@@ -152,6 +152,22 @@ FeGroup* FeProjectChunkHandler::LoadGroupChunk( tChunkFile* file )
         returnMe->AddChild(prompt);
     }
 #endif
+#ifdef SRR2_OLD_3DS
+    if(strcmp(name, "IconAndMessage") == 0 && returnMe->GetSprite("TutorialMessage"))
+    {
+        // Use the native font atlas instead of the small PC letter sprites.
+        FeText* message = new FeText("TutorialMessage3DS", 85, 300);
+        message->SetBoundingBoxSize(470, 200);
+        message->SetTextStyle("font0_16");
+        message->SetTextMode(Scrooby::TEXT_WRAP);
+        message->SetDisplayShadow(true);
+        message->SetShadowColour(tColour(0, 0, 0));
+        message->SetShadowOffset(1, -1);
+        message->AddHardCodedString("");
+        message->SetParent(returnMe);
+        returnMe->AddChild(message);
+    }
+#endif
     return returnMe;
 }
 

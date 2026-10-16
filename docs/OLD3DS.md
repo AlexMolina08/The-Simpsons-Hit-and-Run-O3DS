@@ -280,3 +280,7 @@ The guide uses plain text against its solid background to keep vertex usage
 within the fixed immediate buffer. Texture-font allocation failure now balances
 the matrix stack before returning, preventing subsequent GUI draws from moving
 off screen when that buffer fills.
+
+Tutorial panels use the native font atlas with wrapped text, replacing the
+small PC letter sprites. The disable hint hides every inherited keycap child,
+including the separate F1 caption in the compiled PC page.

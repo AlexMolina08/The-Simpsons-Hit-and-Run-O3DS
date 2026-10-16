@@ -45,6 +45,9 @@ protected:
 	void InitOutro();
 
     static const int MAX_TUTORIAL_MESSAGE_LENGTH = 256;
+#ifdef SRR2_OLD_3DS
+    Scrooby::Text* m_nativeTutorialMessage;
+#endif
     Scrooby::Sprite* m_tutorialMessage;
     Scrooby::Sprite* m_bartsHead;
     Scrooby::Group* m_disableTutorial;
