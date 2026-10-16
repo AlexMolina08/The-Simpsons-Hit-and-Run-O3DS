@@ -226,6 +226,13 @@ extern "C" int main( int argc, char *argv[] )
     // Run it!  Control will not return from here until the game is stopped.
     //
     pGame->Run();
+#ifdef SRR2_OLD3DS_QUEUE_METRICS
+    // The 3DS shutdown uses _exit, which bypasses renderer destructors/atexit.
+    // Write the independent graphics experiment buffer only after gameplay ends.
+    extern void picaQueueDump();
+    picaQueueDump();
+#endif
+
 
 #ifdef RAD_3DS
     radSoundHal3dsShutdownForExit( );

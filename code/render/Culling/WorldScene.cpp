@@ -15,6 +15,13 @@
 #include <main/old3dsdiag.h>
 #include <algorithm>
 #include <functional>
+#ifdef SRR2_OLD3DS_QUEUE_METRICS
+#include <pddi/pica/queuemetrics.hpp>
+#endif
+#ifdef SRR2_OLD3DS_MATERIAL_QUEUE
+#include <pddi/pica/context.hpp>
+#include <typeinfo>
+#endif
 
 #include <render/Culling/NodeFLL.h>
 
@@ -83,6 +90,14 @@ static Vector3f TODO_GRANULARITY(20.0f, 2000.0f, 20.0f);
 //#define RENDER_W_DLIST
 #ifdef ZSORT_RENDER
 // Replace all the following qsort and stl compare functions with stl function objects
+
+#ifdef SRR2_OLD3DS_MATERIAL_QUEUE
+static bool CanQueueStaticEntity(IEntityDSG* entity)
+{
+    return entity && typeid(*entity) == typeid(StaticEntityDSG) &&
+           static_cast<StaticEntityDSG*>(entity)->MaterialQueueSafe();
+}
+#endif
 
 inline bool gZSortCompare( IEntityDSG* pArg1, IEntityDSG* pArg2 )
 {
@@ -901,6 +916,9 @@ void WorldScene::RemoveQuietFail( IEntityDSG* ipEDSG )
 //========================================================================
 void WorldScene::RenderScene( unsigned int iFilter, tPointCamera* ipCam  )
 {
+#ifdef SRR2_OLD3DS_QUEUE_METRICS
+    picaQueueTimer queuePhaseTimer(g_picaQueueMetrics.traversalTicks, true);
+#endif
 #ifdef TRACK_SHADERS
     static int sRenderCall=0;
     sRenderCall++;
@@ -1713,6 +1731,9 @@ DSG_SET_PROFILE('C')
 
 void WorldScene::RenderOpaque( void )
 {
+#ifdef SRR2_OLD3DS_QUEUE_METRICS
+    picaQueueTimer queuePhaseTimer(g_picaQueueMetrics.opaqueTicks, true);
+#endif
 #ifdef TEST_DISTRIBUTED_SORT
     BEGIN_PROFILE("qsort1")
 	    //qsort(mpZSorts.mpData, (size_t)mpZSorts.mUseSize, sizeof(zSortBlah), gShaderCompare);
@@ -1724,7 +1745,18 @@ BEGIN_PROFILE("qsort display")
  	for(int i=mpZSorts.size() - 1; i>-1; i--)
 	{
 //BEGIN_PROFILE("opaque inner")	
+#ifdef SRR2_OLD3DS_MATERIAL_QUEUE
+        picaContext* queueContext = static_cast<picaContext*>(p3d::pddi);
+        const bool queueSafe = picaQueue::Enabled() && (queueContext->staticQueueActive || CanQueueStaticEntity(mpZSorts[i].entityPtr));
+        if(queueSafe && !queueContext->staticQueueActive) queueContext->BeginStaticQueue();
+#endif
 		mpZSorts[i].entityPtr->Display();
+#ifdef SRR2_OLD3DS_MATERIAL_QUEUE
+        if(queueSafe)
+        {
+            if(i == 0 || !CanQueueStaticEntity(mpZSorts[i-1].entityPtr)) queueContext->EndStaticQueue();
+        }
+#endif
 #ifdef TRACK_SHADERS
             UniqueShaders[mpZSorts[i].entityPtr->GetShaderUID()]++;
 #endif
@@ -1735,6 +1767,9 @@ END_PROFILE("qsort display")
 
 void WorldScene::RenderTranslucent( void )
 {
+#ifdef SRR2_OLD3DS_QUEUE_METRICS
+    picaQueueTimer queuePhaseTimer(g_picaQueueMetrics.translucentTicks, true);
+#endif
     #ifdef RAD_GAMECUBE
         RefractionShader::AllowOneBufferCapture();
     #endif
@@ -1762,7 +1797,20 @@ BEGIN_PROFILE("qsort2 display")
 #ifdef SRR2_OLD_3DS
         Old3dsEntityScope entityTiming(mpZSortsPass2[i]->Old3dsCategory());
 #endif
+#ifdef SRR2_OLD3DS_MATERIAL_QUEUE
+        picaContext* queueContext = static_cast<picaContext*>(p3d::pddi);
+        const bool queueSafe = picaQueue::Enabled() && (queueContext->staticQueueActive || CanQueueStaticEntity(mpZSortsPass2[i]));
+        if(queueSafe && !queueContext->staticQueueActive) queueContext->BeginStaticQueue();
+#endif
 		mpZSortsPass2[i]->Display();
+#ifdef SRR2_OLD3DS_MATERIAL_QUEUE
+        if(queueSafe)
+        {
+            // Flush while this static entity's diagnostic scope is still active.
+            // Never carry a submission into an instance, shadow or arbitrary Display.
+            if(i == 0 || !CanQueueStaticEntity(mpZSortsPass2[i-1])) queueContext->EndStaticQueue();
+        }
+#endif
 #ifdef SRR2_OLD_3DS
         ++g_old3dsPhase2Entities[mpZSortsPass2[i]->mTranslucent ? 1 : 0];
 #endif

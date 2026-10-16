@@ -78,6 +78,11 @@ public:
     int  CountDevPasses(void);
     void SetDevPass(unsigned);
     void PreRender(void);
+#ifdef SRR2_OLD3DS_MATERIAL_QUEUE
+    bool QueueOpaque() const { return texEnv[0].alphaBlendMode == PDDI_BLEND_NONE && texEnv[0].writeMask == PDDI_WRITE_ALL; }
+    bool CanApplyQueued(picaMat* previous) const;
+    void ApplyQueued(picaMat* previous);
+#endif
 
 private:
     picaContext* context;

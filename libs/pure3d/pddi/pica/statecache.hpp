@@ -4,6 +4,7 @@
 #include <3ds.h>
 #include <citro3d.h>
 #include <main/old3dsdiag.h>
+#include <pddi/pica/queuemetrics.hpp>
 
 struct picaStateCache
 {
@@ -130,6 +131,9 @@ static inline void picaTexBind0(C3D_Tex* tex)
 
 #ifdef SRR2_OLD_3DS
     Old3dsCount(O3_TEX_CHANGE);
+#ifdef SRR2_OLD3DS_QUEUE_METRICS
+    ++g_picaQueueMetrics.textures;
+#endif
 #endif
     C3D_TexBind(0, tex);
     s.texValid  = true;

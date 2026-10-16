@@ -7,6 +7,8 @@
 
 #include <pddi/base/debug.hpp>
 #include <stdio.h>
+#include <string.h>
+#include <pddi/pica/queuemetrics.hpp>
 #include <main/old3dsdiag.h>
 
 pddiShadeColourTable picaMat::colourTable[] =
@@ -222,6 +224,9 @@ void picaMat::SetDevPass(unsigned)
 {
 #ifdef SRR2_OLD_3DS
     Old3dsCount(O3_MATERIAL_PASS);
+#ifdef SRR2_OLD3DS_QUEUE_METRICS
+    ++g_picaQueueMetrics.materialPasses;
+#endif
 #endif
     const int i = 0;
 
@@ -314,3 +319,57 @@ void picaMat::PreRender(void)
                                texEnv[i].diffuse,
                                texEnv[i].emissive);
 }
+
+#ifdef SRR2_OLD3DS_MATERIAL_QUEUE
+bool picaMat::CanApplyQueued(picaMat* previous) const
+{
+    if(!previous || previous->context != context || lastShader != previous ||
+       currentUID != previous->uid || !g_picaInFrame) return false;
+    const picaTextureEnv& a = texEnv[0];
+    const picaTextureEnv& b = previous->texEnv[0];
+    if(a.alphaTest != b.alphaTest || a.alphaBlendMode != b.alphaBlendMode ||
+       a.twoSided != b.twoSided || a.writeMask != b.writeMask) return false;
+    if(a.alphaTest && (a.alphaCompareMode != b.alphaCompareMode ||
+       memcmp(&a.alphaRef,&b.alphaRef,sizeof(float)) != 0)) return false;
+    const bool textured = a.texture && a.texture->GetC3DTexture();
+    const bool previousTextured = b.texture && b.texture->GetC3DTexture();
+    // The first draw applies complete state. Any invalidated cache forces the
+    // legacy path; this is a synchronous queue scope, not a global shader cache.
+    return textured == previousTextured && g_picaState.alphaTestValid &&
+        g_picaState.blendValid && g_picaState.cullValid && g_picaState.depthValid &&
+        g_picaState.passStagesSet && g_picaState.env0Mode == (textured ? 1 : 2);
+}
+
+void picaMat::ApplyQueued(picaMat* previous)
+{
+    Old3dsOperationScope timing(O3_MATERIAL);
+    const picaTextureEnv& a = texEnv[0];
+    const picaTextureEnv& b = previous->texEnv[0];
+    if(a.texture != b.texture || a.filterMode != b.filterMode || a.uvMode != b.uvMode)
+    {
+        C3D_Tex* texture = a.texture ? a.texture->GetC3DTexture() : NULL;
+        if(texture)
+        {
+            C3D_TexSetFilter(texture, filterTable[a.filterMode], filterTable[a.filterMode]);
+            C3D_TexSetWrap(texture, uvTable[a.uvMode], uvTable[a.uvMode]);
+            picaTexBind0(texture);
+        }
+    }
+    const bool sameUniforms = a.lit == b.lit && (!a.lit ||
+        (a.ambient.c == b.ambient.c && a.diffuse.c == b.diffuse.c && a.emissive.c == b.emissive.c));
+    if(!sameUniforms)
+        context->SetVertexUniforms(a.lit,a.ambient,a.diffuse,a.emissive);
+#ifdef SRR2_OLD3DS_QUEUE_METRICS
+    else ++g_picaQueueMetrics.uniformBypasses;
+    ++g_picaQueueMetrics.pipelineReuses;
+#endif
+    // PICA uses one shader class with no PostRender override. Preserve base UID
+    // tracking so the next legacy draw sees the actual last applied material.
+    context->ADD_STAT(PDDI_STAT_MATERIAL_OPS, !IsCurrent());
+    currentUID = uid;
+    lastShader = this;
+    dirty = false;
+    g_old3dsDrawBlended = a.alphaBlendMode != PDDI_BLEND_NONE;
+    g_old3dsDrawAlphaTested = a.alphaTest;
+}
+#endif

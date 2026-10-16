@@ -34,6 +34,9 @@ public:
 #ifdef SRR2_OLD_3DS
     virtual unsigned Old3dsCategory() const { return O3_STATIC; }
 #endif
+#ifdef SRR2_OLD3DS_MATERIAL_QUEUE
+   bool MaterialQueueSafe() const;
+#endif
    StaticEntityDSG();
    ~StaticEntityDSG();
 

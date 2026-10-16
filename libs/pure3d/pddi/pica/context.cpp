@@ -1,6 +1,7 @@
 #include <pddi/pica/pica.hpp>
 #include <pddi/pica/context.hpp>
 #include <pddi/pica/statecache.hpp>
+#include <pddi/pica/queuemetrics.hpp>
 #include <main/old3dsdiag.h>
 extern "C" void C3Di_UpdateContext(void);
 #ifdef SRR2_OLD_3DS
@@ -98,6 +99,11 @@ picaContext::picaContext(picaDevice* dev, picaDisplay* disp)
     : pddiBaseContext((pddiDisplay*)disp, (pddiDevice*)dev)
 {
     device  = dev;
+#ifdef SRR2_OLD3DS_MATERIAL_QUEUE
+    staticQueueActive = false;
+    staticQueueCount = 0;
+    staticQueuePrevious = NULL;
+#endif
     stereoOn = false;
     bottomPass = false;
     s_picaContext = this;
@@ -204,6 +210,9 @@ picaContext::picaContext(picaDevice* dev, picaDisplay* disp)
 
 picaContext::~picaContext()
 {
+#ifdef SRR2_OLD3DS_QUEUE_METRICS
+    picaQueueDump();
+#endif
     if(defaultShader)
         defaultShader->Release();
     if(clearShader)
@@ -293,6 +302,10 @@ void picaContext::EndFrame()
         GSPGPU_FlushDataCache(immIndices, immIndexUsed);
 
     display->EndFrame();
+#ifdef SRR2_OLD3DS_QUEUE_METRICS
+    g_picaQueueMetrics.commandWords += (u64)(C3D_GetCmdBufUsage() * (640u * 1024u / 4u));
+    picaQueueCapture();
+#endif
 }
 
 void picaContext::Clear(unsigned bufferMask)
@@ -693,6 +706,9 @@ void picaContext::EndPrims(pddiPrimStream* stream)
 
 void picaContext::DrawPrimBuffer(pddiShader* mat, pddiPrimBuffer* buffer)
 {
+#ifdef SRR2_OLD3DS_QUEUE_METRICS
+    picaQueueBackendTimer backendTimer;
+#endif
     if(!mat)
         mat = defaultShader;
 
@@ -707,6 +723,158 @@ void picaContext::DrawPrimBuffer(pddiShader* mat, pddiPrimBuffer* buffer)
 
     ((picaPrimBuffer*)buffer)->Display();
 }
+
+#ifdef SRR2_OLD3DS_MATERIAL_QUEUE
+bool picaContext::CanQueue(pddiShader* material, pddiPrimBuffer* buffer)
+{
+#ifdef SRR2_OLD3DS_QUEUE_METRICS
+    ++g_picaQueueMetrics.candidates;
+#endif
+    return g_picaInFrame && !bottomPass && material && buffer &&
+        state.renderState->zEnabled && state.renderState->zWrite &&
+        !state.stencilState->enabled &&
+        (state.renderState->zCompare == PDDI_COMPARE_LESS ||
+         state.renderState->zCompare == PDDI_COMPARE_LESSEQUAL) &&
+        static_cast<picaMat*>(material)->QueueOpaque() &&
+        static_cast<picaPrimBuffer*>(buffer)->QueuePersistent();
+}
+
+bool picaPrimBuffer::QueuePersistent()
+{
+    if(transient || !buffer || !PrimQueueSupported()) return false;
+    if(indices)
+    {
+        if(elemState < 0) elemState = IndicesInRange() ? 1 : 0;
+        if(elemState != 1) return false;
+    }
+    return true;
+}
+
+#ifdef SRR2_OLD3DS_MATERIAL_QUEUE_SORT
+bool picaPrimBuffer::QueueBounds(float* low, float* high)
+{
+    if(!queueBoundsValid)
+    {
+        const unsigned count = allocated;
+        if(!buffer || !count || transient) return false;
+        for(unsigned axis = 0; axis < 3; ++axis)
+            queueLow[axis] = queueHigh[axis] = ((const float*)buffer)[axis];
+        for(unsigned i = 0; i < count; ++i)
+        {
+            const float* position = (const float*)(buffer + i * PICA_VERTEX_STRIDE);
+            for(unsigned axis = 0; axis < 3; ++axis)
+            {
+                if(!isfinite(position[axis])) return false;
+                if(position[axis] < queueLow[axis]) queueLow[axis] = position[axis];
+                if(position[axis] > queueHigh[axis]) queueHigh[axis] = position[axis];
+            }
+        }
+        queueBoundsValid = true;
+    }
+    memcpy(low, queueLow, sizeof(queueLow));
+    memcpy(high, queueHigh, sizeof(queueHigh));
+    return true;
+}
+
+#endif
+
+void picaContext::SubmitMaterialQueue(Submission* entries, unsigned count)
+{
+    if(!count) return;
+    bool opportunity = false;
+#ifdef SRR2_OLD3DS_MATERIAL_QUEUE_SORT
+    const bool sortEnabled = true;
+#else
+    const bool sortEnabled = false;
+#endif
+    (void)sortEnabled;
+#ifdef SRR2_OLD3DS_QUEUE_METRICS
+    const bool sample = ((++g_picaQueueMetrics.queueSamples & 31u) == 1u);
+    g_picaQueueMetrics.queued += count;
+    if(count > g_picaQueueMetrics.peakEntries) g_picaQueueMetrics.peakEntries = count;
+    for(unsigned i = 0; i < count; ++i)
+        g_picaQueueMetrics.originalChanges += i == 0 || entries[i].material != entries[i-1].material;
+    {
+    picaQueueTimer timer(g_picaQueueMetrics.collectTicks, sample && sortEnabled);
+#endif
+#ifdef SRR2_OLD3DS_MATERIAL_QUEUE_SORT
+    // Only build coverage when there is an actual nonconsecutive material match.
+    opportunity = picaQueue::HasMaterialOpportunity(entries, count);
+    if(opportunity)
+    {
+        const pddiMatrix* mv = state.matrixStack[PDDI_MATRIX_MODELVIEW]->Top();
+        float modelView[4][4], projection[4][4];
+        for(unsigned a = 0; a < 4; ++a)
+            for(unsigned b = 0; b < 4; ++b)
+            {
+                modelView[a][b] = mv->Row4(b)[a];
+            }
+        // C3D_FVec stores components in w,z,y,x order, not x,y,z,w.
+        for(unsigned a = 0; a < 4; ++a)
+        {
+            projection[a][0] = hwProjection.r[a].x;
+            projection[a][1] = hwProjection.r[a].y;
+            projection[a][2] = hwProjection.r[a].z;
+            projection[a][3] = hwProjection.r[a].w;
+        }
+        const picaQueue::Projection coverage = picaQueue::PrepareProjection(modelView, projection);
+        for(unsigned i = 0; i < count; ++i)
+        {
+            float low[3], high[3];
+            if(entries[i].buffer->QueueBounds(low, high))
+                entries[i].rect = picaQueue::ProjectBounds(low, high, coverage);
+        }
+    }
+#endif
+#ifdef SRR2_OLD3DS_QUEUE_METRICS
+    }
+    unsigned moved;
+    {
+        picaQueueTimer timer(g_picaQueueMetrics.sortTicks, sample && sortEnabled);
+        moved = opportunity ? picaQueue::Schedule(entries, count) : 0;
+    }
+    g_picaQueueMetrics.moved += moved;
+    picaQueueTimer submitTimer(g_picaQueueMetrics.submitTicks, sample);
+#else
+    if(opportunity) picaQueue::Schedule(entries, count);
+#endif
+    pddiShader* previous = NULL;
+    for(unsigned i = 0; i < count; ++i)
+        SubmitQueuedOne(entries[i].material, entries[i].buffer, previous);
+}
+
+void picaContext::SubmitQueuedPrim(pddiShader* material, picaPrimBuffer* buffer)
+{
+#ifdef SRR2_OLD3DS_QUEUE_METRICS
+    ++g_picaQueueMetrics.queued;
+    ++g_picaQueueMetrics.queueSamples;
+    if(g_picaQueueMetrics.peakEntries < 1) g_picaQueueMetrics.peakEntries = 1;
+    if(material != staticQueuePrevious) ++g_picaQueueMetrics.originalChanges;
+#endif
+    SubmitQueuedOne(material, buffer, staticQueuePrevious);
+}
+
+void picaContext::SubmitQueuedOne(pddiShader* shader, picaPrimBuffer* buffer, pddiShader*& previous)
+{
+#ifdef SRR2_OLD3DS_QUEUE_METRICS
+    if(shader != previous) ++g_picaQueueMetrics.submittedChanges;
+#endif
+    picaMat* material = static_cast<picaMat*>(shader);
+    if(previous && material->CanApplyQueued(static_cast<picaMat*>(previous)))
+    {
+#ifdef SRR2_OLD3DS_QUEUE_METRICS
+        picaQueueBackendTimer backendTimer;
+#endif
+        material->ApplyQueued(static_cast<picaMat*>(previous));
+        buffer->Display();
+#ifdef SRR2_OLD3DS_QUEUE_METRICS
+        if(shader == previous) ++g_picaQueueMetrics.materialReuses;
+#endif
+    }
+    else DrawPrimBuffer(shader, buffer);
+    previous = shader;
+}
+#endif
 
 int picaContext::GetMaxLights(void)
 {
@@ -863,6 +1031,9 @@ void picaContext::SetVertexUniforms(bool lit, pddiColour ambient, pddiColour dif
 
     if(!projUploaded)
     {
+#ifdef SRR2_OLD3DS_QUEUE_METRICS
+        g_picaQueueMetrics.uniforms += 2;
+#endif
         C3D_FVUnifSet(GPU_VERTEX_SHADER, VSH_FVEC_u_stereoOn,
                       stereoOn ? 1.0f : 0.0f, 0.0f, 0.0f, 0.0f);
         C3D_FVUnifMtx4x4(GPU_VERTEX_SHADER, VSH_FVEC_u_proj, &hwProjection);
@@ -877,6 +1048,9 @@ void picaContext::SetVertexUniforms(bool lit, pddiColour ambient, pddiColour dif
         memcpy(&lastModelView, mv, sizeof(lastModelView));
         modelViewUploaded = true;
         ++g_old3dsModelViewUploads;
+#ifdef SRR2_OLD3DS_QUEUE_METRICS
+        ++g_picaQueueMetrics.uniforms;
+#endif
         Old3dsCount(O3_MV_UPLOAD);
 #endif
     C3D_Mtx hwModelView;
@@ -891,11 +1065,18 @@ void picaContext::SetVertexUniforms(bool lit, pddiColour ambient, pddiColour dif
     C3D_FVUnifMtx4x4(GPU_VERTEX_SHADER, VSH_FVEC_u_mv, &hwModelView);
 #ifdef SRR2_OLD_3DS
     }
-    else { ++g_old3dsModelViewReuses; Old3dsCount(O3_MV_REUSE); }
+    else {
+#ifdef SRR2_OLD3DS_QUEUE_METRICS
+        ++g_picaQueueMetrics.uniformReuses;
+#endif
+        ++g_old3dsModelViewReuses; Old3dsCount(O3_MV_REUSE); }
 #endif
 
     if(!miscUploaded || lit != lastLit)
     {
+#ifdef SRR2_OLD3DS_QUEUE_METRICS
+        ++g_picaQueueMetrics.uniforms;
+#endif
         C3D_FVUnifSet(GPU_VERTEX_SHADER, VSH_FVEC_u_misc,
                       lit ? 1.0f : 0.0f,
                       0.0f,
@@ -916,6 +1097,9 @@ void picaContext::SetVertexUniforms(bool lit, pddiColour ambient, pddiColour dif
 
     if(!lightsUploaded)
     {
+#ifdef SRR2_OLD3DS_QUEUE_METRICS
+        g_picaQueueMetrics.uniforms += 3;
+#endif
         C3D_FVec* pos = C3D_FVUnifWritePtr(GPU_VERTEX_SHADER, VSH_FVEC_u_lightPos, PDDI_MAX_LIGHTS);
         C3D_FVec* col = C3D_FVUnifWritePtr(GPU_VERTEX_SHADER, VSH_FVEC_u_lightColour, PDDI_MAX_LIGHTS);
         C3D_FVec* att = C3D_FVUnifWritePtr(GPU_VERTEX_SHADER, VSH_FVEC_u_lightAtten, PDDI_MAX_LIGHTS);
@@ -936,6 +1120,9 @@ void picaContext::SetVertexUniforms(bool lit, pddiColour ambient, pddiColour dif
     {
         return;
     }
+#ifdef SRR2_OLD3DS_QUEUE_METRICS
+    g_picaQueueMetrics.uniforms += 4;
+#endif
     lastMatAmbient   = ambient;
     lastMatDiffuse   = diffuse;
     lastMatEmissive  = emissive;
@@ -1297,6 +1484,9 @@ picaPrimBuffer::picaPrimBuffer(picaContext* c, pddiPrimType type, unsigned verte
     mem = 0;
     transient = false;
     defaultsValid = false;
+#ifdef SRR2_OLD3DS_MATERIAL_QUEUE_SORT
+    queueBoundsValid = false;
+#endif
 
     primType = type;
     vertexType = vertexFormat;
@@ -1444,6 +1634,9 @@ static inline void picaFlushForGpu(const void* p, unsigned bytes)
 
 void picaPrimBuffer::Unlock(pddiPrimBufferStream*)
 {
+#ifdef SRR2_OLD3DS_MATERIAL_QUEUE_SORT
+    queueBoundsValid = false;
+#endif
 #ifdef SRR2_OLD_3DS
     Old3dsOperationScope timing(O3_VERTEXFLUSH, transient ? 0 : mem);
 #endif
@@ -1658,6 +1851,10 @@ void picaPrimBuffer::Display(void)
         {
             if(cmdOffset > g_old3dsCmdHighWater) g_old3dsCmdHighWater = cmdOffset;
             g_old3dsCmdSize = cmdSize;
+#ifdef SRR2_OLD3DS_QUEUE_METRICS
+            if(cmdOffset > g_picaQueueMetrics.commandHighWater) g_picaQueueMetrics.commandHighWater = cmdOffset;
+            g_picaQueueMetrics.commandSize = cmdSize;
+#endif
         }
 #endif
 
@@ -1683,6 +1880,10 @@ void picaPrimBuffer::Display(void)
                     osConvertVirtToPhys(vertexData) - PICA_BUFINFO_BASE);
 
 #ifdef SRR2_OLD_3DS
+#ifdef SRR2_OLD3DS_QUEUE_METRICS
+    ++g_picaQueueMetrics.draws;
+    g_picaQueueMetrics.vertices += count;
+#endif
     ++g_old3dsDrawCalls;
     g_old3dsDrawVerts += count;
     if(g_old3dsActiveEntity >= 0)
@@ -1851,5 +2052,82 @@ extern "C" void picaWorldBegin(void)
 extern "C" void picaWorldEnd(void)
 {
     if(s_picaContext) s_picaContext->EndWorld();
+}
+#endif
+
+#ifdef SRR2_OLD3DS_QUEUE_METRICS
+#include <stdio.h>
+picaQueueMetrics g_picaQueueMetrics = {};
+#ifdef SRR2_OLD3DS_MATERIAL_QUEUE_AB
+bool picaQueue::enabled = false;
+#endif
+namespace {
+struct QueueRecord { picaQueueMetrics metrics; u64 elapsed; };
+QueueRecord queueRecords[128];
+unsigned queueRecordFirst = 0, queueRecordCount = 0, queueRecordOverwritten = 0;
+u64 queueIntervalStart = 0;
+bool queueDumped = false;
+}
+void picaQueueCapture()
+{
+    if(!queueIntervalStart) queueIntervalStart = svcGetSystemTick();
+    if(++g_picaQueueMetrics.frames < 120) return;
+    const unsigned slot = (queueRecordFirst + queueRecordCount) % 128;
+    if(queueRecordCount == 128)
+    {
+        queueRecordFirst = (queueRecordFirst + 1) % 128;
+        ++queueRecordOverwritten;
+    }
+    else ++queueRecordCount;
+    const u64 now = svcGetSystemTick();
+    QueueRecord& record = queueRecords[slot];
+#ifdef SRR2_OLD3DS_MATERIAL_QUEUE
+    g_picaQueueMetrics.queueMode = picaQueue::Enabled() ? 1 : 0;
+#endif
+    record.metrics = g_picaQueueMetrics;
+    record.elapsed = now - queueIntervalStart;
+    memset(&g_picaQueueMetrics, 0, sizeof(g_picaQueueMetrics));
+    queueIntervalStart = now;
+#ifdef SRR2_OLD3DS_MATERIAL_QUEUE_AB
+    picaQueue::enabled = !picaQueue::enabled;
+#endif
+}
+void picaQueueDump()
+{
+    if(queueDumped) return;
+    FILE* file = fopen("sdmc:/3ds/simpsons/material-queue.log", "w");
+    if(!file) file = fopen("sd:/3ds/simpsons/material-queue.log", "w");
+    if(!file) return;
+    fprintf(file, "QUEUE_BUILD id=%s enabled=%u sort=%u capacity=32 snapshot_bytes=%u overwritten=%u\n",
+        SRR2_OLD3DS_BUILD_ID,
+#ifdef SRR2_OLD3DS_MATERIAL_QUEUE
+        1u,
+#else
+        0u,
+#endif
+#ifdef SRR2_OLD3DS_MATERIAL_QUEUE_SORT
+        1u,
+#else
+        0u,
+#endif
+        (unsigned)sizeof(queueRecords), queueRecordOverwritten);
+#ifdef SRR2_OLD3DS_MATERIAL_QUEUE
+    // Completed records carry their captured mode; the partial tail must use
+    // the current mode rather than the zeroed interval's default value.
+    g_picaQueueMetrics.queueMode = picaQueue::Enabled() ? 1 : 0;
+#endif
+    for(unsigned i = 0; i <= queueRecordCount; ++i)
+    {
+        const picaQueueMetrics& m = i < queueRecordCount ? queueRecords[(queueRecordFirst+i)%128].metrics : g_picaQueueMetrics;
+        fprintf(file, "QUEUE interval=%u frames=%u geometries=%u candidates=%u queued=%u barriers=%u capacity_flushes=%u moved=%u original_changes=%u submitted_changes=%u material_reuses=%u draws=%u vertices=%u material_passes=%u textures=%u uniform_blocks=%u uniform_reuses=%u peak_entries=%u cmd_high=%u cmd_size=%u geometry_ticks=%llu geometry_samples=%u collect_ticks=%llu sort_ticks=%llu submit_ticks=%llu queue_calls=%u elapsed_ticks=%llu command_words=%llu backend_calls=%u backend_samples=%u backend_ticks=%llu pipeline_reuses=%u uniform_bypasses=%u opaque_ticks=%llu translucent_ticks=%llu traversal_ticks=%llu queue_enabled=%u partial=%u\n",
+            i, m.frames, m.geometries, m.candidates, m.queued, m.barriers, m.capacityFlushes,
+            m.moved, m.originalChanges, m.submittedChanges, m.materialReuses,
+            m.draws, m.vertices, m.materialPasses, m.textures, m.uniforms, m.uniformReuses,
+            m.peakEntries, m.commandHighWater, m.commandSize,
+            m.geometryTicks, m.geometrySamples, m.collectTicks, m.sortTicks, m.submitTicks, m.queueSamples,
+            i < queueRecordCount ? queueRecords[(queueRecordFirst+i)%128].elapsed : 0ull, m.commandWords, m.backendCalls, m.backendSamples, m.backendTicks, m.pipelineReuses, m.uniformBypasses, m.opaqueTicks, m.translucentTicks, m.traversalTicks, m.queueMode, i == queueRecordCount ? 1u : 0u);
+    }
+    queueDumped = fflush(file) == 0;
+    if(fclose(file) != 0) queueDumped = false;
 }
 #endif

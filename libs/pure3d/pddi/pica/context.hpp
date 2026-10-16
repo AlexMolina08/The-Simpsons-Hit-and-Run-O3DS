@@ -2,6 +2,9 @@
 #define PDDI_PICA_CONTEXT_HPP
 
 #include <pddi/pica/pica.hpp>
+#ifdef SRR2_OLD3DS_MATERIAL_QUEUE
+#include <pddi/pica/materialqueue.hpp>
+#endif
 
 const unsigned PICA_IMM_VERTEX_BYTES = 512 * 1024;
 const unsigned PICA_IMM_INDEX_BYTES  = 96 * 1024;
@@ -10,6 +13,7 @@ const unsigned PICA_IMM_BUFFERS      = 2;
 const int PICA_IMM_DEFAULT_VERTICES = 256;
 
 class picaExtGamma;
+class picaPrimBuffer;
 
 class picaContext : public pddiBaseContext
 {
@@ -32,6 +36,26 @@ public:
     void EndPrims(pddiPrimStream* stream);
 
     void DrawPrimBuffer(pddiShader* material, pddiPrimBuffer* buffer);
+#ifdef SRR2_OLD3DS_MATERIAL_QUEUE
+    struct Submission
+    {
+        pddiShader* material;
+        picaPrimBuffer* buffer;
+        picaQueue::Rect rect;
+    };
+    bool CanQueue(pddiShader* material, pddiPrimBuffer* buffer);
+    void SubmitMaterialQueue(Submission* entries, unsigned count);
+    void SubmitQueuedPrim(pddiShader* material, picaPrimBuffer* buffer);
+    void SubmitQueuedOne(pddiShader* material, picaPrimBuffer* buffer, pddiShader*& previous);
+    // WorldScene owns this scope across consecutive exact StaticEntityDSGs.
+    // Their Display methods do not change transforms/lights or mutate assets.
+    void BeginStaticQueue() { staticQueueActive = true; staticQueueCount = 0; staticQueuePrevious = NULL; }
+    void EndStaticQueue() { SubmitMaterialQueue(staticQueue, staticQueueCount); staticQueueCount = 0; staticQueuePrevious = NULL; staticQueueActive = false; }
+    bool staticQueueActive;
+    unsigned staticQueueCount;
+    pddiShader* staticQueuePrevious;
+    Submission staticQueue[picaQueue::Capacity];
+#endif
 
     int  GetMaxLights();
     void SetAmbientLight(pddiColour col);
@@ -198,6 +222,12 @@ public:
 
     unsigned GetVertexFormat() { return vertexType; }
     void Display(void);
+#ifdef SRR2_OLD3DS_MATERIAL_QUEUE
+#ifdef SRR2_OLD3DS_MATERIAL_QUEUE_SORT
+    bool QueueBounds(float* low, float* high);
+#endif
+    bool QueuePersistent();
+#endif
 
     void SetFormat(pddiPrimType type, unsigned vertexFormat);
 
@@ -246,5 +276,12 @@ protected:
     bool defaultsValid;
     bool transient;
     unsigned mem;
+#ifdef SRR2_OLD3DS_MATERIAL_QUEUE
+    bool PrimQueueSupported() const { return primType == PDDI_PRIM_TRIANGLES || primType == PDDI_PRIM_TRISTRIP; }
+#ifdef SRR2_OLD3DS_MATERIAL_QUEUE_SORT
+    bool queueBoundsValid;
+    float queueLow[3], queueHigh[3];
+#endif
+#endif
 };
 #endif
