@@ -284,3 +284,8 @@ off screen when that buffer fills.
 Tutorial panels use the native font atlas with wrapped text, replacing the
 small PC letter sprites. The disable hint hides every inherited keycap child,
 including the separate F1 caption in the compiled PC page.
+
+A Continue dismisses a tutorial and stops its speech through the existing skip
+event. It does not wait for an audio completion callback, which can remain
+pending when sound is muted or DSP playback is unavailable. Other platforms
+retain their original tutorial confirmation behavior.

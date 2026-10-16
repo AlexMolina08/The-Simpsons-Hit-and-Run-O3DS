@@ -101,6 +101,12 @@ CGuiScreenTutorial::CGuiScreenTutorial
     iconAndMessage->Translate( 0, 15 );
 #endif // PAL
 
+#ifdef SRR2_OLD_3DS
+    Scrooby::Page* continuePage = m_pScroobyScreen->GetPage("Continue");
+    if(continuePage)
+        continuePage->GetGroup("AcceptLabel")->GetText("Accept")->SetString(0, "A Continue");
+#endif
+
     m_disableTutorial = pPage->GetGroup( "DisableTutorial" );
     rAssert( m_disableTutorial != NULL );
 
@@ -220,7 +226,11 @@ void CGuiScreenTutorial::HandleMessage(	eGuiMessage message,
     #endif // !FINAL
 */
                 {
+#ifdef SRR2_OLD_3DS
+                    this->SetButtonVisible( BUTTON_ICON_ACCEPT, true );
+#else
                     this->SetButtonVisible( BUTTON_ICON_ACCEPT, !GetTutorialManager()->IsDialogPlaying() );
+#endif
 
 //                    rAssert( m_disableTutorial != NULL );
 //                    m_disableTutorial->SetVisible( !GetTutorialManager()->IsDialogPlaying() );
@@ -256,13 +266,19 @@ void CGuiScreenTutorial::HandleMessage(	eGuiMessage message,
             }
             case GUI_MSG_CONTROLLER_SELECT:
             {
-#ifdef WAIT_UNTIL_DIALOG_DONE
+#if defined(WAIT_UNTIL_DIALOG_DONE) && !defined(SRR2_OLD_3DS)
                 if( !this->IsButtonVisible( BUTTON_ICON_ACCEPT ) )
                 {
                     // ignore input
                     //
                     return;
                 }
+#endif
+#ifdef SRR2_OLD_3DS
+                // A dismisses this panel even when tutorial speech cannot finish.
+                if(GetTutorialManager()->IsDialogPlaying() && !CommandLineOptions::Get(CLO_MUTE))
+                    GetEventManager()->TriggerEvent(EVENT_CONVERSATION_SKIP);
+                GetTutorialManager()->MarkDialogFinished();
 #endif
                 GetEventManager()->TriggerEvent( EVENT_FE_MENU_SELECT ); // sound effect
 
