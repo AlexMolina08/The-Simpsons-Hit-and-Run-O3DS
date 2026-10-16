@@ -879,7 +879,7 @@ CGuiScreen::RestoreButtons()
         if( m_buttonIcons[ i ] != NULL )
         {
             m_buttonIcons[ i ]->SetVisible( true );
-#if defined( RAD_WIN32 ) && !defined( RAD_PC )
+#if defined( RAD_WIN32 ) && !defined( RAD_PC ) && !defined( SRR2_OLD_3DS )
             Scrooby::BoundedDrawable* buttonIcon = dynamic_cast< Scrooby::BoundedDrawable* >( m_buttonIcons[ i ]->GetChildDrawable( 1 ) );
             if( buttonIcon )
             {

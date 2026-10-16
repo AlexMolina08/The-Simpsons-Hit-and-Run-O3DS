@@ -26,6 +26,7 @@
 
 #include <raddebug.hpp> // Foundation
 #include <Group.h>
+#include <Text.h>
 #include <Page.h>
 #include <Pure3dObject.h>
 #include <Screen.h>
@@ -99,6 +100,22 @@ CGuiScreenLetterBox::CGuiScreenLetterBox
     m_skipLabel = m_skipButton->GetGroup( "SkipLabel" );
     m_buttonIcons[ BUTTON_ICON_ACCEPT ] = m_skipButton->GetGroup( "AcceptLabel" );
     m_buttonIcons[ BUTTON_ICON_BACK ] = m_skipButton->GetGroup( "BackLabel" );
+#ifdef SRR2_OLD_3DS
+    Scrooby::Group* labels[] = {m_skipLabel, m_buttonIcons[BUTTON_ICON_ACCEPT], m_buttonIcons[BUTTON_ICON_BACK]};
+    const char* names[] = {"Skip", "Accept", "Cancel"};
+    const char* captions[] = {"A Skip", "A Start Mission", "B Cancel"};
+    for(unsigned i = 0; i < 3; ++i)
+    {
+        Scrooby::Text* text = labels[i]->GetText(names[i]);
+        if(!text) continue;
+        text->SetString(0, captions[i]);
+        text->SetBoundingBoxSize(230, 30);
+        text->SetTextMode(Scrooby::TEXT_OVERLAP);
+        for(unsigned child = 0; child < labels[i]->Size(); ++child)
+            if(labels[i]->GetChildDrawable(child) != text)
+                labels[i]->GetChildDrawable(child)->SetVisible(false);
+    }
+#endif
 
 #ifdef RAD_WIN32
     Scrooby::Sprite* skipIcon = m_skipLabel->GetSprite( "Skip" );

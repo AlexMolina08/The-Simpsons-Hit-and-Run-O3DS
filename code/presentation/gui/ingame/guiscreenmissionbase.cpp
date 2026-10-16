@@ -242,6 +242,22 @@ CGuiScreenMissionBase::CGuiScreenMissionBase( Scrooby::Screen* pScreen, CGuiEnti
 
     m_buttonIcons[ BUTTON_ICON_ACCEPT ] = m_loadCompleted->GetGroup( "Continue" );
     m_buttonIcons[ BUTTON_ICON_BACK ] = m_loadCompleted->GetGroup( "Abort" );
+#ifdef SRR2_OLD_3DS
+    const char* names[] = {"Continue", "Abort"};
+    const char* captions[] = {"A Start Mission", "B Cancel"};
+    for(unsigned i = 0; i < 2; ++i)
+    {
+        Scrooby::Group* label = m_buttonIcons[i == 0 ? BUTTON_ICON_ACCEPT : BUTTON_ICON_BACK];
+        Scrooby::Text* text = label->GetText(names[i]);
+        if(!text) continue;
+        text->SetString(0, captions[i]);
+        text->ResetTransformation();
+        text->SetTextMode(Scrooby::TEXT_OVERLAP);
+        for(unsigned child = 0; child < label->Size(); ++child)
+            if(label->GetChildDrawable(child) != text)
+                label->GetChildDrawable(child)->SetVisible(false);
+    }
+#endif
 
     //
     // add some scrooby elements to the watcher
