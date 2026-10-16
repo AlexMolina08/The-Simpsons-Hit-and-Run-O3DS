@@ -67,10 +67,12 @@ struct Old3dsReport
     unsigned g_old3dsTriQueries;
     unsigned g_old3dsTriHits;
     unsigned g_old3dsTriMisses;
+    unsigned g_old3dsTriEmptyLeaf;
     unsigned g_old3dsTriCandidates;
     unsigned g_old3dsTriPlaneTests;
     unsigned g_old3dsTriWorst;
-    unsigned g_old3dsTriRedundantAvoided;
+    unsigned g_old3dsTriExhausted;
+    unsigned g_old3dsTriRescanAvoided;
     unsigned g_old3dsTriSamples;
     double   g_old3dsTriMs;
 };
@@ -278,11 +280,12 @@ static void Old3dsWriteReport(const Old3dsReport& record)
 #endif
 
             if(record.g_old3dsTriQueries)
-                printf("OLD3DS_TRI queries=%u hits=%u misses=%u candidates=%u planetests=%u worst=%u"
-                       " redundant_avoided=%u samples=%u sampled_ms=%.3f mean_query_us=%.2f\n",
+                printf("OLD3DS_TRI queries=%u hits=%u misses=%u empty_leaf=%u candidates=%u planetests=%u worst=%u"
+                       " exhausted_searches=%u rescan_avoided_est=%u samples=%u sampled_ms=%.3f mean_query_us=%.2f\n",
                     record.g_old3dsTriQueries, record.g_old3dsTriHits, record.g_old3dsTriMisses,
+                    record.g_old3dsTriEmptyLeaf,
                     record.g_old3dsTriCandidates, record.g_old3dsTriPlaneTests, record.g_old3dsTriWorst,
-                    record.g_old3dsTriRedundantAvoided, record.g_old3dsTriSamples,
+                    record.g_old3dsTriExhausted, record.g_old3dsTriRescanAvoided, record.g_old3dsTriSamples,
                     record.g_old3dsTriMs,
                     record.g_old3dsTriSamples ? (record.g_old3dsTriMs * 1000.0 / record.g_old3dsTriSamples) : 0.0);
 

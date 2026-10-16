@@ -145,12 +145,17 @@ struct FindIntersectionResult {
     unsigned triTests;
     unsigned planeTests;
     int hitTriangleIndex;
+    bool reachedTris;
+    unsigned emptyLeaf;
+    unsigned exhausted;
+    unsigned rescanAvoided;
 };
 
 FindIntersectionResult RunFindIntersection(
     MockIntersectDSG& dsg,
     const Vector& irPosn,
-    bool is_fixed
+    bool is_fixed,
+    bool buggy_telemetry = false
 ) {
     FindIntersectionResult result;
     result.found = false;
@@ -158,16 +163,33 @@ FindIntersectionResult RunFindIntersection(
     result.triTests = 0;
     result.planeTests = 0;
     result.hitTriangleIndex = -1;
+    result.reachedTris = false;
+    result.emptyLeaf = 0;
+    result.exhausted = 0;
+    result.rescanAvoided = 0;
 
     Vector tmpVect, tmpVect2, TriPts[3], TriNorm;
     float DistToPlane;
     int foundTerrainType;
 
     for (int j = dsg.nTris() - 1; j > -1; j--) {
+        result.reachedTris = true;
+        const int searchStart = j;
         TriPts[0] = irPosn;
         foundTerrainType = dsg.mFlatTriFast(j, TriPts, TriNorm, is_fixed, result.triTests);
         if (foundTerrainType == -1) {
+            ++result.exhausted;
             if (is_fixed) {
+                if (buggy_telemetry) {
+                    // Simulates the physical performance-tri-1 bug: j was mutated to -1
+                    if (j > 0) {
+                        result.rescanAvoided += (unsigned)((j * (j + 1)) / 2);
+                    }
+                } else {
+                    if (searchStart > 0) {
+                        result.rescanAvoided += (unsigned)((searchStart * (searchStart + 1)) / 2);
+                    }
+                }
                 break;
             } else {
                 continue;
@@ -207,6 +229,9 @@ FindIntersectionResult RunFindIntersection(
                 }
             }
         }
+    }
+    if (!result.reachedTris) {
+        ++result.emptyLeaf;
     }
     return result;
 }
@@ -279,9 +304,11 @@ int main() {
     // 1A: Query completely outside mesh (Total Miss)
     Vector missPos(200.0f, 50.0f, 200.0f);
     FindIntersectionResult origMiss = RunFindIntersection(gridMesh, missPos, false);
-    FindIntersectionResult fixedMiss = RunFindIntersection(gridMesh, missPos, true);
+    FindIntersectionResult buggyMiss = RunFindIntersection(gridMesh, missPos, true, /*buggy_telemetry=*/true);
+    FindIntersectionResult fixedMiss = RunFindIntersection(gridMesh, missPos, true, /*buggy_telemetry=*/false);
 
     assert(!origMiss.found);
+    assert(!buggyMiss.found);
     assert(!fixedMiss.found);
     printf("1A. Total Miss:\n");
     printf("    Original: %u tri tests, %u plane tests\n", origMiss.triTests, origMiss.planeTests);
@@ -294,6 +321,23 @@ int main() {
     printf("    -> CONFIRMED: Miss eliminated %u redundant triangle tests (%.1fx faster!)\n",
            origMiss.triTests - fixedMiss.triTests, (double)origMiss.triTests / fixedMiss.triTests);
 
+    // 1A-1: Telemetry Bug Reproduction and Deterministic Regression Assertions
+    // In performance-tri-1 on physical hardware, buggy telemetry mutated j to -1, causing rescanAvoided == 0.
+    assert(buggyMiss.rescanAvoided == 0); // Reproduces the bug in performance-tri-1.log!
+    printf("1A-1. Telemetry Bug Reproduction:\n");
+    printf("    Buggy telemetry reported rescanAvoided=%u (reproduced physical log defect!)\n", buggyMiss.rescanAvoided);
+
+    // With the fix capturing searchStart = j before the call:
+    assert(fixedMiss.rescanAvoided > 0); // Deterministic regression check: MUST NOT be zero!
+    const unsigned expectedAvoided = (gridMesh.nTris() - 1) * gridMesh.nTris() / 2; // (49 * 50) / 2 = 1225
+    assert(fixedMiss.rescanAvoided == expectedAvoided);
+    assert(fixedMiss.exhausted == 1);
+    assert(fixedMiss.emptyLeaf == 0);
+    assert(fixedMiss.reachedTris == true);
+    assert(fixedMiss.triTests + fixedMiss.rescanAvoided == origMiss.triTests); // Exact legacy match (50 + 1225 == 1275)
+    printf("    Fixed telemetry: rescanAvoided=%u, exhausted=%u, emptyLeaf=%u (exact match to legacy %u tests)\n",
+           fixedMiss.rescanAvoided, fixedMiss.exhausted, fixedMiss.emptyLeaf, origMiss.triTests);
+
     // 1B: Early Hit (triangle near the end of the array, index nTris - 1)
     Vector earlyPos(GRID_N * STEP - 2.0f, 50.0f, GRID_N * STEP - 2.0f);
     FindIntersectionResult origEarly = RunFindIntersection(gridMesh, earlyPos, false);
@@ -304,6 +348,10 @@ int main() {
     assert(fixedEarly.found);
     assert(fixedEarly.hitTriangleIndex == refIdx);
     assert(std::abs(fixedEarly.groundPosn.y - refPos.y) < 1e-4f);
+    assert(fixedEarly.reachedTris == true);
+    assert(fixedEarly.emptyLeaf == 0);
+    assert(fixedEarly.exhausted == 0);
+    assert(fixedEarly.rescanAvoided == 0);
     printf("1B. Early Hit (tri %d):\n", refIdx);
     printf("    Fixed hit matches ground truth: Y=%.4f (tri %d, terrain %d)\n",
            fixedEarly.groundPosn.y, fixedEarly.hitTriangleIndex, fixedEarly.terrainType);
@@ -318,12 +366,44 @@ int main() {
     assert(fixedLate.found);
     assert(fixedLate.hitTriangleIndex == refIdx);
     assert(std::abs(fixedLate.groundPosn.y - refPos.y) < 1e-4f);
+    assert(fixedLate.reachedTris == true);
+    assert(fixedLate.emptyLeaf == 0);
+    assert(fixedLate.exhausted == 0);
+    assert(fixedLate.rescanAvoided == 0);
     printf("1C. Late Hit (tri %d):\n", refIdx);
     printf("    Fixed hit matches ground truth: Y=%.4f (tri %d, terrain %d)\n",
            fixedLate.groundPosn.y, fixedLate.hitTriangleIndex, fixedLate.terrainType);
     printf("    Tests: Fixed=%u tri (%u plane tests), Original=%u tri (%u plane tests)\n",
            fixedLate.triTests, fixedLate.planeTests, origLate.triTests, origLate.planeTests);
     assert(fixedLate.triTests <= 50);
+
+    // 1D: Empty Leaf Test (spatial node has 0 elements or 0 triangles)
+    MockIntersectDSG emptyMesh;
+    FindIntersectionResult emptyRes = RunFindIntersection(emptyMesh, missPos, true, false);
+    assert(!emptyRes.found);
+    assert(!emptyRes.reachedTris);
+    assert(emptyRes.emptyLeaf == 1);
+    assert(emptyRes.triTests == 0);
+    assert(emptyRes.exhausted == 0);
+    assert(emptyRes.rescanAvoided == 0);
+    printf("1D. Empty Leaf Test (0 tris):\n");
+    printf("    empty_leaf=%u, reachedTris=%d, triTests=%u, rescanAvoided=%u (no false savings fabricated)\n",
+           emptyRes.emptyLeaf, emptyRes.reachedTris, emptyRes.triTests, emptyRes.rescanAvoided);
+
+    // 1E: Partial scan followed by exhausted miss
+    MockIntersectDSG partialMesh;
+    partialMesh.AddTriangle(Vector(100, 0, 100), Vector(110, 0, 100), Vector(105, 0, 110)); // tri 0 (far)
+    partialMesh.AddTriangle(Vector(100, 0, 120), Vector(110, 0, 120), Vector(105, 0, 130)); // tri 1 (far)
+    partialMesh.AddTriangle(Vector(0, 0, 5), Vector(10, 0, 5), Vector(5, 10, 5));           // tri 2 (vertical wall at z=5)
+    Vector partialQuery(5.0f, 50.0f, 5.0f);
+    FindIntersectionResult partialRes = RunFindIntersection(partialMesh, partialQuery, true, false);
+    assert(!partialRes.found);
+    assert(partialRes.planeTests == 1);
+    assert(partialRes.exhausted == 1);
+    assert(partialRes.rescanAvoided == 1); // searchStart=1 -> (1 * 2)/2 = 1
+    printf("1E. Partial Scan Followed by Exhaustion:\n");
+    printf("    planeTests=%u, exhausted=%u, rescanAvoided=%u\n",
+           partialRes.planeTests, partialRes.exhausted, partialRes.rescanAvoided);
 
     // Test 2: Mask Contamination Demonstration
     // Construct triangles arranged such that NO triangle contains point P(10, 10),
@@ -352,6 +432,7 @@ int main() {
     printf("3. Random Queries Consistency (500 queries):\n");
     unsigned totalOrigTri = 0, totalFixedTri = 0;
     unsigned totalOrigPlane = 0, totalFixedPlane = 0;
+    unsigned totalAvoided = 0, totalExhausted = 0;
     for (int q = 0; q < 500; ++q) {
         float qx = -10.0f + (float)(q % 35) * 2.0f;
         float qz = -10.0f + (float)((q * 7) % 35) * 2.0f;
@@ -367,6 +448,15 @@ int main() {
         totalFixedTri += fRes.triTests;
         totalOrigPlane += oRes.planeTests;
         totalFixedPlane += fRes.planeTests;
+        totalAvoided += fRes.rescanAvoided;
+        totalExhausted += fRes.exhausted;
+
+        assert(fRes.emptyLeaf == 0);
+        assert(fRes.reachedTris == true);
+        if (!fRes.found) {
+            assert(fRes.exhausted >= 1);
+            assert(fRes.rescanAvoided > 0);
+        }
 
         assert(fRes.found == gtHit);
         if (gtHit) {
@@ -383,6 +473,7 @@ int main() {
     printf("    Fixed total triangle tests:    %u (plane tests: %u)\n", totalFixedTri, totalFixedPlane);
     printf("    Overall reduction in triangle checks: %.1f%%\n",
            (1.0 - (double)totalFixedTri / totalOrigTri) * 100.0);
+    printf("    Telemetry: rescanAvoided=%u, exhaustedSearches=%u\n", totalAvoided, totalExhausted);
     printf("    Spurious 3D plane tests eliminated: %u\n", totalOrigPlane - totalFixedPlane);
 
     // Test 4: Timing Benchmark (100,000 queries)

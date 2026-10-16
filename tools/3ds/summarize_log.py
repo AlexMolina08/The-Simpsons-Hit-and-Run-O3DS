@@ -92,6 +92,25 @@ def summarize(path, source):
             return None
         return {key: sum(row.get(key, 0) for row in rows) for key in rows[0] if key != "frames"}
 
+    def triangle_summary(rows):
+        if not rows:
+            return None
+        totals = {}
+        for key in rows[0]:
+            if key == "frames":
+                continue
+            elif key == "worst":
+                totals[key] = max(row.get(key, 0) for row in rows)
+            elif key == "mean_query_us":
+                total_samples = sum(row.get("samples", 0) for row in rows)
+                total_ms = sum(row.get("sampled_ms", 0) for row in rows)
+                totals[key] = round(total_ms * 1000.0 / total_samples, 2) if total_samples else 0.0
+            else:
+                totals[key] = sum(row.get(key, 0) for row in rows)
+        avoided = totals.get("rescan_avoided_est", totals.get("redundant_avoided", 0))
+        totals["legacy_candidates_est"] = totals.get("candidates", 0) + avoided
+        return totals
+
     entity_detail = sampled_groups(entities)
     backend_detail = sampled_groups(operations)
     backend_totals = counter_totals(backend)
@@ -122,7 +141,7 @@ def summarize(path, source):
         "entity_categories_sampled": entity_detail,
         "backend_operations_sampled_nested": backend_detail,
         "backend_counter_totals": backend_totals,
-        "triangle_intersection_queries": counter_totals(triangles),
+        "triangle_intersection_queries": triangle_summary(triangles),
         "detail_reconciliation_differences": reconciliation,
         "draw_drops": {
             scope: {key: int(sum(row.get(key, 0) for context, row in drops if (context == 9) == gameplay))

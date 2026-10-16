@@ -218,23 +218,27 @@ extern "C" unsigned g_old3dsUpdateAllVerified;
 extern "C" unsigned g_old3dsUpdateAllVerifyMismatch;
 
 // Ground triangle intersection diagnostics.
-// Tracks query rate, hits/misses, candidates examined, plane tests entered,
-// worst-case candidates in a query, redundant loop checks avoided, and sampled time.
+// Tracks query rate, hits/misses, empty leaf skips, candidates examined,
+// plane tests entered, worst-case candidates in a query, exhausted searches,
+// estimated redundant loop checks avoided, and sampled query time.
 extern "C" unsigned g_old3dsTriQueries;
 extern "C" unsigned g_old3dsTriHits;
 extern "C" unsigned g_old3dsTriMisses;
+extern "C" unsigned g_old3dsTriEmptyLeaf;
 extern "C" unsigned g_old3dsTriCandidates;
 extern "C" unsigned g_old3dsTriPlaneTests;
 extern "C" unsigned g_old3dsTriWorst;
-extern "C" unsigned g_old3dsTriRedundantAvoided;
+extern "C" unsigned g_old3dsTriExhausted;
+extern "C" unsigned g_old3dsTriRescanAvoided;
 extern "C" unsigned g_old3dsTriSamples;
 extern "C" double   g_old3dsTriMs;
 
 class Old3dsTriScope
 {
 public:
-    explicit Old3dsTriScope(bool& found)
+    explicit Old3dsTriScope(bool& found, bool& reachedTris)
         : mFound(found),
+          mReachedTris(reachedTris),
           mCandidatesStart(g_old3dsTriCandidates),
           mTimed((++g_old3dsTriQueries & 31u) == 1u),
           mStartTick(mTimed ? svcGetSystemTick() : 0)
@@ -246,6 +250,10 @@ public:
         if(queryCandidates > g_old3dsTriWorst)
         {
             g_old3dsTriWorst = queryCandidates;
+        }
+        if(!mReachedTris)
+        {
+            ++g_old3dsTriEmptyLeaf;
         }
         if(mFound)
         {
@@ -263,6 +271,7 @@ public:
     }
 private:
     bool& mFound;
+    bool& mReachedTris;
     unsigned mCandidatesStart;
     bool mTimed;
     u64 mStartTick;
