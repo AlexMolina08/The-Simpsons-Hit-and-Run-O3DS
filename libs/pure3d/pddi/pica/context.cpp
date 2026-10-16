@@ -102,6 +102,9 @@ picaContext::picaContext(picaDevice* dev, picaDisplay* disp)
     disp->SetContext(this);
 
     contextID = 0;
+#ifdef SRR2_OLD_3DS
+    worldQuad = NULL;
+#endif
 
     defaultShader = NULL;
     clearShader   = NULL;
@@ -1598,6 +1601,9 @@ void picaContext::BeginWorld(void)
 {
     if(display->BeginWorldTarget())
     {
+        // Reserve presentation vertices before world geometry consumes the ring.
+        worldQuad = AllocImmVertices(4);
+        if(!worldQuad) display->EndWorldTarget();
         hwViewport[0] = hwViewport[1] = hwViewport[2] = hwViewport[3] = -1;
         SetupHardwareProjection();
         SetScissor(&state.viewState->scissor);
@@ -1612,7 +1618,7 @@ void picaContext::EndWorld(void)
     if(immIndexUsed) GSPGPU_FlushDataCache(immIndices, immIndexUsed);
     if(!display->EndWorldTarget()) return;
 
-    unsigned char* vertices = AllocImmVertices(4);
+    unsigned char* vertices = worldQuad;
     if(vertices)
     {
         const float u = (display->WorldHeight() - 0.5f) / 256.0f;
@@ -1639,6 +1645,7 @@ void picaContext::EndWorld(void)
         C3D_SetScissor(GPU_SCISSOR_DISABLE, 0, 0, 0, 0);
         C3D_CullFace(GPU_CULL_NONE);
         C3D_DepthTest(false, GPU_ALWAYS, GPU_WRITE_COLOR);
+        C3D_StencilTest(false, GPU_ALWAYS, 0, 0xff, 0x00);
         C3D_AlphaTest(false, GPU_ALWAYS, 0);
         C3D_AlphaBlend(GPU_BLEND_ADD, GPU_BLEND_ADD, GPU_ONE, GPU_ZERO, GPU_ONE, GPU_ZERO);
         C3D_FogGasMode(GPU_NO_FOG, GPU_PLAIN_DENSITY, false);

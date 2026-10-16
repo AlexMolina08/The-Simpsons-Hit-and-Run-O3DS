@@ -95,6 +95,9 @@ protected:
 
     void ApplyProjection(pddiMatrix* m);
 
+#ifdef SRR2_OLD_3DS
+    unsigned char* worldQuad;
+#endif
     picaDevice*  device;
     picaDisplay* display;
 

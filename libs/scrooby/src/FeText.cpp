@@ -37,6 +37,15 @@
 // Global Data, Local Data, Local Classes
 //===========================================================================
 
+#ifdef SRR2_OLD_3DS
+// PC small-print fonts otherwise land at roughly six to eight screen pixels.
+// Keep headings unchanged and use the same factor for drawing and wrapping.
+static float Old3DSTextScale(const tFont* font)
+{
+    return font && font->GetFontSize() <= 32.0f ? 1.25f : 1.0f;
+}
+#endif
+
 //===========================================================================
 // Member Functions
 //===========================================================================
@@ -151,7 +160,12 @@ void FeText::Display() //Override
         // TC: for PC sku, the source fonts are actually twice as big (for higher resolution display),
         //     so we need to scale them back down to the intended size
         //
+#ifdef SRR2_OLD_3DS
+        const float pcFontScale = 0.5f * Old3DSTextScale(mFont);
+        p3d::stack->Scale( pcFontScale, pcFontScale, 1.0f );
+#else
         p3d::stack->Scale( 0.5f, 0.5f, 1.0f );
+#endif
 #endif // RAD_WIN32
 
         int formatting = m_horizontalJustification == Scrooby::Centre ? CENTRE_X : 0;
@@ -188,6 +202,10 @@ void FeText::Display() //Override
             //
             static float outlinePercentage = 0.05f;
             float outlineThickness = outlinePercentage * mFont->GetFontSize();
+#ifdef SRR2_OLD_3DS
+            // A thinner outline keeps adjacent strokes from merging at 240p.
+            outlineThickness *= 0.5f;
+#endif
 
             // TC [HACK]: Never allow outline alpha to be greater than text alpha.
             //
@@ -472,6 +490,9 @@ void FeText::ReCalculateAlignment()
         //     right alignment
         //
         width /= 2.0f;
+#ifdef SRR2_OLD_3DS
+        width *= Old3DSTextScale(mFont);
+#endif
 #endif
 
         switch( m_horizontalJustification )
@@ -520,6 +541,9 @@ void FeText::ResetText()
     float boxHeight = 0.0f;
     float scale = 1.0f / FeApp::GetInstance()->GetScreenHeight();
     NormalizeCoord( m_width, m_height, boxWidth, boxHeight );
+#ifdef SRR2_OLD_3DS
+    boxWidth /= Old3DSTextScale(mFont);
+#endif
     P3D_UNICODE* buffer = FeApp::GetInstance()->GetTextBuffer();
     int i = 0;
     int lastSpace = 0;

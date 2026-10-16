@@ -37,6 +37,9 @@
 #include <citro3d.h>
 #include <malloc.h>
 extern "C" unsigned g_picaPresentedFrames;
+// Physics includes character simulation. The other counters are disjoint
+// update stages; all are subsets of update_ms in OLD3DS_PROFILE.
+double g_old3dsUpdateStages[4] = {};
 extern "C" int g_picaWorldScaleAllowed;
 extern "C" double g_picaFrameWaitMs;
 extern "C" double g_picaFrameSubmitMs;
@@ -525,6 +528,8 @@ void Game::Run()
 #ifdef SRR2_OLD_3DS
     double updateMs = 0.0, renderMs = 0.0, serviceMs = 0.0, loadMs = 0.0;
     unsigned profileFrames = 0;
+    double workMs = 0.0, peakWorkMs = 0.0;
+    unsigned overBudgetFrames = 0;
 #endif
     unsigned time = radTimeGetMilliseconds();
     while( !mExitNow )
@@ -560,13 +565,23 @@ void Game::Run()
                 mpPlatform->PausedForErrors(), (unsigned long)linearSpaceFree(), heap.uordblks,
                 C3D_GetProcessingTime(), C3D_GetDrawingTime());
             if(profileFrames)
-                printf("OLD3DS_PROFILE samples=%u update_ms=%.2f render_ms=%.2f service_ms=%.2f load_ms=%.2f gpu_wait_ms=%.2f submit_ms=%.2f\n",
+                printf("OLD3DS_PROFILE samples=%u update_ms=%.2f render_ms=%.2f service_ms=%.2f load_ms=%.2f gpu_wait_ms=%.2f submit_ms=%.2f work_ms=%.2f peak_ms=%.2f over_budget=%u\n",
                     profileFrames, updateMs / profileFrames, renderMs / profileFrames,
                     serviceMs / profileFrames, loadMs / profileFrames,
-                    g_picaFrameWaitMs / profileFrames, g_picaFrameSubmitMs / profileFrames);
+                    g_picaFrameWaitMs / profileFrames, g_picaFrameSubmitMs / profileFrames,
+                    workMs / profileFrames, peakWorkMs, overBudgetFrames);
+            if(profileFrames)
+                printf("OLD3DS_SIM samples=%u physics_ms=%.2f pedestrians_ms=%.2f traffic_ms=%.2f effects_ms=%.2f\n",
+                    profileFrames, g_old3dsUpdateStages[0] / profileFrames,
+                    g_old3dsUpdateStages[1] / profileFrames,
+                    g_old3dsUpdateStages[2] / profileFrames,
+                    g_old3dsUpdateStages[3] / profileFrames);
+            memset(g_old3dsUpdateStages, 0, sizeof(g_old3dsUpdateStages));
             updateMs = renderMs = serviceMs = loadMs = 0.0;
             g_picaFrameWaitMs = g_picaFrameSubmitMs = 0.0;
             profileFrames = 0;
+            workMs = peakWorkMs = 0.0;
+            overBudgetFrames = 0;
             fflush(stdout);
             lastDiagnosticTick = diagnosticTick;
             lastPresented = presented;
@@ -728,6 +743,10 @@ void Game::Run()
         // budget and lets other threads run on the original ARM11 hardware.
         const u64 frameBudgetTicks = (u64)SYSCLOCK_ARM11 / 30;
         const u64 frameTicks = svcGetSystemTick() - frameStartTick;
+        const double currentWorkMs = frameTicks * 1000.0 / SYSCLOCK_ARM11;
+        workMs += currentWorkMs;
+        if(currentWorkMs > peakWorkMs) peakWorkMs = currentWorkMs;
+        if(frameTicks > frameBudgetTicks) ++overBudgetFrames;
         if(frameTicks < frameBudgetTicks)
             svcSleepThread((s64)((frameBudgetTicks - frameTicks) * 1000000000ULL / SYSCLOCK_ARM11));
 #endif

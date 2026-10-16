@@ -183,7 +183,10 @@ bool picaTexture::Create(int x, int y, int bpp, int alpha, int nMip,
     }
 
     int bytesPerPixel = 4;
-    hwFormat = PickHardwareFormat(alpha, &bytesPerPixel);
+    // Font pages use grayscale coverage. LA8 retains all eight alpha bits
+    // without increasing the two-byte texel budget used by RGBA4.
+    hwFormat = g_picaFontTexture ? GPU_LA8 : PickHardwareFormat(alpha, &bytesPerPixel);
+    if(g_picaFontTexture) bytesPerPixel = 2;
 
     const unsigned mipExtra = (unsigned)(texW * texH * bytesPerPixel) / 3;
     const bool roomForMips = linearSpaceFree() > (PICA_MIPMAP_LINEAR_RESERVE + mipExtra);
@@ -290,6 +293,7 @@ void picaTexture::Unlock(int mipLevel)
 
 extern "C" int g_picaMipmapsAllowed = 0;
 extern "C" int g_picaKeepFullSize = 0;
+extern "C" int g_picaFontTexture = 0;
 
 void picaTexture::UploadLevel(int mipLevel)
 {
@@ -474,6 +478,11 @@ void picaTexture::ConvertAndTile(const unsigned int* rgba, int w, int h, void* d
                 case GPU_RGBA5551:
                     ((unsigned short*)dst)[offset] = (unsigned short)
                         (((r >> 3) << 11) | ((g >> 3) << 6) | ((b >> 3) << 1) | (a >> 7));
+                    break;
+
+                case GPU_LA8:
+                    ((unsigned short*)dst)[offset] = (unsigned short)
+                        ((((77 * r + 150 * g + 29 * b) >> 8) << 8) | a);
                     break;
 
                 case GPU_RGBA4:

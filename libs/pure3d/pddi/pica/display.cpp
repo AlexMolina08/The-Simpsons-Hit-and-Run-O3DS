@@ -210,7 +210,11 @@ bool picaDisplay::InitDisplay(const pddiDisplayInit* init)
                 C3D_TexSetFilter(&worldTexture, GPU_LINEAR, GPU_LINEAR);
                 C3D_TexSetWrap(&worldTexture, GPU_CLAMP_TO_EDGE, GPU_CLAMP_TO_EDGE);
             }
-            else C3D_TexDelete(&worldTexture);
+            else
+            {
+                C3D_TexDelete(&worldTexture);
+                memset(&worldTexture, 0, sizeof(worldTexture));
+            }
         }
     }
     printf("OLD3DS_WORLD width=%d height=%d native_ui=1\n", worldWidth, worldHeight);

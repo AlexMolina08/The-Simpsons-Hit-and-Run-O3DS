@@ -140,8 +140,13 @@ presentation approach in Mario Kart 64 3DS commit
 `3a5de70ddab1a4970f0b54a6240a898a13a639ba`, adapted to this backend's rotated
 coordinates and GUI layer boundary.
 
-Font texture chunks bypass the frontend atlas size reduction. This does not
-increase glyph size; small PC text needs a separate readability pass.
+Font texture chunks bypass the frontend atlas size reduction. Grayscale font
+pages use LA8, preserving eight-bit coverage alpha at the same two bytes per
+texel as RGBA4. The nine palette pages in the supplied default font resources
+were checked for grayscale content. Small text (source font size up to 32) is
+25% larger, with matching wrap and right-alignment calculations and thinner
+outlines. Headings keep their existing size. Shared menu hints display `A Select`
+and `B Back` instead of tiny PC keycap sprites.
 
 The Old 3DS renderer now flushes command lists with `GX_CMDLIST_FLUSH`, avoiding
 a second flush of the entire 28 MiB linear heap. Texture upload, persistent
@@ -152,9 +157,38 @@ ranges before submitting world commands. The native New 3DS path is unchanged.
 `OLD3DS_PROFILE` logs interval averages for game update, render, services and
 loading, plus GPU queue waits and frame submission. Wait and submission times
 are subsets of render time, not additional costs. `cpu_ms` remains Citro3D's
-renderer processing sample, not whole-frame CPU time. Emulator timing does not
+renderer processing sample, not whole-frame CPU time. `OLD3DS_SIM` separates
+physics (including character simulation), pedestrians, traffic and effects;
+these are subsets of update time. `work_ms` and `peak_ms` measure mean and
+maximum whole-loop wall time before deliberate frame pacing. `over_budget`
+counts loops exceeding 33.33 ms; I/O, queue waits and suspension can contribute.
+Emulator timing does not
 predict physical ARM11/PICA200 throughput.
 
 For an existing installation, replace only `SimpsonsNTSC.3dsx`; optionally add
 the tiny scale file. Keep the installed game assets and saves. No bulk asset
 transfer is required.
+
+Summarize a console log with:
+
+```sh
+python3 tools/3ds/summarize_log.py --source hardware /path/to/old3ds.log
+```
+
+Use `--source emulator` for emulator logs. Missing telemetry is reported as
+unavailable rather than zero. Interval means are weighted by frame counts.
+
+Update validation logs are in `out/validation/update-20261016/`. The native,
+80% and 75% checks reached gameplay with correct orientation and native GUI.
+The recorded gameplay-interval median submission rates were 29.97, 29.965 and
+29.89 fps respectively in Azahar; these were different routes and iterations,
+not a controlled performance comparison. The 75% check used Level 2; native and
+80% checks used Level 1. Minimum sampled linear headroom was 2,875,776 bytes in
+Level 1 and 3,293,184 bytes in Level 2. The Settings crash was reproduced before
+its fix, then the screen opened, changed a value and returned successfully.
+Camera host regression tests and ARMv6K/VFPv2 executable checks passed.
+
+The physical acceptance target remains open. Start the new executable at native
+resolution to measure the cache-flush change without lowering image quality.
+Compare 80% only if GPU work still limits the same busy route. Do not infer a
+hardware improvement from the emulator medians above.
