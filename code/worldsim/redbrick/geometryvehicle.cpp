@@ -32,6 +32,10 @@
 #include <p3d/view.hpp>
 #include <p3d/effects/particlesystem.hpp>
 #include <pddi/pddi.hpp>
+#ifdef SRR2_OLD3DS_SHADOW_MESH
+#include <pddi/pica/context.hpp>
+#include <pddi/pica/blobtopology.hpp>
+#endif
 #include <p3d/utility.hpp>
 #include <typeinfo>
 #include <p3d/anim/visibilityanimation.hpp>
@@ -1337,6 +1341,29 @@ void GeometryVehicle::DisplayShadow( BlobShadowParams* BlobParams )
     blobShader->SetInt( PDDI_SP_ISLIT, 0 );
     blobShader->SetInt( PDDI_SP_ALPHATEST, 0 );
     blobShader->SetInt( PDDI_SP_SHADEMODE, PDDI_SHADE_GOURAUD );
+#ifdef SRR2_OLD3DS_SHADOW_MESH
+    pddiVector vertices[picaBlob::VertexCount];
+    vertices[0].Set(0.0f, 0.0f, 0.0f);
+    for(int i = 0; i < NumPoints * 2; ++i)
+    {
+        int index = i;
+        int mirrorX = int((index * (1.0f / NumPoints))) % 2;
+        index %= NumPoints;
+        index = rmt::Abs((mirrorX * 5) - index);
+        mirrorX = 1 - (mirrorX * 2);
+        int adjust = rmt::Clamp(index - 1, 0, NumPoints - 3);
+        float inX = (Points[index][0] + mShadowPointAdjustments[adjust][0]) * BlobParams->ShadowScale;
+        float inY = (Points[index][1] + mShadowPointAdjustments[adjust][1]) * BlobParams->ShadowScale;
+        inX *= mirrorX;
+        vertices[1 + 2 * i].Set(inX, inY, 0.0f);
+        vertices[2 + 2 * i].Set(inX + Fades[index][0] * mirrorX * BlobParams->ShadowScale,
+                               inY + Fades[index][1] * BlobParams->ShadowScale, 0.0f);
+    }
+    const bool submitted = static_cast<picaContext*>(p3d::pddi)->DrawBlobShadow(
+        blobShader, vertices, insideColour, OutsideColour);
+    if(!submitted)
+    {
+#endif
     pddiPrimStream* blob = p3d::pddi->BeginPrims( blobShader, PDDI_PRIM_TRIANGLES, PDDI_V_C, 6 * NumPoints );
 	for( int i = 0; i < NumPoints * 2; ++i )
 	{
@@ -1390,6 +1417,9 @@ void GeometryVehicle::DisplayShadow( BlobShadowParams* BlobParams )
         blob->Coord( inX, inY, 0.0f );
     }
     p3d::pddi->EndPrims( blob );
+#ifdef SRR2_OLD3DS_SHADOW_MESH
+    }
+#endif
 	p3d::stack->Pop();
     END_PROFILE("GeometryVehicle::DisplayShadow")
 }

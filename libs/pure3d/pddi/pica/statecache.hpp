@@ -3,6 +3,7 @@
 
 #include <3ds.h>
 #include <citro3d.h>
+#include <main/old3dsdiag.h>
 
 struct picaStateCache
 {
@@ -57,6 +58,9 @@ static inline void picaAlphaTest(bool enable, GPU_TESTFUNC func, int ref)
        s.alphaTestFunc == func && s.alphaTestRef == ref)
         return;
 
+#ifdef SRR2_OLD_3DS
+    Old3dsCount(O3_STATE_CHANGE);
+#endif
     C3D_AlphaTest(enable, func, ref);
     s.alphaTestValid  = true;
     s.alphaTestEnable = enable;
@@ -74,6 +78,9 @@ static inline void picaAlphaBlend(GPU_BLENDEQUATION colorEq, GPU_BLENDEQUATION a
        s.blendSrcAlpha == srcAlpha && s.blendDstAlpha == dstAlpha)
         return;
 
+#ifdef SRR2_OLD_3DS
+    Old3dsCount(O3_STATE_CHANGE);
+#endif
     C3D_AlphaBlend(colorEq, alphaEq, srcClr, dstClr, srcAlpha, dstAlpha);
     s.blendValid    = true;
     s.blendColorEq  = colorEq;  s.blendAlphaEq  = alphaEq;
@@ -87,6 +94,9 @@ static inline void picaCullFace(GPU_CULLMODE mode)
     if(s.cullValid && s.cull == mode)
         return;
 
+#ifdef SRR2_OLD_3DS
+    Old3dsCount(O3_STATE_CHANGE);
+#endif
     C3D_CullFace(mode);
     s.cullValid = true;
     s.cull      = mode;
@@ -98,6 +108,9 @@ static inline void picaDepthTest(bool enable, GPU_TESTFUNC func, GPU_WRITEMASK m
     if(s.depthValid && s.depthEnable == enable && s.depthFunc == func && s.depthMask == mask)
         return;
 
+#ifdef SRR2_OLD_3DS
+    Old3dsCount(O3_STATE_CHANGE);
+#endif
     C3D_DepthTest(enable, func, mask);
     s.depthValid  = true;
     s.depthEnable = enable;
@@ -107,11 +120,17 @@ static inline void picaDepthTest(bool enable, GPU_TESTFUNC func, GPU_WRITEMASK m
 
 static inline void picaTexBind0(C3D_Tex* tex)
 {
+#ifdef SRR2_OLD_3DS
+    Old3dsCount(O3_TEX_REQUEST);
+#endif
     picaStateCache& s = g_picaState;
     if(s.texValid && s.texPtr == tex && s.texData == tex->data && s.texParam == tex->param &&
        s.texWidth == tex->width && s.texHeight == tex->height && s.texFmt == tex->fmt)
         return;
 
+#ifdef SRR2_OLD_3DS
+    Old3dsCount(O3_TEX_CHANGE);
+#endif
     C3D_TexBind(0, tex);
     s.texValid  = true;
     s.texPtr    = tex;

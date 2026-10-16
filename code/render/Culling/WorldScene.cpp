@@ -12,6 +12,7 @@
 #include <roads/roadsegment.h>
 #include <pedpaths/pathsegment.h>
 #include <meta/triggervolume.h>
+#include <main/old3dsdiag.h>
 #include <algorithm>
 #include <functional>
 
@@ -1643,10 +1644,20 @@ shadow generator setup since the tris won't shade properly.
 ========================================================================*/
 void WorldScene::RenderSimpleShadows( void )
 {
+#ifdef SRR2_OLD_3DS
+    Old3dsRenderScope timing(1);
+#endif
     p3d::pddi->SetZWrite(false);
 	for( int i = 0; i < mShadowCastersPass1.mUseSize; ++i )
 	{
-		mShadowCastersPass1[ i ]->DisplaySimpleShadow();
+#ifdef SRR2_OLD_3DS
+        const unsigned before = g_old3dsDrawCalls;
+        ++g_old3dsSimpleShadowCalls;
+#endif
+        mShadowCastersPass1[ i ]->DisplaySimpleShadow();
+#ifdef SRR2_OLD_3DS
+        g_old3dsSimpleShadowDrawn += g_old3dsDrawCalls != before;
+#endif
 	}
 //	for( int i = 0; i < mShadowCastersPass2.mUseSize; ++i )
 //	{
@@ -1654,7 +1665,14 @@ void WorldScene::RenderSimpleShadows( void )
 //	}
     for(int i=mpZSortsPassShadowCasters.size()-1; i>-1; i--)
 	{
-		mpZSortsPassShadowCasters[i]->DisplaySimpleShadow();
+#ifdef SRR2_OLD_3DS
+        const unsigned before = g_old3dsDrawCalls;
+        ++g_old3dsSimpleShadowCalls;
+#endif
+        mpZSortsPassShadowCasters[i]->DisplaySimpleShadow();
+#ifdef SRR2_OLD_3DS
+        g_old3dsSimpleShadowDrawn += g_old3dsDrawCalls != before;
+#endif
 	}
     p3d::pddi->SetZWrite( true );
 }
@@ -1724,17 +1742,33 @@ void WorldScene::RenderTranslucent( void )
 #ifdef TEST_DISTRIBUTED_SORT
     BEGIN_PROFILE("qsort2")
 	    //qsort(mpZSortsPass2.mpData, (size_t)mpZSortsPass2.mUseSize, sizeof(IEntityDSG*), gZSortCompare);
-        std::sort( mpZSortsPass2.begin(), mpZSortsPass2.end(), gZSortCompare );
+        {
+#ifdef SRR2_OLD_3DS
+            Old3dsRenderScope timing(2);
+#endif
+            std::sort( mpZSortsPass2.begin(), mpZSortsPass2.end(), gZSortCompare );
+        }
     END_PROFILE("qsort2")
 #endif
 DSG_SET_PROFILE('T')
 BEGIN_PROFILE("qsort2 display")
+    {
+#ifdef SRR2_OLD_3DS
+    Old3dsRenderScope timing(3);
+#endif
     for(int i=mpZSortsPass2.size()-1; i>-1; i--)
 	{
 //BEGIN_PROFILE("translucent inner")	
+#ifdef SRR2_OLD_3DS
+        Old3dsEntityScope entityTiming(mpZSortsPass2[i]->Old3dsCategory());
+#endif
 		mpZSortsPass2[i]->Display();
+#ifdef SRR2_OLD_3DS
+        ++g_old3dsPhase2Entities[mpZSortsPass2[i]->mTranslucent ? 1 : 0];
+#endif
 //END_PROFILE("translucent inner")	
 	}
+    }
 END_PROFILE("qsort2 display")
 }
 

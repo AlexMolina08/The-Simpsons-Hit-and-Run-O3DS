@@ -7,6 +7,7 @@
 
 #include <pddi/base/debug.hpp>
 #include <stdio.h>
+#include <main/old3dsdiag.h>
 
 pddiShadeColourTable picaMat::colourTable[] =
 {
@@ -219,6 +220,9 @@ int picaMat::CountDevPasses(void)
 
 void picaMat::SetDevPass(unsigned)
 {
+#ifdef SRR2_OLD_3DS
+    Old3dsCount(O3_MATERIAL_PASS);
+#endif
     const int i = 0;
 
     dirty = false;
@@ -295,6 +299,10 @@ void picaMat::SetDevPass(unsigned)
 void picaMat::PreRender(void)
 {
     const int i = 0;
+#ifdef SRR2_OLD_3DS
+    g_old3dsDrawBlended = texEnv[i].alphaBlendMode != PDDI_BLEND_NONE;
+    g_old3dsDrawAlphaTested = texEnv[i].alphaTest;
+#endif
 
     if(dirty)
     {

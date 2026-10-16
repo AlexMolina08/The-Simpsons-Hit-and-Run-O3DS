@@ -44,6 +44,96 @@ extern "C" unsigned g_old3dsCmdSize;
 // sum to it; the remainder is untimed.
 extern "C" double   g_old3dsRenderPhases[6];
 
+// Phase 2 CPU elapsed ticks: coins, simple shadows, depth sort, entity display.
+// Each scope takes two tick reads and snapshots the existing submitted-draw count.
+// The parent phase includes this instrumentation and remaining untimed work.
+extern "C" unsigned long long g_old3dsPhase2Ticks[4];
+extern "C" unsigned g_old3dsPhase2Draws[4];
+extern "C" unsigned g_old3dsPhase2Entities[2]; // opaque, translucent classification
+extern "C" unsigned g_old3dsSimpleShadowCalls;
+extern "C" unsigned g_old3dsSimpleShadowDrawn; // calls issuing at least one draw
+
+#include <3ds.h>
+class Old3dsRenderScope
+{
+public:
+    explicit Old3dsRenderScope(unsigned slot) : slot(slot), draws(g_old3dsDrawCalls), tick(svcGetSystemTick()) {}
+    ~Old3dsRenderScope()
+    {
+        g_old3dsPhase2Ticks[slot] += svcGetSystemTick() - tick;
+        g_old3dsPhase2Draws[slot] += g_old3dsDrawCalls - draws;
+    }
+private:
+    unsigned slot, draws;
+    u64 tick;
+};
+
+
+// Focused phase-2 detail. Categories are semantic DSG families, not shader flags.
+enum Old3dsCategory { O3_OTHER, O3_VEHICLE, O3_CHARACTER, O3_ANIM, O3_ANIMCOLL,
+    O3_STATIC, O3_STATICPHYS, O3_DYNA, O3_ANIMDYNA, O3_STATEPROP, O3_PARTICLE, O3_CATEGORY_COUNT };
+enum Old3dsOperation { O3_SUBMIT, O3_MATERIAL, O3_UNIFORMS, O3_VERTEXLOCK,
+    O3_VERTEXFLUSH, O3_EXPAND, O3_INDEXSCAN, O3_SKIN, O3_STREAM, O3_VEHICLEPOSE, O3_CHARACTERPREP,
+    O3_OPERATION_COUNT };
+enum Old3dsCounter { O3_INDEXED, O3_ARRAY, O3_TRANSIENT, O3_EXPANDED_DRAW,
+    O3_EXPAND_REBUILD, O3_INDEX_TESTED, O3_MV_UPLOAD, O3_MV_REUSE,
+    O3_MATERIAL_PASS, O3_TEX_REQUEST, O3_TEX_CHANGE, O3_STATE_CHANGE,
+    O3_VERTEX_RELOCK, O3_RESCAN_CANDIDATE, O3_DEFAULT_VERTS, O3_COUNTER_COUNT };
+struct Old3dsEntityStats
+{
+    u64 ticks;
+    unsigned calls, samples, draws, indexed, arrays, blended, alphaTested;
+};
+struct Old3dsOperationStats { u64 ticks; unsigned calls, samples, units; };
+extern "C" Old3dsEntityStats g_old3dsEntities[O3_CATEGORY_COUNT];
+extern "C" Old3dsOperationStats g_old3dsOperations[O3_OPERATION_COUNT];
+extern "C" unsigned g_old3dsBackend[O3_COUNTER_COUNT];
+extern "C" int g_old3dsActiveEntity;
+extern "C" bool g_old3dsDrawBlended, g_old3dsDrawAlphaTested;
+inline void Old3dsCount(unsigned counter, unsigned units = 1)
+{
+    if(g_old3dsActiveEntity >= 0) g_old3dsBackend[counter] += units;
+}
+// One entity in four, one backend operation in 32. Counts/units are unsampled.
+// Nested operation times overlap and must never be added to the parent totals.
+class Old3dsOperationScope
+{
+public:
+    Old3dsOperationScope(unsigned operation, unsigned units = 1) : stats(0), tick(0)
+    {
+        if(g_old3dsActiveEntity < 0) return;
+        stats = &g_old3dsOperations[operation];
+        stats->units += units;
+        if((++stats->calls & 31u) == 1u) { ++stats->samples; tick = svcGetSystemTick(); }
+    }
+    void Finish() { if(tick) { stats->ticks += svcGetSystemTick() - tick; tick = 0; } }
+    ~Old3dsOperationScope() { Finish(); }
+private:
+    Old3dsOperationStats* stats;
+    u64 tick;
+};
+class Old3dsEntityScope
+{
+public:
+    explicit Old3dsEntityScope(unsigned category) : previous(g_old3dsActiveEntity), tick(0), draws(g_old3dsDrawCalls)
+    {
+        g_old3dsActiveEntity = category < O3_CATEGORY_COUNT ? category : O3_OTHER;
+        stats = &g_old3dsEntities[g_old3dsActiveEntity];
+        if((++stats->calls & 3u) == 1u) { ++stats->samples; tick = svcGetSystemTick(); }
+    }
+    ~Old3dsEntityScope()
+    {
+        if(tick) stats->ticks += svcGetSystemTick() - tick;
+        stats->draws += g_old3dsDrawCalls - draws;
+        g_old3dsActiveEntity = previous;
+    }
+private:
+    int previous;
+    u64 tick;
+    unsigned draws;
+    Old3dsEntityStats* stats;
+};
+
 // Linear allocation failures, separate from the ordinary heap.
 extern "C" unsigned g_old3dsLinearFailures;
 extern "C" unsigned g_old3dsLinearFailureBytes;

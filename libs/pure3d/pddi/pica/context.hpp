@@ -70,6 +70,10 @@ public:
     void SetVertexUniforms(bool lit, pddiColour ambient, pddiColour diffuse, pddiColour emissive);
     void SetMaterialWriteMask(int mask);
 
+#ifdef SRR2_OLD3DS_SHADOW_MESH
+    bool DrawBlobShadow(pddiShader* shader, const pddiVector* vertices,
+                        pddiColour inside, pddiColour outside);
+#endif
     unsigned char*  AllocImmVertices(unsigned count);
     unsigned short* AllocImmIndices(unsigned count);
 
@@ -200,6 +204,14 @@ protected:
 public:
 
     void SetTransient(unsigned char* verts, unsigned short* idx, unsigned count);
+#ifdef SRR2_OLD3DS_SHADOW_MESH
+    void SetTransientIndices(unsigned short* idx, unsigned count)
+    {
+        indices = idx;
+        indexCount = count;
+        elemState = -1;
+    }
+#endif
 
 protected:
     friend class picaPrimBufferStream;

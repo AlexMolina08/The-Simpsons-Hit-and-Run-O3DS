@@ -103,6 +103,9 @@ class Character
 public DynaPhysDSG
 {
 public:
+#ifdef SRR2_OLD_3DS
+    virtual unsigned Old3dsCategory() const { return O3_CHARACTER; }
+#endif
     enum Role {
         ROLE_UNKNOWN,
         ROLE_DRIVER,

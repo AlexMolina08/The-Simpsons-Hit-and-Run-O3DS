@@ -70,6 +70,9 @@ enum VehicleType {VT_USER, VT_AI, VT_TRAFFIC, VT_LAST};
 class Vehicle : public DynaPhysDSG, public ISuperCamTarget, public IHudMapIconLocator
 {
 public:
+#ifdef SRR2_OLD_3DS
+    virtual unsigned Old3dsCategory() const { return O3_VEHICLE; }
+#endif
 
     //-----
     // core

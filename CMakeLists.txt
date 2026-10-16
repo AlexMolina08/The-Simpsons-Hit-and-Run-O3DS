@@ -22,6 +22,8 @@ elseif(NINTENDO_3DS)
 	set(SRR2_P3D_PDDI "PICA" CACHE STRING "Pure3D PDDI implementation" FORCE)
 	option(SRR2_OLD_3DS "Target original 3DS hardware (no New 3DS features)" OFF)
 	option(SRR2_3DS_MOVIES "Play converted movies (software MPEG-1 on Old 3DS, hardware H.264 on New 3DS)" ON)
+	option(SRR2_OLD3DS_INDEX_CACHE "Preserve index validation across vertex-only updates" OFF)
+	option(SRR2_OLD3DS_SHADOW_MESH "Use indexed vehicle blob shadows" OFF)
 	# Experimental: skip the repeat collision-volume updates the pair loop would
 	# otherwise perform within one collision-detection pass. Off by default so
 	# the shipped build keeps the original behaviour.
@@ -40,7 +42,15 @@ elseif(NINTENDO_3DS)
 		# Stamped into the boot log so a captured log can be matched to the
 		# executable that produced it. The collision-volume experiment has three
 		# modes, so the id names the mode rather than being bumped by hand.
-		if(SRR2_OLD3DS_COLLVOL_VERIFY)
+		if(SRR2_OLD3DS_INDEX_CACHE)
+            add_definitions(-DSRR2_OLD3DS_INDEX_CACHE)
+            set(SRR2_OLD3DS_BUILD_ID "display-index-1")
+        elseif(SRR2_OLD3DS_SHADOW_MESH)
+			add_definitions(-DSRR2_OLD3DS_SHADOW_MESH)
+			set(SRR2_OLD3DS_BUILD_ID "render-shadow-1")
+		elseif(NOT SRR2_OLD3DS_COLLVOL_VERIFY AND NOT SRR2_OLD3DS_COLLVOL_CACHE)
+			set(SRR2_OLD3DS_BUILD_ID "display-diag-1")
+		elseif(SRR2_OLD3DS_COLLVOL_VERIFY)
 			set(SRR2_OLD3DS_BUILD_ID "coll-verify-2")
 		elseif(SRR2_OLD3DS_COLLVOL_CACHE)
 			set(SRR2_OLD3DS_BUILD_ID "coll-cache-1")

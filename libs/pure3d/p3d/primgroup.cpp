@@ -12,6 +12,7 @@
 #include <p3d/chunkfile.hpp>
 #include <p3d/file.hpp>
 #include <pddi/pddiext.hpp>
+#include <main/old3dsdiag.h>
 #include <p3d/anim/vertexanimkey.hpp>
 #include <pddi/base/baseshader.hpp>
 
@@ -252,6 +253,9 @@ tPrimGroupStreamed::~tPrimGroupStreamed()
 
 void tPrimGroupStreamed::Display()
 {
+#ifdef SRR2_OLD_3DS
+    Old3dsOperationScope timing(O3_STREAM, mVertexList->GetNumVertices());
+#endif
     P3DASSERT(mVertexList);
 
     // don't send indices and weights to the stream renderer
@@ -508,6 +512,10 @@ bool tPrimGroupSkinnedPC::SetVertices(unsigned start, unsigned count, rmt::Vecto
 
 void tPrimGroupSkinnedPC::Display(void)
 {
+    {
+#ifdef SRR2_OLD_3DS
+    Old3dsOperationScope timing(O3_SKIN, mVertexCount);
+#endif
 	pddiPrimBufferStream *stream;
 	
     int count = mVertexCount;
@@ -612,6 +620,7 @@ void tPrimGroupSkinnedPC::Display(void)
 		}
 
 	}
+    }
 	//buffer rendering
 	p3d::pddi->DrawPrimBuffer(mShader->GetShader(), mBuffer);
 

@@ -3734,7 +3734,12 @@ void Vehicle::Display()
     //p3d::pddi->SetFillMode(PDDI_FILL_WIRE);        
 
       
+    {
+#ifdef SRR2_OLD_3DS
+        Old3dsOperationScope poseTiming(O3_VEHICLEPOSE);
+#endif
     mPoseEngine->End();     // copy over what we're gonna render
+    }
     mGeometryVehicle->Display();
 
 

@@ -4853,6 +4853,9 @@ void Character::Display(void)
         return;
     }
     
+#ifdef SRR2_OLD_3DS
+    Old3dsOperationScope poseTiming(O3_CHARACTERPREP);
+#endif
     if( mbNeedChoreoUpdate)
     {
         mpPuppet->UpdatePose( );
@@ -4939,6 +4942,9 @@ void Character::Display(void)
     p3d::stack->Push();
     p3d::stack->Translate(rootPos);
 
+#ifdef SRR2_OLD_3DS
+    poseTiming.Finish();
+#endif
     mpCharacterRenderable->Display( mSphere.centre, pose );
 
     p3d::stack->Pop();

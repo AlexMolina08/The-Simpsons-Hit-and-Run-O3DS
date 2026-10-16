@@ -36,6 +36,7 @@
 #ifdef SRR2_OLD_3DS
 #include <citro3d.h>
 #include <malloc.h>
+#include <main/old3dsdiag.h>
 extern "C" unsigned g_picaPresentedFrames;
 extern unsigned g_old3dsModelViewUploads;
 extern unsigned g_old3dsModelViewReuses;
@@ -61,6 +62,16 @@ unsigned g_old3dsDrawDroppedNoRoom = 0;
 unsigned g_old3dsCmdHighWater = 0;
 unsigned g_old3dsCmdSize = 0;
 double   g_old3dsRenderPhases[6] = {};
+unsigned long long g_old3dsPhase2Ticks[4] = {};
+unsigned g_old3dsPhase2Draws[4] = {};
+unsigned g_old3dsPhase2Entities[2] = {};
+unsigned g_old3dsSimpleShadowCalls = 0;
+unsigned g_old3dsSimpleShadowDrawn = 0;
+Old3dsEntityStats g_old3dsEntities[O3_CATEGORY_COUNT] = {};
+Old3dsOperationStats g_old3dsOperations[O3_OPERATION_COUNT] = {};
+unsigned g_old3dsBackend[O3_COUNTER_COUNT] = {};
+int g_old3dsActiveEntity = -1;
+bool g_old3dsDrawBlended = false, g_old3dsDrawAlphaTested = false;
 unsigned g_old3dsLinearFailures = 0;
 unsigned g_old3dsLinearFailureBytes = 0;
 unsigned g_old3dsDetectPasses = 0;
@@ -647,6 +658,56 @@ void Game::Run()
                     g_old3dsRenderPhases[2] / profileFrames, g_old3dsRenderPhases[3] / profileFrames,
                     g_old3dsRenderPhases[4] / profileFrames, g_old3dsRenderPhases[5] / profileFrames);
 
+            if(profileFrames)
+            {
+                double parts[4], sum = 0.0;
+                for(unsigned i = 0; i < 4; ++i)
+                {
+                    parts[i] = g_old3dsPhase2Ticks[i] * 1000.0 / SYSCLOCK_ARM11 / profileFrames;
+                    sum += parts[i];
+                }
+                printf("OLD3DS_PHASE2 samples=%u coins_ms=%.4f shadows_ms=%.4f sort_ms=%.4f display_ms=%.4f remainder_ms=%.4f"
+                       " coins_draws=%u shadows_draws=%u sort_draws=%u display_draws=%u opaque=%u translucent=%u shadow_calls=%u shadow_drawn=%u\n",
+                    profileFrames, parts[0], parts[1], parts[2], parts[3],
+                    g_old3dsRenderPhases[2] / profileFrames - sum,
+                    g_old3dsPhase2Draws[0], g_old3dsPhase2Draws[1], g_old3dsPhase2Draws[2], g_old3dsPhase2Draws[3],
+                    g_old3dsPhase2Entities[0], g_old3dsPhase2Entities[1],
+                    g_old3dsSimpleShadowCalls, g_old3dsSimpleShadowDrawn);
+            }
+
+            if(profileFrames)
+            {
+                static const char* categories[] = {"other","vehicle","character","animated","animcollision",
+                    "static","staticphys","dynamic","animdynamic","stateprop","particle"};
+                static const char* operations[] = {"submit","material","uniforms","vertexlock","vertexflush",
+                    "expand","indexscan","skin","stream","vehiclepose","characterprep"};
+                for(unsigned i = 0; i < O3_CATEGORY_COUNT; ++i)
+                {
+                    const Old3dsEntityStats& e = g_old3dsEntities[i];
+                    if(!e.calls) continue;
+                    const double measuredMs = e.ticks * 1000.0 / SYSCLOCK_ARM11;
+                    printf("OLD3DS_ENTITY category=%s calls=%u samples=%u sampled_ms=%.4f estimated_ms_per_frame=%.4f"
+                           " draws=%u indexed=%u arrays=%u blended=%u alphatest=%u frames=%u\n",
+                        categories[i], e.calls, e.samples, measuredMs,
+                        e.samples ? measuredMs * e.calls / e.samples / profileFrames : 0.0,
+                        e.draws, e.indexed, e.arrays, e.blended, e.alphaTested, profileFrames);
+                }
+                for(unsigned i = 0; i < O3_OPERATION_COUNT; ++i)
+                {
+                    const Old3dsOperationStats& o = g_old3dsOperations[i];
+                    if(!o.calls) continue;
+                    printf("OLD3DS_BACKEND op=%s calls=%u units=%u samples=%u sampled_ms=%.4f frames=%u\n",
+                        operations[i], o.calls, o.units, o.samples, o.ticks * 1000.0 / SYSCLOCK_ARM11, profileFrames);
+                }
+                printf("OLD3DS_BCOUNTS indexed=%u arrays=%u transient=%u expanded_draw=%u expand_rebuild=%u"
+                       " index_tested=%u mv_upload=%u mv_reuse=%u material_pass=%u tex_request=%u tex_change=%u"
+                       " state_change=%u vertex_relock=%u rescan_candidate=%u default_verts=%u frames=%u\n",
+                    g_old3dsBackend[0],g_old3dsBackend[1],g_old3dsBackend[2],g_old3dsBackend[3],
+                    g_old3dsBackend[4],g_old3dsBackend[5],g_old3dsBackend[6],g_old3dsBackend[7],
+                    g_old3dsBackend[8],g_old3dsBackend[9],g_old3dsBackend[10],g_old3dsBackend[11],
+                    g_old3dsBackend[12],g_old3dsBackend[13],g_old3dsBackend[14],profileFrames);
+            }
+
             if(g_old3dsLinearFailures)
                 printf("OLD3DS_LINEARFAIL count=%u largest_bytes=%u\n",
                     g_old3dsLinearFailures, g_old3dsLinearFailureBytes);
@@ -683,6 +744,13 @@ void Game::Run()
             g_old3dsDrawDroppedNoRoom = 0;
             g_old3dsCmdHighWater = g_old3dsCmdSize = 0;
             memset(g_old3dsRenderPhases, 0, sizeof(g_old3dsRenderPhases));
+            memset(g_old3dsEntities, 0, sizeof(g_old3dsEntities));
+            memset(g_old3dsOperations, 0, sizeof(g_old3dsOperations));
+            memset(g_old3dsBackend, 0, sizeof(g_old3dsBackend));
+            memset(g_old3dsPhase2Ticks, 0, sizeof(g_old3dsPhase2Ticks));
+            memset(g_old3dsPhase2Draws, 0, sizeof(g_old3dsPhase2Draws));
+            memset(g_old3dsPhase2Entities, 0, sizeof(g_old3dsPhase2Entities));
+            g_old3dsSimpleShadowCalls = g_old3dsSimpleShadowDrawn = 0;
             g_old3dsLinearFailures = g_old3dsLinearFailureBytes = 0;
             g_old3dsDetectPasses = g_old3dsPairUpdates = 0;
             g_old3dsUpdateAllCalls = g_old3dsUpdateAllRedundant = 0;

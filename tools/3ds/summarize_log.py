@@ -21,6 +21,7 @@ def summarize(path, source):
     simulation = []
     world = None
     context = None
+    entities, operations, backend, phase2, drops = [], [], [], [], []
     for line in path.read_text(errors="replace").splitlines():
         values = fields(line)
         if line.startswith("OLD3DS_WORLD "):
@@ -33,11 +34,54 @@ def summarize(path, source):
             profiles.append(values)
         elif line.startswith("OLD3DS_SIM ") and context == 9:
             simulation.append(values)
+        elif line.startswith("OLD3DS_ENTITY ") and context == 9:
+            entities.append((re.search(r"category=(\S+)", line)[1], values))
+        elif line.startswith("OLD3DS_BACKEND ") and context == 9:
+            operations.append((re.search(r"op=(\S+)", line)[1], values))
+        elif line.startswith("OLD3DS_BCOUNTS ") and context == 9:
+            backend.append(values)
+        elif line.startswith("OLD3DS_PHASE2 ") and context == 9:
+            phase2.append(values)
+        elif line.startswith("OLD3DS_DRAW "):
+            drops.append((context, values))
 
     def weighted(rows, key):
         usable = [row for row in rows if key in row and row.get("samples", 0) > 0]
         count = sum(row["samples"] for row in usable)
         return sum(row[key] * row["samples"] for row in usable) / count if count else None
+
+    profile_count = sum(row.get("samples", 0) for row in profiles)
+
+    def sampled_groups(rows):
+        groups = {}
+        for name, row in rows:
+            group = groups.setdefault(name, {"calls": 0, "samples": 0, "sampled_ms": 0,
+                                             "estimated_total_ms": 0})
+            for key, value in row.items():
+                if key not in ("frames", "estimated_ms_per_frame"):
+                    group[key] = group.get(key, 0) + value
+            if row.get("samples", 0):
+                group["estimated_total_ms"] += row["sampled_ms"] * row["calls"] / row["samples"]
+        for group in groups.values():
+            group["estimated_ms_per_frame"] = group["estimated_total_ms"] / profile_count if profile_count else None
+        return groups or None
+
+    def counter_totals(rows):
+        if not rows:
+            return None
+        return {key: sum(row.get(key, 0) for row in rows) for key in rows[0] if key != "frames"}
+
+    entity_detail = sampled_groups(entities)
+    backend_detail = sampled_groups(operations)
+    backend_totals = counter_totals(backend)
+    reconciliation = None
+    if entity_detail and phase2:
+        reconciliation = {
+            "entity_count_difference": sum(v["calls"] for v in entity_detail.values()) - sum(r["opaque"] + r["translucent"] for r in phase2),
+            "entity_draw_difference": sum(v["draws"] for v in entity_detail.values()) - sum(r["display_draws"] for r in phase2),
+        }
+        if backend_totals:
+            reconciliation["backend_draw_difference"] = backend_totals["indexed"] + backend_totals["arrays"] - sum(v["draws"] for v in entity_detail.values())
 
     fps = [row["fps"] for row in frames]
     return {
@@ -45,6 +89,16 @@ def summarize(path, source):
         "source": source,
         "scope": "Intervals ending in gameplay; transitions and suspension may affect samples.",
         "world": world,
+        "entity_categories_sampled": entity_detail,
+        "backend_operations_sampled_nested": backend_detail,
+        "backend_counter_totals": backend_totals,
+        "detail_reconciliation_differences": reconciliation,
+        "draw_drops": {
+            scope: {key: int(sum(row.get(key, 0) for context, row in drops if (context == 9) == gameplay))
+                    for key in ("dropped_noframe", "dropped_notdrawable", "dropped_noroom")}
+            for scope, gameplay in (("gameplay", True), ("other_contexts", False))
+        } if drops else None,
+        "sampling_note": "Entity timings sample 1/4 calls; backend timings sample 1/32. Estimates can be biased; nested operations overlap.",
         "gameplay_samples": len(frames),
         "median_fps": statistics.median(fps) if fps else None,
         "minimum_fps": min(fps) if fps else None,

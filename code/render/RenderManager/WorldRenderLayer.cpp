@@ -298,7 +298,12 @@ void WorldRenderLayer::Render()
 #endif
 
             BEGIN_PROFILE( "Render coins" );
-            GetCoinManager()->Render();
+            {
+#ifdef SRR2_OLD_3DS
+                Old3dsRenderScope timing(0);
+#endif
+                GetCoinManager()->Render();
+            }
             END_PROFILE( "Render coins" );
 
             // VolShadows

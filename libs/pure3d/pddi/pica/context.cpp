@@ -647,10 +647,38 @@ pddiPrimStream* picaContext::BeginPrims(pddiShader* mat, pddiPrimType primType, 
 
     pddiBaseShader* material = (pddiBaseShader*)mat;
     ADD_STAT(PDDI_STAT_MATERIAL_OPS, !material->IsCurrent());
-    material->SetMaterial();
+    {
+#ifdef SRR2_OLD_3DS
+        Old3dsOperationScope timing(O3_MATERIAL);
+#endif
+        material->SetMaterial();
+    }
 
     return &thePrimStream;
 }
+
+#ifdef SRR2_OLD3DS_SHADOW_MESH
+#include <pddi/pica/blobtopology.hpp>
+bool picaContext::DrawBlobShadow(pddiShader* shader, const pddiVector* vertices,
+                                 pddiColour inside, pddiColour outside)
+{
+    // Reserve before BeginPrims changes immediate state. The caller can use the
+    // original path if either ring is full. No persistent geometry is mutated
+    // while a previous GPU submission may still reference it.
+    if(immVertexUsed + picaBlob::VertexCount * PICA_VERTEX_STRIDE > PICA_IMM_VERTEX_BYTES ||
+       immIndexUsed + picaBlob::IndexCount * sizeof(unsigned short) > PICA_IMM_INDEX_BYTES)
+        return false;
+    unsigned short* indices = AllocImmIndices(picaBlob::IndexCount);
+    picaBlob::Indices(indices);
+    pddiPrimStream* stream = BeginPrims(shader, PDDI_PRIM_TRIANGLES, PDDI_V_C, picaBlob::VertexCount);
+    if(!stream) return false;
+    for(unsigned i = 0; i < picaBlob::VertexCount; ++i)
+        stream->Vertex(const_cast<pddiVector*>(vertices + i), i == 0 || (i & 1) ? inside : outside);
+    theImmBuffer->SetTransientIndices(indices, picaBlob::IndexCount);
+    EndPrims(stream);
+    return true;
+}
+#endif
 
 void picaContext::EndPrims(pddiPrimStream* stream)
 {
@@ -670,7 +698,12 @@ void picaContext::DrawPrimBuffer(pddiShader* mat, pddiPrimBuffer* buffer)
 
     pddiBaseShader* material = (pddiBaseShader*)mat;
     ADD_STAT(PDDI_STAT_MATERIAL_OPS, !material->IsCurrent());
-    material->SetMaterial();
+    {
+#ifdef SRR2_OLD_3DS
+        Old3dsOperationScope timing(O3_MATERIAL);
+#endif
+        material->SetMaterial();
+    }
 
     ((picaPrimBuffer*)buffer)->Display();
 }
@@ -817,6 +850,9 @@ void picaContext::RebuildLightArray(void)
 
 void picaContext::SetVertexUniforms(bool lit, pddiColour ambient, pddiColour diffuse, pddiColour emissive)
 {
+#ifdef SRR2_OLD_3DS
+    Old3dsOperationScope timing(O3_UNIFORMS, 1);
+#endif
     if(!g_picaInFrame)
     {
         InvalidateUniformCache();
@@ -841,6 +877,7 @@ void picaContext::SetVertexUniforms(bool lit, pddiColour ambient, pddiColour dif
         memcpy(&lastModelView, mv, sizeof(lastModelView));
         modelViewUploaded = true;
         ++g_old3dsModelViewUploads;
+        Old3dsCount(O3_MV_UPLOAD);
 #endif
     C3D_Mtx hwModelView;
     for(int row = 0; row < 4; row++)
@@ -854,7 +891,7 @@ void picaContext::SetVertexUniforms(bool lit, pddiColour ambient, pddiColour dif
     C3D_FVUnifMtx4x4(GPU_VERTEX_SHADER, VSH_FVEC_u_mv, &hwModelView);
 #ifdef SRR2_OLD_3DS
     }
-    else ++g_old3dsModelViewReuses;
+    else { ++g_old3dsModelViewReuses; Old3dsCount(O3_MV_REUSE); }
 #endif
 
     if(!miscUploaded || lit != lastLit)
@@ -1334,6 +1371,9 @@ void picaPrimBuffer::SetTransient(unsigned char* verts, unsigned short* idx, uns
 
 pddiPrimBufferStream* picaPrimBuffer::Lock()
 {
+#ifdef SRR2_OLD_3DS
+    Old3dsOperationScope timing(O3_VERTEXLOCK, allocated);
+#endif
     total = 0;
 
     if(buffer == NULL)
@@ -1345,6 +1385,9 @@ pddiPrimBufferStream* picaPrimBuffer::Lock()
     uv     = (vertexType & 0xf)           ? (float*)(ptr + PICA_VERTEX_OFF_UV)  : NULL;
     colour = (vertexType & PDDI_V_COLOUR) ? (ptr + PICA_VERTEX_OFF_COL)         : NULL;
 
+#ifdef SRR2_OLD_3DS
+    Old3dsCount(O3_DEFAULT_VERTS, allocated);
+#endif
     for(unsigned i = 0; i < allocated; i++)
     {
         unsigned char* v = buffer + (i * PICA_VERTEX_STRIDE);
@@ -1376,6 +1419,9 @@ static inline void picaFlushForGpu(const void* p, unsigned bytes)
 
 void picaPrimBuffer::Unlock(pddiPrimBufferStream*)
 {
+#ifdef SRR2_OLD_3DS
+    Old3dsOperationScope timing(O3_VERTEXFLUSH, transient ? 0 : mem);
+#endif
     if(coord)
         coord = (float*)((char*)coord - (total * PICA_VERTEX_STRIDE));
     if(normal)
@@ -1387,8 +1433,17 @@ void picaPrimBuffer::Unlock(pddiPrimBufferStream*)
 
     if(!transient)
     {
+#ifdef SRR2_OLD_3DS
+        Old3dsCount(O3_VERTEX_RELOCK);
+        if(elemState >= 0) Old3dsCount(O3_RESCAN_CANDIDATE, indexCount);
+#endif
         picaFlushForGpu(buffer, mem);
-        expandDirty = true; elemState = -1;
+        expandDirty = true;
+        // Vertex-only updates cannot change index validity. Index writers own
+        // invalidation; expanded vertex data must still be rebuilt after this.
+#ifndef SRR2_OLD3DS_INDEX_CACHE
+        elemState = -1;
+#endif
     }
 }
 
@@ -1427,18 +1482,32 @@ void picaPrimBuffer::SetIndices(unsigned short* i, int count)
 
 bool picaPrimBuffer::IndicesInRange(void) const
 {
+#ifdef SRR2_OLD_3DS
+    Old3dsOperationScope timing(O3_INDEXSCAN, indexCount);
+#endif
     if(indices == NULL || indexCount == 0 || allocated == 0)
         return false;
     for(unsigned i = 0; i < indexCount; i++)
     {
         if(indices[i] >= allocated)
+        {
+#ifdef SRR2_OLD_3DS
+            Old3dsCount(O3_INDEX_TESTED, i + 1);
+#endif
             return false;
+        }
     }
+#ifdef SRR2_OLD_3DS
+    Old3dsCount(O3_INDEX_TESTED, indexCount);
+#endif
     return true;
 }
 
 bool picaPrimBuffer::BuildExpanded(void)
 {
+#ifdef SRR2_OLD_3DS
+    Old3dsOperationScope timing(O3_EXPAND, indexCount);
+#endif
     if(!expandDirty && expanded != NULL)
         return true;
 
@@ -1469,6 +1538,9 @@ bool picaPrimBuffer::BuildExpanded(void)
         expandedBytes = needed;
     }
 
+#ifdef SRR2_OLD_3DS
+    Old3dsCount(O3_EXPAND_REBUILD);
+#endif
     for(unsigned i = 0; i < indexCount; i++)
     {
         unsigned v = indices[i];
@@ -1486,6 +1558,9 @@ bool picaPrimBuffer::BuildExpanded(void)
 
 void picaPrimBuffer::Display(void)
 {
+#ifdef SRR2_OLD_3DS
+    Old3dsOperationScope timing(O3_SUBMIT, 1);
+#endif
     if(!g_picaInFrame)
     {
 #ifdef SRR2_OLD_3DS
@@ -1506,7 +1581,11 @@ void picaPrimBuffer::Display(void)
     unsigned count;
 
     bool useElements = false;
-    if(indices != NULL && !transient)
+    if(indices != NULL
+#ifndef SRR2_OLD3DS_SHADOW_MESH
+       && !transient
+#endif
+      )
     {
         if(elemState < 0)
             elemState = IndicesInRange() ? 1 : 0;
@@ -1525,6 +1604,9 @@ void picaPrimBuffer::Display(void)
         }
         vertexData = expanded;
         count = indexCount;
+#ifdef SRR2_OLD_3DS
+        Old3dsCount(O3_EXPANDED_DRAW);
+#endif
     }
     else
     {
@@ -1578,6 +1660,15 @@ void picaPrimBuffer::Display(void)
 #ifdef SRR2_OLD_3DS
     ++g_old3dsDrawCalls;
     g_old3dsDrawVerts += count;
+    if(g_old3dsActiveEntity >= 0)
+    {
+        Old3dsCount(useElements ? O3_INDEXED : O3_ARRAY);
+        if(transient) Old3dsCount(O3_TRANSIENT);
+        Old3dsEntityStats& e = g_old3dsEntities[g_old3dsActiveEntity];
+        if(useElements) ++e.indexed; else ++e.arrays;
+        e.blended += g_old3dsDrawBlended;
+        e.alphaTested += g_old3dsDrawAlphaTested;
+    }
 #endif
 
     if(useElements)
