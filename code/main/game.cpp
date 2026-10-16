@@ -70,6 +70,9 @@ unsigned g_old3dsSimpleShadowDrawn = 0;
 Old3dsEntityStats g_old3dsEntities[O3_CATEGORY_COUNT] = {};
 Old3dsOperationStats g_old3dsOperations[O3_OPERATION_COUNT] = {};
 unsigned g_old3dsBackend[O3_COUNTER_COUNT] = {};
+Old3dsAnimStats g_old3dsAnimStats[8] = {};
+unsigned g_old3dsAnimQueries[4] = {};
+unsigned g_old3dsWeights[5] = {};
 int g_old3dsActiveEntity = -1;
 bool g_old3dsDrawBlended = false, g_old3dsDrawAlphaTested = false;
 unsigned g_old3dsLinearFailures = 0;
@@ -530,6 +533,10 @@ const unsigned PROFILE_CHANNEL_AI = 1;
 const unsigned PROFILE_CHANNEL_RENDER = 2;
 const unsigned PROFILE_CHANNEL_LOAD = 3;
 
+#ifdef SRR2_OLD_3DS
+#include <main/old3dsreport.h>
+#endif
+
 void Game::Run() 
 {
 #ifdef SRR2_OLD_3DS
@@ -580,7 +587,6 @@ void Game::Run()
     while( !mExitNow )
     {
 #ifdef SRR2_OLD_3DS
-        const u64 frameStartTick = svcGetSystemTick();
         if(mFrameCount == 0) printf("OLD3DS_RUN loop\n");
 #endif
 #ifdef RAD_3DS
@@ -599,142 +605,95 @@ void Game::Run()
 #ifdef SRR2_OLD_3DS
         static u64 lastDiagnosticTick = svcGetSystemTick();
         static unsigned lastPresented = g_picaPresentedFrames;
+        // Pause first, then press SELECT to dump. Hold L as well to exit cleanly.
+        // Never dump while simulation runs.
+        if(ctx == CONTEXT_PAUSE && (hidKeysDown() & KEY_SELECT))
+        {
+            const unsigned dumpStart = radTimeGetMilliseconds();
+            const u64 dumpStartTick = svcGetSystemTick();
+            const bool dumped = Old3dsDumpReports("pause-chord");
+            time += radTimeGetMilliseconds() - dumpStart;
+            lastDiagnosticTick += svcGetSystemTick() - dumpStartTick;
+            if(dumped && (hidKeysHeld() & KEY_L))
+            {
+                Stop();
+                break;
+            }
+        }
+#endif
+#ifdef SRR2_OLD_3DS
+        const u64 frameStartTick = svcGetSystemTick();
         const u64 diagnosticTick = svcGetSystemTick();
         const u64 sampleTicks = diagnosticTick - lastDiagnosticTick;
         if(sampleTicks >= (u64)SYSCLOCK_ARM11 * 5)
         {
+            const u64 captureStart = svcGetSystemTick();
             const unsigned presented = g_picaPresentedFrames;
-            const struct mallinfo heap = mallinfo();
-            printf("OLD3DS_FRAME context=%d frame=%u fps=%.2f paused=%d linear_free=%lu heap_used=%d cpu_ms=%.2f gpu_ms=%.2f\n",
-                (int)ctx, mFrameCount, (presented - lastPresented) * (double)SYSCLOCK_ARM11 / sampleTicks,
-                mpPlatform->PausedForErrors(), (unsigned long)linearSpaceFree(), heap.uordblks,
-                C3D_GetProcessingTime(), C3D_GetDrawingTime());
-            if(profileFrames)
-                printf("OLD3DS_PROFILE samples=%u update_ms=%.2f render_ms=%.2f service_ms=%.2f load_ms=%.2f gpu_wait_ms=%.2f submit_ms=%.2f work_ms=%.2f peak_ms=%.2f over_budget=%u\n",
-                    profileFrames, updateMs / profileFrames, renderMs / profileFrames,
-                    serviceMs / profileFrames, loadMs / profileFrames,
-                    g_picaFrameWaitMs / profileFrames, g_picaFrameSubmitMs / profileFrames,
-                    workMs / profileFrames, peakWorkMs, overBudgetFrames);
-            if(profileFrames)
-                printf("OLD3DS_SIM samples=%u physics_ms=%.2f pedestrians_ms=%.2f traffic_ms=%.2f effects_ms=%.2f\n",
-                    profileFrames, g_old3dsUpdateStages[0] / profileFrames,
-                    g_old3dsUpdateStages[1] / profileFrames,
-                    g_old3dsUpdateStages[2] / profileFrames,
-                    g_old3dsUpdateStages[3] / profileFrames);
-            printf("OLD3DS_RENDER mv_uploads=%u mv_reuses=%u\n",
-                g_old3dsModelViewUploads, g_old3dsModelViewReuses);
+            Old3dsReport& record = s_old3dsReports.Push();
+            record.ctx = (int)ctx;
+            record.mFrameCount = mFrameCount;
+            record.profileFrames = profileFrames;
+            record.updateMs = updateMs;
+            record.renderMs = renderMs;
+            record.serviceMs = serviceMs;
+            record.loadMs = loadMs;
+            record.workMs = workMs;
+            record.peakWorkMs = peakWorkMs;
+            record.overBudgetFrames = overBudgetFrames;
+            record.fps = (presented - lastPresented) * (double)SYSCLOCK_ARM11 / sampleTicks;
+            record.paused = mpPlatform->PausedForErrors();
+            record.linearFree = (unsigned long)linearSpaceFree();
+            record.heapUsed = mallinfo().uordblks;
+            record.cpuMs = C3D_GetProcessingTime();
+            record.gpuMs = C3D_GetDrawingTime();
+            memcpy(record.g_old3dsBackend, g_old3dsBackend, sizeof(g_old3dsBackend));
+            record.g_old3dsCmdHighWater = g_old3dsCmdHighWater;
+            record.g_old3dsCmdSize = g_old3dsCmdSize;
+            record.g_old3dsCollisionPairs = g_old3dsCollisionPairs;
+            record.g_old3dsDetectPasses = g_old3dsDetectPasses;
+            record.g_old3dsDrawCalls = g_old3dsDrawCalls;
+            record.g_old3dsDrawDroppedNoFrame = g_old3dsDrawDroppedNoFrame;
+            record.g_old3dsDrawDroppedNoRoom = g_old3dsDrawDroppedNoRoom;
+            record.g_old3dsDrawDroppedNotDrawable = g_old3dsDrawDroppedNotDrawable;
+            record.g_old3dsDrawVerts = g_old3dsDrawVerts;
+            memcpy(record.g_old3dsEntities, g_old3dsEntities, sizeof(g_old3dsEntities));
+            record.g_old3dsFrameBeginBusy = g_old3dsFrameBeginBusy;
+            record.g_old3dsFrameBeginNoDraw = g_old3dsFrameBeginNoDraw;
+            record.g_old3dsFrameBeginOk = g_old3dsFrameBeginOk;
+            record.g_old3dsFramePresented = g_old3dsFramePresented;
+            record.g_old3dsLinearFailureBytes = g_old3dsLinearFailureBytes;
+            record.g_old3dsLinearFailures = g_old3dsLinearFailures;
+            record.g_old3dsModelViewReuses = g_old3dsModelViewReuses;
+            record.g_old3dsModelViewUploads = g_old3dsModelViewUploads;
+            memcpy(record.g_old3dsOperations, g_old3dsOperations, sizeof(g_old3dsOperations));
+            record.g_old3dsPairUpdates = g_old3dsPairUpdates;
+            memcpy(record.g_old3dsPhase2Draws, g_old3dsPhase2Draws, sizeof(g_old3dsPhase2Draws));
+            memcpy(record.g_old3dsPhase2Entities, g_old3dsPhase2Entities, sizeof(g_old3dsPhase2Entities));
+            memcpy(record.g_old3dsPhase2Ticks, g_old3dsPhase2Ticks, sizeof(g_old3dsPhase2Ticks));
+            record.g_old3dsPhysicsAreas = g_old3dsPhysicsAreas;
+            memcpy(record.g_old3dsPhysicsFrames, g_old3dsPhysicsFrames, sizeof(g_old3dsPhysicsFrames));
+            record.g_old3dsPhysicsSubsteps = g_old3dsPhysicsSubsteps;
+            memcpy(record.g_old3dsRenderPhases, g_old3dsRenderPhases, sizeof(g_old3dsRenderPhases));
+            record.g_old3dsSimpleShadowCalls = g_old3dsSimpleShadowCalls;
+            record.g_old3dsSimpleShadowDrawn = g_old3dsSimpleShadowDrawn;
+            record.g_old3dsUpdateAllCalls = g_old3dsUpdateAllCalls;
+            record.g_old3dsUpdateAllMs = g_old3dsUpdateAllMs;
+            record.g_old3dsUpdateAllRedundant = g_old3dsUpdateAllRedundant;
+            record.g_old3dsUpdateAllRedundantMs = g_old3dsUpdateAllRedundantMs;
+            record.g_old3dsUpdateAllRedundantSamples = g_old3dsUpdateAllRedundantSamples;
+            record.g_old3dsUpdateAllSamples = g_old3dsUpdateAllSamples;
+            record.g_old3dsUpdateAllStaticSkip = g_old3dsUpdateAllStaticSkip;
+            record.g_old3dsUpdateAllVerified = g_old3dsUpdateAllVerified;
+            record.g_old3dsUpdateAllVerifyMismatch = g_old3dsUpdateAllVerifyMismatch;
+            memcpy(record.g_old3dsUpdateStages, g_old3dsUpdateStages, sizeof(g_old3dsUpdateStages));
+            record.g_picaFrameSubmitMs = g_picaFrameSubmitMs;
+            record.g_picaFrameWaitMs = g_picaFrameWaitMs;
+            memcpy(record.anim, g_old3dsAnimStats, sizeof(g_old3dsAnimStats));
+            memcpy(record.animQueries, g_old3dsAnimQueries, sizeof(g_old3dsAnimQueries));
+            memcpy(record.weights, g_old3dsWeights, sizeof(g_old3dsWeights));
+            memset(g_old3dsAnimStats, 0, sizeof(g_old3dsAnimStats));
+            memset(g_old3dsAnimQueries, 0, sizeof(g_old3dsAnimQueries));
             g_old3dsModelViewUploads = g_old3dsModelViewReuses = 0;
-
-            // Substeps are bucketed by the elapsed milliseconds the physics
-            // update received, using the same threshold that selects the count.
-            // This is the distribution of the selected count, not a count of
-            // substeps executed.
-            printf("OLD3DS_PHYS substep_frames_1=%u substep_frames_2=%u substep_frames_3plus=%u"
-                   " substeps_total=%u areas=%u pairs=%u\n",
-                g_old3dsPhysicsFrames[0], g_old3dsPhysicsFrames[1], g_old3dsPhysicsFrames[2],
-                g_old3dsPhysicsSubsteps, g_old3dsPhysicsAreas, g_old3dsCollisionPairs);
-
-            // begin_ok + begin_busy should equal the loops that attempted a
-            // frame; presented counts frames actually submitted to the GPU.
-            printf("OLD3DS_PRESENT begin_ok=%u begin_busy=%u begin_nodraw=%u presented=%u\n",
-                g_old3dsFrameBeginOk, g_old3dsFrameBeginBusy,
-                g_old3dsFrameBeginNoDraw, g_old3dsFramePresented);
-
-            // dropped_* must stay at zero. Any non-zero value means geometry was
-            // silently omitted, which would inflate FPS without being an
-            // improvement. cmd_high_water is bytes used against cmd_size.
-            printf("OLD3DS_DRAW calls=%u verts=%u dropped_noframe=%u dropped_notdrawable=%u"
-                   " dropped_noroom=%u cmd_high_water=%u cmd_size=%u\n",
-                g_old3dsDrawCalls, g_old3dsDrawVerts,
-                g_old3dsDrawDroppedNoFrame, g_old3dsDrawDroppedNotDrawable,
-                g_old3dsDrawDroppedNoRoom, g_old3dsCmdHighWater, g_old3dsCmdSize);
-
-            // Slots: 0 traversal/sort, 1 opaque, 2 translucent, 3 billboards,
-            // 4 sparkles, 5 guts. These are subsets of render_ms.
-            if(profileFrames)
-                printf("OLD3DS_RPHASE traversal_ms=%.2f opaque_ms=%.2f translucent_ms=%.2f"
-                       " billboards_ms=%.2f sparkles_ms=%.2f guts_ms=%.2f\n",
-                    g_old3dsRenderPhases[0] / profileFrames, g_old3dsRenderPhases[1] / profileFrames,
-                    g_old3dsRenderPhases[2] / profileFrames, g_old3dsRenderPhases[3] / profileFrames,
-                    g_old3dsRenderPhases[4] / profileFrames, g_old3dsRenderPhases[5] / profileFrames);
-
-            if(profileFrames)
-            {
-                double parts[4], sum = 0.0;
-                for(unsigned i = 0; i < 4; ++i)
-                {
-                    parts[i] = g_old3dsPhase2Ticks[i] * 1000.0 / SYSCLOCK_ARM11 / profileFrames;
-                    sum += parts[i];
-                }
-                printf("OLD3DS_PHASE2 samples=%u coins_ms=%.4f shadows_ms=%.4f sort_ms=%.4f display_ms=%.4f remainder_ms=%.4f"
-                       " coins_draws=%u shadows_draws=%u sort_draws=%u display_draws=%u opaque=%u translucent=%u shadow_calls=%u shadow_drawn=%u\n",
-                    profileFrames, parts[0], parts[1], parts[2], parts[3],
-                    g_old3dsRenderPhases[2] / profileFrames - sum,
-                    g_old3dsPhase2Draws[0], g_old3dsPhase2Draws[1], g_old3dsPhase2Draws[2], g_old3dsPhase2Draws[3],
-                    g_old3dsPhase2Entities[0], g_old3dsPhase2Entities[1],
-                    g_old3dsSimpleShadowCalls, g_old3dsSimpleShadowDrawn);
-            }
-
-            if(profileFrames)
-            {
-                static const char* categories[] = {"other","vehicle","character","animated","animcollision",
-                    "static","staticphys","dynamic","animdynamic","stateprop","particle"};
-                static const char* operations[] = {"submit","material","uniforms","vertexlock","vertexflush",
-                    "expand","indexscan","skin","stream","vehiclepose","characterprep"};
-                for(unsigned i = 0; i < O3_CATEGORY_COUNT; ++i)
-                {
-                    const Old3dsEntityStats& e = g_old3dsEntities[i];
-                    if(!e.calls) continue;
-                    const double measuredMs = e.ticks * 1000.0 / SYSCLOCK_ARM11;
-                    printf("OLD3DS_ENTITY category=%s calls=%u samples=%u sampled_ms=%.4f estimated_ms_per_frame=%.4f"
-                           " draws=%u indexed=%u arrays=%u blended=%u alphatest=%u frames=%u\n",
-                        categories[i], e.calls, e.samples, measuredMs,
-                        e.samples ? measuredMs * e.calls / e.samples / profileFrames : 0.0,
-                        e.draws, e.indexed, e.arrays, e.blended, e.alphaTested, profileFrames);
-                }
-                for(unsigned i = 0; i < O3_OPERATION_COUNT; ++i)
-                {
-                    const Old3dsOperationStats& o = g_old3dsOperations[i];
-                    if(!o.calls) continue;
-                    printf("OLD3DS_BACKEND op=%s calls=%u units=%u samples=%u sampled_ms=%.4f frames=%u\n",
-                        operations[i], o.calls, o.units, o.samples, o.ticks * 1000.0 / SYSCLOCK_ARM11, profileFrames);
-                }
-                printf("OLD3DS_BCOUNTS indexed=%u arrays=%u transient=%u expanded_draw=%u expand_rebuild=%u"
-                       " index_tested=%u mv_upload=%u mv_reuse=%u material_pass=%u tex_request=%u tex_change=%u"
-                       " state_change=%u vertex_relock=%u rescan_candidate=%u default_verts=%u frames=%u\n",
-                    g_old3dsBackend[0],g_old3dsBackend[1],g_old3dsBackend[2],g_old3dsBackend[3],
-                    g_old3dsBackend[4],g_old3dsBackend[5],g_old3dsBackend[6],g_old3dsBackend[7],
-                    g_old3dsBackend[8],g_old3dsBackend[9],g_old3dsBackend[10],g_old3dsBackend[11],
-                    g_old3dsBackend[12],g_old3dsBackend[13],g_old3dsBackend[14],profileFrames);
-            }
-
-            if(g_old3dsLinearFailures)
-                printf("OLD3DS_LINEARFAIL count=%u largest_bytes=%u\n",
-                    g_old3dsLinearFailures, g_old3dsLinearFailureBytes);
-
-            // Redundant collision-volume updates. calls is every UpdateAll()
-            // reached from the pair loop; redundant counts those that repeated a
-            // volume already updated in the same pass. mean_first_us and
-            // mean_red_us are measured separately on one call in eight. The
-            // recoverable time per interval is redundant * mean_red_us, since a
-            // repeat does the same work as the first update of that volume.
-            printf("OLD3DS_COLL passes=%u pairs_updated=%u calls=%u redundant=%u"
-                   " static_skip=%u first_samples=%u mean_first_us=%.2f"
-                   " red_samples=%u mean_red_us=%.2f\n",
-                g_old3dsDetectPasses, g_old3dsPairUpdates, g_old3dsUpdateAllCalls,
-                g_old3dsUpdateAllRedundant, g_old3dsUpdateAllStaticSkip,
-                g_old3dsUpdateAllSamples,
-                g_old3dsUpdateAllSamples ? (g_old3dsUpdateAllMs * 1000.0 / g_old3dsUpdateAllSamples) : 0.0,
-                g_old3dsUpdateAllRedundantSamples,
-                g_old3dsUpdateAllRedundantSamples ? (g_old3dsUpdateAllRedundantMs * 1000.0 / g_old3dsUpdateAllRedundantSamples) : 0.0);
-
-#ifdef SRR2_OLD3DS_COLLVOL_VERIFY
-            // Verify build: how many repeats were hashed before and after, and
-            // how many of those changed geometry. mismatch must stay zero.
-            printf("OLD3DS_COLLVERIFY verified=%u mismatch=%u\n",
-                g_old3dsUpdateAllVerified, g_old3dsUpdateAllVerifyMismatch);
-#endif
-
             memset(g_old3dsPhysicsFrames, 0, sizeof(g_old3dsPhysicsFrames));
             g_old3dsPhysicsSubsteps = g_old3dsPhysicsAreas = g_old3dsCollisionPairs = 0;
             g_old3dsFrameBeginOk = g_old3dsFrameBeginBusy = g_old3dsFrameBeginNoDraw = 0;
@@ -766,7 +725,8 @@ void Game::Run()
             profileFrames = 0;
             workMs = peakWorkMs = 0.0;
             overBudgetFrames = 0;
-            fflush(stdout);
+            s_old3dsCaptureTicks += svcGetSystemTick() - captureStart;
+            ++s_old3dsCaptures;
             lastDiagnosticTick = diagnosticTick;
             lastPresented = presented;
         }
@@ -973,6 +933,12 @@ void Game::Run()
 
         END_PROFILER_FRAME();
     }
+#ifdef SRR2_OLD_3DS
+    Old3dsDumpReports("clean-exit");
+#endif
+#ifdef RAD_3DS
+    aptUnhook(&s_aptCookie);
+#endif
 }
 
 

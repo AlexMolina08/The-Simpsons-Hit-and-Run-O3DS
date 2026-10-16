@@ -134,6 +134,58 @@ private:
     Old3dsEntityStats* stats;
 };
 
+
+// Animated-object correlation only: no bounds or visibility behavior changes.
+struct Old3dsAnimStats
+{
+    unsigned long long uid;
+    char name[32];
+    unsigned calls, draws, particleCalls, translatedCalls, translatedDraws;
+};
+extern "C" Old3dsAnimStats g_old3dsAnimStats[8];
+extern "C" unsigned g_old3dsAnimQueries[4]; // all, particles, translated, table overflow
+extern "C" unsigned g_old3dsWeights[5]; // cumulative loaded vertices, rigid, zero w1/w2/w3
+class Old3dsAnimScope
+{
+public:
+    Old3dsAnimScope(unsigned long long uid, const char* name, bool particle, bool translated)
+        : stats(0), draws(g_old3dsDrawCalls), translated(translated)
+    {
+        for(unsigned i = 0; i < 8; ++i)
+        {
+            if(!g_old3dsAnimStats[i].calls || g_old3dsAnimStats[i].uid == uid)
+            {
+                stats = &g_old3dsAnimStats[i];
+                if(!stats->calls)
+                {
+                    stats->uid = uid;
+                    unsigned j = 0;
+                    if(name) for(; j < 31 && name[j]; ++j) stats->name[j] = name[j];
+                    stats->name[j] = 0;
+                }
+                ++stats->calls;
+                if(particle) ++stats->particleCalls;
+                if(translated) ++stats->translatedCalls;
+                break;
+            }
+        }
+        if(!stats) ++g_old3dsAnimQueries[3];
+    }
+    ~Old3dsAnimScope()
+    {
+        if(stats)
+        {
+            const unsigned submitted = g_old3dsDrawCalls - draws;
+            stats->draws += submitted;
+            if(translated) stats->translatedDraws += submitted;
+        }
+    }
+private:
+    Old3dsAnimStats* stats;
+    unsigned draws;
+    bool translated;
+};
+
 // Linear allocation failures, separate from the ordinary heap.
 extern "C" unsigned g_old3dsLinearFailures;
 extern "C" unsigned g_old3dsLinearFailureBytes;

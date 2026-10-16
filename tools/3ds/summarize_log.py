@@ -22,12 +22,31 @@ def summarize(path, source):
     world = None
     context = None
     entities, operations, backend, phase2, drops = [], [], [], [], []
+    buffers, dumps, anim_queries, animations = [], [], [], []
+    pending_queries, pending_animations, weights = None, [], None
     for line in path.read_text(errors="replace").splitlines():
         values = fields(line)
-        if line.startswith("OLD3DS_WORLD "):
+        if line.startswith("OLD3DS_BUFFER "):
+            buffers.append(values)
+        elif line.startswith("OLD3DS_DUMP "):
+            dumps.append(values)
+        elif line.startswith("OLD3DS_ANIMQUERY "):
+            pending_queries = values
+        elif line.startswith("OLD3DS_ANIM "):
+            # Preserve 64-bit asset identifiers exactly, not as float.
+            uid = re.search(r"uid=(\d+)", line)[1]
+            pending_animations.append((uid, {key: value for key, value in values.items() if key != "uid"}))
+        elif line.startswith("OLD3DS_WEIGHTS "):
+            weights = values  # cumulative asset-load histogram, not frame work
+        elif line.startswith("OLD3DS_WORLD "):
             world = values
         elif line.startswith("OLD3DS_FRAME "):
             context = values.get("context")
+            if context == 9:
+                if pending_queries is not None:
+                    anim_queries.append(pending_queries)
+                animations.extend(pending_animations)
+            pending_queries, pending_animations = None, []
             if context == 9 and "fps" in values:
                 frames.append(values)
         elif line.startswith("OLD3DS_PROFILE ") and context == 9:
@@ -89,6 +108,15 @@ def summarize(path, source):
         "source": source,
         "scope": "Intervals ending in gameplay; transitions and suspension may affect samples.",
         "world": world,
+        "telemetry_buffers": buffers or None,
+        "diagnostic_dump_costs": dumps or None,
+        "loaded_skin_weight_histogram": weights,
+        "animated_bounds_queries": counter_totals(anim_queries),
+        "animated_asset_counters": {
+            uid: {key: sum(row.get(key, 0) for name, row in animations if name == uid)
+                  for key in ("calls", "draws", "particle_calls", "translated_calls", "translated_draws")}
+            for uid in dict(animations)
+        } or None,
         "entity_categories_sampled": entity_detail,
         "backend_operations_sampled_nested": backend_detail,
         "backend_counter_totals": backend_totals,
