@@ -19,6 +19,10 @@ public:
 
     void BeginFrame();
     void EndFrame();
+#ifdef SRR2_OLD_3DS
+    void BeginWorld(void);
+    void EndWorld(void);
+#endif
 
     void Clear(unsigned bufferMask);
 

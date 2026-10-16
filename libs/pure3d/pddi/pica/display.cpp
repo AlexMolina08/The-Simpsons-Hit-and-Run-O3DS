@@ -23,7 +23,10 @@ static void picaWriteEye(float shift)
 
 extern "C" int      g_picaInFrame        = 0;
 #ifdef SRR2_OLD_3DS
+extern "C" int g_picaWorldScaleAllowed = 0;
 extern "C" unsigned g_picaPresentedFrames = 0;
+extern "C" double g_picaFrameWaitMs = 0.0;
+extern "C" double g_picaFrameSubmitMs = 0.0;
 #endif
 static int s_c3dRefCount = 0;
 
@@ -45,6 +48,13 @@ picaDisplay::picaDisplay(pddiDisplayInfo* info)
     target      = NULL;
     targetRight = NULL;
     targetBottom = NULL;
+#ifdef SRR2_OLD_3DS
+    memset(&worldTexture, 0, sizeof(worldTexture));
+    worldTarget = NULL;
+    worldActive = false;
+    worldWidth = 400;
+    worldHeight = 240;
+#endif
     stereoThisFrame = false;
     eyeShift    = 0.0f;
     c3dStarted  = false;
@@ -62,6 +72,10 @@ picaDisplay::~picaDisplay()
         g_picaInFrame = 0;
     }
 
+#ifdef SRR2_OLD_3DS
+    if(worldTarget) C3D_RenderTargetDelete(worldTarget);
+    if(worldTexture.data) C3D_TexDelete(&worldTexture);
+#endif
     if(target != NULL)
     {
         C3D_RenderTargetDelete(target);
@@ -172,6 +186,36 @@ bool picaDisplay::InitDisplay(const pddiDisplayInit* init)
         }
     }
 
+#ifdef SRR2_OLD_3DS
+    // Optional, tiny SD-side override; the native path requires no extra memory.
+    int percent = 100;
+    FILE* settings = fopen("old3ds-world-scale.txt", "r");
+    if(settings)
+    {
+        if(fscanf(settings, "%d", &percent) != 1) percent = 100;
+        fclose(settings);
+    }
+    if(percent != 75 && percent != 80) percent = 100;
+    if(percent != 100 && worldTarget == NULL)
+    {
+        // Retain the backend's rotated coordinates so projection and depth
+        // conventions remain identical to the native framebuffer.
+        if(C3D_TexInitVRAM(&worldTexture, 256, 512, GPU_RGBA8))
+        {
+            worldTarget = C3D_RenderTargetCreateFromTex(&worldTexture, GPU_TEXFACE_2D, 0, GPU_RB_DEPTH24_STENCIL8);
+            if(worldTarget)
+            {
+                worldWidth = 400 * percent / 100;
+                worldHeight = 240 * percent / 100;
+                C3D_TexSetFilter(&worldTexture, GPU_LINEAR, GPU_LINEAR);
+                C3D_TexSetWrap(&worldTexture, GPU_CLAMP_TO_EDGE, GPU_CLAMP_TO_EDGE);
+            }
+            else C3D_TexDelete(&worldTexture);
+        }
+    }
+    printf("OLD3DS_WORLD width=%d height=%d native_ui=1\n", worldWidth, worldHeight);
+#endif
+
     reset = true;
     return true;
 }
@@ -202,7 +246,13 @@ void picaDisplay::BeginFrame(void)
     {
         if(g_picaGpuWaitHook) g_picaGpuWaitHook(1);
 
+#ifdef SRR2_OLD_3DS
+        const u64 waitTick = svcGetSystemTick();
+#endif
         const bool frameOk = C3D_FrameBegin(0);
+#ifdef SRR2_OLD_3DS
+        g_picaFrameWaitMs += (svcGetSystemTick() - waitTick) * 1000.0 / SYSCLOCK_ARM11;
+#endif
 
         if(g_picaGpuWaitHook) g_picaGpuWaitHook(0);
 
@@ -288,9 +338,20 @@ void picaDisplay::EndFrame(void)
         FinishTopSegment();
         stereoThisFrame = false;
 
+#ifdef SRR2_OLD_3DS
+        const u64 submitTick = svcGetSystemTick();
+#endif
+        // Textures, persistent geometry and immediate rings flush their own
+        // modified ranges. Flush the command list without flushing the entire
+        // linear heap again on the memory-constrained Old 3DS profile.
+#ifdef SRR2_OLD_3DS
+        C3D_FrameEnd(GX_CMDLIST_FLUSH);
+#else
         C3D_FrameEnd(0);
+#endif
         inFrame = false;
 #ifdef SRR2_OLD_3DS
+        g_picaFrameSubmitMs += (svcGetSystemTick() - submitTick) * 1000.0 / SYSCLOCK_ARM11;
         ++g_picaPresentedFrames;
 #endif
     }
@@ -318,3 +379,24 @@ float picaDisplay::EndTiming(void)
 {
     return (float)SDL_GetTicks() - beginTime;
 }
+
+#ifdef SRR2_OLD_3DS
+bool picaDisplay::BeginWorldTarget(void)
+{
+    if(!inFrame || !worldTarget || !g_picaWorldScaleAllowed) return false;
+    C3D_RenderTargetClear(worldTarget, C3D_CLEAR_ALL, 0x000000FF, 0x00FFFFFF);
+    worldActive = C3D_FrameDrawOn(worldTarget);
+    return worldActive;
+}
+
+bool picaDisplay::EndWorldTarget(void)
+{
+    if(!worldActive) return false;
+    // Submit world commands before sampling their render texture.
+    C3D_FrameSplit(GX_CMDLIST_FLUSH);
+    worldActive = false;
+    C3D_RenderTargetClear(target, C3D_CLEAR_ALL, 0x000000FF, 0x00FFFFFF);
+    C3D_FrameDrawOn(target);
+    return true;
+}
+#endif

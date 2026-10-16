@@ -1,9 +1,10 @@
 # Original Nintendo 3DS
 
 This experimental build targets the original 3DS and 2DS. It has been exercised
-in Azahar 2126.2 with New 3DS mode disabled and CPU clock at 100%. Physical
-hardware performance has not been measured. The 25–30 fps hardware target
-remains an acceptance requirement, not a verified result.
+in Azahar 2126.2 with New 3DS mode disabled and CPU clock at 100%. The first physical Old 3DS log confirms a 64 MiB application region and
+successful gameplay, but busy scenes miss the performance target. Across 146
+samples ending in gameplay, median submission rate was 18.22 fps. The 25–30 fps
+hardware target remains an acceptance requirement, not a verified result.
 
 ## Build and install
 
@@ -101,7 +102,7 @@ clang++ -std=c++11 -Wall -Wextra -Werror -I . \
 out/validation/camera_input
 ```
 
-Still required: physical Old 3DS installation and memory validation; sustained
+Still required: validation of the updated build on physical Old 3DS; sustained
 on-foot and driving routes through busy streaming boundaries in every level;
 complete missions, save/reload, suspend/resume, and audible sound with DSP firmware.
 Movies are skipped. Audible output has not been verified in the local setup.
@@ -119,3 +120,41 @@ contains the QA options described above. Keyboard controls are arrows for the
 Circle Pad, Shift for L, Command for A, Option for B, Z for X, X for Y, M for
 Start and N for Select. The emulator profile uses original 3DS mode and 100%
 CPU clock. Hardware controls remain those in the table above.
+
+## October 16 update
+
+The pause Settings screen used console-only camera inversion and vibration
+indices against PC menu assets. Missing rows compacted the menu, so entering
+Settings accessed an absent item. The 3DS now uses the PC row layout. The crash
+was reproduced in Azahar before the fix; the updated screen opens and accepts
+changes.
+
+An optional `old3ds-world-scale.txt` beside the executable selects `100`, `80`,
+or `75` (a single integer). Missing or invalid settings select native 400×240.
+The lower modes render the world at 320×192 or 300×180, then bilinearly upscale
+it before rendering the GUI at native resolution. Frontend screens stay native.
+Render targets are allocated once in VRAM, with native fallback on allocation
+failure. These fixed modes are for hardware comparison; automatic resolution
+scaling is not enabled. The architecture follows the intermediate texture and
+presentation approach in Mario Kart 64 3DS commit
+`3a5de70ddab1a4970f0b54a6240a898a13a639ba`, adapted to this backend's rotated
+coordinates and GUI layer boundary.
+
+Font texture chunks bypass the frontend atlas size reduction. This does not
+increase glyph size; small PC text needs a separate readability pass.
+
+The Old 3DS renderer now flushes command lists with `GX_CMDLIST_FLUSH`, avoiding
+a second flush of the entire 28 MiB linear heap. Texture upload, persistent
+vertex/index updates, expanded geometry and immediate vertex/index rings flush
+their modified ranges explicitly. The scaled-world split also flushes immediate
+ranges before submitting world commands. The native New 3DS path is unchanged.
+
+`OLD3DS_PROFILE` logs interval averages for game update, render, services and
+loading, plus GPU queue waits and frame submission. Wait and submission times
+are subsets of render time, not additional costs. `cpu_ms` remains Citro3D's
+renderer processing sample, not whole-frame CPU time. Emulator timing does not
+predict physical ARM11/PICA200 throughput.
+
+For an existing installation, replace only `SimpsonsNTSC.3dsx`; optionally add
+the tiny scale file. Keep the installed game assets and saves. No bulk asset
+transfer is required.

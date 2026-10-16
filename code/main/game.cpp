@@ -37,6 +37,9 @@
 #include <citro3d.h>
 #include <malloc.h>
 extern "C" unsigned g_picaPresentedFrames;
+extern "C" int g_picaWorldScaleAllowed;
+extern "C" double g_picaFrameWaitMs;
+extern "C" double g_picaFrameSubmitMs;
 #endif
 
 extern "C" int      srr2SuspendFiles( void );
@@ -519,6 +522,10 @@ void Game::Run()
     static aptHookCookie s_aptCookie;
     aptHook( &s_aptCookie, srr2AptHook, NULL );
 #endif
+#ifdef SRR2_OLD_3DS
+    double updateMs = 0.0, renderMs = 0.0, serviceMs = 0.0, loadMs = 0.0;
+    unsigned profileFrames = 0;
+#endif
     unsigned time = radTimeGetMilliseconds();
     while( !mExitNow )
     {
@@ -552,10 +559,21 @@ void Game::Run()
                 (int)ctx, mFrameCount, (presented - lastPresented) * (double)SYSCLOCK_ARM11 / sampleTicks,
                 mpPlatform->PausedForErrors(), (unsigned long)linearSpaceFree(), heap.uordblks,
                 C3D_GetProcessingTime(), C3D_GetDrawingTime());
+            if(profileFrames)
+                printf("OLD3DS_PROFILE samples=%u update_ms=%.2f render_ms=%.2f service_ms=%.2f load_ms=%.2f gpu_wait_ms=%.2f submit_ms=%.2f\n",
+                    profileFrames, updateMs / profileFrames, renderMs / profileFrames,
+                    serviceMs / profileFrames, loadMs / profileFrames,
+                    g_picaFrameWaitMs / profileFrames, g_picaFrameSubmitMs / profileFrames);
+            updateMs = renderMs = serviceMs = loadMs = 0.0;
+            g_picaFrameWaitMs = g_picaFrameSubmitMs = 0.0;
+            profileFrames = 0;
             fflush(stdout);
             lastDiagnosticTick = diagnosticTick;
             lastPresented = presented;
         }
+#endif
+#ifdef SRR2_OLD_3DS
+        g_picaWorldScaleAllowed = (ctx == CONTEXT_GAMEPLAY || ctx == CONTEXT_PAUSE);
 #endif
         g_picaMipmapsAllowed =
             ( ctx == CONTEXT_LOADING_GAMEPLAY || ctx == CONTEXT_GAMEPLAY || ctx == CONTEXT_PAUSE ||
@@ -610,6 +628,9 @@ void Game::Run()
         // Service the GameFlow and RenderFlow.
         //
 
+#ifdef SRR2_OLD_3DS
+        u64 phaseTick = svcGetSystemTick();
+#endif
         if ( !mpPlatform->PausedForErrors() )
         {
 #ifdef SRR2_OLD_3DS
@@ -618,6 +639,10 @@ void Game::Run()
             DEMOPROFILE( g_DemoProfiler.Start(PROFILE_CHANNEL_AI); )
             mpTimerList->Service(); //nv
             mpGameFlow->OnTimerDone(elapsed, NULL);
+#ifdef SRR2_OLD_3DS
+            updateMs += (svcGetSystemTick() - phaseTick) * 1000.0 / SYSCLOCK_ARM11;
+            phaseTick = svcGetSystemTick();
+#endif
 #ifdef SRR2_OLD_3DS
             if(mFrameCount == 0) printf("OLD3DS_RUN render\n");
 #endif
@@ -647,6 +672,10 @@ void Game::Run()
         //
         // Service FTech subsystems.
         //
+#ifdef SRR2_OLD_3DS
+        renderMs += (svcGetSystemTick() - phaseTick) * 1000.0 / SYSCLOCK_ARM11;
+        phaseTick = svcGetSystemTick();
+#endif
         ::radFileService();
 #ifdef SRR2_OLD_3DS
         if(mFrameCount == 0) printf("OLD3DS_RUN files\n");
@@ -681,7 +710,15 @@ void Game::Run()
         // Spin Pure3D async loading.
         //
         DEMOPROFILE( g_DemoProfiler.Start(PROFILE_CHANNEL_LOAD); )
+#ifdef SRR2_OLD_3DS
+        serviceMs += (svcGetSystemTick() - phaseTick) * 1000.0 / SYSCLOCK_ARM11;
+        phaseTick = svcGetSystemTick();
+#endif
         p3d::loadManager->SwitchTask();
+#ifdef SRR2_OLD_3DS
+        loadMs += (svcGetSystemTick() - phaseTick) * 1000.0 / SYSCLOCK_ARM11;
+        ++profileFrames;
+#endif
         DEMOPROFILE( g_DemoProfiler.Stop(PROFILE_CHANNEL_LOAD); )
 
         ++mFrameCount;

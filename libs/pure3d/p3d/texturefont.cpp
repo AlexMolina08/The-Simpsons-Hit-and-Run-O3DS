@@ -14,6 +14,9 @@
 #include <p3d/matrixstack.hpp>
 
 #include <string.h>
+#ifdef RAD_3DS
+extern "C" int g_picaKeepFullSize;
+#endif
 static const unsigned TEXTURE_FONT_VERSION = 0;
 
 const unsigned int BACKGROUND_GLYPH_INDEX = 0;
@@ -438,7 +441,16 @@ tTextureFontLoader::LoadObject(tChunkFile* f, tEntityStore* store)
             case Pure3D::Texture::TEXTURE:
             {
                 P3DASSERT(currTex<font->numTextures);
+#ifdef RAD_3DS
+                // Glyph atlases must retain their source resolution. Reducing an
+                // atlas also reduces every glyph before screen-space filtering.
+                const int previousFullSize = g_picaKeepFullSize;
+                g_picaKeepFullSize = 1;
+#endif
                 tTexture* texture = loader->LoadTexture(f);
+#ifdef RAD_3DS
+                g_picaKeepFullSize = previousFullSize;
+#endif
                 tRefCounted::Assign(font->textures[currTex],texture);
                 currTex++;
                 break;

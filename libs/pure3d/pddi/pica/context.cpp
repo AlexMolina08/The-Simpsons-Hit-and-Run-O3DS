@@ -273,6 +273,9 @@ void picaContext::BeginFrame()
 
 void picaContext::EndFrame()
 {
+#ifdef SRR2_OLD_3DS
+    EndWorld();
+#endif
     pddiBaseContext::EndFrame();
 
     if(immVertexUsed)
@@ -433,7 +436,15 @@ void picaContext::SetupViewport(void)
     wantViewport[1] = hwY < 0 ? 0 : hwY;
     wantViewport[2] = height;
     wantViewport[3] = width;
-
+#ifdef SRR2_OLD_3DS
+    if(display->IsWorldTarget())
+    {
+        wantViewport[0] = wantViewport[0] * display->WorldHeight() / PICA_SCREEN_HEIGHT;
+        wantViewport[1] = wantViewport[1] * display->WorldWidth() / PICA_SCREEN_WIDTH;
+        wantViewport[2] = wantViewport[2] * display->WorldHeight() / PICA_SCREEN_HEIGHT;
+        wantViewport[3] = wantViewport[3] * display->WorldWidth() / PICA_SCREEN_WIDTH;
+    }
+#endif
     ApplyViewport();
 }
 
@@ -536,6 +547,17 @@ void picaContext::SetScissor(pddiRect* rect)
         return;
     }
 
+#ifdef SRR2_OLD_3DS
+    if(display->IsWorldTarget() && !bottomPass)
+    {
+        C3D_SetScissor(GPU_SCISSOR_NORMAL,
+            (h - r->bottom) * display->WorldHeight() / h,
+            (w - r->right) * display->WorldWidth() / w,
+            (h - r->top) * display->WorldHeight() / h,
+            (w - r->left) * display->WorldWidth() / w);
+        return;
+    }
+#endif
     C3D_SetScissor(GPU_SCISSOR_NORMAL,
                    (u32)(h - r->bottom), (u32)(w - r->right),
                    (u32)(h - r->top),    (u32)(w - r->left));
@@ -1570,3 +1592,86 @@ extern "C" void picaBottomScreenEnd(void)
     if(s_picaContext != NULL)
         s_picaContext->EndBottomScreen();
 }
+
+#ifdef SRR2_OLD_3DS
+void picaContext::BeginWorld(void)
+{
+    if(display->BeginWorldTarget())
+    {
+        hwViewport[0] = hwViewport[1] = hwViewport[2] = hwViewport[3] = -1;
+        SetupHardwareProjection();
+        SetScissor(&state.viewState->scissor);
+    }
+}
+
+void picaContext::EndWorld(void)
+{
+    if(!display->IsWorldTarget()) return;
+    // FrameSplit may start the queue before EndFrame flushes the immediate ring.
+    if(immVertexUsed) GSPGPU_FlushDataCache(immVertices, immVertexUsed);
+    if(immIndexUsed) GSPGPU_FlushDataCache(immIndices, immIndexUsed);
+    if(!display->EndWorldTarget()) return;
+
+    unsigned char* vertices = AllocImmVertices(4);
+    if(vertices)
+    {
+        const float u = (display->WorldHeight() - 0.5f) / 256.0f;
+        const float v = (display->WorldWidth() - 0.5f) / 512.0f;
+        const float xy[4][2] = {{-1,-1},{1,-1},{-1,1},{1,1}};
+        const float uv[4][2] = {{0.5f/256,0.5f/512},{u,0.5f/512},{0.5f/256,v},{u,v}};
+        for(int i=0;i<4;++i)
+        {
+            unsigned char* vertex = vertices + i * PICA_VERTEX_STRIDE;
+            memset(vertex, 0, PICA_VERTEX_STRIDE);
+            float* position = (float*)(vertex + PICA_VERTEX_OFF_POS);
+            position[0] = xy[i][0]; position[1] = xy[i][1]; position[2] = -0.5f;
+            memcpy(vertex + PICA_VERTEX_OFF_UV, uv[i], sizeof(uv[i]));
+        }
+        C3D_Mtx identity;
+        Mtx_Identity(&identity);
+        C3D_BindProgram(&shaderProgram);
+        C3D_SetAttrInfo(&attrInfo);
+        C3D_FVUnifMtx4x4(GPU_VERTEX_SHADER, VSH_FVEC_u_proj, &identity);
+        C3D_FVUnifMtx4x4(GPU_VERTEX_SHADER, VSH_FVEC_u_mv, &identity);
+        C3D_FVUnifSet(GPU_VERTEX_SHADER, VSH_FVEC_u_misc, 0, 0, 1, 1);
+        C3D_FVUnifSet(GPU_VERTEX_SHADER, VSH_FVEC_u_stereoOn, 0, 0, 0, 0);
+        C3D_SetViewport(0, 0, PICA_SCREEN_HEIGHT, PICA_SCREEN_WIDTH);
+        C3D_SetScissor(GPU_SCISSOR_DISABLE, 0, 0, 0, 0);
+        C3D_CullFace(GPU_CULL_NONE);
+        C3D_DepthTest(false, GPU_ALWAYS, GPU_WRITE_COLOR);
+        C3D_AlphaTest(false, GPU_ALWAYS, 0);
+        C3D_AlphaBlend(GPU_BLEND_ADD, GPU_BLEND_ADD, GPU_ONE, GPU_ZERO, GPU_ONE, GPU_ZERO);
+        C3D_FogGasMode(GPU_NO_FOG, GPU_PLAIN_DENSITY, false);
+        C3D_TexBind(0, display->WorldTexture());
+        for(int i=0;i<6;++i)
+        {
+            C3D_TexEnv* env = C3D_GetTexEnv(i);
+            C3D_TexEnvInit(env);
+            C3D_TexEnvSrc(env, C3D_Both, i == 0 ? GPU_TEXTURE0 : GPU_PREVIOUS, GPU_PRIMARY_COLOR, GPU_PRIMARY_COLOR);
+            C3D_TexEnvFunc(env, C3D_Both, GPU_REPLACE);
+        }
+        C3D_BufInfo buffers;
+        BufInfo_Init(&buffers);
+        BufInfo_Add(&buffers, vertices, PICA_VERTEX_STRIDE, 4, 0x3210);
+        C3D_SetBufInfo(&buffers);
+        C3D_DrawArrays(GPU_TRIANGLE_STRIP, 0, 4);
+    }
+    picaStateInvalidate();
+    InvalidateUniformCache();
+    pddiBaseShader::ClearCurrentShader();
+    hwViewport[0] = hwViewport[1] = hwViewport[2] = hwViewport[3] = -1;
+    SyncState(0xffffffff);
+    SetupHardwareProjection();
+    SetScissor(&state.viewState->scissor);
+    ApplyFogState();
+}
+
+extern "C" void picaWorldBegin(void)
+{
+    if(s_picaContext) s_picaContext->BeginWorld();
+}
+extern "C" void picaWorldEnd(void)
+{
+    if(s_picaContext) s_picaContext->EndWorld();
+}
+#endif
