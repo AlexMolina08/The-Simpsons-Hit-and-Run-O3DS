@@ -21,7 +21,7 @@ def summarize(path, source):
     simulation = []
     world = None
     context = None
-    entities, operations, backend, phase2, drops = [], [], [], [], []
+    entities, operations, backend, phase2, drops, triangles = [], [], [], [], [], []
     buffers, dumps, anim_queries, animations = [], [], [], []
     pending_queries, pending_animations, weights = None, [], None
     for line in path.read_text(errors="replace").splitlines():
@@ -63,6 +63,8 @@ def summarize(path, source):
             phase2.append(values)
         elif line.startswith("OLD3DS_DRAW "):
             drops.append((context, values))
+        elif line.startswith("OLD3DS_TRI ") and context == 9:
+            triangles.append(values)
 
     def weighted(rows, key):
         usable = [row for row in rows if key in row and row.get("samples", 0) > 0]
@@ -120,6 +122,7 @@ def summarize(path, source):
         "entity_categories_sampled": entity_detail,
         "backend_operations_sampled_nested": backend_detail,
         "backend_counter_totals": backend_totals,
+        "triangle_intersection_queries": counter_totals(triangles),
         "detail_reconciliation_differences": reconciliation,
         "draw_drops": {
             scope: {key: int(sum(row.get(key, 0) for context, row in drops if (context == 9) == gameplay))

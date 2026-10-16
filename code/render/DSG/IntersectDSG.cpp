@@ -22,6 +22,9 @@
 // Project Includes
 //========================================
 #include <render/DSG/IntersectDSG.h>
+#ifdef SRR2_OLD_3DS
+#include <main/old3dsdiag.h>
+#endif
 
 //************************************************************************
 //
@@ -390,7 +393,14 @@ int IntersectDSG::mFlatTriFast
     {
         for(i=orTriNum; Mask!=IntersectDSG::FOUND_PT && i>-1; i--)
         {
+#ifdef SRR2_OLD_3DS
+            ++g_old3dsTriCandidates;
+#endif
+#ifdef SRR2_OLD3DS_FLAT_TRI_FAST
+            Mask = IntersectDSG::INIT_PT;
+#else
             Mask |= IntersectDSG::INIT_PT;
+#endif
         //////////////////////////////////////////////////////////////////////////
             // Intentional Copy n Paste is done to ensure inlining
             //////////////////////////////////////////////////////////////////////////
@@ -439,6 +449,9 @@ int IntersectDSG::mFlatTriFast
                 }
             }
         }
+#ifdef SRR2_OLD3DS_FLAT_TRI_FAST
+        orTriNum = -1;
+#endif
     }
     return -1;
     //rTuneAssert(orTriNum==i+1);

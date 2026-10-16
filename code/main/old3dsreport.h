@@ -64,6 +64,15 @@ struct Old3dsReport
     double g_old3dsUpdateStages[4];
     double g_picaFrameSubmitMs;
     double g_picaFrameWaitMs;
+    unsigned g_old3dsTriQueries;
+    unsigned g_old3dsTriHits;
+    unsigned g_old3dsTriMisses;
+    unsigned g_old3dsTriCandidates;
+    unsigned g_old3dsTriPlaneTests;
+    unsigned g_old3dsTriWorst;
+    unsigned g_old3dsTriRedundantAvoided;
+    unsigned g_old3dsTriSamples;
+    double   g_old3dsTriMs;
 };
 static Old3dsRing<Old3dsReport, 64> s_old3dsReports;
 static_assert(sizeof(s_old3dsReports) <= 128 * 1024, "Telemetry exceeds Old 3DS RAM budget");
@@ -267,6 +276,15 @@ static void Old3dsWriteReport(const Old3dsReport& record)
             printf("OLD3DS_COLLVERIFY verified=%u mismatch=%u\n",
                 g_old3dsUpdateAllVerified, g_old3dsUpdateAllVerifyMismatch);
 #endif
+
+            if(record.g_old3dsTriQueries)
+                printf("OLD3DS_TRI queries=%u hits=%u misses=%u candidates=%u planetests=%u worst=%u"
+                       " redundant_avoided=%u samples=%u sampled_ms=%.3f mean_query_us=%.2f\n",
+                    record.g_old3dsTriQueries, record.g_old3dsTriHits, record.g_old3dsTriMisses,
+                    record.g_old3dsTriCandidates, record.g_old3dsTriPlaneTests, record.g_old3dsTriWorst,
+                    record.g_old3dsTriRedundantAvoided, record.g_old3dsTriSamples,
+                    record.g_old3dsTriMs,
+                    record.g_old3dsTriSamples ? (record.g_old3dsTriMs * 1000.0 / record.g_old3dsTriSamples) : 0.0);
 
 }
 // Called only from a settled pause or after Game::Run exits. The caller

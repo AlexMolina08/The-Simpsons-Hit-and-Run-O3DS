@@ -217,5 +217,56 @@ extern "C" double   g_old3dsUpdateAllRedundantMs;
 extern "C" unsigned g_old3dsUpdateAllVerified;
 extern "C" unsigned g_old3dsUpdateAllVerifyMismatch;
 
+// Ground triangle intersection diagnostics.
+// Tracks query rate, hits/misses, candidates examined, plane tests entered,
+// worst-case candidates in a query, redundant loop checks avoided, and sampled time.
+extern "C" unsigned g_old3dsTriQueries;
+extern "C" unsigned g_old3dsTriHits;
+extern "C" unsigned g_old3dsTriMisses;
+extern "C" unsigned g_old3dsTriCandidates;
+extern "C" unsigned g_old3dsTriPlaneTests;
+extern "C" unsigned g_old3dsTriWorst;
+extern "C" unsigned g_old3dsTriRedundantAvoided;
+extern "C" unsigned g_old3dsTriSamples;
+extern "C" double   g_old3dsTriMs;
+
+class Old3dsTriScope
+{
+public:
+    explicit Old3dsTriScope(bool& found)
+        : mFound(found),
+          mCandidatesStart(g_old3dsTriCandidates),
+          mTimed((++g_old3dsTriQueries & 31u) == 1u),
+          mStartTick(mTimed ? svcGetSystemTick() : 0)
+    {
+    }
+    ~Old3dsTriScope()
+    {
+        const unsigned queryCandidates = g_old3dsTriCandidates - mCandidatesStart;
+        if(queryCandidates > g_old3dsTriWorst)
+        {
+            g_old3dsTriWorst = queryCandidates;
+        }
+        if(mFound)
+        {
+            ++g_old3dsTriHits;
+        }
+        else
+        {
+            ++g_old3dsTriMisses;
+        }
+        if(mTimed)
+        {
+            ++g_old3dsTriSamples;
+            g_old3dsTriMs += (svcGetSystemTick() - mStartTick) * 1000.0 / SYSCLOCK_ARM11;
+        }
+    }
+private:
+    bool& mFound;
+    unsigned mCandidatesStart;
+    bool mTimed;
+    u64 mStartTick;
+};
+
 #endif // SRR2_OLD_3DS
 #endif // OLD3DS_DIAG_H
