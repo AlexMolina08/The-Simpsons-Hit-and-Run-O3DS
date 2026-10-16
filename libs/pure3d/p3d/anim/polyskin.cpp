@@ -80,7 +80,9 @@ void tPolySkin::Display(tPose* p)
         boneMatrix[i].MultAligned(skeleton->GetJoint(i)->inverseWorldMatrix, p->GetJoint(i)->worldMatrix);
 #endif
 
+#ifndef SRR2_OLD3DS_BONE_ONCE
         boneMatrix[i].Mult(skeleton->GetJoint(i)->inverseWorldMatrix, p->GetJoint(i)->worldMatrix);
+#endif
 
     }
 

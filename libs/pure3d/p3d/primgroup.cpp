@@ -21,6 +21,9 @@
 #endif
 
 #include <string.h>
+#ifdef SRR2_OLD3DS_SKIN_DIRECT
+#include <pddi/pica/context.hpp>
+#endif
 
 
 #define INDEXED_STREAM_COLOUR_WITH_OFFSET(  i, color, offset )  \
@@ -512,6 +515,9 @@ bool tPrimGroupSkinnedPC::SetVertices(unsigned start, unsigned count, rmt::Vecto
 
 void tPrimGroupSkinnedPC::Display(void)
 {
+#ifdef SRR2_OLD3DS_SKIN_DIRECT
+    unsigned char* direct = NULL;
+#endif
     {
 #ifdef SRR2_OLD_3DS
     Old3dsOperationScope timing(O3_SKIN, mVertexCount);
@@ -520,10 +526,17 @@ void tPrimGroupSkinnedPC::Display(void)
 	
     int count = mVertexCount;
     SkinVertex *verts = mVertices;
+#ifdef SRR2_OLD3DS_SKIN_DIRECT
+    direct = static_cast<picaPrimBuffer*>(mBuffer)->LockSkin(count);
+#endif
 
 	if(mVertexFormat & PDDI_V_NORMAL){
 
-		stream = mBuffer->Lock( );
+		stream =
+#ifdef SRR2_OLD3DS_SKIN_DIRECT
+            direct ? NULL :
+#endif
+            mBuffer->Lock( );
 
         for(int i = 0; i < count; i++){
             // fetch first bone index			
@@ -564,8 +577,19 @@ void tPrimGroupSkinnedPC::Display(void)
 				vertex.y += (m->m[0][1]*sv->x + m->m[1][1]*sv->y + m->m[2][1]*sv->z + m->m[3][1]) * weight;
 				vertex.z += (m->m[0][2]*sv->x + m->m[1][2]*sv->y + m->m[2][2]*sv->z + m->m[3][2]) * weight;
 			}
+#ifdef SRR2_OLD3DS_SKIN_DIRECT
+            if(direct)
+            {
+                float* out = (float*)(direct + i * PICA_VERTEX_STRIDE);
+                out[0] = vertex.x; out[1] = vertex.y; out[2] = vertex.z;
+                out[3] = normal.x; out[4] = normal.y; out[5] = normal.z;
+            }
+            else
+#endif
+            {
 			stream->Normal( normal.x, normal.y, normal.z );
-			stream->Position( vertex.x, vertex.y, vertex.z );			
+			stream->Position( vertex.x, vertex.y, vertex.z );
+            }
         }
 		
         if(stream){
@@ -575,7 +599,11 @@ void tPrimGroupSkinnedPC::Display(void)
     }
 	else{			//no normal blend the position only
 
-		stream = mBuffer->Lock( );
+		stream =
+#ifdef SRR2_OLD3DS_SKIN_DIRECT
+            direct ? NULL :
+#endif
+            mBuffer->Lock( );
 		for(int i = 0; i < count; i++){
 			// fetch first bone index
 			Matrix* m = matrixPalette[verts[i].indices[0]];
@@ -610,7 +638,15 @@ void tPrimGroupSkinnedPC::Display(void)
 			}
 
 			// output transformed vertex
-			stream->Position( vertex.x, vertex.y, vertex.z );
+#ifdef SRR2_OLD3DS_SKIN_DIRECT
+            if(direct)
+            {
+                float* out = (float*)(direct + i * PICA_VERTEX_STRIDE);
+                out[0] = vertex.x; out[1] = vertex.y; out[2] = vertex.z;
+            }
+            else
+#endif
+                stream->Position( vertex.x, vertex.y, vertex.z );
 		}
 
 
@@ -620,6 +656,9 @@ void tPrimGroupSkinnedPC::Display(void)
 		}
 
 	}
+#ifdef SRR2_OLD3DS_SKIN_DIRECT
+    if(direct) mBuffer->Unlock(NULL);
+#endif
     }
 	//buffer rendering
 	p3d::pddi->DrawPrimBuffer(mShader->GetShader(), mBuffer);
@@ -1356,6 +1395,18 @@ tPrimGroup* tPrimGroupLoader::LoadPCSkin(tChunkFile* f, tEntityStore* store, rmt
         f->EndChunk();
     }
 
+#ifdef SRR2_OLD_3DS
+    // One scan at asset load, not in the per-frame skinning loop.
+    for(unsigned i = 0; i < mVertexCount; ++i)
+    {
+        const float* w = skinPrimGroup->mVertices[i].weights;
+        ++g_old3dsWeights[0];
+        if(w[0] == 1.0f) ++g_old3dsWeights[1];
+        if(w[1] == 0.0f) ++g_old3dsWeights[2];
+        if(w[2] == 0.0f) ++g_old3dsWeights[3];
+        if(1.0f - (w[2] + w[1] + w[0]) == 0.0f) ++g_old3dsWeights[4];
+    }
+#endif
     return primGroup;
 }
 #endif //RAD_PS2

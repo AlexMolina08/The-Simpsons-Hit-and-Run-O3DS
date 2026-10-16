@@ -1296,6 +1296,7 @@ picaPrimBuffer::picaPrimBuffer(picaContext* c, pddiPrimType type, unsigned verte
     expandDirty = true; elemState = -1;
     mem = 0;
     transient = false;
+    defaultsValid = false;
 
     primType = type;
     vertexType = vertexFormat;
@@ -1356,12 +1357,14 @@ picaPrimBuffer::~picaPrimBuffer()
 void picaPrimBuffer::SetFormat(pddiPrimType type, unsigned vertexFormat)
 {
     primType   = type;
+    if(vertexType != vertexFormat) defaultsValid = false;
     vertexType = vertexFormat;
 }
 
 void picaPrimBuffer::SetTransient(unsigned char* verts, unsigned short* idx, unsigned count)
 {
     PDDIASSERT(transient);
+    defaultsValid = false;
     buffer     = verts;
     indices    = idx;
     allocated  = count;
@@ -1385,6 +1388,11 @@ pddiPrimBufferStream* picaPrimBuffer::Lock()
     uv     = (vertexType & 0xf)           ? (float*)(ptr + PICA_VERTEX_OFF_UV)  : NULL;
     colour = (vertexType & PDDI_V_COLOUR) ? (ptr + PICA_VERTEX_OFF_COL)         : NULL;
 
+#ifdef SRR2_OLD3DS_DEFAULT_CACHE
+    // Only absent attributes are written here. Stream writers cannot touch
+    // them. Transient allocations and format changes invalidate the cache.
+    if(!transient && defaultsValid) return stream;
+#endif
 #ifdef SRR2_OLD_3DS
     Old3dsCount(O3_DEFAULT_VERTS, allocated);
 #endif
@@ -1408,8 +1416,25 @@ pddiPrimBufferStream* picaPrimBuffer::Lock()
         }
     }
 
+    defaultsValid = true;
+
     return stream;
 }
+
+#ifdef SRR2_OLD3DS_SKIN_DIRECT
+unsigned char* picaPrimBuffer::LockSkin(unsigned count)
+{
+    if(transient || !buffer || count > allocated) return NULL;
+    Lock();
+    // Unlock rewinds attribute pointers by total; match the regular stream.
+    total = count;
+    coord = (float*)((unsigned char*)coord + count * PICA_VERTEX_STRIDE);
+    if(normal) normal = (float*)((unsigned char*)normal + count * PICA_VERTEX_STRIDE);
+    if(uv) uv = (float*)((unsigned char*)uv + count * PICA_VERTEX_STRIDE);
+    if(colour) colour += count * PICA_VERTEX_STRIDE;
+    return buffer;
+}
+#endif
 
 static inline void picaFlushForGpu(const void* p, unsigned bytes)
 {

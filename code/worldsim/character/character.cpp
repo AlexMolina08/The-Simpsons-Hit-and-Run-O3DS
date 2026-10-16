@@ -4922,7 +4922,13 @@ void Character::Display(void)
     for(int i = 0; i < pose->GetNumJoint(); i++)
     {
         rmt::Matrix tmp;
+#ifdef SRR2_OLD3DS_JOINT_TRANSLATE
+        // Row-vector affine convention: A * T changes only translation.
+        tmp = pose->GetJoint(i)->worldMatrix;
+        tmp.Row(3).Add(backToTheOrigin.Row(3));
+#else
         tmp.Mult(pose->GetJoint(i)->worldMatrix, backToTheOrigin);
+#endif
         if(shouldScale)
         {
             rmt::Matrix scale;

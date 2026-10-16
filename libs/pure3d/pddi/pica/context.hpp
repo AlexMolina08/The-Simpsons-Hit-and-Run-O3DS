@@ -181,6 +181,9 @@ public:
 
     pddiPrimBufferStream* Lock();
     void Unlock(pddiPrimBufferStream* stream);
+#ifdef SRR2_OLD3DS_SKIN_DIRECT
+    unsigned char* LockSkin(unsigned count);
+#endif
 
     unsigned char* LockIndexBuffer();
     void UnlockIndexBuffer(int count);
@@ -240,6 +243,7 @@ protected:
     int            elemState;
     bool           IndicesInRange(void) const;
 
+    bool defaultsValid;
     bool transient;
     unsigned mem;
 };
