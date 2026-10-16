@@ -101,6 +101,10 @@ else()
 	)
 endif()
 
+if(NINTENDO_3DS AND SRR2_OLD_3DS AND SRR2_3DS_MOVIES)
+    list(APPEND RADMOVIE_SOURCES "src/ctr/ctrsoftwaredecoder.cpp")
+endif()
+
 add_library(radmovie STATIC ${RADMOVIE_SOURCES})
 target_include_directories(radmovie
 	PUBLIC "inc/"
@@ -157,4 +161,20 @@ if(SRR2_BUILD_TESTS)
 	if(VITA)
 		vita_create_self(simplemovie.self simplemovie)
 	endif()
+endif()
+
+if(NINTENDO_3DS AND SRR2_OLD_3DS AND SRR2_3DS_MOVIES)
+    set_source_files_properties(src/ctr/ctrmovieplayer.cpp PROPERTIES COMPILE_OPTIONS "-O3")
+    # FFmpeg's public ABI uses 32-bit enums. Keep this translation unit isolated
+    # behind fixed-width frame fields; game/PDDI enums retain their native ABI.
+    set_source_files_properties(src/ctr/ctrsoftwaredecoder.cpp PROPERTIES COMPILE_OPTIONS "-O3;-fno-short-enums")
+endif()
+
+if(NINTENDO_3DS AND SRR2_OLD_3DS AND SRR2_3DS_MOVIES)
+    set(SRR2_OLD3DS_FFMPEG_ROOT "${CMAKE_SOURCE_DIR}/out/deps/old3ds-prefix" CACHE PATH "Minimal Old 3DS FFmpeg installation")
+    find_path(SRR2_OLD3DS_AVCODEC_INCLUDE libavcodec/avcodec.h PATHS "${SRR2_OLD3DS_FFMPEG_ROOT}/include" NO_DEFAULT_PATH REQUIRED)
+    find_library(SRR2_OLD3DS_AVCODEC avcodec PATHS "${SRR2_OLD3DS_FFMPEG_ROOT}/lib" NO_DEFAULT_PATH REQUIRED)
+    find_library(SRR2_OLD3DS_AVUTIL avutil PATHS "${SRR2_OLD3DS_FFMPEG_ROOT}/lib" NO_DEFAULT_PATH REQUIRED)
+    target_include_directories(radmovie PRIVATE "${SRR2_OLD3DS_AVCODEC_INCLUDE}")
+    target_link_libraries(radmovie "${SRR2_OLD3DS_AVCODEC}" "${SRR2_OLD3DS_AVUTIL}" m)
 endif()

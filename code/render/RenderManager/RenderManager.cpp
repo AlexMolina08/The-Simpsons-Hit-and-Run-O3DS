@@ -542,7 +542,7 @@ void RenderManager::ContextUpdate( unsigned int iElapsedTime )
 #ifdef RAD_3DS
     CHudMap::BeforeRenderLayers3DS();
 #ifdef SRR2_OLD_3DS
-    picaWorldBegin();
+    if(!GetPresentationManager()->GetFMVPlayer()->IsPlaying()) picaWorldBegin();
 #endif
 #endif
 

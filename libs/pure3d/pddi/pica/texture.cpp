@@ -508,3 +508,18 @@ void picaTexture::Discard(void)  { }
 int  picaTexture::GetNumPaletteEntries(void)                   { return 0; }
 void picaTexture::SetPalette(int nEntries, pddiColour* palette) { }
 int  picaTexture::GetPalette(pddiColour* palette)              { return 0; }
+
+#ifdef SRR2_OLD_3DS
+bool picaTexture::UploadMovieYUV(const unsigned char* y, const unsigned char* cr, const unsigned char* cb,
+                               int width, int height, int yPitch, int chromaPitch)
+{
+    if(!created || !y || !cr || !cb || hwFormat != GPU_RGB565 || tex.maxLevel != 0 ||
+       width <= 0 || height <= 0 || width > tex.width || height > tex.height ||
+       (width & 7) || (height & 7) || yPitch < width || chromaPitch < width / 2) return false;
+    if(!valid) memset(tex.data, 0, (size_t)tex.width * tex.height * 2);
+    picaSwizzleYUV420toRGB565(tex.data, y, cr, cb, width, height, tex.width, yPitch, chromaPitch);
+    C3D_TexFlush(&tex);
+    valid = true;
+    return true;
+}
+#endif

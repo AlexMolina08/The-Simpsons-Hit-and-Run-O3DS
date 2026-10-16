@@ -90,6 +90,10 @@ class radMovieRenderStrategyBink
         virtual void ChangeParameters( unsigned int width, unsigned int height );
 
         virtual bool Render( void );
+#ifdef SRR2_OLD_3DS
+        bool UploadMovieYUV(const unsigned char* y, const unsigned char* cr, const unsigned char* cb,
+                            unsigned width, unsigned height, unsigned yPitch, unsigned chromaPitch);
+#endif
 
     private:
 

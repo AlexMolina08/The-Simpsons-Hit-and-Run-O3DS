@@ -9,7 +9,7 @@ hardware target remains an acceptance requirement, not a verified result.
 ## Build and install
 
 Install devkitPro's ARM toolchain, libctru, Citro3D, CMake, Ninja, Git and Python 3.
-The build script compiles pinned SDL2, zlib and libpng sources locally; it does
+The build script compiles pinned SDL2, zlib, libpng and a minimal FFmpeg decoder locally; it does
 not require administrator access or modify the installed toolchain.
 
 ```sh
@@ -105,7 +105,7 @@ out/validation/camera_input
 Still required: validation of the updated build on physical Old 3DS; sustained
 on-foot and driving routes through busy streaming boundaries in every level;
 complete missions, save/reload, suspend/resume, and audible sound with DSP firmware.
-Movies are skipped. Audible output has not been verified in the local setup.
+Software movie playback is available as described below. Audible output has not been verified in the local setup.
 
 For hardware acceptance, collect `old3ds.log` while traversing representative
 routes with traffic, pedestrians and collisions. Require 25–30 fps during
@@ -165,9 +165,9 @@ counts loops exceeding 33.33 ms; I/O, queue waits and suspension can contribute.
 Emulator timing does not
 predict physical ARM11/PICA200 throughput.
 
-For an existing installation, replace only `SimpsonsNTSC.3dsx`; optionally add
-the tiny scale file. Keep the installed game assets and saves. No bulk asset
-transfer is required.
+For the renderer/settings update alone, replace only `SimpsonsNTSC.3dsx`; optionally add
+the tiny scale file. Movie playback additionally requires the converted movie
+files below. Keep installed world assets and saves; they need no retransmission.
 
 Summarize a console log with:
 
@@ -192,3 +192,52 @@ The physical acceptance target remains open. Start the new executable at native
 resolution to measure the cache-flush change without lowering image quality.
 Compare 80% only if GPU work still limits the same busy route. Do not infer a
 hardware improvement from the emulator medians above.
+
+
+## Old 3DS movie playback
+
+The Old 3DS build now uses a single-threaded ARMv6K MPEG-1 decoder from FFmpeg
+7.1.1 instead of the New 3DS MVD service. It renders 320×240 video at 30000/1001
+frames per second. Conversion combines BT.601 colour conversion and PICA200
+RGB565 tiling in one pass, avoiding a full RGBA frame and a second conversion.
+Movies bypass optional world resolution scaling. In-engine story scenes keep
+using the normal game renderer.
+
+The existing New 3DS H.264/version-1 movie format remains separate. Old 3DS
+requires version-2 containers; do not reuse New 3DS `.3dm` files. Convert only
+movies from a personally supplied PC installation:
+
+```sh
+python3 tools/3ds/convert_old3ds_movies.py "/path/to/PC game" \
+    --out out/old3ds-movies
+```
+
+The converter reads originals without changing them. It preserves stereo sound
+as 32 kHz PCM and pads a short video's final image when its audio lasts longer.
+Repeated conversion skips unchanged outputs. `--only intro fmv1A` can prepare
+a smaller initial subset. The supplied PC folder contains five 0.1-second logo
+placeholders; conversion cannot restore original footage absent from that copy.
+
+For an existing SD installation, transfer:
+
+- `out/old3ds/SimpsonsNTSC.3dsx` to `sd:/3ds/simpsons/SimpsonsNTSC.3dsx`.
+- All `out/old3ds-movies/*.3dm` to `sd:/3ds/simpsons/movies/`.
+- Optionally, a world-scale text file as described above.
+
+The 17 converted movies total 156,525,485 bytes. Do not transfer `.3dm.txt` cache
+stamps. Existing `art`, `scripts`, `sound`, RCF archives and saves are unchanged.
+Sound requires the console's own DSP firmware. The local emulator has no DSP
+firmware and reports `audio started=0`; audible playback and audio/video sync
+on hardware remain unverified.
+
+`OLD3DS_MOVIE` reports decoder time, combined conversion/upload time, decoded
+and presented frame counts, and elapsed playback time. Decoded frames alone do
+not prove the presentation rate. All 17 converted clips pass host full-decode
+and file-reopen checks through the same decoder adapter. A separate sanitizer
+check compares the upload against scalar BT.601 colours, Morton tiling, padded
+plane strides and untouched texture padding. These are functional checks, not
+physical Old 3DS performance measurements.
+
+The FFmpeg source revision, build flags, newlib patch and LGPL license are
+recorded in `libs/radmovie/src/ctr/third_party/`. The build verifies final
+ARMv6K/VFPv2 attributes and keeps FFmpeg's 32-bit enum ABI inside its adapter.

@@ -27,6 +27,10 @@ public:
 
     pddiLockInfo* Lock(int mipLevel, pddiRect* rect = 0);
     void Unlock(int mipLevel);
+#ifdef SRR2_OLD_3DS
+    bool UploadMovieYUV(const unsigned char* y, const unsigned char* cr, const unsigned char* cb,
+                        int width, int height, int yPitch, int chromaPitch);
+#endif
 
     void Prefetch(void);
     void Discard(void);

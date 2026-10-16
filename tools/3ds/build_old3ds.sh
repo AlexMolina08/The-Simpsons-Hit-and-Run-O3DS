@@ -47,9 +47,11 @@ cmake -S "$deps/SDL" -B "$deps/old3ds-sdl-build" "${common[@]}" \
 cmake --build "$deps/old3ds-sdl-build" -j "$jobs"
 cmake --install "$deps/old3ds-sdl-build"
 
+bash "$source_root/tools/3ds/build_old3ds_ffmpeg.sh" "$source_root" "$jobs"
+
 build="$source_root/out/old3ds-build"
 cmake -S "$source_root" -B "$build" "${common[@]}" \
-    -DCMAKE_POLICY_VERSION_MINIMUM=3.5 -DSRR2_OLD_3DS=ON \
+    -DCMAKE_POLICY_VERSION_MINIMUM=3.5 -DSRR2_OLD_3DS=ON -DSRR2_3DS_MOVIES=ON \
     "-DSDL2_DIR=$prefix/lib/cmake/SDL2" \
     "-DPNG_LIBRARY=$prefix/lib/liblibpng16_static.a" "-DPNG_PNG_INCLUDE_DIR=$prefix/include" \
     "-DZLIB_LIBRARY=$zlib" "-DZLIB_INCLUDE_DIR=$prefix/include"

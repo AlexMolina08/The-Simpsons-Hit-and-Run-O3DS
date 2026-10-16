@@ -25,6 +25,9 @@
 
 #include <radprofiler.hpp>
 #include "binkrenderstrategy.hpp"
+#ifdef SRR2_OLD_3DS
+#include <pddi/pica/texture.hpp>
+#endif
 
 extern bool inLoop;
 
@@ -108,6 +111,11 @@ unsigned int radMovieRenderStrategyBink::LockNextDestination( LockedDestination 
         {
             return 0;
         }
+
+#ifdef RAD_MOVIEPLAYER_CTR_SOFTWARE
+        // Initialize the padded texture edge before the first software frame.
+        memset(pPddiLockInfo->bits, 0, pPddiLockInfo->pitch * pPddiLockInfo->height);
+#endif
 
         m_DestLocked = true;
 
@@ -480,3 +488,22 @@ IRadMovieRenderStrategy * radMovieSimpleFullScreenRenderStrategyCreate( radMemor
 {
     return new( allocator )radMovieRenderStrategyBink( );
 }
+
+#ifdef SRR2_OLD_3DS
+bool radMovieRenderStrategyBink::UploadMovieYUV(const unsigned char* y, const unsigned char* cr,
+    const unsigned char* cb, unsigned width, unsigned height, unsigned yPitch, unsigned chromaPitch)
+{
+    if(m_NumTiles != 1 || !m_pTile[0].m_pTexture ||
+       width != m_MovieWidth || height != m_MovieHeight) return false;
+    picaTexture* texture = dynamic_cast<picaTexture*>(m_pTile[0].m_pTexture->GetTexture());
+    return texture && texture->UploadMovieYUV(y, cr, cb, width, height, yPitch, chromaPitch);
+}
+
+bool radMovieUploadSoftwareFrame(IRadMovieRenderStrategy* strategy, const unsigned char* y,
+    const unsigned char* cr, const unsigned char* cb, unsigned width, unsigned height,
+    unsigned yPitch, unsigned chromaPitch)
+{
+    radMovieRenderStrategyBink* movie = dynamic_cast<radMovieRenderStrategyBink*>(strategy);
+    return movie && movie->UploadMovieYUV(y, cr, cb, width, height, yPitch, chromaPitch);
+}
+#endif
