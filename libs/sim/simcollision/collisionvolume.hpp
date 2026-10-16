@@ -39,6 +39,13 @@ public:
     inline CollisionVolumeTypeEnum Type()     const { return mType; }
     inline bool IsVisible() const                     { return mVisible; }
     inline TList<CollisionVolume*>* SubVolumeList()   { return mSubVolumeList; }
+
+#ifdef SRR2_OLD_3DS
+    // Diagnostic-only pass stamp. The detector uses this to detect that it has
+    // already updated this volume during the current collision-detection pass.
+    inline unsigned UpdatePassStamp() const  { return mUpdatePassStamp; }
+    inline void SetUpdatePassStamp(unsigned s) { mUpdatePassStamp = s; }
+#endif
     
     void AddSubVolume(CollisionVolume* point);
     bool RemoveSubVolume(CollisionVolume* el);
@@ -100,9 +107,16 @@ protected:
     CollisionObject* mCollisionObject;
     TList<CollisionVolume*>* mSubVolumeList;
     
-    bool mVisible;    
+    bool mVisible;
     bool mUpdated;
     rmt::Vector mDP; // relative position of the Volume and its parent object
+
+#ifdef SRR2_OLD_3DS
+    // Diagnostic only. Identifies the collision-detection pass that last updated
+    // this volume, so repeated updates of one volume within a single pass can be
+    // counted. Never read outside the detector's pair loop.
+    unsigned mUpdatePassStamp;
+#endif
     
     tColour mColour;
 

@@ -63,6 +63,17 @@ unsigned g_old3dsCmdSize = 0;
 double   g_old3dsRenderPhases[6] = {};
 unsigned g_old3dsLinearFailures = 0;
 unsigned g_old3dsLinearFailureBytes = 0;
+unsigned g_old3dsDetectPasses = 0;
+unsigned g_old3dsPairUpdates = 0;
+unsigned g_old3dsUpdateAllCalls = 0;
+unsigned g_old3dsUpdateAllRedundant = 0;
+unsigned g_old3dsUpdateAllStaticSkip = 0;
+unsigned g_old3dsUpdateAllSamples = 0;
+double   g_old3dsUpdateAllMs = 0.0;
+unsigned g_old3dsUpdateAllRedundantSamples = 0;
+double   g_old3dsUpdateAllRedundantMs = 0.0;
+unsigned g_old3dsUpdateAllVerified = 0;
+unsigned g_old3dsUpdateAllVerifyMismatch = 0;
 extern "C" int g_picaWorldScaleAllowed;
 extern "C" double g_picaFrameWaitMs;
 extern "C" double g_picaFrameSubmitMs;
@@ -640,6 +651,29 @@ void Game::Run()
                 printf("OLD3DS_LINEARFAIL count=%u largest_bytes=%u\n",
                     g_old3dsLinearFailures, g_old3dsLinearFailureBytes);
 
+            // Redundant collision-volume updates. calls is every UpdateAll()
+            // reached from the pair loop; redundant counts those that repeated a
+            // volume already updated in the same pass. mean_first_us and
+            // mean_red_us are measured separately on one call in eight. The
+            // recoverable time per interval is redundant * mean_red_us, since a
+            // repeat does the same work as the first update of that volume.
+            printf("OLD3DS_COLL passes=%u pairs_updated=%u calls=%u redundant=%u"
+                   " static_skip=%u first_samples=%u mean_first_us=%.2f"
+                   " red_samples=%u mean_red_us=%.2f\n",
+                g_old3dsDetectPasses, g_old3dsPairUpdates, g_old3dsUpdateAllCalls,
+                g_old3dsUpdateAllRedundant, g_old3dsUpdateAllStaticSkip,
+                g_old3dsUpdateAllSamples,
+                g_old3dsUpdateAllSamples ? (g_old3dsUpdateAllMs * 1000.0 / g_old3dsUpdateAllSamples) : 0.0,
+                g_old3dsUpdateAllRedundantSamples,
+                g_old3dsUpdateAllRedundantSamples ? (g_old3dsUpdateAllRedundantMs * 1000.0 / g_old3dsUpdateAllRedundantSamples) : 0.0);
+
+#ifdef SRR2_OLD3DS_COLLVOL_VERIFY
+            // Verify build: how many repeats were hashed before and after, and
+            // how many of those changed geometry. mismatch must stay zero.
+            printf("OLD3DS_COLLVERIFY verified=%u mismatch=%u\n",
+                g_old3dsUpdateAllVerified, g_old3dsUpdateAllVerifyMismatch);
+#endif
+
             memset(g_old3dsPhysicsFrames, 0, sizeof(g_old3dsPhysicsFrames));
             g_old3dsPhysicsSubsteps = g_old3dsPhysicsAreas = g_old3dsCollisionPairs = 0;
             g_old3dsFrameBeginOk = g_old3dsFrameBeginBusy = g_old3dsFrameBeginNoDraw = 0;
@@ -650,6 +684,13 @@ void Game::Run()
             g_old3dsCmdHighWater = g_old3dsCmdSize = 0;
             memset(g_old3dsRenderPhases, 0, sizeof(g_old3dsRenderPhases));
             g_old3dsLinearFailures = g_old3dsLinearFailureBytes = 0;
+            g_old3dsDetectPasses = g_old3dsPairUpdates = 0;
+            g_old3dsUpdateAllCalls = g_old3dsUpdateAllRedundant = 0;
+            g_old3dsUpdateAllStaticSkip = g_old3dsUpdateAllSamples = 0;
+            g_old3dsUpdateAllMs = 0.0;
+            g_old3dsUpdateAllRedundantSamples = 0;
+            g_old3dsUpdateAllRedundantMs = 0.0;
+            g_old3dsUpdateAllVerified = g_old3dsUpdateAllVerifyMismatch = 0;
 
             memset(g_old3dsUpdateStages, 0, sizeof(g_old3dsUpdateStages));
             updateMs = renderMs = serviceMs = loadMs = 0.0;

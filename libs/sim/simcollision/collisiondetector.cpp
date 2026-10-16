@@ -2,6 +2,15 @@
 #include "simcollision/collisiondetector.hpp"
 #include "simcollision/collision.hpp"
 #include "simcommon/simmath.hpp"
+#include <main/old3dsdiag.h>
+
+#ifdef SRR2_OLD_3DS
+#include <3ds.h>
+#endif
+
+#ifdef SRR2_OLD3DS_COLLVOL_VERIFY
+#include <string.h>
+#endif
 
 using namespace RadicalMathLibrary;
 
@@ -80,28 +89,222 @@ static inline bool IsBBIn(CollisionVolume* thisEl, CollisionVolume* el, float pr
     return true;
 }
 
+#ifdef SRR2_OLD_3DS
+// Update one volume inside the pair loop, at most once per collision-detection
+// pass.
+//
+// A "pass" is one DetectCollision() call over one area's pair list. Within a
+// pass this function only reads collision volumes and never moves an object, so
+// a second UpdateAll() on a volume already updated this pass recomputes
+// identical values. The stamp records which pass last updated the volume.
+//
+// The stamp starts at 1 because volumes are constructed with a stamp of 0.
+//
+// Three modes:
+//   measurement (default) - always call UpdateAll(), counting and timing the
+//                           repeats separately. This is the evidence build.
+//   SRR2_OLD3DS_COLLVOL_CACHE - skip the repeat. The first update in a pass is
+//                           still performed, so every volume the pass touches
+//                           is updated exactly as before; only the repeats go.
+//   SRR2_OLD3DS_COLLVOL_VERIFY - perform the repeat exactly as the original
+//                           does, but hash the volume's geometry before and
+//                           after. A mismatch means the repeat changed
+//                           something the detector reads, and the cache is
+//                           therefore unsound. This build exists to falsify
+//                           the cache on real gameplay data rather than argue
+//                           for it from the source alone.
+//
+// A volume reached by two different areas in the same pass is updated once per
+// area, because each area's DetectCollision() call takes a fresh stamp. Areas
+// are separate passes by construction, and the original code also updated once
+// per area. Only the repeats within one area's pair list are removed.
+#ifdef SRR2_OLD3DS_COLLVOL_VERIFY
+// FNV-1a over the geometry the detector reads: the shared position/box/sphere
+// fields plus each subclass's orientation fields. Deliberately excludes
+// mUpdated and the pass stamp, which are bookkeeping rather than geometry.
+// Each float is folded in directly rather than staged in an array, so adding a
+// field to a volume subclass cannot silently overrun a fixed-size buffer.
+static void HashGeometryFloat(unsigned& hash, float f)
+{
+    unsigned bits;
+    memcpy(&bits, &f, sizeof(bits));
+    hash ^= bits;
+    hash *= 16777619u;
+}
+
+static void HashVolumeGeometry(CollisionVolume* vol, unsigned& hash)
+{
+    HashGeometryFloat(hash, vol->mPosition.x);
+    HashGeometryFloat(hash, vol->mPosition.y);
+    HashGeometryFloat(hash, vol->mPosition.z);
+    HashGeometryFloat(hash, vol->mBoxSize.x);
+    HashGeometryFloat(hash, vol->mBoxSize.y);
+    HashGeometryFloat(hash, vol->mBoxSize.z);
+    HashGeometryFloat(hash, vol->mSphereRadius);
+
+    switch(vol->Type())
+    {
+    case CylinderVolumeType:
+        {
+            CylinderVolume* c = static_cast<CylinderVolume*>(vol);
+            HashGeometryFloat(hash, c->mAxis.x);
+            HashGeometryFloat(hash, c->mAxis.y);
+            HashGeometryFloat(hash, c->mAxis.z);
+            HashGeometryFloat(hash, c->mLength);
+            HashGeometryFloat(hash, c->mCylinderRadius);
+        }
+        break;
+    case OBBoxVolumeType:
+        {
+            OBBoxVolume* b = static_cast<OBBoxVolume*>(vol);
+            for(int i = 0; i < 3; ++i)
+            {
+                HashGeometryFloat(hash, b->mAxis[i].x);
+                HashGeometryFloat(hash, b->mAxis[i].y);
+                HashGeometryFloat(hash, b->mAxis[i].z);
+                HashGeometryFloat(hash, b->mLength[i]);
+            }
+        }
+        break;
+    case WallVolumeType:
+        {
+            WallVolume* w = static_cast<WallVolume*>(vol);
+            HashGeometryFloat(hash, w->mNormal.x);
+            HashGeometryFloat(hash, w->mNormal.y);
+            HashGeometryFloat(hash, w->mNormal.z);
+        }
+        break;
+    default:
+        break;
+    }
+}
+#endif
+
+static void UpdateVolumeForPass(CollisionVolume* vol, unsigned passStamp)
+{
+    const bool redundant = (vol->UpdatePassStamp() == passStamp);
+    if(redundant)
+    {
+        ++g_old3dsUpdateAllRedundant;
+    }
+    else
+    {
+        vol->SetUpdatePassStamp(passStamp);
+    }
+
+    ++g_old3dsUpdateAllCalls;
+
+#ifdef SRR2_OLD3DS_COLLVOL_CACHE
+    // The repeat would recompute values the first update already produced. The
+    // call count and the redundant count are still maintained, so this build
+    // reports the same redundancy ratio; the per-call cost of a skipped repeat
+    // comes from the measurement build, which times those calls directly.
+    if(redundant)
+    {
+        return;
+    }
+#endif
+
+    const bool timed = ((g_old3dsUpdateAllCalls & 7u) == 1u);
+    const u64 tick = timed ? svcGetSystemTick() : 0;
+
+#ifdef SRR2_OLD3DS_COLLVOL_VERIFY
+    // Hash the geometry the repeat is about to overwrite, then hash it again
+    // afterwards. Equal hashes mean the repeat recomputed the same values and
+    // skipping it would have been unobservable.
+    unsigned hashBefore = 2166136261u;
+    if(redundant)
+    {
+        HashVolumeGeometry(vol, hashBefore);
+    }
+#endif
+
+    vol->UpdateAll();
+
+#ifdef SRR2_OLD3DS_COLLVOL_VERIFY
+    if(redundant)
+    {
+        unsigned hashAfter = 2166136261u;
+        HashVolumeGeometry(vol, hashAfter);
+        ++g_old3dsUpdateAllVerified;
+        if(hashBefore != hashAfter)
+        {
+            ++g_old3dsUpdateAllVerifyMismatch;
+        }
+    }
+#endif
+
+    if(timed)
+    {
+        const double ms = (svcGetSystemTick() - tick) * 1000.0 / SYSCLOCK_ARM11;
+        if(redundant)
+        {
+            g_old3dsUpdateAllRedundantMs += ms;
+            ++g_old3dsUpdateAllRedundantSamples;
+        }
+        else
+        {
+            g_old3dsUpdateAllMs += ms;
+            ++g_old3dsUpdateAllSamples;
+        }
+    }
+}
+#endif
+
+// collision distance : distance between the two volumes along the collision normal
 void CollisionDetector::DetectCollision(TArray<CollisionObjectPair>* inPList, TArray<Collision>* inCList, float inDt, const bool printOut )
 {
     mDt = inDt;
     SetCollisionList( *inCList );
     rAssert( GetCollisionList() != NULL);
-    
+
+#ifdef SRR2_OLD_3DS
+    static unsigned sUpdatePassStamp = 0;
+    ++sUpdatePassStamp;
+    if(sUpdatePassStamp == 0) sUpdatePassStamp = 1;
+    ++g_old3dsDetectPasses;
+#endif
+
     for (int i=0; i < inPList->GetSize(); i++)
     {
         mNewColl = 0;
         CollisionObjectPair* p = &inPList->GetAt(i);
 
+        // checks a collision is possible between the two objects
         if (p->mNeedsUpdate)
         {
+#ifdef SRR2_OLD_3DS
+            ++g_old3dsPairUpdates;
+#endif
             if(!p->mObjectA->IsStatic() )
             {
+#ifdef SRR2_OLD_3DS
+                UpdateVolumeForPass(p->VolumeA(), sUpdatePassStamp);
+#else
                 p->VolumeA()->UpdateAll();
+#endif
             }
+#ifdef SRR2_OLD_3DS
+            else
+            {
+                ++g_old3dsUpdateAllStaticSkip;
+            }
+#endif
 
             if(!p->mObjectB->IsStatic())
             {
+#ifdef SRR2_OLD_3DS
+                UpdateVolumeForPass(p->VolumeB(), sUpdatePassStamp);
+#else
                 p->VolumeB()->UpdateAll();
+#endif
             }
+#ifdef SRR2_OLD_3DS
+            else
+            {
+                ++g_old3dsUpdateAllStaticSkip;
+            }
+#endif
 
             #ifdef RAD_DEBUG
             if( printOut )

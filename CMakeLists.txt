@@ -22,11 +22,32 @@ elseif(NINTENDO_3DS)
 	set(SRR2_P3D_PDDI "PICA" CACHE STRING "Pure3D PDDI implementation" FORCE)
 	option(SRR2_OLD_3DS "Target original 3DS hardware (no New 3DS features)" OFF)
 	option(SRR2_3DS_MOVIES "Play converted movies (software MPEG-1 on Old 3DS, hardware H.264 on New 3DS)" ON)
+	# Experimental: skip the repeat collision-volume updates the pair loop would
+	# otherwise perform within one collision-detection pass. Off by default so
+	# the shipped build keeps the original behaviour.
+	option(SRR2_OLD3DS_COLLVOL_CACHE "Skip repeated collision-volume updates within a detection pass" OFF)
+	# Experimental: perform the repeated updates unchanged but hash the volume's
+	# geometry before and after each one, so a mismatch can falsify the cache.
+	option(SRR2_OLD3DS_COLLVOL_VERIFY "Hash collision-volume geometry around repeated updates" OFF)
 	if(SRR2_OLD_3DS)
 		add_definitions(-DSRR2_OLD_3DS)
+		if(SRR2_OLD3DS_COLLVOL_CACHE)
+			add_definitions(-DSRR2_OLD3DS_COLLVOL_CACHE)
+		endif()
+		if(SRR2_OLD3DS_COLLVOL_VERIFY)
+			add_definitions(-DSRR2_OLD3DS_COLLVOL_VERIFY)
+		endif()
 		# Stamped into the boot log so a captured log can be matched to the
-		# executable that produced it. Bump this when the build changes.
-		add_definitions(-DSRR2_OLD3DS_BUILD_ID="diag-1")
+		# executable that produced it. The collision-volume experiment has three
+		# modes, so the id names the mode rather than being bumped by hand.
+		if(SRR2_OLD3DS_COLLVOL_VERIFY)
+			set(SRR2_OLD3DS_BUILD_ID "coll-verify-2")
+		elseif(SRR2_OLD3DS_COLLVOL_CACHE)
+			set(SRR2_OLD3DS_BUILD_ID "coll-cache-1")
+		else()
+			set(SRR2_OLD3DS_BUILD_ID "coll-1")
+		endif()
+		add_definitions(-DSRR2_OLD3DS_BUILD_ID="${SRR2_OLD3DS_BUILD_ID}")
 		# Retain the normal 3DSX startup/linker script, using ARM11 barriers.
 		string(REPLACE "-specs=3dsx.specs"
 			"-specs=\"${CMAKE_CURRENT_SOURCE_DIR}/tools/3ds/old3ds.specs\""

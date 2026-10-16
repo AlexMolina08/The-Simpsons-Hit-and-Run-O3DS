@@ -48,5 +48,32 @@ extern "C" double   g_old3dsRenderPhases[6];
 extern "C" unsigned g_old3dsLinearFailures;
 extern "C" unsigned g_old3dsLinearFailureBytes;
 
+// Redundant collision-volume updates. A "pass" is one
+// CollisionDetector::DetectCollision() call over one area's pair list. Within a
+// pass the detector only reads volumes, so updating the same root volume more
+// than once recomputes identical values.
+//
+// First and repeat updates are timed in separate buckets, one call in eight, so
+// the recoverable time is measured rather than assumed. mean_first_us is the
+// cost of a first update of a volume in a pass; mean_red_us is the cost of a
+// repeat. Recoverable time per interval is redundant * mean_red_us.
+extern "C" unsigned g_old3dsDetectPasses;
+extern "C" unsigned g_old3dsPairUpdates;
+extern "C" unsigned g_old3dsUpdateAllCalls;
+extern "C" unsigned g_old3dsUpdateAllRedundant;
+extern "C" unsigned g_old3dsUpdateAllStaticSkip;
+extern "C" unsigned g_old3dsUpdateAllSamples;
+extern "C" double   g_old3dsUpdateAllMs;
+extern "C" unsigned g_old3dsUpdateAllRedundantSamples;
+extern "C" double   g_old3dsUpdateAllRedundantMs;
+
+// Verify build only. g_old3dsUpdateAllVerified counts repeats whose geometry
+// was hashed before and after the repeat update; g_old3dsUpdateAllVerifyMismatch
+// counts those where the hash changed. The cache is only sound if the mismatch
+// count stays zero: a non-zero value means a repeat altered geometry the
+// detector reads, so skipping it would change collision results.
+extern "C" unsigned g_old3dsUpdateAllVerified;
+extern "C" unsigned g_old3dsUpdateAllVerifyMismatch;
+
 #endif // SRR2_OLD_3DS
 #endif // OLD3DS_DIAG_H

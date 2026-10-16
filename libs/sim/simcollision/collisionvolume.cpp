@@ -22,6 +22,9 @@ CollisionVolume::CollisionVolume()
     mSubVolumeList(NULL),
     mVisible(true),
     mUpdated(false)
+#ifdef SRR2_OLD_3DS
+    , mUpdatePassStamp(0)
+#endif
 {
     mPosition.Set(0, 0, 0);
     mBoxSize.Set(0, 0, 0);
