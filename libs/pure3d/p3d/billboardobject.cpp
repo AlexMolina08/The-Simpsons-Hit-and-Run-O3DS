@@ -17,6 +17,9 @@
 #include <p3d/matrixstack.hpp>
 #include <p3d/billboardobject.hpp>
 #include <pddi/pddiext.hpp>
+#ifdef SRR2_OLD3DS_QUAD_STREAM
+#include <pddi/pica/quadstream.hpp>
+#endif
 
 #ifdef RAD_XBOX
 #include <pddi/pddixbox.hpp>
@@ -363,6 +366,10 @@ tBillboardQuad::Display(pddiPrimStream* stream, const Matrix& world, const Matri
     if( BillboardQuadManager::sEnabled )
         return;
 
+#ifdef SRR2_OLD3DS_QUAD_STREAM
+    if(picaEmitQuad(stream,v,t,displayColour,
+        (!flip || billboardMode!=p3dBillboardConstants::BillboardMode::NO_AXIS) ? picaQuad::Billboard : picaQuad::Flipped)) return;
+#endif
     if ((!flip)||(billboardMode != p3dBillboardConstants::BillboardMode::NO_AXIS))
     {
         //bottom left
@@ -435,6 +442,10 @@ void BakedBillboardQuad::Display(pddiPrimStream* stream)
     //displayColour.SetRed(255);
     //displayColour.SetGreen(255);
     //displayColour.SetBlue(255);
+#ifdef SRR2_OLD3DS_QUAD_STREAM
+    if(picaEmitQuad(stream,v,t,displayColour,
+        (!flip || billboardMode!=p3dBillboardConstants::BillboardMode::NO_AXIS) ? picaQuad::Billboard : picaQuad::Flipped)) return;
+#endif
     if ((!flip)||(billboardMode != p3dBillboardConstants::BillboardMode::NO_AXIS))
     {
         //bottom left
@@ -964,6 +975,10 @@ tCamRelativeBillboardQuad::Display(pddiPrimStream* stream, const rmt::Matrix& wo
     if( BillboardQuadManager::sEnabled )
         return;
 
+#ifdef SRR2_OLD3DS_QUAD_STREAM
+    if(picaEmitQuad(stream,v,t,displayColour,
+        (!flip || billboardMode!=p3dBillboardConstants::BillboardMode::NO_AXIS) ? picaQuad::Billboard : picaQuad::Flipped)) return;
+#endif
     if ((!flip)||(billboardMode != p3dBillboardConstants::BillboardMode::NO_AXIS))
     {
         //bottom left
@@ -1335,7 +1350,11 @@ tBillboardQuadGroup::Display()
         #endif
 
 
-        pddiPrimStream* stream = p3d::pddi->BeginPrims(shader->GetShader(), PDDI_PRIM_TRIANGLES, PDDI_V_CT, numVisibleQuads*6);
+        pddiPrimStream* stream=nullptr;
+#ifdef SRR2_OLD3DS_QUAD_STREAM
+        stream=picaBeginQuadStream(shader->GetShader(),numVisibleQuads);
+#endif
+        if(!stream) stream = p3d::pddi->BeginPrims(shader->GetShader(), PDDI_PRIM_TRIANGLES, PDDI_V_CT, numVisibleQuads*6);
 
         for (int i = 0; i < numQuads; i++)
         {
@@ -1469,7 +1488,11 @@ tBillboardQuadGroup::Display()
 
         p3d::stack->PushIdentity();
 
-        pddiPrimStream* stream = p3d::pddi->BeginPrims(shader->GetShader(), PDDI_PRIM_TRIANGLES, PDDI_V_CT, mTempQuads.mUseSize*6);
+        pddiPrimStream* stream=nullptr;
+#ifdef SRR2_OLD3DS_QUAD_STREAM
+        stream=picaBeginQuadStream(shader->GetShader(),mTempQuads.mUseSize);
+#endif
+        if(!stream) stream = p3d::pddi->BeginPrims(shader->GetShader(), PDDI_PRIM_TRIANGLES, PDDI_V_CT, mTempQuads.mUseSize*6);
 
         for (int i = 0; i < mTempQuads.mUseSize; i++)
         {

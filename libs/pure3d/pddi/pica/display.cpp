@@ -9,7 +9,6 @@ extern "C" void C3Di_UpdateContext(void);
 extern "C" bool C3Di_SplitFrame(u32** pBuf, u32* pSize);
 
 static const float PICA_STEREO_MAX_SHIFT   = 0.045f;
-static const float PICA_STEREO_CONVERGENCE = 7.0f;
 
 static void picaWriteEye(float shift)
 {
@@ -294,6 +293,7 @@ void picaDisplay::StartTopSegment(void)
 {
     if(stereoThisFrame)
     {
+        if(context) context->FlushStreams();
         C3Di_UpdateContext();
         picaWriteEye(-eyeShift);
         C3D_FrameSplit(0);
@@ -309,6 +309,7 @@ void picaDisplay::FinishTopSegment(void)
     if(!stereoThisFrame)
         return;
 
+    if(context) context->FlushStreams();
     u32* sceneBuf = NULL;
     u32  sceneSize = 0;
     if(C3Di_SplitFrame(&sceneBuf, &sceneSize))
@@ -362,6 +363,7 @@ void picaDisplay::EndFrame(void)
         C3D_FrameEnd(0);
 #endif
         inFrame = false;
+        g_picaInFrame = 0;
 #ifdef SRR2_OLD_3DS
         g_picaFrameSubmitMs += (svcGetSystemTick() - submitTick) * 1000.0 / SYSCLOCK_ARM11;
         ++g_picaPresentedFrames;
@@ -406,6 +408,7 @@ bool picaDisplay::EndWorldTarget(void)
 {
     if(!worldActive) return false;
     // Submit world commands before sampling their render texture.
+    if(context) context->FlushStreams();
     C3D_FrameSplit(GX_CMDLIST_FLUSH);
     worldActive = false;
     C3D_RenderTargetClear(target, C3D_CLEAR_ALL, 0x000000FF, 0x00FFFFFF);

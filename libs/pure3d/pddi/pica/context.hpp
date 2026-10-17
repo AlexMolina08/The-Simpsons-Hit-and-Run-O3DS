@@ -2,7 +2,19 @@
 #define PDDI_PICA_CONTEXT_HPP
 
 #include <pddi/pica/pica.hpp>
+#ifdef SRR2_OLD3DS_CLIP_BOUNDS
+#include <pddi/pica/clipbounds.hpp>
+#endif
 #include <pddi/pica/skinning.hpp>
+#ifdef SRR2_OLD3DS_LIGHT_CAPTURE
+#include <pddi/pica/lightcapture.hpp>
+#endif
+#ifdef SRR2_OLD3DS_SKIN_CLIP
+namespace picaSkinClip { struct Bounds; }
+#endif
+#ifdef SRR2_OLD3DS_GPU_SKIN_EYE_CACHE
+#include <pddi/pica/skineyecache.hpp>
+#endif
 #ifdef SRR2_OLD3DS_MATERIAL_QUEUE
 #include <pddi/pica/materialqueue.hpp>
 #endif
@@ -39,6 +51,21 @@ public:
     void DrawPrimBuffer(pddiShader* material, pddiPrimBuffer* buffer);
 #ifdef SRR2_OLD3DS_GPU_SKIN
     bool BindSkinProgram(bool enabled);
+    bool skinProgramBound = false;
+#ifdef SRR2_OLD3DS_GPU_SKIN_EYE_CACHE
+    picaSkin::EyeCache skinEyeCache;
+#endif
+#ifdef SRR2_OLD3DS_GPU_SKIN_RIGID_PACK
+    bool skinRigidLayout = false;
+    C3D_AttrInfo skinRigidAttrInfo;
+    void SetSkinLayout(bool rigid);
+#endif
+#ifdef SRR2_OLD3DS_GPU_SKIN_BATCH
+    unsigned skinBatchDepth = 0;
+    void BeginSkinBatch();
+    void EndSkinBatch();
+    void SkinBatchBarrier();
+#endif
     DVLB_s* skinBinary;
     shaderProgram_s skinProgram;
     C3D_AttrInfo skinAttrInfo;
@@ -98,15 +125,32 @@ public:
     picaDisplay* GetDisplay(void) { return display; }
     bool ExtBGRA(void)            { return false; }
 
-    void SetVertexUniforms(bool lit, pddiColour ambient, pddiColour diffuse, pddiColour emissive);
+    void SetVertexUniforms(bool lit, pddiColour ambient, pddiColour diffuse, pddiColour emissive, const float (*prepared)[4] = NULL);
     void SetMaterialWriteMask(int mask);
 
 #ifdef SRR2_OLD3DS_SHADOW_MESH
     bool DrawBlobShadow(pddiShader* shader, const pddiVector* vertices,
                         pddiColour inside, pddiColour outside);
 #endif
+#ifdef SRR2_OLD3DS_CHARACTER_SHADOW
+    bool DrawCharacterShadow(pddiShader* shader, const pddiVector* vertices,
+                             pddiColour inside, pddiColour outside);
+#endif
     unsigned char*  AllocImmVertices(unsigned count);
+#ifdef SRR2_OLD3DS_SKIN_RING
+    unsigned char* AllocSkinVertices(unsigned count);
+#endif
+    void FlushStreams();
     unsigned short* AllocImmIndices(unsigned count);
+#ifdef SRR2_OLD3DS_QUAD_STREAM
+    pddiPrimStream* BeginQuadStream(pddiShader* shader,unsigned count);
+    bool EmitQuad(pddiPrimStream* stream,const pddiVector* positions,const pddiVector2* coordinates,
+                  pddiColour colour,unsigned topology);
+    bool EmitColourQuad(pddiPrimStream* stream,const pddiVector* positions,const pddiVector2* coordinates,
+                        const pddiColour* colours,unsigned topology);
+    unsigned short* quadIndices=nullptr;
+    unsigned quadCapacity=0,quadWritten=0,quadTotal=0,quadFallbacks=0,quadColourTotal=0;
+#endif
 
     void ApplyFogState(void);
 
@@ -148,6 +192,17 @@ protected:
     bool stereoOn;
 
 public:
+#ifdef SRR2_OLD3DS_UNLIT_PROJECTION
+    void DumpUnlitProjectionStats();
+#endif
+#ifdef SRR2_OLD3DS_CLIP_BOUNDS
+    void DumpClipBoundsStats();
+    bool CullBounds(const float low[3], const float high[3]);
+#ifdef SRR2_OLD3DS_SKIN_CLIP
+    bool CullSkinBounds(const picaSkinClip::Bounds* const* groups, unsigned groupCount,
+                        const pddiMatrix* matrices, unsigned count);
+#endif
+#endif
     bool BeginBottomScreen(float u0, float v0, float u1, float v1);
     void EndBottomScreen(void);
 
@@ -158,15 +213,45 @@ private:
     void  BottomMapPoint(float u, float v, float* bu, float* bv) const;
 
     C3D_AttrInfo attrInfo;
+#ifdef SRR2_OLD3DS_NO_NORMAL_FETCH
+    C3D_AttrInfo noNormalAttrInfo;
+    bool noNormalLayout;
+public:
+    void SetNoNormalLayout(bool enabled);
+private:
+#endif
 
     C3D_Mtx hwProjection;
+#ifdef SRR2_OLD3DS_CLIP_BOUNDS
+    bool clipPrepared;
+    pddiMatrix clipModelView;
+    C3D_Mtx clipProjection;
+    picaClipBounds::Transform clipTransform;
+#ifdef SRR2_OLD3DS_CLIP_PLANE_PREP
+    picaClipBounds::ProjectionPlanes clipProjectionPlanes;
+#endif
+    unsigned clipTested, clipRejected;
+#endif
+#ifdef SRR2_OLD3DS_UNLIT_PROJECTION
+    bool sparseUnlitProjection, lastFastUnlit;
+    unsigned fastUnlitCalls, otherProjectionCalls;
+#endif
 
+#ifdef SRR2_OLD3DS_DIRECTIONAL_LIGHT
+    C3D_FVec directionalPos[PDDI_MAX_LIGHTS];
+    bool directionalOnly = false;
+    unsigned directionalDraws = 0, generalLightDraws = 0;
+#endif
     C3D_FVec lightPos[PDDI_MAX_LIGHTS];
     C3D_FVec lightColour[PDDI_MAX_LIGHTS];
     C3D_FVec lightAtten[PDDI_MAX_LIGHTS];
     int      nActiveLights;
     bool     lightsDirty;
 
+#ifdef SRR2_OLD3DS_LIGHT_CAPTURE
+    picaLightCapture::Cache lightCaptureCache[PDDI_MAX_LIGHTS];
+    unsigned lightSetupCalls=0,lightDisabledSkips=0,lightCaptureHits=0,lightCaptureComputations=0;
+#endif
     C3D_FVec eyeLight[PDDI_MAX_LIGHTS];
 
     void CaptureEyeLight(int handle);
@@ -198,6 +283,9 @@ private:
     unsigned short* immIndexRing[PICA_IMM_BUFFERS];
     unsigned        immRing;
     unsigned        immVertexUsed;
+#ifdef SRR2_OLD3DS_SKIN_RING
+    unsigned skinVertexUsed;
+#endif
     unsigned short* immIndices;
     unsigned        immIndexUsed;
 };
@@ -221,6 +309,10 @@ public:
 
     void SetIndices(unsigned short* indices, int count);
 
+#ifdef SRR2_OLD3DS_LOAD_UPLOAD
+    void BeginUpload() { uploadPending = true; }
+    void EndUpload();
+#endif
     bool CheckMemImageVersion(int version) { return false; }
     void* LockMemImage(unsigned)           { return NULL; }
     void UnlockMemImage()                  { }
@@ -229,14 +321,27 @@ public:
 
     unsigned GetVertexFormat() { return vertexType; }
     void Display(void);
+#ifdef SRR2_OLD3DS_CLIP_BOUNDS
+    void UpdateClipBounds();
+    bool CullNative();
+    bool clipBoundsValid;
+    float clipLow[3], clipHigh[3];
+#endif
 #ifdef SRR2_OLD3DS_GPU_SKIN_SUPPORT
-    void PrepareGpuSkin(const void* source, unsigned count, unsigned bones, bool selected);
+    void PrepareGpuSkin(const void* source, unsigned count, unsigned bones, bool selected, bool pedestrian = false, bool named = false);
     bool TryGpuSkin(pddiShader* material, const pddiMatrix* const* matrices, unsigned count);
     void MutateGpuSkin();
     picaSkinAllocation* skinAllocation;
     picaSkin::Reason skinReason;
     unsigned skinBoneCount;
     bool skinDrawing;
+#ifdef SRR2_OLD3DS_SKIN_CLIP
+    picaSkinClip::Bounds* skinClipBounds;
+
+#endif
+#ifdef SRR2_OLD3DS_GPU_SKIN_RIGID_PACK
+    bool skinRigid;
+#endif
 #endif
 #ifdef SRR2_OLD3DS_MATERIAL_QUEUE
 #ifdef SRR2_OLD3DS_MATERIAL_QUEUE_SORT
@@ -245,14 +350,35 @@ public:
     bool QueuePersistent();
 #endif
 
+#ifdef SRR2_OLD3DS_NO_NORMAL_FETCH
+    void AllowNoNormalPacking() { noNormalAllowed = true; }
+    void ExpandNoNormal();
+    bool noNormalAllowed, noNormalPacked;
+#endif
     void SetFormat(pddiPrimType type, unsigned vertexFormat);
 
 protected:
     bool BuildExpanded(void);
+#ifdef SRR2_OLD3DS_DRAW_PREP
+    void PrepareDraw();
+    bool drawPrepared;
+    GPU_Primitive_t nativePrimitive;
+    u32 nativeOffset;
+    unsigned nativeCount;
+#endif
 
 public:
 
     void SetTransient(unsigned char* verts, unsigned short* idx, unsigned count);
+#ifdef SRR2_OLD3DS_QUAD_STREAM
+    void AppendQuad(const pddiVector* positions,const pddiVector2* coordinates,pddiColour colour);
+    void AppendColourQuad(const pddiVector* positions,const pddiVector2* coordinates,const pddiColour* colours);
+    // Only the generated four-vertex topology calls this after range checks.
+    void SetQuadIndices(unsigned short* idx,unsigned count)
+    {
+        indices=idx;indexCount=count;elemState=1;
+    }
+#endif
 #ifdef SRR2_OLD3DS_SHADOW_MESH
     void SetTransientIndices(unsigned short* idx, unsigned count)
     {
@@ -271,6 +397,9 @@ protected:
     unsigned vertexType;
 
     unsigned char* buffer;
+#ifdef SRR2_OLD3DS_SKIN_RING
+    unsigned char* skinVertices;
+#endif
     float* coord;
     float* normal;
     float* uv;
@@ -289,6 +418,9 @@ protected:
     int            elemState;
     bool           IndicesInRange(void) const;
 
+#ifdef SRR2_OLD3DS_LOAD_UPLOAD
+    bool uploadPending;
+#endif
     bool defaultsValid;
     bool transient;
     unsigned mem;

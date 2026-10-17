@@ -21,7 +21,10 @@
 #endif
 
 #include <string.h>
-#if defined(SRR2_OLD3DS_SKIN_DIRECT) || defined(SRR2_OLD3DS_GPU_SKIN_SUPPORT)
+#ifdef SRR2_OLD3DS_SKIN_ZERO
+#include <p3d/skinzero.hpp>
+#endif
+#if defined(SRR2_OLD3DS_SKIN_DIRECT) || defined(SRR2_OLD3DS_GPU_SKIN_SUPPORT) || defined(SRR2_OLD3DS_LOAD_UPLOAD)
 #include <pddi/pica/context.hpp>
 #endif
 
@@ -43,6 +46,25 @@
                     
 #define INDEXED_STREAM_UV_WITH_OFFSET( i, uv, offset, uvIdx )  \
                     stream->UV( uv[ indices[ i ] ].u + offset[ indices[ i ] ].u, uv[ indices[ i ] ].v + offset[ indices[ i ] ].v, uvIdx );
+
+#ifdef SRR2_OLD3DS_LOAD_UPLOAD
+namespace
+{
+class PicaLoadUpload
+{
+    picaPrimBuffer* buffer;
+public:
+    PicaLoadUpload() : buffer(NULL) {}
+    ~PicaLoadUpload() { if(buffer) buffer->EndUpload(); }
+    void Begin(pddiPrimBuffer* value)
+    {
+        if(buffer) buffer->EndUpload();
+        buffer = static_cast<picaPrimBuffer*>(value);
+        if(buffer) buffer->BeginUpload();
+    }
+};
+}
+#endif
 
 using namespace RadicalMathLibrary;
 
@@ -517,10 +539,21 @@ bool tPrimGroupSkinnedPC::SetVertices(unsigned start, unsigned count, rmt::Vecto
 }
 
 #ifdef SRR2_OLD3DS_GPU_SKIN_SUPPORT
-void tPrimGroupSkinnedPC::PrepareGpuSkin(bool selected)
+void tPrimGroupSkinnedPC::PrepareGpuSkin(bool selected, bool pedestrian, bool named)
 {
     static_assert(sizeof(SkinVertex)==sizeof(picaSkin::Source), "Skin source layout");
-    static_cast<picaPrimBuffer*>(mBuffer)->PrepareGpuSkin(mVertices,mVertexCount,nMatrices,selected);
+    static_cast<picaPrimBuffer*>(mBuffer)->PrepareGpuSkin(mVertices,mVertexCount,nMatrices,selected,pedestrian,named);
+}
+#endif
+
+#ifdef SRR2_OLD3DS_BONE_USAGE
+bool tPrimGroupSkinnedPC::CollectBoneUsage(p3dSkin::BoneUsage& usage,const rmt::Matrix* base) const
+{
+    static_assert(sizeof(rmt::Matrix)==64,"Palette matrix stride");
+    if(!matrixPalette || !nMatrices || nMatrices>256) return false;
+    for(unsigned i=0;i<nMatrices;++i)
+        if(!usage.Add(base,matrixPalette[i])) return false;
+    return true;
 }
 #endif
 
@@ -542,6 +575,9 @@ void tPrimGroupSkinnedPC::Display(void)
 	
     int count = mVertexCount;
     SkinVertex *verts = mVertices;
+#ifdef SRR2_OLD3DS_SKIN_ZERO
+    p3dSkin::ZeroInfluences zeroInfluences;
+#endif
 #ifdef SRR2_OLD3DS_SKIN_DIRECT
     direct = static_cast<picaPrimBuffer*>(mBuffer)->LockSkin(count);
 #endif
@@ -569,29 +605,55 @@ void tPrimGroupSkinnedPC::Display(void)
 			Vector vertex;
 			Vector* sv = &verts[i].position;
 			float weight = verts[i].weights[0];
-			vertex.x = (m->m[0][0]*sv->x + m->m[1][0]*sv->y + m->m[2][0]*sv->z + m->m[3][0]) * weight;
-			vertex.y = (m->m[0][1]*sv->x + m->m[1][1]*sv->y + m->m[2][1]*sv->z + m->m[3][1]) * weight;
-			vertex.z = (m->m[0][2]*sv->x + m->m[1][2]*sv->y + m->m[2][2]*sv->z + m->m[3][2]) * weight;
+			#ifdef SRR2_OLD3DS_SKIN_WEIGHTS
+			if(weight == 1.0f)
+			{
+			    vertex.x = (m->m[0][0]*sv->x + m->m[1][0]*sv->y + m->m[2][0]*sv->z + m->m[3][0]);
+			    vertex.y = (m->m[0][1]*sv->x + m->m[1][1]*sv->y + m->m[2][1]*sv->z + m->m[3][1]);
+			    vertex.z = (m->m[0][2]*sv->x + m->m[1][2]*sv->y + m->m[2][2]*sv->z + m->m[3][2]);
+			}
+			else
+#endif
+			{
+			    vertex.x = (m->m[0][0]*sv->x + m->m[1][0]*sv->y + m->m[2][0]*sv->z + m->m[3][0]) * weight;
+			    vertex.y = (m->m[0][1]*sv->x + m->m[1][1]*sv->y + m->m[2][1]*sv->z + m->m[3][1]) * weight;
+			    vertex.z = (m->m[0][2]*sv->x + m->m[1][2]*sv->y + m->m[2][2]*sv->z + m->m[3][2]) * weight;
+			}
 
 			if(weight != 1.0f)
 			{
 				weight = verts[i].weights[1];
 				m = matrixPalette[verts[i].indices[1]];
+#ifdef SRR2_OLD3DS_SKIN_ZERO
+                if(!zeroInfluences.CanSkip(weight, vertex, *sv, *m, verts[i].indices[1]))
+#endif
+                {
 				vertex.x += (m->m[0][0]*sv->x + m->m[1][0]*sv->y + m->m[2][0]*sv->z + m->m[3][0]) * weight;
 				vertex.y += (m->m[0][1]*sv->x + m->m[1][1]*sv->y + m->m[2][1]*sv->z + m->m[3][1]) * weight;
 				vertex.z += (m->m[0][2]*sv->x + m->m[1][2]*sv->y + m->m[2][2]*sv->z + m->m[3][2]) * weight;
+                }
 
 				weight = verts[i].weights[2];
 				m = matrixPalette[verts[i].indices[2]];
+#ifdef SRR2_OLD3DS_SKIN_ZERO
+                if(!zeroInfluences.CanSkip(weight, vertex, *sv, *m, verts[i].indices[2]))
+#endif
+                {
 				vertex.x += (m->m[0][0]*sv->x + m->m[1][0]*sv->y + m->m[2][0]*sv->z + m->m[3][0]) * weight;
 				vertex.y += (m->m[0][1]*sv->x + m->m[1][1]*sv->y + m->m[2][1]*sv->z + m->m[3][1]) * weight;
 				vertex.z += (m->m[0][2]*sv->x + m->m[1][2]*sv->y + m->m[2][2]*sv->z + m->m[3][2]) * weight;
+                }
 
 				weight = 1.0f - (verts[i].weights[2] + verts[i].weights[1] + verts[i].weights[0]);
 				m = matrixPalette[verts[i].indices[3]];
+#ifdef SRR2_OLD3DS_SKIN_ZERO
+                if(!zeroInfluences.CanSkip(weight, vertex, *sv, *m, verts[i].indices[3]))
+#endif
+                {
 				vertex.x += (m->m[0][0]*sv->x + m->m[1][0]*sv->y + m->m[2][0]*sv->z + m->m[3][0]) * weight;
 				vertex.y += (m->m[0][1]*sv->x + m->m[1][1]*sv->y + m->m[2][1]*sv->z + m->m[3][1]) * weight;
 				vertex.z += (m->m[0][2]*sv->x + m->m[1][2]*sv->y + m->m[2][2]*sv->z + m->m[3][2]) * weight;
+                }
 			}
 #ifdef SRR2_OLD3DS_SKIN_DIRECT
             if(direct)
@@ -628,29 +690,55 @@ void tPrimGroupSkinnedPC::Display(void)
 			Vector vertex;
 			Vector* sv = &verts[i].position;
 			float weight = verts[i].weights[0];
-			vertex.x = (m->m[0][0]*sv->x + m->m[1][0]*sv->y + m->m[2][0]*sv->z + m->m[3][0]) * weight;
-			vertex.y = (m->m[0][1]*sv->x + m->m[1][1]*sv->y + m->m[2][1]*sv->z + m->m[3][1]) * weight;
-			vertex.z = (m->m[0][2]*sv->x + m->m[1][2]*sv->y + m->m[2][2]*sv->z + m->m[3][2]) * weight;
+			#ifdef SRR2_OLD3DS_SKIN_WEIGHTS
+			if(weight == 1.0f)
+			{
+			    vertex.x = (m->m[0][0]*sv->x + m->m[1][0]*sv->y + m->m[2][0]*sv->z + m->m[3][0]);
+			    vertex.y = (m->m[0][1]*sv->x + m->m[1][1]*sv->y + m->m[2][1]*sv->z + m->m[3][1]);
+			    vertex.z = (m->m[0][2]*sv->x + m->m[1][2]*sv->y + m->m[2][2]*sv->z + m->m[3][2]);
+			}
+			else
+#endif
+			{
+			    vertex.x = (m->m[0][0]*sv->x + m->m[1][0]*sv->y + m->m[2][0]*sv->z + m->m[3][0]) * weight;
+			    vertex.y = (m->m[0][1]*sv->x + m->m[1][1]*sv->y + m->m[2][1]*sv->z + m->m[3][1]) * weight;
+			    vertex.z = (m->m[0][2]*sv->x + m->m[1][2]*sv->y + m->m[2][2]*sv->z + m->m[3][2]) * weight;
+			}
 
 			if(weight != 1.0f)
 			{
 				weight = verts[i].weights[1];
 				m = matrixPalette[verts[i].indices[1]];
+#ifdef SRR2_OLD3DS_SKIN_ZERO
+                if(!zeroInfluences.CanSkip(weight, vertex, *sv, *m, verts[i].indices[1]))
+#endif
+                {
 				vertex.x += (m->m[0][0]*sv->x + m->m[1][0]*sv->y + m->m[2][0]*sv->z + m->m[3][0]) * weight;
 				vertex.y += (m->m[0][1]*sv->x + m->m[1][1]*sv->y + m->m[2][1]*sv->z + m->m[3][1]) * weight;
 				vertex.z += (m->m[0][2]*sv->x + m->m[1][2]*sv->y + m->m[2][2]*sv->z + m->m[3][2]) * weight;
+                }
 
 				weight = verts[i].weights[2];
 				m = matrixPalette[verts[i].indices[2]];
+#ifdef SRR2_OLD3DS_SKIN_ZERO
+                if(!zeroInfluences.CanSkip(weight, vertex, *sv, *m, verts[i].indices[2]))
+#endif
+                {
 				vertex.x += (m->m[0][0]*sv->x + m->m[1][0]*sv->y + m->m[2][0]*sv->z + m->m[3][0]) * weight;
 				vertex.y += (m->m[0][1]*sv->x + m->m[1][1]*sv->y + m->m[2][1]*sv->z + m->m[3][1]) * weight;
 				vertex.z += (m->m[0][2]*sv->x + m->m[1][2]*sv->y + m->m[2][2]*sv->z + m->m[3][2]) * weight;
+                }
 
 				weight = 1.0f - (verts[i].weights[2] + verts[i].weights[1] + verts[i].weights[0]);
 				m = matrixPalette[verts[i].indices[3]];
+#ifdef SRR2_OLD3DS_SKIN_ZERO
+                if(!zeroInfluences.CanSkip(weight, vertex, *sv, *m, verts[i].indices[3]))
+#endif
+                {
 				vertex.x += (m->m[0][0]*sv->x + m->m[1][0]*sv->y + m->m[2][0]*sv->z + m->m[3][0]) * weight;
 				vertex.y += (m->m[0][1]*sv->x + m->m[1][1]*sv->y + m->m[2][1]*sv->z + m->m[3][1]) * weight;
 				vertex.z += (m->m[0][2]*sv->x + m->m[1][2]*sv->y + m->m[2][2]*sv->z + m->m[3][2]) * weight;
+                }
 			}
 
 			// output transformed vertex
@@ -1162,6 +1250,9 @@ bool tPrimGroupLoader::ParseHeader(tChunkFile *f, tEntityStore *store)
 #ifndef RAD_PS2
 tPrimGroup* tPrimGroupLoader::LoadPCSkin(tChunkFile* f, tEntityStore* store, rmt::Matrix* bones)
 {
+#ifdef SRR2_OLD3DS_LOAD_UPLOAD
+    PicaLoadUpload upload;
+#endif
 	//don't create a primBuffer whose vertex contains weights and matrices indices 
 	//for PC, since PC skin is software blended, the weights and matrices indices
 	//are stored separately( in SkinVertex ), exclude binormal & tangent also
@@ -1212,6 +1303,9 @@ tPrimGroup* tPrimGroupLoader::LoadPCSkin(tChunkFile* f, tEntityStore* store, rmt
                     pddiPrimBufferDesc desc(mPrimType, mVertexFormat, mVertexCount, mIndexCount);
                     desc.SetMatrixCount(mMatrixCount);
                     primBuffer  = p3d::device->NewPrimBuffer(&desc);
+#ifdef SRR2_OLD3DS_LOAD_UPLOAD
+                    upload.Begin(primBuffer);
+#endif
                     primGroup->SetBuffer(primBuffer);
                    
                 }
@@ -1643,6 +1737,9 @@ tPrimGroup* tPrimGroupLoader::LoadStreamed(tChunkFile* f, tEntityStore* store, r
 //-------------------------------------------------------------------------------------------------------------------
 tPrimGroup*  tPrimGroupLoader::Load(tChunkFile *f, tEntityStore *store, rmt::Matrix* bones, bool optimise, bool deform)
 {
+#ifdef SRR2_OLD3DS_LOAD_UPLOAD
+    PicaLoadUpload upload;
+#endif
     pddiExtHardwareSkinning* hwSkin = p3d::context->GetHardwareSkinning();
 
     if(!ParseHeader(f, store))
@@ -1725,6 +1822,12 @@ tPrimGroup*  tPrimGroupLoader::Load(tChunkFile *f, tEntityStore *store, rmt::Mat
                 desc.SetMemoryImaged(true);
                 desc.SetMatrixCount(mMatrixCount);
                 primBuffer = p3d::device->NewPrimBuffer(&desc);
+#ifdef SRR2_OLD3DS_LOAD_UPLOAD
+                upload.Begin(primBuffer);
+#ifdef SRR2_OLD3DS_NO_NORMAL_FETCH
+                    static_cast<picaPrimBuffer*>(primBuffer)->AllowNoNormalPacking();
+#endif
+#endif
                 primGroup->SetBuffer(primBuffer);
             break;
     
@@ -1738,6 +1841,12 @@ tPrimGroup*  tPrimGroupLoader::Load(tChunkFile *f, tEntityStore *store, rmt::Mat
                     desc.SetMemoryImaged(true);
                     desc.SetMatrixCount(mMatrixCount);
                     primBuffer  = p3d::device->NewPrimBuffer(&desc);
+#ifdef SRR2_OLD3DS_LOAD_UPLOAD
+                    upload.Begin(primBuffer);
+#ifdef SRR2_OLD3DS_NO_NORMAL_FETCH
+                    static_cast<picaPrimBuffer*>(primBuffer)->AllowNoNormalPacking();
+#endif
+#endif
                     primGroup->SetBuffer(primBuffer);
 
                     #ifdef RAD_XBOX
@@ -1774,6 +1883,12 @@ tPrimGroup*  tPrimGroupLoader::Load(tChunkFile *f, tEntityStore *store, rmt::Mat
                     pddiPrimBufferDesc desc(mPrimType, mVertexFormat, mVertexCount, mIndexCount);
                     desc.SetMatrixCount(mMatrixCount);
                     primBuffer  = p3d::device->NewPrimBuffer(&desc);
+#ifdef SRR2_OLD3DS_LOAD_UPLOAD
+                    upload.Begin(primBuffer);
+#ifdef SRR2_OLD3DS_NO_NORMAL_FETCH
+                    static_cast<picaPrimBuffer*>(primBuffer)->AllowNoNormalPacking();
+#endif
+#endif
                     primGroup->SetBuffer(primBuffer);
                     
 #ifdef RAD_XBOX

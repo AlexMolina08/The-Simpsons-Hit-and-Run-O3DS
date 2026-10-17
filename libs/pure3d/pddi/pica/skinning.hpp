@@ -9,7 +9,8 @@ struct picaSkinAllocation
     void *nativeBuffer;
     void *expandedBuffer;
     unsigned bytes;
-    unsigned char pad[32 - 3 * sizeof(void *) - sizeof(unsigned)];
+    unsigned pedestrian; // Pool: 0 player, 1 pedestrian, 2 named NPC.
+    unsigned char pad[32 - 3 * sizeof(void *) - 2 * sizeof(unsigned)];
 };
 static_assert(sizeof(picaSkinAllocation) == 32, "aligned skin allocation header");
 struct picaSkinMetrics
@@ -28,7 +29,7 @@ bool picaSkinEnabled();
 void picaSkinBeginFrame();
 void picaSkinEndFrame(u64 work, u64 update, u64 render, bool gameplay);
 void picaSkinRetire(picaSkinAllocation *p);
-picaSkinAllocation *picaSkinAllocate(unsigned bytes);
+picaSkinAllocation *picaSkinAllocate(unsigned bytes, bool pedestrian = false, bool named = false);
 extern "C" void picaSkinDump();
 #endif
 #endif

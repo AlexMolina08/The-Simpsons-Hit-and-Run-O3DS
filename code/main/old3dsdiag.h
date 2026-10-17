@@ -54,6 +54,7 @@ extern "C" unsigned g_old3dsSimpleShadowCalls;
 extern "C" unsigned g_old3dsSimpleShadowDrawn; // calls issuing at least one draw
 
 #include <3ds.h>
+#include <main/old3dssampling.h>
 class Old3dsRenderScope
 {
 public:
@@ -74,7 +75,9 @@ enum Old3dsCategory { O3_OTHER, O3_VEHICLE, O3_CHARACTER, O3_ANIM, O3_ANIMCOLL,
     O3_STATIC, O3_STATICPHYS, O3_DYNA, O3_ANIMDYNA, O3_STATEPROP, O3_PARTICLE, O3_CATEGORY_COUNT };
 enum Old3dsOperation { O3_SUBMIT, O3_MATERIAL, O3_UNIFORMS, O3_VERTEXLOCK,
     O3_VERTEXFLUSH, O3_EXPAND, O3_INDEXSCAN, O3_SKIN, O3_STREAM, O3_VEHICLEPOSE, O3_CHARACTERPREP,
-    O3_OPERATION_COUNT };
+    O3_PHYS_VEHICLEPREP, O3_PHYS_CHARPREP, O3_PHYS_DETECT, O3_PHYS_SOLVE,
+    O3_PHYS_VEHICLEUPDATE, O3_PHYS_CHARUPDATE, O3_PHYS_CAMERA,
+    O3_PHYS_AREAS, O3_PHYS_GROUND, O3_PHYS_PRE, O3_OPERATION_COUNT };
 enum Old3dsCounter { O3_INDEXED, O3_ARRAY, O3_TRANSIENT, O3_EXPANDED_DRAW,
     O3_EXPAND_REBUILD, O3_INDEX_TESTED, O3_MV_UPLOAD, O3_MV_REUSE,
     O3_MATERIAL_PASS, O3_TEX_REQUEST, O3_TEX_CHANGE, O3_STATE_CHANGE,
@@ -99,12 +102,12 @@ inline void Old3dsCount(unsigned counter, unsigned units = 1)
 class Old3dsOperationScope
 {
 public:
-    Old3dsOperationScope(unsigned operation, unsigned units = 1) : stats(0), tick(0)
+    Old3dsOperationScope(unsigned operation, unsigned units = 1, bool outsideEntity = false) : stats(0), tick(0)
     {
-        if(g_old3dsActiveEntity < 0) return;
+        if(g_old3dsActiveEntity < 0 && !outsideEntity) return;
         stats = &g_old3dsOperations[operation];
         stats->units += units;
-        if((++stats->calls & 31u) == 1u) { ++stats->samples; tick = svcGetSystemTick(); }
+        if(Old3dsRotatingSample(stats->calls++,5)) { ++stats->samples; tick = svcGetSystemTick(); }
     }
     void Finish() { if(tick) { stats->ticks += svcGetSystemTick() - tick; tick = 0; } }
     ~Old3dsOperationScope() { Finish(); }
@@ -119,7 +122,7 @@ public:
     {
         g_old3dsActiveEntity = category < O3_CATEGORY_COUNT ? category : O3_OTHER;
         stats = &g_old3dsEntities[g_old3dsActiveEntity];
-        if((++stats->calls & 3u) == 1u) { ++stats->samples; tick = svcGetSystemTick(); }
+        if(Old3dsRotatingSample(stats->calls++,2)) { ++stats->samples; tick = svcGetSystemTick(); }
     }
     ~Old3dsEntityScope()
     {

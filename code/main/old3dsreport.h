@@ -224,7 +224,10 @@ static void Old3dsWriteReport(const Old3dsReport& record)
                 static const char* categories[] = {"other","vehicle","character","animated","animcollision",
                     "static","staticphys","dynamic","animdynamic","stateprop","particle"};
                 static const char* operations[] = {"submit","material","uniforms","vertexlock","vertexflush",
-                    "expand","indexscan","skin","stream","vehiclepose","characterprep"};
+                    "expand","indexscan","skin","stream","vehiclepose","characterprep",
+                    "physics_vehicleprep","physics_charprep","physics_detect","physics_solve",
+                    "physics_vehicleupdate","physics_charupdate","physics_camera",
+                    "physics_areas","physics_ground","physics_pre"};
                 for(unsigned i = 0; i < O3_CATEGORY_COUNT; ++i)
                 {
                     const Old3dsEntityStats& e = g_old3dsEntities[i];

@@ -174,12 +174,27 @@ else()
 endif()
 
 if(SRR2_P3D_PDDI STREQUAL "PICA")
+    set(PICA_SKIN_SRC "${CMAKE_CURRENT_SOURCE_DIR}/pddi/pica/shaders/skin.v.pica")
+    if(SRR2_OLD_3DS AND SRR2_OLD3DS_LIGHT_LOOP)
+        set(PICA_SKIN_SRC "${CMAKE_CURRENT_SOURCE_DIR}/pddi/pica/shaders/skin_lights.v.pica")
+    endif()
+    if(SRR2_OLD3DS_GPU_SKIN_COMPACT)
+        set(PICA_SKIN_SRC "${CMAKE_CURRENT_SOURCE_DIR}/pddi/pica/shaders/skin_compact.v.pica")
+    endif()
+    if(SRR2_OLD3DS_GPU_SKIN_PACKED)
+        set(PICA_SKIN_SRC "${CMAKE_CURRENT_SOURCE_DIR}/pddi/pica/shaders/skin_eye_packed.v.pica")
+    elseif(SRR2_OLD3DS_GPU_SKIN_EYE_PALETTE)
+        set(PICA_SKIN_SRC "${CMAKE_CURRENT_SOURCE_DIR}/pddi/pica/shaders/skin_eye.v.pica")
+    endif()
+    if(SRR2_OLD_3DS AND SRR2_OLD3DS_DIRECTIONAL_LIGHT)
+        set(PICA_SKIN_SRC "${CMAKE_CURRENT_SOURCE_DIR}/pddi/pica/shaders/skin_eye_directional.v.pica")
+    endif()
 	if(SRR2_OLD3DS_GPU_SKIN)
         list(APPEND PDDI_SOURCES "${CMAKE_CURRENT_BINARY_DIR}/skin_shbin.c")
         add_custom_command(OUTPUT "${CMAKE_CURRENT_BINARY_DIR}/skin.shbin" "${CMAKE_CURRENT_BINARY_DIR}/skin_shbin.h"
             COMMAND "${PICASSO_EXE}" -o "${CMAKE_CURRENT_BINARY_DIR}/skin.shbin"
-                -h "${CMAKE_CURRENT_BINARY_DIR}/skin_shbin.h" "${CMAKE_CURRENT_SOURCE_DIR}/pddi/pica/shaders/skin.v.pica"
-            DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/pddi/pica/shaders/skin.v.pica" VERBATIM)
+                -h "${CMAKE_CURRENT_BINARY_DIR}/skin_shbin.h" "${PICA_SKIN_SRC}"
+            DEPENDS "${PICA_SKIN_SRC}" VERBATIM)
         add_custom_command(OUTPUT "${CMAKE_CURRENT_BINARY_DIR}/skin_shbin.c"
             COMMAND "${CMAKE_COMMAND}" "-DINPUT=${CMAKE_CURRENT_BINARY_DIR}/skin.shbin"
                 "-DOUTPUT=${CMAKE_CURRENT_BINARY_DIR}/skin_shbin.c" "-DSYMBOL=pddi_skin_shbin"
@@ -187,7 +202,15 @@ if(SRR2_P3D_PDDI STREQUAL "PICA")
             DEPENDS "${CMAKE_CURRENT_BINARY_DIR}/skin.shbin" "${CMAKE_SOURCE_DIR}/cmake/bin2c.cmake" VERBATIM)
     endif()
 	set(PICA_SHADER_SRC "${CMAKE_CURRENT_SOURCE_DIR}/pddi/pica/shaders/pddi.v.pica")
-
+    if(SRR2_OLD_3DS AND SRR2_OLD3DS_LIGHT_LOOP)
+        set(PICA_SHADER_SRC "${CMAKE_CURRENT_SOURCE_DIR}/pddi/pica/shaders/pddi_lights.v.pica")
+    endif()
+    if(SRR2_OLD_3DS AND SRR2_OLD3DS_UNLIT_PROJECTION)
+        set(PICA_SHADER_SRC "${CMAKE_CURRENT_SOURCE_DIR}/pddi/pica/shaders/pddi_unlit_projection.v.pica")
+    endif()
+    if(SRR2_OLD_3DS AND SRR2_OLD3DS_DIRECTIONAL_LIGHT)
+        set(PICA_SHADER_SRC "${CMAKE_CURRENT_SOURCE_DIR}/pddi/pica/shaders/pddi_directional.v.pica")
+    endif()
 
 	add_custom_command(
 		OUTPUT  "${CMAKE_CURRENT_BINARY_DIR}/pddi.shbin"

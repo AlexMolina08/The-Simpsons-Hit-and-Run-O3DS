@@ -528,3 +528,52 @@ void BlockDecompressImageBC3(uint32_t width, uint32_t height, const uint8_t* blo
 		blockStorage += blockCountX * 16;
 	}
 }
+
+void BlockDecompressBC(unsigned kind, const uint8_t* block, unsigned int* rgba)
+{
+    // Reuse the original endpoint expansion and integer interpolation, but
+    // build each colour/alpha palette once per block instead of once per texel.
+    const uint8_t* colour = block + (kind == 1 ? 0 : 8);
+    unsigned endpoint[2];
+    unsigned rgb[2][3];
+    for(unsigned i = 0; i < 2; ++i)
+    {
+        endpoint[i] = colour[2 * i] | (colour[2 * i + 1] << 8);
+        unsigned temp = (endpoint[i] >> 11) * 255 + 16;
+        rgb[i][0] = (temp / 32 + temp) / 32;
+        temp = ((endpoint[i] & 0x07e0) >> 5) * 255 + 32;
+        rgb[i][1] = (temp / 64 + temp) / 64;
+        temp = (endpoint[i] & 0x001f) * 255 + 16;
+        rgb[i][2] = (temp / 32 + temp) / 32;
+    }
+    unsigned palette[4];
+    for(unsigned i = 0; i < 2; ++i)
+        palette[i] = rgb[i][0] | (rgb[i][1] << 8) | (rgb[i][2] << 16);
+    // BC2 deliberately retains this renderer's existing three-colour behaviour
+    // for reversed endpoints. BC3 always uses four colours, as its decoder does.
+    const bool fourColours = kind == 3 || endpoint[0] > endpoint[1];
+    unsigned p2[3], p3[3];
+    for(unsigned c = 0; c < 3; ++c)
+    {
+        p2[c] = fourColours ? (2 * rgb[0][c] + rgb[1][c]) / 3 : (rgb[0][c] + rgb[1][c]) / 2;
+        p3[c] = fourColours ? (rgb[0][c] + 2 * rgb[1][c]) / 3 : 0;
+    }
+    palette[2] = p2[0] | (p2[1] << 8) | (p2[2] << 16);
+    palette[3] = p3[0] | (p3[1] << 8) | (p3[2] << 16);
+    uint8_t alphaIndices[16], alpha[8];
+    if(kind == 3)
+    {
+        alpha[0] = block[0]; alpha[1] = block[1];
+        Decompress16x3bitIndices(block + 2, alphaIndices);
+        for(unsigned i = 2; i < 8; ++i)
+            alpha[i] = alpha[0] > alpha[1] ? ((8 - i) * alpha[0] + (i - 1) * alpha[1]) / 7 :
+                i == 6 ? 0 : i == 7 ? 255 : ((6 - i) * alpha[0] + (i - 1) * alpha[1]) / 5;
+    }
+    for(unsigned i = 0; i < 16; ++i)
+    {
+        const unsigned code = (colour[4 + i / 4] >> ((i % 4) * 2)) & 3;
+        const unsigned a = kind == 3 ? alpha[alphaIndices[i]] : kind == 2 ?
+            ((block[i / 2] >> ((i % 2) * 4)) & 15) * 17 : (!fourColours && code == 3) ? 0 : 255;
+        rgba[i] = palette[code] | (a << 24);
+    }
+}

@@ -1,3 +1,6 @@
+#ifdef SRR2_OLD3DS_QUAD_STREAM
+#include <pddi/pica/quadstream.hpp>
+#endif
 /*===========================================================================
     particleemitter.cpp
     28-Feb-2001 Created by Kevin Voon
@@ -789,7 +792,11 @@ void tSpriteEmitter::Display()
             }
         }
 
-        pddiPrimStream* stream = p3d::pddi->BeginPrims(shader->GetShader(), PDDI_PRIM_TRIANGLES, PDDI_V_CT, 6 * numLiveParticles);
+        pddiPrimStream* stream=nullptr;
+#ifdef SRR2_OLD3DS_QUAD_STREAM
+        stream=picaBeginQuadStream(shader->GetShader(),numLiveParticles);
+#endif
+        if(!stream) stream = p3d::pddi->BeginPrims(shader->GetShader(), PDDI_PRIM_TRIANGLES, PDDI_V_CT, 6 * numLiveParticles);
 
         for (int i = 0; i < numLiveParticles; i++)
         {                                              
@@ -807,6 +814,19 @@ void tSpriteEmitter::Display()
             currPos.y = transform.m[0][1]*temp.x + transform.m[1][1]*temp.y + transform.m[2][1]*temp.z + transform.m[3][1];
             currPos.z = transform.m[0][2]*temp.x + transform.m[1][2]*temp.y + transform.m[2][2]*temp.z + transform.m[3][2];
 
+#ifdef SRR2_OLD3DS_QUAD_STREAM
+            const pddiVector positions[4]={
+                pddiVector(currPos.x+x,currPos.y+y,currPos.z),
+                pddiVector(currPos.x-x,currPos.y-y,currPos.z),
+                pddiVector(currPos.x-y,currPos.y+x,currPos.z),
+                pddiVector(currPos.x+y,currPos.y-x,currPos.z)};
+            const pddiVector2 coordinates[4]={
+                pddiVector2(texFrameCoords[current->texFrame+1],1.0f),
+                pddiVector2(texFrameCoords[current->texFrame],0.0f),
+                pddiVector2(texFrameCoords[current->texFrame],1.0f),
+                pddiVector2(texFrameCoords[current->texFrame+1],0.0f)};
+            if(picaEmitQuad(stream,positions,coordinates,current->colour,picaQuad::Particle)) continue;
+#endif
             stream->Colour(current->colour);
             stream->UV(texFrameCoords[current->texFrame+1], 1.0f);
             stream->Coord(currPos.x+x, currPos.y+y, currPos.z);

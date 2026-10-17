@@ -85,6 +85,18 @@ public:
 #endif
 
 private:
+#ifdef SRR2_OLD3DS_DRAW_PREP
+    void PrepareNative();
+    bool nativeDirty;
+    GPU_TEXTURE_FILTER_PARAM nativeFilter;
+    GPU_TEXTURE_WRAP_PARAM nativeWrap;
+    GPU_TESTFUNC nativeCompare;
+    GPU_BLENDEQUATION nativeEquation;
+    GPU_BLENDFACTOR nativeSource, nativeDestination;
+    int nativeAlphaRef;
+    bool coloursValid;
+    float nativeColours[3][4];
+#endif
     picaContext* context;
     int pass;
     bool dirty;

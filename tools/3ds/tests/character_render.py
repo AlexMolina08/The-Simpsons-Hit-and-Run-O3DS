@@ -18,10 +18,13 @@ polyskin=(root/'libs/pure3d/p3d/anim/polyskin.cpp').read_text()
 bone_loop=extract(polyskin,'for(int i = 0; i < p->GetNumJoint(); i++)')
 prelude=r'''
 #include <cassert>
+#include <cfenv>
+#include <p3d/skinzero.hpp>
 #include <cmath>
 #include <cstdio>
 #include <cstring>
 #include <random>
+#include <limits>
 #include <vector>
 #include <algorithm>
 #define PDDIASSERT(x) assert(x)
@@ -36,6 +39,12 @@ struct Old3dsOperationScope {
 void Old3dsCount(int,unsigned=1){}
 const unsigned PICA_VERTEX_STRIDE=36, PICA_VERTEX_OFF_POS=0, PICA_VERTEX_OFF_NRM=12,
  PICA_VERTEX_OFF_UV=24, PICA_VERTEX_OFF_COL=32;
+int g_picaInFrame=1;
+struct picaContext {
+ std::vector<unsigned char> ring;unsigned used=0;
+ picaContext():ring(512*1024){}
+ unsigned char* AllocSkinVertices(unsigned count){if(count*36>ring.size()-used)return nullptr;auto* p=ring.data()+used;used+=count*36;return p;}
+};
 const unsigned PDDI_V_NORMAL=16, PDDI_V_COLOUR=32;
 struct Vector { float x,y,z; void Add(const Vector& b){x+=b.x;y+=b.y;z+=b.z;} };
 struct Matrix { float m[4][4]; Vector& Row(int i){return *reinterpret_cast<Vector*>(m[i]);}
@@ -51,10 +60,13 @@ struct pddiPrimBufferStream { virtual ~pddiPrimBufferStream(){};
  virtual void Position(float,float,float)=0; virtual void Normal(float,float,float)=0; };
 class picaPrimBufferStream;
 struct picaPrimBuffer {
+ picaContext* context=nullptr;
+ unsigned char* skinVertices=nullptr;
+ bool IndicesInRange()const{return indices&&indexCount>0;}
  float *coord=nullptr,*normal=nullptr,*uv=nullptr;
  unsigned char *colour=nullptr,*buffer=nullptr;
  unsigned total=0, allocated=0, vertexType=0, mem=0, indexCount=0;
- bool transient=false, defaultsValid=false, expandDirty=false;
+ bool transient=false, defaultsValid=false, expandDirty=false, uploadPending=false;
  int elemState=-1;
  picaPrimBufferStream* stream=nullptr;
  pddiPrimBufferStream* Lock(); void Unlock(pddiPrimBufferStream*);
@@ -90,14 +102,21 @@ tests=r'''
 int main(int argc,char** argv) {
  assert(argc==2); FILE* output=fopen(argv[1],"wb"); assert(output);
  std::mt19937 random(90421); std::uniform_real_distribution<float> value(-100,100);
+ const int rounding[]={FE_TONEAREST,FE_DOWNWARD,FE_UPWARD,FE_TOWARDZERO};
+ for(int mode:rounding) {
+ std::fesetround(mode);
  for(int trial=0;trial<2000;++trial) {
   unsigned count=1+random()%100;
   unsigned format=(trial%2?PDDI_V_NORMAL:0)|(trial%3?1:0)|(trial%5?PDDI_V_COLOUR:0);
   std::vector<unsigned char> bytes(count*36,0xa5);
-  picaPrimBuffer buffer; buffer.buffer=bytes.data(); buffer.allocated=count; buffer.mem=bytes.size(); buffer.vertexType=format;
+  picaContext context;unsigned short index=0;
+  picaPrimBuffer buffer;buffer.context=&context;buffer.indices=&index;buffer.indexCount=1; buffer.buffer=bytes.data(); buffer.allocated=count; buffer.mem=bytes.size(); buffer.vertexType=format;
   picaPrimBufferStream stream(&buffer); buffer.stream=&stream;
   Matrix matrices[8]; Matrix* palette[8];
   for(int k=0;k<8;++k) {palette[k]=&matrices[k]; for(auto& row:matrices[k].m) for(float& f:row) f=value(random);}
+  if(trial%43==0) matrices[3].m[2][1]=INFINITY;
+  if(trial%47==0) matrices[4].m[1][1]=NAN;
+  if(trial%53==0) matrices[5].m[0][2]=std::numeric_limits<float>::max();
   std::vector<tPrimGroupSkinnedPC::SkinVertex> vertices(count);
   for(auto& v:vertices) {
    v.position={value(random),value(random),value(random)}; v.normal={value(random),value(random),value(random)};
@@ -107,6 +126,9 @@ int main(int argc,char** argv) {
    if(trial%4==2) {v.weights[0]=.25f;v.weights[1]=.25f;v.weights[2]=.5f;}
    if(trial%97==0) v.weights[1]=NAN;
    if(trial%101==0) v.position.x=INFINITY;
+   if(trial%31==0) v.position={-0.f,0.f,-0.f};
+   if(trial%37==0) v.position.x=std::numeric_limits<float>::denorm_min();
+   if(trial%41==0) v.position.y=std::numeric_limits<float>::max();
    for(unsigned& index:v.indices) index=random()%8;
   }
   Shader shader; tPrimGroupSkinnedPC group{(int)count,vertices.data(),format,&buffer,palette,&shader};
@@ -117,8 +139,21 @@ int main(int argc,char** argv) {
    if(format&PDDI_V_COLOUR) memset(bytes.data()+i*36+32,123,4);
   }
   for(int frame=0;frame<4;++frame) {
+#ifdef SRR2_OLD3DS_SKIN_RING
+   // Exercise ring exhaustion while preserving the complete effect allocation.
+   if(frame==2)context.used=context.ring.size();
+#endif
    expectSkinTiming=true;group.Display();expectSkinTiming=false;assert(!skinTimingActive); assert(buffer.total==count); assert(buffer.coord==(float*)buffer.buffer);
+#ifdef SRR2_OLD3DS_SKIN_RING
+   const unsigned char* result=buffer.skinVertices?buffer.skinVertices:bytes.data();
+   fwrite(result,1,bytes.size(),output);
+   if(buffer.skinVertices){
+    assert(buffer.skinVertices>=context.ring.data());
+    if(frame==0)assert(context.used==count*36);
+   }
+#else
    fwrite(bytes.data(),1,bytes.size(),output);
+#endif
   }
   // Format changes must restore newly absent attributes.
   buffer.SetFormat(0,0); buffer.Lock();
@@ -128,6 +163,8 @@ int main(int argc,char** argv) {
    for(int k=32;k<36;++k) assert(bytes[i*36+k]==255);
   }
  }
+ }
+ std::fesetround(FE_TONEAREST);
  // Both transient reuse and format changes must restore absent defaults.
  {
   alignas(float) unsigned char bytes[72]; memset(bytes,0xab,sizeof(bytes));
@@ -166,10 +203,13 @@ with tempfile.TemporaryDirectory(prefix='srr-character-test-') as directory:
  temp=Path(directory); cpp=temp/'test.cpp'
  cpp.write_text(prelude+extract(matrix,'void Matrix::Mult(const Matrix& a, const Matrix& b)')+stream+methods+'void BuildBones(Matrix* boneMatrix, Skeleton* skeleton, Pose* p) {\n'+bone_loop+'\n}\n'+extract(skin,'void tPrimGroupSkinnedPC::Display(void)')+joint+tests)
  outputs=[]
- for mode in ['reference','optimized']:
+ for mode in ['reference','optimized','ring','rigid','zero']:
   binary=temp/mode; data=temp/(mode+'.bin'); outputs.append(data)
   flags=[] if mode=='reference' else ['-DSRR2_OLD3DS_SKIN_DIRECT','-DSRR2_OLD3DS_DEFAULT_CACHE','-DSRR2_OLD3DS_JOINT_TRANSLATE','-DSRR2_OLD3DS_BONE_ONCE']
-  subprocess.run(['clang++','-std=c++11','-O2','-ffp-contract=off','-fsanitize=address,undefined',*flags,str(cpp),'-o',str(binary)],check=True)
+  if mode in ['ring','rigid','zero']:flags+=['-DSRR2_OLD3DS_SKIN_RING','-DSRR2_OLD3DS_INDEX_CACHE','-DSRR2_OLD3DS_LOAD_UPLOAD']
+  if mode in ['rigid','zero']:flags+=['-DSRR2_OLD3DS_SKIN_WEIGHTS']
+  if mode=='zero':flags+=['-DSRR2_OLD3DS_SKIN_ZERO']
+  subprocess.run(['clang++','-std=c++11','-O2','-ffp-contract=off','-fsanitize=address,undefined',*flags,'-I'+str(root/'libs/pure3d'),str(cpp),'-o',str(binary)],check=True)
   subprocess.run([str(binary),str(data)],check=True)
- assert outputs[0].read_bytes()==outputs[1].read_bytes(), 'Vertex buffer mismatch'
+ assert all(p.read_bytes()==outputs[0].read_bytes() for p in outputs[1:]), 'Vertex buffer mismatch'
  print('Reference/optimized vertex buffers match byte-for-byte, including NaN/Inf arithmetic, UV/color retention, and format changes.')

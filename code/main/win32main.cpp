@@ -1,3 +1,39 @@
+#ifdef SRR2_OLD3DS_JOINT_AXIS_ONCE
+extern "C" void old3dsDumpJointAxisReuse();
+#endif
+#ifdef SRR2_OLD3DS_BONE_USAGE
+extern "C" void old3dsDumpBoneUsage();
+#endif
+#ifdef SRR2_OLD3DS_JOINT_VECTOR_REUSE
+extern "C" void old3dsDumpJointVectors();
+#endif
+#ifdef SRR2_OLD3DS_IO_WAIT_YIELD
+extern "C" void old3dsDumpIoWait();
+#endif
+#if defined(SRR2_OLD_3DS) && defined(SRR2_OLD3DS_COLL_PREP)
+extern "C" void old3dsDumpPairTail();
+#endif
+#ifdef SRR2_OLD3DS_SPHERE_WALK_CACHE
+extern "C" void old3dsDumpSphereWalkCache();
+#endif
+#ifdef SRR2_OLD3DS_JOINT_ROTATION_REUSE
+extern "C" void old3dsValidateJointRotationReuse();
+#endif
+#ifdef SRR2_OLD3DS_VRAM_TEXTURES
+extern "C" void picaDumpVramTextures();
+#endif
+#ifdef SRR2_OLD3DS_VEHICLE_PROFILE
+extern "C" void old3dsDumpVehicleProfile();
+#endif
+#ifdef SRR2_OLD3DS_CLIP_BOUNDS
+extern "C" void picaDumpClipBoundsStats();
+#endif
+#ifdef SRR2_OLD3DS_PGO_GENERATE
+extern "C" void old3dsDumpProfile();
+#endif
+#ifdef SRR2_OLD3DS_UNLIT_PROJECTION
+extern "C" void picaDumpUnlitProjectionStats();
+#endif
 //=============================================================================
 // Copyright (C) 2002 Radical Entertainment Ltd.  All rights reserved.
 //
@@ -225,7 +261,43 @@ extern "C" int main( int argc, char *argv[] )
     //
     // Run it!  Control will not return from here until the game is stopped.
     //
+#ifdef SRR2_OLD3DS_JOINT_ROTATION_REUSE
+    old3dsValidateJointRotationReuse();
+#endif
     pGame->Run();
+#ifdef SRR2_OLD3DS_IO_WAIT_YIELD
+    old3dsDumpIoWait();
+#endif
+#if defined(SRR2_OLD_3DS) && defined(SRR2_OLD3DS_COLL_PREP)
+    old3dsDumpPairTail();
+#endif
+#ifdef SRR2_OLD3DS_JOINT_VECTOR_REUSE
+    old3dsDumpJointVectors();
+#endif
+#ifdef SRR2_OLD3DS_JOINT_AXIS_ONCE
+    old3dsDumpJointAxisReuse();
+#endif
+#ifdef SRR2_OLD3DS_BONE_USAGE
+    old3dsDumpBoneUsage();
+#endif
+#ifdef SRR2_OLD3DS_SPHERE_WALK_CACHE
+    old3dsDumpSphereWalkCache();
+#endif
+#ifdef SRR2_OLD3DS_VRAM_TEXTURES
+    picaDumpVramTextures();
+#endif
+#ifdef SRR2_OLD3DS_VEHICLE_PROFILE
+    old3dsDumpVehicleProfile();
+#endif
+#ifdef SRR2_OLD3DS_CLIP_BOUNDS
+    picaDumpClipBoundsStats();
+#endif
+#ifdef SRR2_OLD3DS_PGO_GENERATE
+    old3dsDumpProfile();
+#endif
+#ifdef SRR2_OLD3DS_UNLIT_PROJECTION
+    picaDumpUnlitProjectionStats();
+#endif
 #ifdef SRR2_OLD3DS_GPU_SKIN_SUPPORT
     extern void picaSkinDump();
     picaSkinDump();

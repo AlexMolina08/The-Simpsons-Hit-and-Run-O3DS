@@ -41,13 +41,13 @@ static const float MIN_MOVIE_TIME = 0.125f;
 // Global Data, Local Data, Local Classes
 //===========================================================================
 
-struct ControlMap
+struct FMVControlMap
 {
     const char* inputName;
     FMVInput::FMVInputEnum inputID;
 };
 
-const ControlMap FMV_CONTROL_MAP[] =
+const FMVControlMap FMV_CONTROL_MAP[] =
 {
 #ifdef RAD_GAMECUBE
     { "Menu",           FMVInput::Skip },

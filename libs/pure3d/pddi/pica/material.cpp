@@ -132,7 +132,13 @@ picaMat::picaMat(picaContext* c)
     texEnv[0].enabled = true;
     pass = 0;
     dirty = true;
+#ifdef SRR2_OLD3DS_DRAW_PREP
+    nativeDirty = true;
+#endif
 
+#ifdef SRR2_OLD3DS_DRAW_PREP
+    coloursValid = false;
+#endif
     lastError = PDDI_OK;
 }
 
@@ -173,26 +179,71 @@ void picaMat::SetTexture(pddiTexture* t)
         texEnv[pass].texture->AddRef();
 
     dirty = true;
+#ifdef SRR2_OLD3DS_DRAW_PREP
+    nativeDirty = true;
+#endif
 }
 
-void picaMat::SetUVMode(int mode)     { texEnv[pass].uvMode = (pddiUVMode)mode; dirty = true; }
-void picaMat::SetFilterMode(int mode) { texEnv[pass].filterMode = (pddiFilterMode)mode; dirty = true; }
+void picaMat::SetUVMode(int mode)     {
+#ifdef SRR2_OLD3DS_DRAW_PREP
+    if(texEnv[pass].uvMode == (pddiUVMode)mode) return;
+#endif
+    texEnv[pass].uvMode = (pddiUVMode)mode; dirty = true;
+#ifdef SRR2_OLD3DS_DRAW_PREP
+    nativeDirty = true;
+#endif
+}
+void picaMat::SetFilterMode(int mode) {
+#ifdef SRR2_OLD3DS_DRAW_PREP
+    if(texEnv[pass].filterMode == (pddiFilterMode)mode) return;
+#endif
+    texEnv[pass].filterMode = (pddiFilterMode)mode; dirty = true;
+#ifdef SRR2_OLD3DS_DRAW_PREP
+    nativeDirty = true;
+#endif
+}
 void picaMat::SetShadeMode(int shade) { texEnv[pass].shadeMode = (pddiShadeMode)shade; }
-void picaMat::SetTwoSided(int b)      { texEnv[pass].twoSided = b != 0; dirty = true; }
+void picaMat::SetTwoSided(int b)      {
+#ifdef SRR2_OLD3DS_DRAW_PREP
+    if(texEnv[pass].twoSided == (b != 0)) return;
+#endif
+    texEnv[pass].twoSided = b != 0; dirty = true;
+#ifdef SRR2_OLD3DS_DRAW_PREP
+    nativeDirty = true;
+#endif
+}
 void picaMat::EnableLighting(int b)   { texEnv[pass].lit = b != 0; }
 
-void picaMat::SetAmbient(pddiColour a)       { texEnv[pass].ambient = a; }
-void picaMat::SetDiffuse(pddiColour colour)  { texEnv[pass].diffuse = colour; }
+void picaMat::SetAmbient(pddiColour a)
+{
+#ifdef SRR2_OLD3DS_DRAW_PREP
+    if(texEnv[pass].ambient.c != a.c) coloursValid = false;
+#endif
+    texEnv[pass].ambient = a;
+}
+void picaMat::SetDiffuse(pddiColour colour)
+{
+#ifdef SRR2_OLD3DS_DRAW_PREP
+    if(texEnv[pass].diffuse.c != colour.c) coloursValid = false;
+#endif
+    texEnv[pass].diffuse = colour;
+}
 void picaMat::SetSpecular(pddiColour c)      { texEnv[pass].specular = c; }
 
 void picaMat::SetEmissive(pddiColour c)
 {
+#ifdef SRR2_OLD3DS_DRAW_PREP
+    if(texEnv[pass].emissive.c != c.c) coloursValid = false;
+#endif
     texEnv[pass].emissive = c;
     SetEmissiveAlpha(c.Alpha());
 }
 
 void picaMat::SetEmissiveAlpha(int alpha)
 {
+#ifdef SRR2_OLD3DS_DRAW_PREP
+    if(texEnv[pass].diffuse.Alpha() != alpha) coloursValid = false;
+#endif
     texEnv[pass].diffuse.SetAlpha(alpha);
     if(alpha < 255)
     {
@@ -209,16 +260,78 @@ void picaMat::SetEmissiveAlpha(int alpha)
 }
 
 void picaMat::SetShininess(float power)  { texEnv[pass].shininess = power; }
-void picaMat::SetBlendMode(int mode)     { texEnv[pass].alphaBlendMode = (pddiBlendMode)mode; dirty = true; }
-void picaMat::EnableAlphaTest(int b)     { texEnv[pass].alphaTest = b != 0; dirty = true; }
-void picaMat::SetAlphaCompare(int c)     { texEnv[pass].alphaCompareMode = pddiCompareMode(c); dirty = true; }
-void picaMat::SetAlphaRef(float ref)     { texEnv[pass].alphaRef = ref; dirty = true; }
-void picaMat::SetColourWrite(int mask)   { texEnv[pass].writeMask = mask; dirty = true; }
+void picaMat::SetBlendMode(int mode)     {
+#ifdef SRR2_OLD3DS_DRAW_PREP
+    if(texEnv[pass].alphaBlendMode == (pddiBlendMode)mode) return;
+#endif
+    texEnv[pass].alphaBlendMode = (pddiBlendMode)mode; dirty = true;
+#ifdef SRR2_OLD3DS_DRAW_PREP
+    nativeDirty = true;
+#endif
+}
+void picaMat::EnableAlphaTest(int b)     {
+#ifdef SRR2_OLD3DS_DRAW_PREP
+    if(texEnv[pass].alphaTest == (b != 0)) return;
+#endif
+    texEnv[pass].alphaTest = b != 0; dirty = true;
+#ifdef SRR2_OLD3DS_DRAW_PREP
+    nativeDirty = true;
+#endif
+}
+void picaMat::SetAlphaCompare(int c)     {
+#ifdef SRR2_OLD3DS_DRAW_PREP
+    if(texEnv[pass].alphaCompareMode == pddiCompareMode(c)) return;
+#endif
+    texEnv[pass].alphaCompareMode = pddiCompareMode(c); dirty = true;
+#ifdef SRR2_OLD3DS_DRAW_PREP
+    nativeDirty = true;
+#endif
+}
+void picaMat::SetAlphaRef(float ref)     {
+#ifdef SRR2_OLD3DS_DRAW_PREP
+    if(texEnv[pass].alphaRef == ref) return;
+#endif
+    texEnv[pass].alphaRef = ref; dirty = true;
+#ifdef SRR2_OLD3DS_DRAW_PREP
+    nativeDirty = true;
+#endif
+}
+void picaMat::SetColourWrite(int mask)   {
+#ifdef SRR2_OLD3DS_DRAW_PREP
+    if(texEnv[pass].writeMask == mask) return;
+#endif
+    texEnv[pass].writeMask = mask; dirty = true;
+#ifdef SRR2_OLD3DS_DRAW_PREP
+    nativeDirty = true;
+#endif
+}
 
 int picaMat::CountDevPasses(void)
 {
     return 1;
 }
+
+#ifdef SRR2_OLD3DS_DRAW_PREP
+void picaMat::PrepareNative()
+{
+    if(!nativeDirty) return;
+    const picaTextureEnv& e = texEnv[0];
+    nativeFilter = filterTable[e.filterMode];
+    nativeWrap = uvTable[e.uvMode];
+    nativeCompare = e.alphaTest ? alphaCompareTable[e.alphaCompareMode] : GPU_ALWAYS;
+    nativeAlphaRef = 0;
+    if(e.alphaTest)
+    {
+        nativeAlphaRef = (int)(e.alphaRef * 255.0f);
+        if(nativeAlphaRef < 0) nativeAlphaRef = 0;
+        if(nativeAlphaRef > 255) nativeAlphaRef = 255;
+    }
+    nativeEquation = blendEquation[e.alphaBlendMode];
+    nativeSource = blendFactor[e.alphaBlendMode][0];
+    nativeDestination = blendFactor[e.alphaBlendMode][1];
+    nativeDirty = false;
+}
+#endif
 
 void picaMat::SetDevPass(unsigned)
 {
@@ -229,12 +342,18 @@ void picaMat::SetDevPass(unsigned)
 #endif
 #endif
     const int i = 0;
+#ifdef SRR2_OLD3DS_DRAW_PREP
+    PrepareNative();
+#endif
 
     dirty = false;
 
     if(!g_picaInFrame)
     {
         dirty = true;
+#ifdef SRR2_OLD3DS_DRAW_PREP
+    nativeDirty = true;
+#endif
         return;
     }
 
@@ -242,9 +361,14 @@ void picaMat::SetDevPass(unsigned)
 
     if(hwTex)
     {
+#ifdef SRR2_OLD3DS_DRAW_PREP
+        C3D_TexSetFilter(hwTex, nativeFilter, nativeFilter);
+        C3D_TexSetWrap(hwTex, nativeWrap, nativeWrap);
+#else
         C3D_TexSetFilter(hwTex, filterTable[texEnv[i].filterMode],
                                 filterTable[texEnv[i].filterMode]);
         C3D_TexSetWrap(hwTex, uvTable[texEnv[i].uvMode], uvTable[texEnv[i].uvMode]);
+#endif
         picaTexBind0(hwTex);
     }
 
@@ -278,6 +402,11 @@ void picaMat::SetDevPass(unsigned)
         g_picaState.passStagesSet = true;
     }
 
+#ifdef SRR2_OLD3DS_DRAW_PREP
+    picaAlphaTest(texEnv[i].alphaTest, nativeCompare, nativeAlphaRef);
+    picaAlphaBlend(nativeEquation, nativeEquation, nativeSource,
+                   nativeDestination, nativeSource, nativeDestination);
+#else
     if(texEnv[i].alphaTest)
     {
         int ref = (int)(texEnv[i].alphaRef * 255.0f);
@@ -297,6 +426,7 @@ void picaMat::SetDevPass(unsigned)
                    blendFactor[texEnv[i].alphaBlendMode][0],
                    blendFactor[texEnv[i].alphaBlendMode][1]);
 
+#endif
     context->EnableCulling(!texEnv[i].twoSided);
     context->SetMaterialWriteMask(texEnv[i].writeMask);
 }
@@ -314,10 +444,31 @@ void picaMat::PreRender(void)
         SetDevPass(0);
     }
 
+#ifdef SRR2_OLD3DS_DRAW_PREP
+    // Every colour writer invalidates this data on an actual change, including
+    // shared-material fades and swatches between draws in the same frame.
+    if(texEnv[i].lit && !coloursValid)
+    {
+        const pddiColour colours[3] = {texEnv[i].ambient, texEnv[i].diffuse, texEnv[i].emissive};
+        for(unsigned c = 0; c < 3; ++c)
+        {
+            nativeColours[c][0] = (float)colours[c].Red() / 255.0f;
+            nativeColours[c][1] = (float)colours[c].Green() / 255.0f;
+            nativeColours[c][2] = (float)colours[c].Blue() / 255.0f;
+        }
+        nativeColours[0][3] = 1.0f;
+        nativeColours[1][3] = (float)texEnv[i].diffuse.Alpha() / 255.0f;
+        nativeColours[2][3] = 0.0f;
+        coloursValid = true;
+    }
+    context->SetVertexUniforms(texEnv[i].lit, texEnv[i].ambient,
+                               texEnv[i].diffuse, texEnv[i].emissive, nativeColours);
+#else
     context->SetVertexUniforms(texEnv[i].lit,
                                texEnv[i].ambient,
                                texEnv[i].diffuse,
                                texEnv[i].emissive);
+#endif
 }
 
 #ifdef SRR2_OLD3DS_MATERIAL_QUEUE

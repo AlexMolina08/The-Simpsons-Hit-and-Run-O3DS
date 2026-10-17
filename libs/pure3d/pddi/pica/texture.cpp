@@ -2,6 +2,9 @@
 #include <pddi/pica/texture.hpp>
 #include <pddi/pica/context.hpp>
 #include <pddi/pica/swizzle.hpp>
+#ifdef SRR2_OLD3DS_TEXTURE_TILES
+#include <pddi/pica/texturetile.hpp>
+#endif
 
 #include <pddi/base/debug.hpp>
 #include <pddi/gl/decompress.h>
@@ -9,6 +12,76 @@
 #include <math.h>
 #include <string.h>
 #include <stdlib.h>
+#include <stdio.h>
+
+#ifdef SRR2_OLD3DS_VRAM_TEXTURES
+// Ownership nodes are allocated before GPU submission. Retirement never allocates
+// or overwrites GPU-visible bytes; context's completed-frame fence reclaims them.
+struct picaVramAllocation { picaVramAllocation* next; void* data; unsigned bytes; };
+static picaVramAllocation* retiredVram;
+static unsigned vramTextureBytes, vramTexturePeak, vramTextureCopies;
+static unsigned vramTextureEligible, vramTextureInFrame, vramTextureFailures;
+static void RetireVram(picaVramAllocation* allocation)
+{
+    allocation->next=retiredVram;retiredVram=allocation;
+}
+extern "C" void picaReclaimVramTextures()
+{
+    while(retiredVram)
+    {
+        picaVramAllocation* node=retiredVram;retiredVram=node->next;
+        vramTextureBytes-=node->bytes;vramFree(node->data);free(node);
+    }
+}
+extern "C" void picaDumpVramTextures()
+{
+    printf("OLD3DS_VRAM_TEXTURES used=%u peak=%u copies=%u eligible=%u in_frame=%u failures=%u free=%lu\n",
+        vramTextureBytes,vramTexturePeak,vramTextureCopies,vramTextureEligible,
+        vramTextureInFrame,vramTextureFailures,(unsigned long)vramSpaceFree());
+}
+class picaVramUpload
+{
+    C3D_Tex& tex;picaVramAllocation*& owner;void*& pending;bool& valid;
+    void* previous;bool previousValid,complete;
+public:
+    picaVramUpload(C3D_Tex& t,picaVramAllocation*& o,void*& p,bool& v):
+        tex(t),owner(o),pending(p),valid(v),previous(t.data),previousValid(v),complete(false)
+        {if(pending)tex.data=pending;}
+    void Complete(){complete=true;}
+    ~picaVramUpload()
+    {
+        if(!pending)return;
+        if(complete){RetireVram(owner);owner=NULL;}
+        else {linearFree(pending);tex.data=previous;valid=previousValid;}
+        pending=NULL;
+    }
+};
+void picaTexture::TryPromoteVram()
+{
+    if(vramUploaded)return;
+    vramUploaded=true;
+    if(!vramEligible)return;
+    ++vramTextureEligible;
+    // This API waits for copy completion outside a Citro3D frame. In-frame
+    // copies are asynchronous, so retain the original allocation in that case.
+    if(g_picaInFrame){++vramTextureInFrame;return;}
+    const unsigned bytes=C3D_TexCalcTotalSize(tex.size,tex.maxLevel);
+    const unsigned budget=2*1024*1024,reserve=2*1024*1024;
+    if(bytes<8192 || bytes>131072 || bytes>budget-vramTextureBytes ||
+       vramSpaceFree()<bytes+reserve)return;
+    picaVramAllocation* node=(picaVramAllocation*)malloc(sizeof(picaVramAllocation));
+    if(!node){++vramTextureFailures;return;}
+    node->data=vramAlloc(bytes);
+    if(!node->data){free(node);++vramTextureFailures;return;}
+    node->bytes=bytes;node->next=NULL;
+    // UploadLevel already flushed every mip. This is a raw byte copy, with no
+    // display-transfer format conversion, resampling or color quantization.
+    C3D_SyncTextureCopy((u32*)tex.data,0,(u32*)node->data,0,bytes,8);
+    linearFree(tex.data);tex.data=node->data;vramAllocation=node;
+    vramTextureBytes+=bytes;++vramTextureCopies;
+    if(vramTextureBytes>vramTexturePeak)vramTexturePeak=vramTextureBytes;
+}
+#endif
 
 static const int PICA_STAGING_BPP = 4;
 
@@ -92,6 +165,9 @@ picaTexture::picaTexture(picaContext* c)
     nMipMap      = 0;
     alphaDepth   = 0;
     priority     = 15;
+#ifdef SRR2_OLD3DS_VRAM_TEXTURES
+    vramAllocation=NULL;reuploadLinear=NULL;vramEligible=vramUploaded=false;
+#endif
     created      = false;
     valid        = false;
     hwFormat     = GPU_RGBA8;
@@ -107,6 +183,10 @@ picaTexture::~picaTexture()
 
     if(created)
     {
+#ifdef SRR2_OLD3DS_VRAM_TEXTURES
+        if(vramAllocation){RetireVram(vramAllocation);vramAllocation=NULL;}
+        else
+#endif
         C3D_TexDelete(&tex);
         created = false;
 
@@ -116,6 +196,9 @@ picaTexture::~picaTexture()
 
 void picaTexture::FreeStaging(void)
 {
+#ifdef SRR2_OLD3DS_VRAM_TEXTURES
+    if(reuploadLinear){linearFree(reuploadLinear);reuploadLinear=NULL;}
+#endif
     if(staging)
     {
         free(staging);
@@ -128,6 +211,13 @@ void picaTexture::FreeStaging(void)
 bool picaTexture::Create(int x, int y, int bpp, int alpha, int nMip,
                          pddiTextureType textureType, pddiTextureUsageHint usageHint)
 {
+#ifdef SRR2_OLD3DS_VRAM_TEXTURES
+    // Movie construction explicitly sets KeepFullSize, and font pages set
+    // FontTexture. Keep both CPU-writable; later ordinary reuploads can demote.
+    vramEligible=usageHint==PDDI_USAGE_STATIC && !g_picaKeepFullSize &&
+                 !g_picaFontTexture && textureType!=PDDI_TEXTYPE_YUV;
+    vramUploaded=false;
+#endif
     xSize      = x;
     ySize      = y;
     nMipMap    = nMip;
@@ -271,6 +361,15 @@ pddiLockInfo* picaTexture::Lock(int mipMap, pddiRect* rect)
         stagingBytes = needed;
     }
 
+#ifdef SRR2_OLD3DS_VRAM_TEXTURES
+    // A later full upload demotes to CPU-writable linear storage. Allocate before
+    // granting the lock; failure leaves the previous texture and ownership intact.
+    if(mipMap==0 && vramAllocation && !reuploadLinear)
+    {
+        reuploadLinear=linearAlloc(C3D_TexCalcTotalSize(tex.size,tex.maxLevel));
+        if(!reuploadLinear)return NULL;
+    }
+#endif
     stagingLevel = mipMap;
 
     lock.width  = w;
@@ -297,12 +396,51 @@ extern "C" int g_picaFontTexture = 0;
 
 void picaTexture::UploadLevel(int mipLevel)
 {
+#ifdef SRR2_OLD3DS_VRAM_TEXTURES
+    picaVramUpload vramUpload(tex,vramAllocation,reuploadLinear,valid);
+#endif
     const int srcW = (xSize >> mipLevel) > 0 ? (xSize >> mipLevel) : 1;
     const int srcH = (ySize >> mipLevel) > 0 ? (ySize >> mipLevel) : 1;
 
     const int dstW = tex.width;
     const int dstH = tex.height;
 
+#ifdef SRR2_OLD3DS_TEXTURE_TILES
+    if(IsCompressed(type) && tex.maxLevel == 0 && srcW == dstW && srcH == dstH &&
+       !(srcW & 7) && !(srcH & 7))
+    {
+        // Common streamed-world path: no full RGBA image, allocation or row flip.
+        // Scaled/mipmapped textures retain the exact original filtering path.
+        const unsigned kind = type == PDDI_TEXTYPE_DXT1 ? 1 :
+            (type == PDDI_TEXTYPE_DXT2 || type == PDDI_TEXTYPE_DXT3) ? 2 : 3;
+        const unsigned blockBytes = kind == 1 ? 8 : 16;
+        const unsigned char* block = staging;
+        unsigned int rgba[16];
+        for(int y = 0; y < srcH; y += 4)
+        {
+            if(g_picaYieldHook) g_picaYieldHook();
+            for(int x = 0; x < srcW; x += 4, block += blockBytes)
+            {
+                BlockDecompressBC(kind, block, rgba);
+                const unsigned dy = srcH - 4 - y;
+                switch(hwFormat)
+                {
+                case GPU_RGBA8: picaTile::Block<picaTile::RGBA8>(rgba,x,dy,dstW,tex.data); break;
+                case GPU_RGBA5551: picaTile::Block<picaTile::RGBA5551>(rgba,x,dy,dstW,tex.data); break;
+                case GPU_LA8: picaTile::Block<picaTile::LA8>(rgba,x,dy,dstW,tex.data); break;
+                case GPU_RGBA4: picaTile::Block<picaTile::RGBA4>(rgba,x,dy,dstW,tex.data); break;
+                default: picaTile::Block<picaTile::RGB565>(rgba,x,dy,dstW,tex.data); break;
+                }
+            }
+        }
+        C3D_TexFlush(&tex);
+#ifdef SRR2_OLD3DS_VRAM_TEXTURES
+        vramUpload.Complete();TryPromoteVram();
+#endif
+        valid = true;
+        return;
+    }
+#endif
     unsigned char* decompressed = NULL;
     const unsigned char* src = staging;
 
@@ -440,11 +578,24 @@ void picaTexture::UploadLevel(int mipLevel)
         free(decompressed);
 
     C3D_TexFlush(&tex);
+#ifdef SRR2_OLD3DS_VRAM_TEXTURES
+    vramUpload.Complete();TryPromoteVram();
+#endif
     valid = true;
 }
 
 void picaTexture::ConvertAndTile(const unsigned int* rgba, int w, int h, void* dstData)
 {
+#ifdef SRR2_OLD3DS_TEXTURE_TILES
+    switch(hwFormat)
+    {
+    case GPU_RGBA8: picaTile::Convert<picaTile::RGBA8>(rgba,w,h,dstData,g_picaYieldHook); break;
+    case GPU_RGBA5551: picaTile::Convert<picaTile::RGBA5551>(rgba,w,h,dstData,g_picaYieldHook); break;
+    case GPU_LA8: picaTile::Convert<picaTile::LA8>(rgba,w,h,dstData,g_picaYieldHook); break;
+    case GPU_RGBA4: picaTile::Convert<picaTile::RGBA4>(rgba,w,h,dstData,g_picaYieldHook); break;
+    default: picaTile::Convert<picaTile::RGB565>(rgba,w,h,dstData,g_picaYieldHook); break;
+    }
+#else
     unsigned char* dst = (unsigned char*)dstData;
 
     for(int y = 0; y < h; y++)
@@ -497,6 +648,7 @@ void picaTexture::ConvertAndTile(const unsigned int* rgba, int w, int h, void* d
             }
         }
     }
+#endif
 }
 
 void picaTexture::SetPriority(int p) { priority = p; }
@@ -513,6 +665,11 @@ int  picaTexture::GetPalette(pddiColour* palette)              { return 0; }
 bool picaTexture::UploadMovieYUV(const unsigned char* y, const unsigned char* cr, const unsigned char* cb,
                                int width, int height, int yPitch, int chromaPitch)
 {
+#ifdef SRR2_OLD3DS_VRAM_TEXTURES
+    // Movie construction is excluded from promotion. Keep this guard so a future
+    // caller can use its ordinary writable-texture fallback instead of writing VRAM.
+    if(vramAllocation)return false;
+#endif
     if(!created || !y || !cr || !cb || hwFormat != GPU_RGB565 || tex.maxLevel != 0 ||
        width <= 0 || height <= 0 || width > tex.width || height > tex.height ||
        (width & 7) || (height & 7) || yPitch < width || chromaPitch < width / 2) return false;

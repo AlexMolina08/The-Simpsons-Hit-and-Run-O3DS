@@ -1,3 +1,4 @@
+#include <main/old3dshot.h>
 #include <worldsim/character/character.h>
 
 #include <choreo/animation.hpp>
@@ -1494,6 +1495,7 @@ Return:         void
 
 =============================================================================
 */
+OLD3DS_HOT_PATH
 void Character::PreSimUpdate( float timeins )
 {
 #ifdef RAD_DEBUG
@@ -1998,6 +2000,7 @@ Return:         void
 
 =============================================================================
 */
+OLD3DS_HOT_PATH
 void Character::PostSimUpdate( float timeins )
 {
     TestInAnyonesFrustrum();

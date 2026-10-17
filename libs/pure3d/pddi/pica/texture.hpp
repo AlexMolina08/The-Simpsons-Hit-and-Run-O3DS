@@ -4,6 +4,8 @@
 #include <pddi/pica/pica.hpp>
 #include <pddi/pdditype.hpp>
 
+struct picaVramAllocation;
+
 class picaTexture : public pddiTexture
 {
 public:
@@ -44,6 +46,12 @@ protected:
     void UploadLevel(int mipLevel);
     void ConvertAndTile(const unsigned int* rgba, int w, int h, void* dst);
 
+#ifdef SRR2_OLD3DS_VRAM_TEXTURES
+    void TryPromoteVram();
+    picaVramAllocation* vramAllocation;
+    void* reuploadLinear;
+    bool vramEligible, vramUploaded;
+#endif
     picaContext* context;
 
     int log2X, log2Y;

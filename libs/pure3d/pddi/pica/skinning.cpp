@@ -3,10 +3,13 @@
 #include <citro3d.h>
 #include <cstdio>
 #include <cstring>
+#ifdef SRR2_OLD3DS_SLERP_CACHE
+extern "C" bool radmathSlerpCacheStats(unsigned* hits, unsigned* misses);
+#endif
 picaSkinMetrics g_picaSkinMetrics = {};
 picaSkin::Reason g_picaSkinAllocationReason = picaSkin::Ready;
 static picaSkinAllocation *retired;
-static unsigned liveBytes, peakBytes, frameNumber;
+static unsigned liveBytes, pedestrianBytes, namedBytes, peakBytes, frameNumber;
 #ifdef SRR2_OLD3DS_GPU_SKIN_METRICS
 static picaSkinMetrics records[256];
 static unsigned recordCount, overwritten;
@@ -24,14 +27,25 @@ bool picaSkinEnabled()
     return false;
 #endif
 }
-picaSkinAllocation *picaSkinAllocate(unsigned bytes)
+picaSkinAllocation *picaSkinAllocate(unsigned bytes, bool pedestrian, bool named)
 {
     g_picaSkinAllocationReason = picaSkin::BudgetLimit;
+#ifndef SRR2_OLD3DS_GPU_SKIN_PEDESTRIANS
+    if(pedestrian) return NULL;
+#endif
+#ifndef SRR2_OLD3DS_GPU_SKIN_CAST
+    if(named) return NULL;
+#endif
+    if(pedestrian && named) return NULL;
     if (bytes > picaSkin::Budget - sizeof(picaSkinAllocation))
         return NULL;
     bytes += sizeof(picaSkinAllocation);
-    if (!picaSkin::Fits(bytes, liveBytes, linearSpaceFree()))
-        return NULL;
+    const unsigned poolLive = named ? namedBytes : pedestrian ? pedestrianBytes : liveBytes - pedestrianBytes - namedBytes;
+#ifdef SRR2_OLD3DS_GPU_SKIN_BORROW
+    if(!picaSkin::FitsBorrowed(bytes, poolLive, liveBytes, linearSpaceFree())) return NULL;
+#else
+    if(!picaSkin::Fits(bytes, poolLive, linearSpaceFree())) return NULL;
+#endif
     g_picaSkinAllocationReason = picaSkin::Allocation;
     picaSkinAllocation *p = (picaSkinAllocation *)linearAlloc(bytes);
     if (!p)
@@ -40,10 +54,13 @@ picaSkinAllocation *picaSkinAllocate(unsigned bytes)
         return NULL;
     }
     p->bytes = bytes;
+    p->pedestrian = named ? 2u : pedestrian ? 1u : 0u;
     p->next = NULL;
     p->nativeBuffer = NULL;
     p->expandedBuffer = NULL;
     liveBytes += bytes;
+    if(pedestrian) pedestrianBytes += bytes;
+    if(named) namedBytes += bytes;
     if (liveBytes > peakBytes)
         peakBytes = liveBytes;
     g_picaSkinAllocationReason = picaSkin::Ready;
@@ -66,6 +83,8 @@ void picaSkinBeginFrame()
         picaSkinAllocation *p = retired;
         retired = p->next;
         liveBytes -= p->bytes;
+        if(p->pedestrian == 1) pedestrianBytes -= p->bytes;
+        if(p->pedestrian == 2) namedBytes -= p->bytes;
         if (p->nativeBuffer)
             linearFree(p->nativeBuffer);
         if (p->expandedBuffer)
@@ -115,8 +134,27 @@ extern "C" void picaSkinDump()
     if (!f)
         return;
     std::fprintf(
-        f, "GPU_SKIN version=1 record_bytes=%u capacity=256 overwritten=%u budget=%u reserve=%u\n",
-        (unsigned)sizeof(records), overwritten, picaSkin::Budget, picaSkin::Reserve);
+        f, "GPU_SKIN version=1 record_bytes=%u capacity=256 overwritten=%u budget=%u reserve=%u pedestrian_budget=%u named_budget=%u\n",
+        (unsigned)sizeof(records), overwritten, picaSkin::Budget, picaSkin::Reserve,
+#ifdef SRR2_OLD3DS_GPU_SKIN_PEDESTRIANS
+        picaSkin::Budget,
+#else
+        0u,
+#endif
+#ifdef SRR2_OLD3DS_GPU_SKIN_CAST
+        picaSkin::Budget);
+#else
+        0u);
+#endif
+#ifdef SRR2_OLD3DS_GPU_SKIN_BORROW
+    std::fprintf(f, "GPU_SKIN_POOL shared=1 total_budget=%u pool_limit=%u group_limit=%u\n",
+                 picaSkin::SharedBudget, picaSkin::BorrowPoolLimit, picaSkin::Budget);
+#endif
+#ifdef SRR2_OLD3DS_SLERP_CACHE
+    unsigned slerpHits, slerpMisses;
+    if(radmathSlerpCacheStats(&slerpHits, &slerpMisses))
+        std::fprintf(f, "SLERP_CACHE hits=%u misses=%u\n", slerpHits, slerpMisses);
+#endif
     unsigned begin = recordCount > 256 ? recordCount - 256 : 0;
     for (unsigned i = begin; i < recordCount; ++i)
     {

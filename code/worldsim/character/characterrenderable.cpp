@@ -11,6 +11,36 @@
 #include <camera/supercammanager.h>
 #include <contexts/bootupcontext.h>
 
+#ifdef SRR2_OLD3DS_CHARACTER_SHADOW
+#include <pddi/pica/context.hpp>
+#include <pddi/pica/blobtopology.hpp>
+namespace
+{
+void BuildCharacterShadowVertices(pddiVector* vertices, const float points[8][2],
+                                  const float fades[8][2], const float* scales,
+                                  float shadowScale, bool articulated)
+{
+    vertices[0].Set(0.0f, 0.0f, 0.0f);
+    for(unsigned i = 0; i < picaCharacterBlob::SliceCount; ++i)
+    {
+        const unsigned index = i % 8;
+        const float fadeScale = i < 8 ? shadowScale : -shadowScale;
+        const float pointScale = articulated ? scales[i] : index == i ? 0.2f : -0.2f;
+        // Keep the original operation order and signed-zero behavior.
+        float x = points[index][0];
+        x *= shadowScale;
+        x *= pointScale;
+        float y = points[index][1];
+        y *= shadowScale;
+        y *= pointScale;
+        vertices[1 + 2 * i].Set(x, y, 0.0f);
+        vertices[2 + 2 * i].Set(x + fades[index][0] * fadeScale,
+                                y + fades[index][1] * fadeScale, 0.0f);
+    }
+}
+}
+#endif
+
 // Hack.
 //  [6/27/2002]
 #include <worldsim/character/charactermanager.h>
@@ -379,6 +409,15 @@ void CharacterRenderable::DisplayShadow( tPose* pose, const BlobShadowParams* Bl
         blobShader->SetInt( PDDI_SP_ALPHATEST, 0 );
         blobShader->SetInt( PDDI_SP_SHADEMODE, PDDI_SHADE_GOURAUD );
 
+#ifdef SRR2_OLD3DS_CHARACTER_SHADOW
+        pddiVector shadowVertices[picaCharacterBlob::VertexCount];
+        BuildCharacterShadowVertices(shadowVertices, BlobPoints, FadePoints, pointScales,
+                                     BlobParams->ShadowScale, articulated);
+        const bool submitted = static_cast<picaContext*>(p3d::pddi)->DrawCharacterShadow(
+            blobShader, shadowVertices, insideColour, OutsideColour);
+        if(!submitted)
+        {
+#endif
         blob  = p3d::pddi->BeginPrims( blobShader, PDDI_PRIM_TRIANGLES, PDDI_V_C, 9 * NumBlobSlices );
         for(int i=0; i < NumBlobSlices; i++)
         {
@@ -436,6 +475,9 @@ void CharacterRenderable::DisplayShadow( tPose* pose, const BlobShadowParams* Bl
             blob->Coord( x2, y2, 0.0f );
         }
         p3d::pddi->EndPrims( blob );
+#ifdef SRR2_OLD3DS_CHARACTER_SHADOW
+        }
+#endif
 
         p3d::stack->Pop();
         END_PROFILE( "Char Blobby Shadow" );

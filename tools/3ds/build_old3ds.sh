@@ -54,7 +54,7 @@ cmake -S "$source_root" -B "$build" "${common[@]}" \
     -DCMAKE_POLICY_VERSION_MINIMUM=3.5 -DSRR2_OLD_3DS=ON -DSRR2_3DS_MOVIES=ON \
     "-DSDL2_DIR=$prefix/lib/cmake/SDL2" \
     "-DPNG_LIBRARY=$prefix/lib/liblibpng16_static.a" "-DPNG_PNG_INCLUDE_DIR=$prefix/include" \
-    "-DZLIB_LIBRARY=$zlib" "-DZLIB_INCLUDE_DIR=$prefix/include"
+    "-DZLIB_LIBRARY=$zlib" "-DZLIB_INCLUDE_DIR=$prefix/include" "$@"
 cmake --build "$build" -j "$jobs"
 mkdir -p "$repo/out/old3ds"
 attributes=$("$DEVKITPRO/devkitARM/bin/arm-none-eabi-readelf" -A "$build/code/SRR2.elf")
