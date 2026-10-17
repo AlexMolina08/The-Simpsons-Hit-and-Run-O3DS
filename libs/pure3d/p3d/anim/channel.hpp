@@ -55,7 +55,11 @@ public:
     unsigned GetInterpolate( ) const        { return interpolate;}
 
 protected:
-    tChannel() : channelCode(0), dataType(UNASSIGNED), numKeys(0), frames(NULL) {}
+    tChannel() : channelCode(0), dataType(UNASSIGNED),
+#ifdef SRR2_OLD3DS_CHANNEL_HINT
+        bracketHint(0),
+#endif
+        numKeys(0), frames(NULL) {}
 
     bool FindBracketKeys(float frame, int& beginKeys, int& endKey) const;
 
@@ -63,6 +67,9 @@ protected:
     unsigned                channelCode;
 	unsigned short          interpolate : 1;
 	unsigned short          dataType : 7;
+#ifdef SRR2_OLD3DS_CHANNEL_HINT
+    mutable unsigned short  bracketHint : 8;
+#endif
     short                   numKeys;
     short*                  frames;
 

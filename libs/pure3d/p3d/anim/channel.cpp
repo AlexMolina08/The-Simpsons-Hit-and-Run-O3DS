@@ -45,7 +45,10 @@ tChannel::tChannel(int nKeys, tAnimationMemoryBlock* block) :
     memoryBlock(block),
     channelCode(0), 
     interpolate(true),
-    dataType(UNASSIGNED), 
+    dataType(UNASSIGNED),
+#ifdef SRR2_OLD3DS_CHANNEL_HINT
+    bracketHint(0),
+#endif
     numKeys(nKeys), 
     frames(NULL)
 {
@@ -90,6 +93,30 @@ bool tChannel::FindBracketKeys(float frame, int& beginKeys, int& endKey) const
         return false;
     }
 
+#ifdef SRR2_OLD3DS_CHANNEL_HINT
+    // A hint is never a retained result: validate against the current frame keys.
+    // Shared channels, reverse playback, seeks and asset edits fall back exactly.
+    // Eight unused flag bits hold the index; larger tracks keep binary search.
+    if(numKeys > 2 && numKeys <= 256)
+    {
+        int hint=bracketHint;
+        if(hint < numKeys-1)
+        {
+            if(frame >= (float)frames[hint] && frame < (float)frames[hint+1])
+            {
+                beginKeys=hint; endKey=hint+1;
+                return true;
+            }
+            ++hint;
+            if(hint < numKeys-1 && frame >= (float)frames[hint] && frame < (float)frames[hint+1])
+            {
+                bracketHint=hint;
+                beginKeys=hint; endKey=hint+1;
+                return true;
+            }
+        }
+    }
+#endif
     int left = 0;
     int right = numKeys - 1;
     int current = right / 2;
@@ -112,6 +139,9 @@ bool tChannel::FindBracketKeys(float frame, int& beginKeys, int& endKey) const
         current = (left + right) / 2;
     }
    
+#ifdef SRR2_OLD3DS_CHANNEL_HINT
+    if(numKeys <= 256) bracketHint=current;
+#endif
     beginKeys = current;
     endKey = current+1;
     return true;
