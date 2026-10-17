@@ -3,9 +3,19 @@
 #include "simcommon/simlistinitsize.hpp"
 #include "simcommon/simmath.hpp"
 #include "simcommon/simutility.hpp"
+#if defined(SRR2_OLD_3DS) && defined(SRR2_OLD3DS_COLL_PREP)
+#include <stdio.h>
+#endif
 
 namespace sim
 {
+#if defined(SRR2_OLD_3DS) && defined(SRR2_OLD3DS_COLL_PREP)
+static unsigned old3dsPairTailChecks=0, old3dsPairTailHits=0;
+extern "C" void old3dsDumpPairTail()
+{
+    printf("OLD3DS_PAIR_TAIL checks=%u hits=%u\n",old3dsPairTailChecks,old3dsPairTailHits);
+}
+#endif
 
 CollisionManager* CollisionManager::sInstance = NULL;
 
@@ -182,12 +192,21 @@ void CollisionManager::DetectCollision(int area, float inDt, float gameTime, con
 
 void CollisionManager::DetectCollision(float inDt, float gameTime, const bool printOut )
 {
+#ifdef SRR2_OLD3DS_COLL_PREP
+    // Only this synchronous all-area detection call shares preparation. No
+    // solver, simulation, camera update or external callback runs between its
+    // areas. Single-area calls keep fresh stamps, including the camera pass.
+    const unsigned previousBatch = mCollisionDetector.BeginPreparationBatch();
+#endif
     unsigned int size = mCacheActivatedArea.GetSize();
     for (unsigned int i = 0; i < size; ++i )
     {
         int areaToDetect = mCacheActivatedArea[i];
         DetectCollision( areaToDetect, inDt, gameTime, printOut );
     }
+#ifdef SRR2_OLD3DS_COLL_PREP
+    mCollisionDetector.EndPreparationBatch(previousBatch);
+#endif
     EndDetectCollision();
 }
 
@@ -544,6 +563,17 @@ void CollisionManager::Area::AddPair(CollisionObject* inObjectA, CollisionObject
     rAssert(mObjectList.Contains(inObjectA) && mObjectList.Contains(inObjectB));
     rAssert(inObjectA != inObjectB);
 
+#if defined(SRR2_OLD_3DS) && defined(SRR2_OLD3DS_COLL_PREP)
+    // Automatic pairing commonly appended this exact pair immediately before
+    // explicit registration. Membership is boolean; pair order stays untouched.
+    ++old3dsPairTailChecks;
+    const int last=mPairList.GetSize()-1;
+    if(last>=0 && mPairList[last].Contains(inObjectA) && mPairList[last].Contains(inObjectB))
+    {
+        ++old3dsPairTailHits;
+        return;
+    }
+#endif
     for (int i=0; i<mPairList.GetSize(); ++i)
     {
         if (mPairList[i].Contains(inObjectA) && mPairList[i].Contains(inObjectB))

@@ -63,6 +63,12 @@ public:
 private:
     Wheel* mWheel;
     int mJointIndex;
+#ifdef SRR2_OLD3DS_WHEEL_ROTATION_REUSE
+    bool mRotationValid = false;
+    bool mLastSteerWheel;
+    float mLastRotation, mLastSteering;
+    float mRotation[3][3];
+#endif
 
 };
 

@@ -205,6 +205,9 @@ tEntity* IntersectLoader::LoadObject(tChunkFile* f, tEntityStore* store)
             profileTotalSize = 8192;
     }
 */
+#ifdef SRR2_OLD3DS_TRI_BLOCKS
+    pIDSG->BuildTriangleBlocks();
+#endif
     mpListenerCB->OnChunkLoaded( pIDSG, mUserData, _id );
     IEntityDSG::msDeletionsSafe=false;
     return NULL;//pIDSG;

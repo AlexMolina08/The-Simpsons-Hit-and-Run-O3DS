@@ -45,6 +45,10 @@ public:
     // already updated this volume during the current collision-detection pass.
     inline unsigned UpdatePassStamp() const  { return mUpdatePassStamp; }
     inline void SetUpdatePassStamp(unsigned s) { mUpdatePassStamp = s; }
+#ifdef SRR2_OLD3DS_COLL_PREP
+    void CapturePreparedUpdated() { mPreparedUpdated = mUpdated; }
+    void RestorePreparedUpdated() { mUpdated = mPreparedUpdated; }
+#endif
 #endif
     
     void AddSubVolume(CollisionVolume* point);
@@ -95,6 +99,9 @@ protected:
 
     void ConvertToRigidBody();
     
+#ifdef SRR2_OLD3DS_COLL_PREP
+    void UpdatePosRot();
+#endif
     void UpdateRot();
     void UpdatePos();
     virtual void SetRotation() {}
@@ -116,6 +123,9 @@ protected:
     // this volume, so repeated updates of one volume within a single pass can be
     // counted. Never read outside the detector's pair loop.
     unsigned mUpdatePassStamp;
+#ifdef SRR2_OLD3DS_COLL_PREP
+    bool mPreparedUpdated;
+#endif
 #endif
     
     tColour mColour;

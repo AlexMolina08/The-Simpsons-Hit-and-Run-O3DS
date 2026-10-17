@@ -1,3 +1,4 @@
+#include <main/old3dshot.h>
 
 #include "simphysics/articulatedphysicsobject.hpp"
 
@@ -321,6 +322,7 @@ void ArticulatedPhysicsObject::SetClone(ArticulatedPhysicsObject* clone, SimStat
     mTimeStep = 0;
 }
 
+OLD3DS_HOT_PATH
 void ArticulatedPhysicsObject::Update(float inDt)
 {
     mTimeStep = inDt;
@@ -350,6 +352,7 @@ void ArticulatedPhysicsObject::Update(float inDt)
     }
 }
 
+OLD3DS_HOT_PATH
 void ArticulatedPhysicsObject::UpdatePoseMatrix()
 {
     if (!ConvertedToRigidBody())
@@ -372,6 +375,7 @@ void ArticulatedPhysicsObject::UpdateForPhysicsProperties()
     }
 }
 
+OLD3DS_HOT_PATH
 void ArticulatedPhysicsObject::ComputeInertiaMatrix()
 {
     if (mMass > 0 && mTimeSinceComputeInertiaMatrix >= mTimeComputeInertiaMatrix && !ConvertedToRigidBody())

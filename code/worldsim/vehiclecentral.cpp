@@ -13,6 +13,9 @@
 // System Includes
 //========================================
 
+#ifdef SRR2_OLD3DS_VEHICLE_PROFILE
+#include <worldsim/redbrick/old3dsvehicleprofile.h>
+#endif
 #include <raddebug.hpp>
 
 #include <stdlib.h> // for atof
@@ -1615,8 +1618,17 @@ void VehicleCentral::Update(float dt)
                 if(mActiveVehicleList[i]->GetLocomotionType() == VL_PHYSICS)
                 {
                     BEGIN_PROFILE("WorldPhysManager()->UpdateDyna")
+#ifdef SRR2_OLD3DS_VEHICLE_PROFILE
+                    Old3dsVehicleProfile::ExternalSample externalProfile;
+#endif
                     GetWorldPhysicsManager()->UpdateDynamicObjects(dt, mActiveVehicleList[i]->mCollisionAreaIndex);
+#ifdef SRR2_OLD3DS_VEHICLE_PROFILE
+                    externalProfile.End(Old3dsVehicleProfile::DynamicObjects);
+#endif
                     GetWorldPhysicsManager()->UpdateAnimCollisions(dt, mActiveVehicleList[i]->mCollisionAreaIndex);
+#ifdef SRR2_OLD3DS_VEHICLE_PROFILE
+                    externalProfile.End(Old3dsVehicleProfile::AnimCollisions);
+#endif
                     END_PROFILE("WorldPhysManager()->UpdateDyna")
                     // Temp removed this because objects were being updated twice.
                     // more important (for me) to have the character update anim objects.

@@ -3,6 +3,9 @@
 #define _PHYSICSJOINT_HPP_
 
 #include <memory/classsizetracker.h>
+#ifdef SRR2_OLD3DS_JOINT_VECTOR_REUSE
+#include "simphysics/jointvectorcache.hpp"
+#endif
 #include "poser/posedriver.hpp"
 #include "poser/pose.hpp"
 #include "poser/joint.hpp"
@@ -89,6 +92,9 @@ protected:
     virtual void SetCache(const rmt::Vector& cache)                                           = 0;
     virtual float TryAddDeformationSpeed(const rmt::Vector& w)                                = 0;
     virtual void TryFixOverFlow(const rmt::Vector& w)                                         = 0;
+#ifdef SRR2_OLD3DS_JOINT_AXIS_ONCE
+    void JointAngleFromAxis(const rmt::Vector& parentAxis,float& angle);
+#endif
     void JointAngle(bool parentRelative, float& angle);                                       
     virtual void GetCache(rmt::Vector& cache) const                                           = 0;
     virtual void AddCacheToDeformationSpeed()                                                 = 0;
@@ -133,6 +139,9 @@ protected:
     rmt::Vector                mDCMPositioni;         // vector from joint origin to joint cm in joint space
     rmt::Vector                mAxis;
     rmt::Matrix                mTransform;
+#ifdef SRR2_OLD3DS_JOINT_VECTOR_REUSE
+    jointVectorCache::Cache mVectorRotationCache;
+#endif
     
     float                      mInvStiffness;         // relates to muscle stiffness
     float                      mAbsorptionFactor;     // the amount of the incoming impulse absorbed by the joint
@@ -283,7 +292,7 @@ protected:
     void ComputeAbsorbedImpulse(const rmt::Vector& impulse, rmt::Vector& absImpulse) { absImpulse.Scale(mAbsorptionFactor, impulse); }
     float TryAddDeformationSpeed(const rmt::Vector& w);
     void TryFixOverFlow(const rmt::Vector& w);
-    void ComputeJointAngle();
+    void ComputeJointAngle(const rmt::Vector* preparedAxis = NULL);
     void GetCache(rmt::Vector& cache)                  const { cache = mDeformationSpeedCache; }
     void AddCacheToDeformationSpeed()                        { mDeformationSpeed.Add(mDeformationSpeedCache); mDeformationSpeedEmpty = false; }
     void AddToDeformationSpeed(const rmt::Vector& w)         { mDeformationSpeed.Add(w); mDeformationSpeedEmpty = false; }

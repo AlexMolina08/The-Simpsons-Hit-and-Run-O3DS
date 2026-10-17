@@ -17,6 +17,10 @@
 
 #include <worldsim/redbrick/suspensionjointdriver.h>
 #include <worldsim/redbrick/wheel.h>
+#ifdef SRR2_OLD3DS_WHEEL_ROTATION_REUSE
+#include <cmath>
+#include <string.h>
+#endif
 
 
 
@@ -91,6 +95,21 @@ void SuspensionJointDriver::Update(poser::Pose* pose)
     // !! TODO - safe to just apply this?
     //matrix.m[3][1] += mWheel->mPhysicsVehicleOwner->mGravitySettleYCorrection;  // this is insignificant
 
+#ifdef SRR2_OLD3DS_WHEEL_ROTATION_REUSE
+    const bool steerWheel = mWheel->mSteerWheel;
+    const float rotation = mWheel->mCumulativeRot;
+    const float steering = steerWheel ? mWheel->mWheelTurnAngle : 0.0f;
+    const bool cacheable = std::isfinite(rotation) && std::isfinite(steering);
+    const bool reuse = mRotationValid && cacheable && mLastSteerWheel == steerWheel &&
+        memcmp(&rotation, &mLastRotation, sizeof(rotation)) == 0 &&
+        memcmp(&steering, &mLastSteering, sizeof(steering)) == 0;
+    if(reuse)
+    {
+        for(unsigned row = 0; row < 3; ++row) memcpy(matrix.m[row], mRotation[row], 12);
+    }
+    else
+    {
+#endif
     if(mWheel->mSteerWheel)
     {
         // this is one of the two front wheels, so turn it
@@ -106,6 +125,15 @@ void SuspensionJointDriver::Update(poser::Pose* pose)
         matrix.FillRotateX(mWheel->mCumulativeRot);
     }
 
+#ifdef SRR2_OLD3DS_WHEEL_ROTATION_REUSE
+        // Rotation fills leave translation and projection components untouched.
+        mRotationValid = cacheable;
+        mLastSteerWheel = steerWheel;
+        mLastRotation = rotation;
+        mLastSteering = steering;
+        for(unsigned row = 0; row < 3; ++row) memcpy(mRotation[row], matrix.m[row], 12);
+    }
+#endif
     joint->SetObjectMatrix(matrix);
 
     /*

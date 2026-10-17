@@ -1,3 +1,4 @@
+#include <main/old3dshot.h>
 
 #include "simcollision/collisiondetector.hpp"
 #include "simcollision/collision.hpp"
@@ -28,6 +29,9 @@ float CollisionDetector::sSafeTimeBeforeCollision(10.0f);
 
 CollisionDetector::CollisionDetector()
     : mDt(0)
+#ifdef SRR2_OLD3DS_COLL_PREP
+    , mPreparationBatchStamp(0)
+#endif
 {
     SetCollisionDistance(SimEnvironment::GetDefaultSimEnvironment()->CollisionDistance());
 }
@@ -180,6 +184,23 @@ static void HashVolumeGeometry(CollisionVolume* vol, unsigned& hash)
 }
 #endif
 
+static unsigned NextUpdatePassStamp()
+{
+    static unsigned stamp = 0;
+    ++stamp;
+    if(stamp == 0) ++stamp;
+    return stamp;
+}
+
+#ifdef SRR2_OLD3DS_COLL_PREP
+unsigned CollisionDetector::BeginPreparationBatch()
+{
+    const unsigned previous = mPreparationBatchStamp;
+    mPreparationBatchStamp = NextUpdatePassStamp();
+    return previous;
+}
+#endif
+
 static void UpdateVolumeForPass(CollisionVolume* vol, unsigned passStamp)
 {
     const bool redundant = (vol->UpdatePassStamp() == passStamp);
@@ -201,6 +222,11 @@ static void UpdateVolumeForPass(CollisionVolume* vol, unsigned passStamp)
     // comes from the measurement build, which times those calls directly.
     if(redundant)
     {
+#ifdef SRR2_OLD3DS_COLL_PREP
+        // Area preparation may mark the root stale without moving it. Retain
+        // the exact Updated() result from its first update in this batch.
+        vol->RestorePreparedUpdated();
+#endif
         return;
     }
 #endif
@@ -220,6 +246,9 @@ static void UpdateVolumeForPass(CollisionVolume* vol, unsigned passStamp)
 #endif
 
     vol->UpdateAll();
+#ifdef SRR2_OLD3DS_COLL_PREP
+    vol->CapturePreparedUpdated();
+#endif
 
 #ifdef SRR2_OLD3DS_COLLVOL_VERIFY
     if(redundant)
@@ -252,6 +281,7 @@ static void UpdateVolumeForPass(CollisionVolume* vol, unsigned passStamp)
 #endif
 
 // collision distance : distance between the two volumes along the collision normal
+OLD3DS_HOT_PATH
 void CollisionDetector::DetectCollision(TArray<CollisionObjectPair>* inPList, TArray<Collision>* inCList, float inDt, const bool printOut )
 {
     mDt = inDt;
@@ -259,9 +289,11 @@ void CollisionDetector::DetectCollision(TArray<CollisionObjectPair>* inPList, TA
     rAssert( GetCollisionList() != NULL);
 
 #ifdef SRR2_OLD_3DS
-    static unsigned sUpdatePassStamp = 0;
-    ++sUpdatePassStamp;
-    if(sUpdatePassStamp == 0) sUpdatePassStamp = 1;
+#ifdef SRR2_OLD3DS_COLL_PREP
+    const unsigned sUpdatePassStamp = mPreparationBatchStamp ? mPreparationBatchStamp : NextUpdatePassStamp();
+#else
+    const unsigned sUpdatePassStamp = NextUpdatePassStamp();
+#endif
     ++g_old3dsDetectPasses;
 #endif
 
@@ -331,6 +363,7 @@ void CollisionDetector::DetectCollision(CollisionVolume* volA, CollisionVolume* 
     DetectCollision(volA, volB);
 }
 
+OLD3DS_HOT_PATH
 void CollisionDetector::DetectOnSubVolume(CollisionVolume* volA, CollisionVolume* volB)
 {
     // test for collision on all the subVolume of volA with all the subEl of volB
@@ -339,10 +372,34 @@ void CollisionDetector::DetectOnSubVolume(CollisionVolume* volA, CollisionVolume
     
     if (lsta != NULL && lstb != NULL)
     {
+#ifdef SRR2_OLD3DS_COLL_PREP
+        // These broad-phase predicates depend on the parent and B child only.
+        // Detection appends contacts but does not move volumes or change the
+        // collision distance. Keep B indices in their original order. Large
+        // lists use the original path; no allocation or persistent cache exists.
+        unsigned char candidates[64];
+        int candidateCount = -1;
+        const bool prepare = lstb->GetSize() <= 64;
+#endif
         for (int i=0; i<lsta->GetSize(); i++)
         {
             if (IsBBIn(volB, (*lsta)[i], mCollisionDistance))
             {
+#ifdef SRR2_OLD3DS_COLL_PREP
+                if(prepare)
+                {
+                    if(candidateCount < 0)
+                    {
+                        candidateCount = 0;
+                        for(int j = 0; j < lstb->GetSize(); ++j)
+                            if(IsBBIn(volA, (*lstb)[j], mCollisionDistance))
+                                candidates[candidateCount++] = (unsigned char)j;
+                    }
+                    for(int j = 0; j < candidateCount; ++j)
+                        DetectCollision((*lsta)[i], (*lstb)[candidates[j]]);
+                    continue;
+                }
+#endif
                 for (int j=0; j<lstb->GetSize(); j++)
                 {
                     if (IsBBIn(volA, (*lstb)[j], mCollisionDistance))
@@ -356,7 +413,11 @@ void CollisionDetector::DetectOnSubVolume(CollisionVolume* volA, CollisionVolume
         for (int i=0; i<lsta->GetSize(); i++)
         {
             if (IsBBIn(volB, (*lsta)[i], mCollisionDistance))
+#ifdef SRR2_OLD3DS_COLL_PREP
+                DetectCollisionOverlapping(volB, (*lsta)[i]);
+#else
                 DetectCollision(volB, (*lsta)[i]);
+#endif
         }
     }
     else // lstb != NULL
@@ -364,7 +425,11 @@ void CollisionDetector::DetectOnSubVolume(CollisionVolume* volA, CollisionVolume
         for (int i=0; i<lstb->GetSize(); i++)
         {
             if (IsBBIn(volA, (*lstb)[i], mCollisionDistance))
+#ifdef SRR2_OLD3DS_COLL_PREP
+                DetectCollisionOverlapping(volA, (*lstb)[i]);
+#else
                 DetectCollision(volA, (*lstb)[i]);
+#endif
         }
     }
 }
@@ -376,6 +441,14 @@ void CollisionDetector::DetectCollision(CollisionVolume* volA, CollisionVolume* 
         return;
     }
     
+    DetectCollisionOverlapping(volA, volB);
+}
+
+// Caller has checked this exact ordered pair with the current collision distance.
+// Detection does not move volumes between the check and dispatch.
+OLD3DS_HOT_PATH
+void CollisionDetector::DetectCollisionOverlapping(CollisionVolume* volA, CollisionVolume* volB)
+{
     if (volA->Type() == BBoxVolumeType || volB->Type() == BBoxVolumeType)
     {
         DetectOnSubVolume(volB, volA);

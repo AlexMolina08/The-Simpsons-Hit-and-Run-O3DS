@@ -1,3 +1,4 @@
+#include <main/old3dshot.h>
 
 #include "simphysics/physicsobject.hpp"
 #include "simphysics/articulatedphysicsobject.hpp"
@@ -287,6 +288,7 @@ void PhysicsObject::UpdateScale()
     mRestingDetector.AffectTypicalValuesByScaleFactor(s);
 }
 
+OLD3DS_HOT_PATH
 void PhysicsObject::Update(float dt_sec)
 {
     if (mSimState->GetControl() == simSimulationCtrl && !IsAtRest() && dt_sec > 0)

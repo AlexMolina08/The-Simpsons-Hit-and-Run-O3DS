@@ -2,6 +2,9 @@
 #define __SPATIAL_TREE_ITER_H__
 
 #include <p3d/utility.hpp>
+#ifdef SRR2_OLD3DS_SPHERE_WALK_CACHE
+#include <render/Culling/spherewalkcache.hpp>
+#endif
 #include <render/Culling/SpatialTree.h>
 #include <render/Culling/ISpatialProxy.h>
 #include <render/Culling/SphereSP.h>
@@ -108,10 +111,19 @@ protected:
 
    //Bounding Box is left as series of defining points to make iteration simpler
    BoxPts mBBox;
+#ifdef SRR2_OLD3DS_SPHERE_WALK_CACHE
+   Old3dsSphereWalkCache mSphereWalkCache;
+   void MarkSphereQuery(SphereSP& sphere, tMark mark);
+   void MarkSphereBounds(int node, const float bounds[6], tMark mark,
+                         Old3dsSphereWalkCache::Entry* record);
+#endif
 
 
    SpatialNode& rSeekLeaf( int iCurNodeOffset, Vector3f& irPt );
 
+#ifdef SRR2_OLD3DS_SPATIAL_WALK_FAST
+   void MarkSpherePlanes(int node, SphereSP& sphere, tMark mark);
+#endif
    void MarkAll( int                ipCurNode,
                  BoxPts&            irBoxPts, 
                  SphereSP&   irDesiredVolume, 
@@ -174,6 +186,9 @@ SpatialTreeIter::~SpatialTreeIter()
 inline  
 void SpatialTreeIter::SetToRoot( SpatialTree& irTree )
 {
+#ifdef SRR2_OLD3DS_SPHERE_WALK_CACHE
+   mSphereWalkCache.Clear();
+#endif
    mpRootNode = irTree.GetRoot();
 
    mBBox.SetTo( irTree.GetBounds() );
@@ -188,6 +203,9 @@ void SpatialTreeIter::SetToRoot( SpatialTree& irTree )
 inline  
 void SpatialTreeIter::Clear()
 {
+#ifdef SRR2_OLD3DS_SPHERE_WALK_CACHE
+   mSphereWalkCache.Clear();
+#endif
    mpRootNode  = NULL;
 }
 
@@ -555,8 +573,16 @@ inline
 void SpatialTreeIter::MarkAll( SphereSP& irDesiredVolume, tMark iMark )
 {
    mCurNodes.ClearUse();
+#ifdef SRR2_OLD3DS_SPATIAL_WALK_FAST
+#ifdef SRR2_OLD3DS_SPHERE_WALK_CACHE
+   MarkSphereQuery(irDesiredVolume, iMark);
+#else
+   MarkSpherePlanes(0, irDesiredVolume, iMark);
+#endif
+#else
    BoxPts tmpBBox(mBBox);
-   MarkAll( 0, tmpBBox, irDesiredVolume, iMark );   
+   MarkAll( 0, tmpBBox, irDesiredVolume, iMark );
+#endif
 }
 /////////////////////////////////////////////////////////////////////////////////////
 /////////////////////////////////////////////////////////////////////////////////////

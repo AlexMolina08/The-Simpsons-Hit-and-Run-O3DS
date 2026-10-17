@@ -1,11 +1,24 @@
+#include <main/old3dshot.h>
 
 #include "simphysics/physicsjoint.hpp"
 #include "simphysics/articulatedphysicsobject.hpp"
+#ifdef SRR2_OLD3DS_JOINT_VECTOR_REUSE
+#include <cmath>
+#include <cstdio>
+#endif
 
 using namespace RadicalMathLibrary;
 
 namespace sim
 {
+#ifdef SRR2_OLD3DS_JOINT_VECTOR_REUSE
+static unsigned vectorRotationCalls=0, vectorRotationHits=0;
+extern "C" void old3dsDumpJointVectors()
+{
+    std::printf("OLD3DS_JOINT_VECTORS calls=%u hits=%u bytes_per_joint=%u\n",
+        vectorRotationCalls,vectorRotationHits,(unsigned)sizeof(jointVectorCache::Cache));
+}
+#endif
 
 static float FRACTSIZE = 0.1f;          // defines an area around joint->fR inside wich a collision impulse is simply transmitted to the parent joint
 static float PARALLEL = 0.999f;         // defines when a joint orientation is considered as parallel to the collision normal
@@ -162,12 +175,34 @@ void PhysicsJoint::UpdateForPhysicsProperties()
     }
 }
 
+OLD3DS_HOT_PATH
 void PhysicsJoint::SetTransform(const Matrix& m)
 {
     // could extract the scale and adjust the volume/mass right away
+#ifdef SRR2_OLD3DS_JOINT_VECTOR_REUSE
+    const Vector& sourceAxis=mParentObject->JointInfo(mIndex).mAxis;
+    const unsigned control=jointVectorCache::Control();
+    ++vectorRotationCalls;
+    const bool reuse=mVectorRotationCache.Matches(mTransform.m,m.m,&mDCMPositioni,&sourceAxis,control);
+    // Translation and every derived SetTransform operation remain live. In
+    // particular this does not skip angle, deformation or constraint handling.
+    mTransform=m;
+    if(reuse)
+    {
+        ++vectorRotationHits;
+        return;
+    }
+    mTransform.RotateVector(mDCMPositioni, &mDCMPosition);
+    mTransform.RotateVector(sourceAxis, &mAxis);
+    const bool finite=std::isfinite(mDCMPosition.x) && std::isfinite(mDCMPosition.y) &&
+        std::isfinite(mDCMPosition.z) && std::isfinite(mAxis.x) &&
+        std::isfinite(mAxis.y) && std::isfinite(mAxis.z);
+    mVectorRotationCache.Store(&mDCMPositioni,&sourceAxis,control,finite);
+#else
     mTransform = m;
     mTransform.RotateVector(mDCMPositioni, &mDCMPosition);
     mTransform.RotateVector(mParentObject->JointInfo(mIndex).mAxis, &mAxis);
+#endif
 }
 
 void PhysicsJoint::SetClone(PhysicsJoint* clone)
@@ -479,6 +514,32 @@ bool PhysicsJoint::IsParentOf(PhysicsJoint* inJoint)
     return ret;
 }
 
+#ifdef SRR2_OLD3DS_JOINT_AXIS_ONCE
+static unsigned jointAxisReuses1D=0,jointAxisReuses3D=0;
+extern "C" void old3dsDumpJointAxisReuse()
+{
+    printf("JOINT_AXIS_ONCE one_d=%u three_d=%u\n",jointAxisReuses1D,jointAxisReuses3D);
+}
+void PhysicsJoint::JointAngleFromAxis(const Vector& parentAxis,float& angle)
+{
+        angle = mAxis.DotProduct(parentAxis);
+#ifdef SRR2_OLD3DS_JOINT_ANGLE_FAST
+        // acos(0.999) is below 0.045 radians, safely inside the existing
+        // 0.1-radian dead zone. Keep its exact zero without evaluating acos.
+        // The live threshold guard also preserves a smaller debug tolerance.
+        if(angle >= 0.999f && MIN_ANGLE_ACCURACY >= 0.1f)
+        {
+            angle = 0;
+            return;
+        }
+#endif
+        angle = ACosSafe(angle);
+
+        if (Fabs(angle) < MIN_ANGLE_ACCURACY)
+            angle = 0;
+}
+#endif
+
 void PhysicsJoint::JointAngle(bool parentRelative, float& angle)
 {
     if (!parentRelative)
@@ -489,11 +550,25 @@ void PhysicsJoint::JointAngle(bool parentRelative, float& angle)
     {
         Vector parentAxis;
         mParentObject->JointAxis(mParentIndex, parentAxis, false);
+#ifdef SRR2_OLD3DS_JOINT_AXIS_ONCE
+        JointAngleFromAxis(parentAxis,angle);
+#else
         angle = mAxis.DotProduct(parentAxis);
+#ifdef SRR2_OLD3DS_JOINT_ANGLE_FAST
+        // acos(0.999) is below 0.045 radians, safely inside the existing
+        // 0.1-radian dead zone. Keep its exact zero without evaluating acos.
+        // The live threshold guard also preserves a smaller debug tolerance.
+        if(angle >= 0.999f && MIN_ANGLE_ACCURACY >= 0.1f)
+        {
+            angle = 0;
+            return;
+        }
+#endif
         angle = ACosSafe(angle);
         
         if (Fabs(angle) < MIN_ANGLE_ACCURACY)
             angle = 0;
+#endif
     }
 }
 
@@ -616,6 +691,7 @@ void PhysicsJoint1D::SetConstraintAngles(float inMinAngle, float inMaxAngle)
     }
 }
 
+OLD3DS_HOT_PATH
 void PhysicsJoint1D::SetTransform(const Matrix& m)
 {
     PhysicsJoint::SetTransform(m);
@@ -624,6 +700,7 @@ void PhysicsJoint1D::SetTransform(const Matrix& m)
     TestJointAngle();
 }
 
+OLD3DS_HOT_PATH
 void PhysicsJoint1D::UpdateDeformation(float deformationRate, float deformationSpeedRate, float dt)
 {
     if (mDeformationSpeed == 0 && mDeformation == 0)
@@ -860,11 +937,20 @@ void PhysicsJoint1D::ComputeJointAngle()
 {
     if (mParentRelative)
     {
+#ifdef SRR2_OLD3DS_JOINT_AXIS_ONCE
+        Vector v,parentAxis;
+        mParentObject->JointAxis(mParentIndex,parentAxis,false);
+        JointAngleFromAxis(parentAxis,mCurrentAngle);
+        ++jointAxisReuses1D;
+#else
         JointAngle(mParentRelative, mCurrentAngle);
+#endif
 
         // get the sign of the angle using the Axis of rotation
+#ifndef SRR2_OLD3DS_JOINT_AXIS_ONCE
         Vector v, parentAxis;
         mParentObject->JointAxis(mParentIndex, parentAxis, false);
+#endif
         v.CrossProduct(parentAxis, mAxis);
         if (mRotAxis.DotProduct(v) <= 0)
             mCurrentAngle = -mCurrentAngle;
@@ -922,6 +1008,7 @@ void PhysicsJoint3D::SetConstraintAngles(float inMinAngle, float inMaxAngle)
     mMinAngle = -mMaxAngle;
 }
 
+OLD3DS_HOT_PATH
 void PhysicsJoint3D::SetTransform(const Matrix& m)
 {
     PhysicsJoint::SetTransform(m);
@@ -936,10 +1023,15 @@ void PhysicsJoint3D::SetTransform(const Matrix& m)
     if (ref.DotProduct(mCurrentRotAxis) < 0) // forget about the isolate case == 0
         mCurrentRotAxis.Scale(-1.0f);
     
+#ifdef SRR2_OLD3DS_JOINT_AXIS_ONCE
+    ComputeJointAngle(&parentAxis);
+#else
     ComputeJointAngle();
+#endif
     TestJointAngle();
 }
 
+OLD3DS_HOT_PATH
 void PhysicsJoint3D::UpdateDeformation(float deformationRate, float deformationSpeedRate, float dt)
 {
     if (mDeformationSpeedEmpty == true && mDeformationEmpty == true)
@@ -1187,8 +1279,20 @@ void PhysicsJoint3D::TryFixOverFlow(const Vector& addSpeed)
     }
 }
 
-void PhysicsJoint3D::ComputeJointAngle()
+void PhysicsJoint3D::ComputeJointAngle(const Vector* preparedAxis)
 {
+#ifdef SRR2_OLD3DS_JOINT_AXIS_ONCE
+    // SetTransform already fetched this parent axis. Geometry is unchanged
+    // through rotation-axis preparation; all deformation and limit work stays live.
+    if(mParentRelative && preparedAxis)
+    {
+        JointAngleFromAxis(*preparedAxis,mCurrentAngle);
+        ++jointAxisReuses3D;
+    }
+    else
+#else
+    (void)preparedAxis;
+#endif
     JointAngle(mParentRelative, mCurrentAngle);
     
     if (mParentRelative)

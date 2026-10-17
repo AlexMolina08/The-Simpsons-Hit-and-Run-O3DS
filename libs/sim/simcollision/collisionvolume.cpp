@@ -254,10 +254,36 @@ void CollisionVolume::SetClone(CollisionVolume* clone)
 
 void CollisionVolume::UpdateAll()
 {
+#ifdef SRR2_OLD3DS_COLL_PREP
+    UpdatePosRot();
+#else
     UpdatePos();
     UpdateRot();
+#endif
     UpdateBBox();
 }
+
+#ifdef SRR2_OLD3DS_COLL_PREP
+void CollisionVolume::UpdatePosRot()
+{
+    // Rotation implementations read only this volume and its owner's transform.
+    // Finish each node while it is hot, retaining the separate bottom-up bounds
+    // pass. No transform pointer survives another GetTransform call: flexible
+    // SimStates return shared scratch storage.
+    if(mCollisionObject != NULL)
+    {
+        mUpdated = false;
+        if(mType != BBoxVolumeType && !mCollisionObject->IsManualUpdate())
+            mCollisionObject->GetTransform(mObjRefIndex).Transform(mDP, &mPosition);
+        SetRotation();
+    }
+    else
+        mUpdated = true;
+    if(mSubVolumeList != NULL)
+        for(int i = 0; i < mSubVolumeList->GetSize(); ++i)
+            mSubVolumeList->GetAt(i)->UpdatePosRot();
+}
+#endif
 
 void CollisionVolume::UpdateBSphere()
 {
