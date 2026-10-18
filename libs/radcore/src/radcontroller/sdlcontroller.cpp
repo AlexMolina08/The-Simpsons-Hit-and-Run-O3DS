@@ -35,6 +35,9 @@
 #include "radcontrollerbuffer.hpp"
 
 #include <SDL.h>
+#ifdef SRR2_OLD3DS_NATIVE_BENCH
+extern "C" int nativeBenchInput(int,int,int);
+#endif
 #ifdef SRR2_OLD_3DS
 #include "old3dsinput.hpp"
 #endif
@@ -305,6 +308,9 @@ class radControllerInputPointSDL
             {
 #if SDL_MAJOR_VERSION < 3
                 newValue = SDL_GameControllerGetButton( m_pController, (SDL_GameControllerButton)m_Identifier ) ? 1.0f : 0.0f;
+#ifdef SRR2_OLD3DS_NATIVE_BENCH
+                newValue=nativeBenchInput(0,m_Identifier,(int)newValue);
+#endif
 #ifdef SRR2_OLD_3DS
                 // L is reserved for camera movement. L+Select cycles camera modes;
                 // Select alone retains the vehicle reset binding.
@@ -325,6 +331,9 @@ class radControllerInputPointSDL
             {
 #if SDL_MAJOR_VERSION < 3
                 newValue = SDL_GameControllerGetAxis( m_pController, (SDL_GameControllerAxis)m_Identifier );
+#ifdef SRR2_OLD3DS_NATIVE_BENCH
+                newValue=nativeBenchInput(1,m_Identifier,(int)newValue);
+#endif
 
 #else
                 newValue = SDL_GetGamepadAxis( m_pController, (SDL_GamepadAxis)m_Identifier );
@@ -335,6 +344,9 @@ class radControllerInputPointSDL
             {
 #if SDL_MAJOR_VERSION < 3
                 newValue = SDL_GameControllerGetAxis( m_pController, (SDL_GameControllerAxis)m_Identifier );
+#ifdef SRR2_OLD3DS_NATIVE_BENCH
+                newValue=nativeBenchInput(1,m_Identifier,(int)newValue);
+#endif
 #ifdef SRR2_OLD_3DS
                 const bool cameraHeld = SDL_GameControllerGetButton(m_pController, SDL_CONTROLLER_BUTTON_LEFTSHOULDER) != 0;
                 if(m_Identifier == SDL_CONTROLLER_AXIS_LEFTX || m_Identifier == SDL_CONTROLLER_AXIS_LEFTY)

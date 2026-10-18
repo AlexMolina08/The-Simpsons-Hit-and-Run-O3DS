@@ -1172,6 +1172,9 @@ void WorldPhysicsManager::SetSimUnits()
 OLD3DS_HOT_PATH
 void WorldPhysicsManager::Update(unsigned int timeDeltaMilliSeconds)
 {
+#ifdef SRR2_OLD3DS_CAUSAL_DIAG
+    O3ExperimentTimer causalPhysics(O3E_PHYSICS);
+#endif
 
 
     BEGIN_PROFILE("WorldPhysicsManager::Update")
@@ -1275,6 +1278,9 @@ void WorldPhysicsManager::Update(unsigned int timeDeltaMilliSeconds)
     for(unsigned i = 0; i < numSubsteps; i++)
     {
         // do shit
+        #ifdef SRR2_OLD3DS_CAUSAL_DIAG
+        O3ExperimentTimer causalSubstep(O3E_SUBSTEP);
+#endif
         WorldSimSubstepGuts(substep, firstSubstep);
         firstSubstep = false;
     }

@@ -1662,6 +1662,9 @@ shadow generator setup since the tris won't shade properly.
 ========================================================================*/
 void WorldScene::RenderSimpleShadows( void )
 {
+#ifdef SRR2_OLD3DS_CAUSAL_DIAG
+    O3ExperimentWorld worldScope;
+#endif
 #ifdef SRR2_OLD_3DS
     Old3dsRenderScope timing(1);
 #endif
@@ -1731,6 +1734,9 @@ DSG_SET_PROFILE('C')
 
 void WorldScene::RenderOpaque( void )
 {
+#ifdef SRR2_OLD3DS_CAUSAL_DIAG
+    O3ExperimentWorld worldScope;
+#endif
 #ifdef SRR2_OLD3DS_QUEUE_METRICS
     picaQueueTimer queuePhaseTimer(g_picaQueueMetrics.opaqueTicks, true);
 #endif
@@ -1792,6 +1798,9 @@ END_PROFILE("qsort display")
 
 void WorldScene::RenderTranslucent( void )
 {
+#ifdef SRR2_OLD3DS_CAUSAL_DIAG
+    O3ExperimentWorld worldScope;
+#endif
 #ifdef SRR2_OLD3DS_QUEUE_METRICS
     picaQueueTimer queuePhaseTimer(g_picaQueueMetrics.translucentTicks, true);
 #endif

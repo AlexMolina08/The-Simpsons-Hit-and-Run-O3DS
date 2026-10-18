@@ -14,6 +14,7 @@
 //========================================
 // Standard Library
 #include <stdlib.h>
+#include <main/nativebench.h>
 #ifdef SRR2_OLD3DS_GPU_SKIN_SUPPORT
 #include <pddi/pica/skinning.hpp>
 #endif
@@ -621,6 +622,11 @@ void Game::Run()
         static unsigned lastPresented = g_picaPresentedFrames;
         // Pause first, then press SELECT to dump. Hold L as well to exit cleanly.
         // Never dump while simulation runs.
+        #ifdef SRR2_OLD3DS_CAUSAL_DIAG
+        if(ctx == CONTEXT_PAUSE && (hidKeysDown() & KEY_SELECT) && (hidKeysHeld() & KEY_R))
+            O3ExperimentArm((hidKeysHeld() & KEY_X)!=0);
+        else
+#endif
         if(ctx == CONTEXT_PAUSE && (hidKeysDown() & KEY_SELECT))
         {
             const unsigned dumpStart = radTimeGetMilliseconds();
@@ -636,6 +642,9 @@ void Game::Run()
         }
 #endif
 #ifdef SRR2_OLD_3DS
+        #ifdef SRR2_OLD3DS_CAUSAL_DIAG
+        // Begin after the interval capture resets its counters below.
+#endif
         const u64 frameStartTick = svcGetSystemTick();
         const u64 diagnosticTick = svcGetSystemTick();
         const u64 sampleTicks = diagnosticTick - lastDiagnosticTick;
@@ -779,6 +788,18 @@ void Game::Run()
         unsigned newTime =  radTimeGetMilliseconds();
         unsigned elapsed = newTime - time;
         time = newTime;
+#ifdef SRR2_OLD3DS_NATIVE_BENCH
+        elapsed=NativeBench::Begin(elapsed,ctx);
+#ifdef SRR2_OLD3DS_CAUSAL_DIAG
+        O3ExperimentExternalCapture(NativeBench::collecting);
+#endif
+#endif
+#ifdef SRR2_OLD3DS_CAUSAL_DIAG
+        O3ExperimentBegin(mFrameCount,ctx==CONTEXT_GAMEPLAY);
+#endif
+#ifdef SRR2_OLD3DS_CAUSAL_DIAG
+        if(ctx==CONTEXT_GAMEPLAY && O3ExperimentFixed()) elapsed=50;
+#endif
 
         //
         // Service the windows message loop.
@@ -830,9 +851,12 @@ void Game::Run()
 #endif
             DEMOPROFILE( g_DemoProfiler.Start(PROFILE_CHANNEL_AI); )
             mpTimerList->Service(); //nv
-            mpGameFlow->OnTimerDone(elapsed, NULL);
+            { NB_SCOPE(Update); mpGameFlow->OnTimerDone(elapsed, NULL); }
 #ifdef SRR2_OLD_3DS
             const u64 updateTicks=svcGetSystemTick()-phaseTick;
+#ifdef SRR2_OLD3DS_CAUSAL_DIAG
+            O3ExperimentPhase(0,updateTicks);
+#endif
             updateMs += updateTicks * 1000.0 / SYSCLOCK_ARM11;
 #ifdef SRR2_OLD3DS_GPU_SKIN_SUPPORT
             skinUpdateTicks=updateTicks;
@@ -847,7 +871,13 @@ void Game::Run()
             if( !mExitNow )
             {
                 DEMOPROFILE( g_DemoProfiler.Start(PROFILE_CHANNEL_RENDER); )
-                mpRenderFlow->OnTimerDone(elapsed, NULL);
+                {
+#ifdef SRR2_OLD3DS_CAUSAL_DIAG
+                    O3ExperimentTimer causalRender(O3E_RENDER);
+#endif
+                    NB_SCOPE(Render);
+                    mpRenderFlow->OnTimerDone(elapsed, NULL);
+                }
                 DEMOPROFILE( g_DemoProfiler.Stop(PROFILE_CHANNEL_RENDER); )
             }
         }
@@ -870,6 +900,9 @@ void Game::Run()
         //
 #ifdef SRR2_OLD_3DS
         const u64 renderTicks=svcGetSystemTick()-phaseTick;
+#ifdef SRR2_OLD3DS_CAUSAL_DIAG
+        O3ExperimentPhase(1,renderTicks);
+#endif
         renderMs += renderTicks * 1000.0 / SYSCLOCK_ARM11;
 #ifdef SRR2_OLD3DS_GPU_SKIN_SUPPORT
         skinRenderTicks=renderTicks;
@@ -911,12 +944,20 @@ void Game::Run()
         //
         DEMOPROFILE( g_DemoProfiler.Start(PROFILE_CHANNEL_LOAD); )
 #ifdef SRR2_OLD_3DS
-        serviceMs += (svcGetSystemTick() - phaseTick) * 1000.0 / SYSCLOCK_ARM11;
+        const u64 serviceTicks=svcGetSystemTick()-phaseTick;
+#ifdef SRR2_OLD3DS_CAUSAL_DIAG
+        O3ExperimentPhase(2,serviceTicks);
+#endif
+        serviceMs += serviceTicks * 1000.0 / SYSCLOCK_ARM11;
         phaseTick = svcGetSystemTick();
 #endif
-        p3d::loadManager->SwitchTask();
+        { NB_SCOPE(Stream); p3d::loadManager->SwitchTask(); }
 #ifdef SRR2_OLD_3DS
-        loadMs += (svcGetSystemTick() - phaseTick) * 1000.0 / SYSCLOCK_ARM11;
+        const u64 loadTicks=svcGetSystemTick()-phaseTick;
+#ifdef SRR2_OLD3DS_CAUSAL_DIAG
+        O3ExperimentPhase(3,loadTicks);
+#endif
+        loadMs += loadTicks * 1000.0 / SYSCLOCK_ARM11;
         ++profileFrames;
 #endif
         DEMOPROFILE( g_DemoProfiler.Stop(PROFILE_CHANNEL_LOAD); )
@@ -929,8 +970,14 @@ void Game::Run()
         const u64 frameBudgetTicks = (u64)SYSCLOCK_ARM11 / 30;
         const u64 frameTicks = svcGetSystemTick() - frameStartTick;
         const double currentWorkMs = frameTicks * 1000.0 / SYSCLOCK_ARM11;
+#ifdef SRR2_OLD3DS_CAUSAL_DIAG
+        O3ExperimentEnd(frameTicks,elapsed);
+#endif
 #ifdef SRR2_OLD3DS_GPU_SKIN_SUPPORT
         picaSkinEndFrame(frameTicks,skinUpdateTicks,skinRenderTicks,ctx==CONTEXT_GAMEPLAY);
+#endif
+#ifdef SRR2_OLD3DS_NATIVE_BENCH
+        if(NativeBench::End(frameTicks,ctx)) mExitNow=true;
 #endif
         workMs += currentWorkMs;
         if(currentWorkMs > peakWorkMs) peakWorkMs = currentWorkMs;
@@ -1009,7 +1056,12 @@ unsigned Game::GetRandomSeed ()
 {
     radDate date;
     ::radTimeGetDate (&date);
-    return ( ( date.m_Year << 16 ) | (  date.m_Month << 8 ) | ( date.m_Day ) ) ^ ( ( date.m_Second << 24 ) | ( date.m_Minute << 8 ) | ( date.m_Hour ) );
+    unsigned value=( ( date.m_Year << 16 ) | (  date.m_Month << 8 ) | ( date.m_Day ) ) ^ ( ( date.m_Second << 24 ) | ( date.m_Minute << 8 ) | ( date.m_Hour ) );
+#ifdef SRR2_OLD3DS_NATIVE_BENCH
+    return NativeBench::Seed(value);
+#else
+    return value;
+#endif
 }
 
 

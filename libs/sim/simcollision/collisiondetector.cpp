@@ -282,6 +282,43 @@ static void UpdateVolumeForPass(CollisionVolume* vol, unsigned passStamp)
 
 // collision distance : distance between the two volumes along the collision normal
 OLD3DS_HOT_PATH
+#ifdef SRR2_OLD3DS_PARALLEL_COLLISION
+void CollisionDetector::PrepareReadOnlyVolumes(TArray<CollisionObjectPair>* pairs)
+{
+    const unsigned stamp=mPreparationBatchStamp?mPreparationBatchStamp:NextUpdatePassStamp();
+    for(int i=0;i<pairs->GetSize();++i) {
+        CollisionObjectPair& p=pairs->GetAt(i);
+        if(!p.mNeedsUpdate)continue;
+        if(!p.mObjectA->IsStatic())UpdateVolumeForPass(p.VolumeA(),stamp);
+        if(!p.mObjectB->IsStatic())UpdateVolumeForPass(p.VolumeB(),stamp);
+    }
+}
+void CollisionDetector::CopyPreparedConfiguration(const CollisionDetector& source)
+{
+    mMinCollisionDistance=source.mMinCollisionDistance;
+    mCollisionFilter=source.mCollisionFilter;
+}
+void CollisionDetector::RestorePreparedTail(float dt,bool hasPairs,unsigned contacts,bool updatedPair)
+{
+    mDt=dt;
+    if(hasPairs)mNewColl=contacts;
+    if(updatedPair)mCollisionDistance=mMinCollisionDistance;
+}
+bool CollisionDetector::DetectPreparedArea(TArray<CollisionObjectPair>* pairs,TArray<Collision>* contacts,float dt)
+{
+    mDt=dt;SetCollisionList(*contacts);contacts->Clear();
+    mPreparedOverflow=false;mPreparedContactLimit=contacts->ArraySize();
+    for(int i=0;i<pairs->GetSize();++i) {
+        mNewColl=0;CollisionObjectPair& p=pairs->GetAt(i);
+        if(p.mNeedsUpdate) {
+            mCollisionDistance=mMinCollisionDistance;
+            DetectCollision(p.VolumeA(),p.VolumeB());p.mCollide=mNewColl;
+        }
+    }
+    mPreparedContactLimit=-1;return !mPreparedOverflow;
+}
+#endif
+
 void CollisionDetector::DetectCollision(TArray<CollisionObjectPair>* inPList, TArray<Collision>* inCList, float inDt, const bool printOut )
 {
     mDt = inDt;

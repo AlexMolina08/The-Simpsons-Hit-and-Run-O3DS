@@ -1,4 +1,8 @@
+#ifdef SRR2_OLD3DS_PREPARED_BACKEND
+#include <pddi/pica/preparedbackend.h>
+#endif
 #include <pddi/pica/pica.hpp>
+#include <main/old3dsexperiment.h>
 #include <pddi/pica/texture.hpp>
 #include <pddi/pica/context.hpp>
 #include <pddi/pica/swizzle.hpp>
@@ -58,6 +62,9 @@ public:
 };
 void picaTexture::TryPromoteVram()
 {
+#ifdef SRR2_OLD3DS_PREPARED_BACKEND
+    picaPreparedBackendFence();
+#endif
     if(vramUploaded)return;
     vramUploaded=true;
     if(!vramEligible)return;
@@ -179,6 +186,9 @@ picaTexture::picaTexture(picaContext* c)
 
 picaTexture::~picaTexture()
 {
+#ifdef SRR2_OLD3DS_PREPARED_BACKEND
+    picaPreparedBackendFence();
+#endif
     FreeStaging();
 
     if(created)
@@ -211,6 +221,9 @@ void picaTexture::FreeStaging(void)
 bool picaTexture::Create(int x, int y, int bpp, int alpha, int nMip,
                          pddiTextureType textureType, pddiTextureUsageHint usageHint)
 {
+#ifdef SRR2_OLD3DS_PREPARED_BACKEND
+    picaPreparedBackendFence();
+#endif
 #ifdef SRR2_OLD3DS_VRAM_TEXTURES
     // Movie construction explicitly sets KeepFullSize, and font pages set
     // FontTexture. Keep both CPU-writable; later ordinary reuploads can demote.
@@ -381,6 +394,9 @@ pddiLockInfo* picaTexture::Lock(int mipMap, pddiRect* rect)
 
 void picaTexture::Unlock(int mipLevel)
 {
+#ifdef SRR2_OLD3DS_PREPARED_BACKEND
+    picaPreparedBackendFence();
+#endif
     if((staging == NULL) || !created)
         return;
 
@@ -396,6 +412,12 @@ extern "C" int g_picaFontTexture = 0;
 
 void picaTexture::UploadLevel(int mipLevel)
 {
+#ifdef SRR2_OLD3DS_PREPARED_BACKEND
+    picaPreparedBackendFence();
+#endif
+#ifdef SRR2_OLD3DS_CAUSAL_DIAG
+    O3ExperimentTimer causalTimer(O3E_TEXTURE);
+#endif
 #ifdef SRR2_OLD3DS_VRAM_TEXTURES
     picaVramUpload vramUpload(tex,vramAllocation,reuploadLinear,valid);
 #endif
@@ -586,6 +608,9 @@ void picaTexture::UploadLevel(int mipLevel)
 
 void picaTexture::ConvertAndTile(const unsigned int* rgba, int w, int h, void* dstData)
 {
+#ifdef SRR2_OLD3DS_CAUSAL_DIAG
+    O3ExperimentTimer causalTimer(O3E_CONVERT);
+#endif
 #ifdef SRR2_OLD3DS_TEXTURE_TILES
     switch(hwFormat)
     {
@@ -655,7 +680,11 @@ void picaTexture::SetPriority(int p) { priority = p; }
 int  picaTexture::GetPriority(void)  { return priority; }
 
 void picaTexture::Prefetch(void) { }
-void picaTexture::Discard(void)  { }
+void picaTexture::Discard(void)  {
+#ifdef SRR2_OLD3DS_PREPARED_BACKEND
+    picaPreparedBackendFence();
+#endif
+}
 
 int  picaTexture::GetNumPaletteEntries(void)                   { return 0; }
 void picaTexture::SetPalette(int nEntries, pddiColour* palette) { }
@@ -665,6 +694,9 @@ int  picaTexture::GetPalette(pddiColour* palette)              { return 0; }
 bool picaTexture::UploadMovieYUV(const unsigned char* y, const unsigned char* cr, const unsigned char* cb,
                                int width, int height, int yPitch, int chromaPitch)
 {
+#ifdef SRR2_OLD3DS_PREPARED_BACKEND
+    picaPreparedBackendFence();
+#endif
 #ifdef SRR2_OLD3DS_VRAM_TEXTURES
     // Movie construction is excluded from promotion. Keep this guard so a future
     // caller can use its ordinary writable-texture fallback instead of writing VRAM.

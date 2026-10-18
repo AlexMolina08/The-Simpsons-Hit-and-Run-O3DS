@@ -118,6 +118,7 @@ u32 __ctru_heap_size = 30 * 1024 * 1024;
 // Project Includes
 //========================================
 #include <main/game.h>
+#include <main/nativebench.h>
 #include <main/win32platform.h>
 #include <main/singletons.h>
 #include <main/commandlineoptions.h>
@@ -196,6 +197,9 @@ extern "C" int main( int argc, char *argv[] )
     CommandLineOptions::InitDefaults();
     ProcessCommandLineArguments( argc, argv );
     ProcessCommandLineArgumentsFromFile();
+#ifdef SRR2_OLD3DS_NATIVE_BENCH
+    NativeBench::Init(argc,argv);
+#endif
 #ifdef SRR2_OLD_3DS
     printf("OLD3DS_INIT commandline_complete\n");
 #endif
@@ -290,6 +294,9 @@ extern "C" int main( int argc, char *argv[] )
     old3dsValidateJointRotationReuse();
 #endif
     pGame->Run();
+#ifdef SRR2_OLD3DS_NATIVE_BENCH
+    NativeBench::Dump();
+#endif
 #ifdef SRR2_OLD3DS_IO_WAIT_YIELD
     old3dsDumpIoWait();
 #endif

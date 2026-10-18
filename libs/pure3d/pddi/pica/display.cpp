@@ -1,3 +1,6 @@
+#ifdef SRR2_OLD3DS_PREPARED_BACKEND
+#include <pddi/pica/preparedbackend.h>
+#endif
 #include <pddi/pica/display.hpp>
 #include <pddi/pica/context.hpp>
 #include <pddi/base/debug.hpp>
@@ -7,6 +10,9 @@
 
 extern "C" void C3Di_UpdateContext(void);
 extern "C" bool C3Di_SplitFrame(u32** pBuf, u32* pSize);
+#ifdef SRR2_OLD3DS_NATIVE_UNIFORMS
+extern "C" void picaNativeUniformInvalidate(GPU_SHADER_TYPE type, int first, int count);
+#endif
 
 static const float PICA_STEREO_MAX_SHIFT   = 0.045f;
 
@@ -19,6 +25,9 @@ static void picaWriteEye(float shift)
     v.w = 0.0f;
     GPUCMD_AddWrite(GPUREG_VSH_FLOATUNIFORM_CONFIG, 0x80000000u | VSH_FVEC_u_eye);
     GPUCMD_AddWrites(GPUREG_VSH_FLOATUNIFORM_DATA, (u32*)v.c, 4);
+#ifdef SRR2_OLD3DS_NATIVE_UNIFORMS
+    picaNativeUniformInvalidate(GPU_VERTEX_SHADER, VSH_FVEC_u_eye, 1);
+#endif
 }
 
 extern "C" int      g_picaInFrame        = 0;
@@ -65,6 +74,9 @@ picaDisplay::picaDisplay(pddiDisplayInfo* info)
 
 picaDisplay::~picaDisplay()
 {
+#ifdef SRR2_OLD3DS_PREPARED_BACKEND
+    picaPreparedBackendFence();
+#endif
     if(inFrame)
     {
         C3D_FrameEnd(0);
@@ -253,7 +265,13 @@ void picaDisplay::BeginFrame(void)
 #ifdef SRR2_OLD_3DS
         const u64 waitTick = svcGetSystemTick();
 #endif
-        const bool frameOk = C3D_FrameBegin(0);
+        bool frameOk;
+        {
+#ifdef SRR2_OLD3DS_CAUSAL_DIAG
+            O3ExperimentTimer causalWait(O3E_WAIT);
+#endif
+            frameOk = C3D_FrameBegin(0);
+        }
 #ifdef SRR2_OLD_3DS
         g_picaFrameWaitMs += (svcGetSystemTick() - waitTick) * 1000.0 / SYSCLOCK_ARM11;
         // A failed begin submits no frame at all. The old code discarded this
@@ -358,6 +376,9 @@ void picaDisplay::EndFrame(void)
         // modified ranges. Flush the command list without flushing the entire
         // linear heap again on the memory-constrained Old 3DS profile.
 #ifdef SRR2_OLD_3DS
+        #ifdef SRR2_OLD3DS_CAUSAL_DIAG
+        O3ExperimentSubmit();
+#endif
         C3D_FrameEnd(GX_CMDLIST_FLUSH);
 #else
         C3D_FrameEnd(0);
@@ -374,6 +395,9 @@ void picaDisplay::EndFrame(void)
 
 void picaDisplay::SwapBuffers(void)
 {
+#ifdef SRR2_OLD3DS_PREPARED_BACKEND
+    picaPreparedBackendFence();
+#endif
     EndFrame();
     reset = false;
 }

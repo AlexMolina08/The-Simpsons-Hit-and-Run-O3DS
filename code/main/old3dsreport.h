@@ -306,6 +306,9 @@ static void Old3dsWriteReport(const Old3dsReport& record)
 // recover RAM, so hardware tests must explicitly dump before closing.
 static bool Old3dsDumpReports(const char* reason)
 {
+    #ifdef SRR2_OLD3DS_CAUSAL_DIAG
+    O3ExperimentDump();
+#endif
     if(!s_old3dsReports.Size()) return true;
     clearerr(stdout);
     const u64 begin = svcGetSystemTick();

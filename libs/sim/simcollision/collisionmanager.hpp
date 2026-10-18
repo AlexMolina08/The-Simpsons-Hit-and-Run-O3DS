@@ -14,6 +14,9 @@ namespace sim
 {
 
 class CollisionObject;
+#ifdef SRR2_OLD3DS_PARALLEL_COLLISION
+class ParallelCollisionState;
+#endif
 
 typedef unsigned CollisionManagerAttributes;
 const CollisionManagerAttributes CM_DetectIfMoving     = 1<<1;
@@ -121,6 +124,10 @@ protected:
     ~CollisionManager();
     
     void EndDetectCollision();
+#ifdef SRR2_OLD3DS_PARALLEL_COLLISION
+    ParallelCollisionState* mParallelCollision;
+    bool DetectParallel(float dt,float gameTime,bool printOut);
+#endif
 
     CollisionDetector mCollisionDetector;
     ImpulseBasedCollisionSolver mImpulseBasedCollisionSolver;

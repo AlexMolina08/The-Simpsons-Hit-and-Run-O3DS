@@ -10,9 +10,17 @@
 #include <typeinfo>
 #include <cstdio>
 static unsigned collisionTransformReads=0,collisionTransformReuses=0;
+static inline void CollisionTransformCount(unsigned& counter)
+{
+#ifdef SRR2_OLD3DS_PARALLEL_COLLISION
+    __atomic_fetch_add(&counter,1u,__ATOMIC_RELAXED);
+#else
+    ++counter;
+#endif
+}
 extern "C" void old3dsDumpCollisionTransforms()
 {
-    std::printf("COLL_TRANSFORM reads=%u reused=%u retained_bytes=0\n",collisionTransformReads,collisionTransformReuses);
+    std::printf("COLL_TRANSFORM reads=%u reused=%u retained_bytes=0\n",__atomic_load_n(&collisionTransformReads,__ATOMIC_RELAXED),__atomic_load_n(&collisionTransformReuses,__ATOMIC_RELAXED));
 }
 #endif
 
@@ -310,7 +318,7 @@ void CollisionVolume::UpdatePosRot(CollisionObject* stableOwner, SimState* stabl
         mUpdated=false;
         if(mType!=BBoxVolumeType && !mCollisionObject->IsManualUpdate())
         {
-            ++collisionTransformReads;
+            CollisionTransformCount(collisionTransformReads);
             const Matrix& matrix=mCollisionObject->GetTransform(mObjRefIndex);
             matrix.Transform(mDP,&mPosition);
             // A custom earlier node can replace its owner's SimState. The
@@ -1429,13 +1437,13 @@ namespace sim {
 void CylinderVolume::SetRotationFromTransform(const Matrix& matrix)
 {
     if(typeid(*this)!=typeid(CylinderVolume)) {SetRotation();return;}
-    mUpdated=true;++collisionTransformReuses;
+    mUpdated=true;CollisionTransformCount(collisionTransformReuses);
     matrix.RotateVector(mAxisRef,&mAxis);
 }
 void OBBoxVolume::SetRotationFromTransform(const Matrix& matrix)
 {
     if(typeid(*this)!=typeid(OBBoxVolume)) {SetRotation();return;}
-    mUpdated=true;++collisionTransformReuses;
+    mUpdated=true;CollisionTransformCount(collisionTransformReuses);
     const Matrix m=matrix;
     m.RotateVector(mAxisRef[0],&mAxis[0]);
     m.RotateVector(mAxisRef[1],&mAxis[1]);
@@ -1448,7 +1456,7 @@ void OBBoxVolume::SetRotationFromTransform(const Matrix& matrix)
 void WallVolume::SetRotationFromTransform(const Matrix& matrix)
 {
     if(typeid(*this)!=typeid(WallVolume)) {SetRotation();return;}
-    mUpdated=true;++collisionTransformReuses;
+    mUpdated=true;CollisionTransformCount(collisionTransformReuses);
     matrix.RotateVector(mNormalRef,&mNormal);
 }
 }

@@ -1,7 +1,21 @@
+#ifdef SRR2_OLD3DS_RENDER_WORKER
+#include "renderworker.h"
+#endif
+#ifdef SRR2_OLD3DS_OCCLUSION
+#include <pddi/pica/occlusionmetrics.h>
+#include <typeinfo>
+#endif
+#ifdef SRR2_OLD3DS_NATIVE_CONTEXT
+#include <pddi/pica/trackeduniforms.hpp>
+#include <pddi/pica/nativecontext.h>
+#endif
 #ifdef SRR2_OLD3DS_DRAW_PACKET
 #include <pddi/pica/drawpacket.h>
 #endif
 #include <main/old3dshot.h>
+#if defined(SRR2_OLD3DS_RESIDENT_SHADERS) && defined(SRR2_OLD3DS_NATIVE_BENCH)
+#include <main/nativebench.h>
+#endif
 #ifdef SRR2_OLD3DS_SKIN_CLIP
 #include <pddi/pica/skinclip.hpp>
 #include <cstdlib>
@@ -109,6 +123,10 @@ static_assert(VSH_FLAG_u_wheelPalette==(1u<<3) && VSH_ULEN_u_wheelMV==16 && VSH_
 
 extern "C" const unsigned char pddi_pica_shbin[];
 extern "C" const unsigned int  pddi_pica_shbin_size;
+#ifdef SRR2_OLD3DS_RESIDENT_SHADERS
+extern "C" const unsigned char pddi_resident_shbin[];
+extern "C" const unsigned int pddi_resident_shbin_size;
+#endif
 #ifdef SRR2_OLD3DS_GPU_SKIN
 #include "skin_shbin.h"
 #ifdef SRR2_OLD3DS_GPU_SKIN_EYE_PALETTE
@@ -122,6 +140,22 @@ static_assert(VSH_FVEC_u_bones == 27 && VSH_ULEN_u_bones == 69, "Skin shader reg
 #endif
 extern "C" const unsigned char pddi_skin_shbin[];
 extern "C" const unsigned int pddi_skin_shbin_size;
+#endif
+
+#ifdef SRR2_OLD3DS_PREPARED_BACKEND
+#include <pddi/pica/prepareddraw.hpp>
+#include <pddi/pica/preparedgeometry.hpp>
+#include <pddi/pica/preparedskin.hpp>
+#include <pddi/pica/preparedexecutor.hpp>
+#ifdef SRR2_OLD3DS_PREPARED_THREAD
+#include <pddi/pica/preparedworker.hpp>
+#endif
+#include <new>
+#include <typeinfo>
+bool g_picaPreparedBackendEnabled=false;
+unsigned g_picaPreparedExecution=1;
+static picaPreparedBackendStats preparedBackendStats={};
+void picaPreparedBackendGetStats(picaPreparedBackendStats* output){*output=preparedBackendStats;}
 #endif
 
 static const GPU_Primitive_t primTypeTable[5] =
@@ -191,6 +225,13 @@ static void picaAptHook(APT_HookType hook, void*)
 }
 
 static picaContext* s_picaContext = NULL;
+#ifdef SRR2_OLD3DS_PREPARED_BACKEND
+void picaPreparedBackendFence(){if(s_picaContext)s_picaContext->FlushPreparedExecution(true);}
+bool picaPreparedCaptureState(unsigned kind,unsigned a,unsigned b,unsigned c,unsigned d,unsigned e,unsigned f)
+{
+    return s_picaContext && s_picaContext->PreparedBatching() && s_picaContext->QueuePreparedState({kind,a,b,c,d,e,f});
+}
+#endif
 #ifdef SRR2_OLD3DS_UNLIT_PROJECTION
 void picaContext::DumpUnlitProjectionStats()
 {
@@ -239,7 +280,18 @@ picaContext::picaContext(picaDevice* dev, picaDisplay* disp)
 
     extGamma = new picaExtGamma;
 
+#ifdef SRR2_OLD3DS_RESIDENT_SHADERS
+    const bool useResident =
+#ifdef SRR2_OLD3DS_NATIVE_BENCH
+        NativeBench::ResidentShaders();
+#else
+        true;
+#endif
+    shaderBinary = useResident ? DVLB_ParseFile((u32*)pddi_resident_shbin, pddi_resident_shbin_size)
+                              : DVLB_ParseFile((u32*)pddi_pica_shbin, pddi_pica_shbin_size);
+#else
     shaderBinary = DVLB_ParseFile((u32*)pddi_pica_shbin, pddi_pica_shbin_size);
+#endif
     PDDIASSERT(shaderBinary != NULL);
     if(shaderBinary == NULL)
     {
@@ -295,10 +347,20 @@ picaContext::picaContext(picaDevice* dev, picaDisplay* disp)
         noNormalLayout = false;
 #endif
 #ifdef SRR2_OLD3DS_GPU_SKIN
+#ifdef SRR2_OLD3DS_RESIDENT_SHADERS
+    // Both DVLEs share one DVLP. Citro3D changes entry points and attributes
+    // without uploading instructions again. Uniform invalidation stays intact.
+    skinBinary = useResident ? shaderBinary : DVLB_ParseFile((u32*)pddi_skin_shbin, pddi_skin_shbin_size);
+#else
     skinBinary = DVLB_ParseFile((u32*)pddi_skin_shbin, pddi_skin_shbin_size);
+#endif
     if(skinBinary) {
         shaderProgramInit(&skinProgram);
+#ifdef SRR2_OLD3DS_RESIDENT_SHADERS
+        shaderProgramSetVsh(&skinProgram, &skinBinary->DVLE[skinBinary==shaderBinary ? 1 : 0]);
+#else
         shaderProgramSetVsh(&skinProgram, &skinBinary->DVLE[0]);
+#endif
 #ifdef SRR2_OLD3DS_GPU_SKIN_PACKED
         C3D_AttrInfo packedAttributes;
         AttrInfo_Init(&packedAttributes);
@@ -324,6 +386,15 @@ picaContext::picaContext(picaDevice* dev, picaDisplay* disp)
     }
 #endif
 
+#ifdef SRR2_OLD3DS_NATIVE_CONTEXT
+    picaNativeRegisterPrograms(shaderBinary ? &shaderProgram : NULL,
+#ifdef SRR2_OLD3DS_GPU_SKIN
+                              skinBinary ? &skinProgram : NULL
+#else
+                              NULL
+#endif
+                              );
+#endif
     C3D_DepthMap(true, -1.0f, 0.0f);
     C3D_FragOpMode(GPU_FRAGOPMODE_GL);
 
@@ -382,10 +453,32 @@ picaContext::picaContext(picaDevice* dev, picaDisplay* disp)
     clearShader->SetInt(PDDI_SP_COLOURWRITE, PDDI_WRITE_NONE);
 
     lastError = PDDI_OK;
+#ifdef SRR2_OLD3DS_PREPARED_BACKEND
+    // Display setup can mark a frame active before this constructor finishes.
+    // Its remaining direct SDK initialization must retain main-thread ownership.
+    preparedBatchReady=true;
+#endif
 }
 
 picaContext::~picaContext()
 {
+#ifdef SRR2_OLD3DS_PREPARED_BACKEND
+    FlushPreparedExecution(true);
+#ifdef SRR2_OLD3DS_PREPARED_THREAD
+    delete preparedWorker;preparedWorker=nullptr;
+#endif
+    delete preparedExecutor;preparedExecutor=nullptr;
+    delete preparedInputPool;preparedInputPool=nullptr;
+#endif
+#ifdef SRR2_OLD3DS_RENDER_WORKER
+    picaRenderWorkerShutdown();
+#endif
+#ifdef SRR2_OLD3DS_OCCLUSION
+    picaVisibilityShutdown();
+#endif
+#ifdef SRR2_OLD3DS_NATIVE_CONTEXT
+    picaNativeRegisterPrograms(NULL,NULL);
+#endif
 #ifdef SRR2_OLD3DS_STATIC_BATCH
     ClearStaticBatches();
 #endif
@@ -394,6 +487,9 @@ picaContext::~picaContext()
 #endif
 #ifdef SRR2_OLD3DS_DRAW_PREP
     FlushStreams();
+#ifdef SRR2_OLD3DS_RENDER_WORKER
+    picaRenderWorkerEndFrame();
+#endif
     display->EndFrame();
     C3Di_RenderQueueWaitDone();
     picaBufferReclaim();
@@ -420,7 +516,10 @@ picaContext::~picaContext()
     immIndices  = NULL;
 
 #ifdef SRR2_OLD3DS_GPU_SKIN
-    if(skinBinary) { shaderProgramFree(&skinProgram); DVLB_Free(skinBinary); }
+    if(skinBinary) {
+        shaderProgramFree(&skinProgram);
+        if(skinBinary!=shaderBinary) DVLB_Free(skinBinary);
+    }
 #endif
     if(shaderBinary)
     {
@@ -432,12 +531,20 @@ picaContext::~picaContext()
     display->SetContext(NULL);
     display->Release();
     device->Release();
+    if(s_picaContext==this)s_picaContext=nullptr;
 }
 
 picaStateCache g_picaState;
 
 void picaContext::BeginFrame()
 {
+#ifdef SRR2_OLD3DS_PREPARED_BACKEND
+    FlushPreparedExecution(true);
+#endif
+#ifdef SRR2_OLD3DS_OCCLUSION
+    visibilityWorld=false;
+    picaVisibilityReset(true);
+#endif
     pddiBaseContext::BeginFrame();
 #ifdef SRR2_OLD3DS_STATIC_BATCH
     if(++staticBatchFrame==0) ClearStaticBatches();
@@ -449,6 +556,9 @@ void picaContext::BeginFrame()
     picaStateInvalidate();
 
     display->BeginFrame();
+#ifdef SRR2_OLD3DS_RENDER_WORKER
+    if(g_picaInFrame)picaRenderWorkerBeginFrame();else picaRenderWorkerEndFrame();
+#endif
 #ifdef SRR2_OLD3DS_DRAW_PREP
     if(g_picaInFrame) picaBufferReclaim();
 #endif
@@ -512,12 +622,18 @@ void picaContext::BeginFrame()
 
 void picaContext::EndFrame()
 {
+#ifdef SRR2_OLD3DS_PREPARED_BACKEND
+    FlushPreparedExecution(true);
+#endif
 #ifdef SRR2_OLD_3DS
     EndWorld();
 #endif
     pddiBaseContext::EndFrame();
 
     FlushStreams();
+#ifdef SRR2_OLD3DS_RENDER_WORKER
+    picaRenderWorkerEndFrame();
+#endif
     display->EndFrame();
 
 #ifdef SRR2_OLD3DS_QUEUE_METRICS
@@ -528,6 +644,12 @@ void picaContext::EndFrame()
 
 void picaContext::Clear(unsigned bufferMask)
 {
+#ifdef SRR2_OLD3DS_PREPARED_BACKEND
+    FlushPreparedExecution(true);
+#endif
+#ifdef SRR2_OLD3DS_OCCLUSION
+    picaVisibilityReset(false);
+#endif
     pddiBaseContext::Clear(bufferMask);
 
     PushState((pddiStateMask)(PDDI_STATE_RENDER | PDDI_STATE_VIEW));
@@ -632,6 +754,9 @@ void picaContext::ApplyProjection(pddiMatrix* m)
     }
 
     projUploaded = false;
+#ifdef SRR2_OLD3DS_PREPARED_BACKEND
+    ++preparedProjectionEpoch;
+#endif
 }
 
 void picaContext::SetupViewport(void)
@@ -701,12 +826,19 @@ void picaContext::ApplyViewport(void)
     hwViewport[2] = wantViewport[2];
     hwViewport[3] = wantViewport[3];
 
+#ifdef SRR2_OLD3DS_PREPARED_BACKEND
+    if(PreparedBatching() && QueuePreparedState({PICA_PREPARED_VIEWPORT,(u32)hwViewport[0],(u32)hwViewport[1],(u32)hwViewport[2],(u32)hwViewport[3],0,0}))return;
+    FlushPreparedExecution(true);
+#endif
     C3D_SetViewport((u32)hwViewport[0], (u32)hwViewport[1],
                     (u32)hwViewport[2], (u32)hwViewport[3]);
 }
 
 void picaContext::SetupHardwareProjection(void)
 {
+#ifdef SRR2_OLD3DS_OCCLUSION
+    picaVisibilityReset(false);
+#endif
     pddiMatrix projection;
 
     switch(state.viewState->projectionMode)
@@ -788,14 +920,22 @@ void picaContext::SetScissor(pddiRect* rect)
 
     if((r->left <= 0) && (r->top <= 0) && (r->right >= w) && (r->bottom >= h))
     {
-        C3D_SetScissor(GPU_SCISSOR_DISABLE, 0, 0, 0, 0);
+#ifdef SRR2_OLD3DS_PREPARED_BACKEND
+        SubmitPreparedScissor(GPU_SCISSOR_DISABLE,0,0,0,0);
+#else
+        C3D_SetScissor(GPU_SCISSOR_DISABLE,0,0,0,0);
+#endif
         return;
     }
 
 #ifdef SRR2_OLD_3DS
     if(display->IsWorldTarget() && !bottomPass)
     {
+#ifdef SRR2_OLD3DS_PREPARED_BACKEND
+        SubmitPreparedScissor(GPU_SCISSOR_NORMAL,
+#else
         C3D_SetScissor(GPU_SCISSOR_NORMAL,
+#endif
             (h - r->bottom) * display->WorldHeight() / h,
             (w - r->right) * display->WorldWidth() / w,
             (h - r->top) * display->WorldHeight() / h,
@@ -803,13 +943,20 @@ void picaContext::SetScissor(pddiRect* rect)
         return;
     }
 #endif
-    C3D_SetScissor(GPU_SCISSOR_NORMAL,
+    #ifdef SRR2_OLD3DS_PREPARED_BACKEND
+        SubmitPreparedScissor(GPU_SCISSOR_NORMAL,
+#else
+        C3D_SetScissor(GPU_SCISSOR_NORMAL,
+#endif
                    (u32)(h - r->bottom), (u32)(w - r->right),
                    (u32)(h - r->top),    (u32)(w - r->left));
 }
 
 void picaContext::FlushStreams()
 {
+#ifdef SRR2_OLD3DS_CAUSAL_DIAG
+    O3ExperimentTimer causalTimer(O3E_STREAM_FLUSH);
+#endif
     if(immVertexUsed) GSPGPU_FlushDataCache(immVertices, immVertexUsed);
     if(immIndexUsed) GSPGPU_FlushDataCache(immIndices, immIndexUsed);
 #ifdef SRR2_OLD3DS_SKIN_RING
@@ -906,13 +1053,20 @@ pddiPrimStream* picaContext::BeginPrims(pddiShader* mat, pddiPrimType primType, 
 
     thePrimStream.stream = theImmBuffer->Lock();
 
+#ifdef SRR2_OLD3DS_OCCLUSION
+    if(typeid(*mat)!=typeid(picaMat))picaVisibilityForeignState();
+#endif
     pddiBaseShader* material = (pddiBaseShader*)mat;
     ADD_STAT(PDDI_STAT_MATERIAL_OPS, !material->IsCurrent());
     {
 #ifdef SRR2_OLD_3DS
         Old3dsOperationScope timing(O3_MATERIAL);
 #endif
+#ifdef SRR2_OLD3DS_PREPARED_BACKEND
+        ApplyDrawMaterial(material);
+#else
         material->SetMaterial();
+#endif
     }
 
     return &thePrimStream;
@@ -1162,28 +1316,54 @@ bool picaPrimBuffer::CullNative()
 OLD3DS_HOT_PATH
 void picaContext::DrawPrimBuffer(pddiShader* mat, pddiPrimBuffer* buffer)
 {
+#ifdef SRR2_OLD3DS_CAUSAL_DIAG
+    O3ExperimentTimer causalTimer(O3E_BACKEND);
+#endif
 #ifdef SRR2_OLD3DS_CLIP_BOUNDS
     // Entity/geometry callbacks and all simulation still execute. A rejected
     // native draw cannot affect pixels, so its material setup is unnecessary.
     if(static_cast<picaPrimBuffer*>(buffer)->CullNative()) return;
 #endif
 
+#ifdef SRR2_OLD3DS_CAUSAL_DIAG
+    if(g_o3WorldDepth && g_o3Mode==O3_SUPPRESS) {
+        // Keep all upstream geometry/pose/display callbacks and immediate writes.
+        // Persistent draws stop before material traversal; streams stop in Display.
+        O3ExperimentDraw(static_cast<picaPrimBuffer*>(buffer)->DiagnosticVertexCount()); return;
+    }
+#endif
 #ifdef SRR2_OLD3DS_QUEUE_METRICS
     picaQueueBackendTimer backendTimer;
 #endif
     if(!mat)
         mat = defaultShader;
 
+#ifdef SRR2_OLD3DS_OCCLUSION
+    const bool visibilityKnown=typeid(*mat)==typeid(picaMat);
+    if(!visibilityKnown)picaVisibilityForeignState();
+    const bool visibilityHidden=visibilityKnown && VisibilityQuery(static_cast<picaPrimBuffer*>(buffer));
+    if(visibilityHidden && g_picaVisibilityMode==1)return;
+    const u64 visibilityStart=visibilityHidden && g_picaVisibilityMode==2?svcGetSystemTick():0;
+    const unsigned visibilityBeforeDraws=g_old3dsDrawCalls;
+#endif
     pddiBaseShader* material = (pddiBaseShader*)mat;
     ADD_STAT(PDDI_STAT_MATERIAL_OPS, !material->IsCurrent());
     {
 #ifdef SRR2_OLD_3DS
         Old3dsOperationScope timing(O3_MATERIAL);
 #endif
+#ifdef SRR2_OLD3DS_PREPARED_BACKEND
+        ApplyDrawMaterial(material);
+#else
         material->SetMaterial();
+#endif
     }
 
     ((picaPrimBuffer*)buffer)->Display();
+#ifdef SRR2_OLD3DS_OCCLUSION
+    if(visibilityStart)picaVisibilityObserved(svcGetSystemTick()-visibilityStart);
+    if(visibilityKnown && g_old3dsDrawCalls!=visibilityBeforeDraws)VisibilityRaster(static_cast<picaPrimBuffer*>(buffer));
+#endif
 }
 
 #ifdef SRR2_OLD3DS_MATERIAL_QUEUE
@@ -1356,6 +1536,9 @@ void picaContext::SetAmbientLight(pddiColour col)
 
 void picaContext::InvalidateUniformCache(void)
 {
+#ifdef SRR2_OLD3DS_PREPARED_BACKEND
+    ++preparedUniformEpoch;
+#endif
 #ifdef SRR2_OLD_3DS
     modelViewUploaded = false;
 #endif
@@ -1451,6 +1634,9 @@ void picaContext::CaptureEyeLight(int handle)
 
 void picaContext::RebuildLightArray(void)
 {
+#ifdef SRR2_OLD3DS_PREPARED_BACKEND
+    ++preparedLightEpoch;
+#endif
     nActiveLights = 0;
 
     for(int i = 0; i < PDDI_MAX_LIGHTS; i++)
@@ -1519,8 +1705,379 @@ void picaContext::RebuildLightArray(void)
     lightsDirty = false;
 }
 
+#ifdef SRR2_OLD3DS_PREPARED_BACKEND
+bool picaContext::PreparedBatching() const
+{return g_picaPreparedBackendEnabled && g_picaInFrame && g_picaPreparedExecution>=3 && preparedBatchReady && !preparedBatchFailed;}
+
+void picaContext::BeginPreparedExecution()
+{
+#ifdef SRR2_OLD3DS_PREPARED_THREAD
+    if(preparedWorker && preparedWorker->Active())return;
+#endif
+    if(!preparedExecutor)preparedExecutor=new(std::nothrow)picaPreparedExecutor;
+    if(!preparedExecutor){preparedBatchFailed=true;return;}
+    if(preparedExecutor->valid)return;
+    picaPreparedExecutor& executor=*preparedExecutor;
+    picaPreparedUniformCache& cache=executor.uniforms;
+    cache.modelViewUploaded=modelViewUploaded;cache.projUploaded=projUploaded;
+    cache.lightsUploaded=lightsUploaded;cache.matUploaded=matUploaded;
+    cache.lastLit=lastLit;cache.miscUploaded=miscUploaded;
+    if(modelViewUploaded)cache.lastModelView=lastModelView;
+    if(matUploaded){cache.lastMatAmbient=lastMatAmbient;cache.lastMatDiffuse=lastMatDiffuse;cache.lastMatEmissive=lastMatEmissive;cache.lastSceneAmbient=lastSceneAmbient;}
+#ifdef SRR2_OLD3DS_UNLIT_PROJECTION
+    cache.sparseUnlitProjection=sparseUnlitProjection;cache.lastFastUnlit=lastFastUnlit;
+#endif
+    cache.invalidationEpoch=preparedUniformEpoch;cache.lightEpoch=preparedLightEpoch;cache.projectionEpoch=preparedProjectionEpoch;
+    executor.Begin();
+#ifdef SRR2_OLD3DS_PREPARED_THREAD
+    if(g_picaPreparedExecution==4 || g_picaPreparedExecution==6)
+    {
+        if(!preparedInputPool)preparedInputPool=new(std::nothrow)picaPreparedInputPool;
+        if(preparedInputPool && !preparedWorkerAttempted){preparedWorkerAttempted=true;preparedWorker=picaPreparedWorker::Create(preparedExecutor,preparedInputPool);}
+        if(preparedWorker)preparedWorker->Begin(g_picaPreparedExecution==6);
+    }
+#endif
+}
+
+void picaContext::FlushPreparedExecution(bool release)
+{
+#ifdef SRR2_OLD3DS_PREPARED_THREAD
+    picaPreparedExecutor* completedExecutor=nullptr;
+    if(preparedWorker && preparedWorker->Active())
+    {
+        if(!release){preparedWorker->Publish(preparedExecutor,preparedInputPool);return;}
+        completedExecutor=preparedWorker->Finish(preparedExecutor,preparedInputPool);
+        preparedBackendStats.batchFlushes+=completedExecutor->flushes;
+        preparedBackendStats.batchedDraws+=completedExecutor->submitted;
+        preparedBackendStats.workerDraws=preparedWorker->workerDraws;preparedBackendStats.mainDraws=preparedWorker->mainDraws;
+        preparedBackendStats.workerJobs=preparedWorker->jobs;
+        preparedBackendStats.comparisons=preparedWorker->comparisons;preparedBackendStats.mismatches=preparedWorker->mismatches;
+        preparedBackendStats.workerAvailable=1;preparedBackendStats.workerCore=preparedWorker->workerCore;
+        preparedBackendStats.initialAllowance=preparedWorker->initialAllowance;preparedBackendStats.actualAllowance=preparedWorker->actualAllowance;
+        preparedBackendStats.mainFp=preparedWorker->mainFp;preparedBackendStats.workerFp=preparedWorker->workerFp;
+        preparedBackendStats.workerWaitTicks=preparedWorker->waitTicks;preparedBackendStats.workerCommitTicks=preparedWorker->commitTicks;
+    }
+    if(!completedExecutor && (!preparedExecutor || !preparedExecutor->valid || preparedExecutor->draining))return;
+    picaPreparedExecutor& executor=completedExecutor?*completedExecutor:*preparedExecutor;
+#else
+    if(!preparedExecutor || !preparedExecutor->valid || preparedExecutor->draining)return;
+    picaPreparedExecutor& executor=*preparedExecutor;
+#endif
+    const unsigned beforeFlushes=executor.flushes,beforeDraws=executor.submitted;
+    const u64 executionStart=svcGetSystemTick();
+    executor.Flush();
+    preparedBackendStats.batchTicks+=svcGetSystemTick()-executionStart;
+    preparedBackendStats.batchFlushes+=executor.flushes-beforeFlushes;
+    preparedBackendStats.batchedDraws+=executor.submitted-beforeDraws;
+    u32* commands;u32 commandSize,commandOffset;GPUCMD_GetBuffer(&commands,&commandSize,&commandOffset);
+    if(commands){if(commandOffset>g_old3dsCmdHighWater)g_old3dsCmdHighWater=commandOffset;g_old3dsCmdSize=commandSize;}
+#ifdef SRR2_OLD3DS_GPU_SKIN_SUPPORT
+    if(commandOffset>g_picaSkinMetrics.maxCommand)g_picaSkinMetrics.maxCommand=commandOffset;
+#endif
+    picaPreparedUniformCache& cache=executor.uniforms;
+    modelViewUploaded=cache.modelViewUploaded;projUploaded=cache.projUploaded;
+    lightsUploaded=cache.lightsUploaded;matUploaded=cache.matUploaded;
+    lastLit=cache.lastLit;miscUploaded=cache.miscUploaded;
+    if(modelViewUploaded)lastModelView=cache.lastModelView;
+    if(matUploaded){lastMatAmbient=cache.lastMatAmbient;lastMatDiffuse=cache.lastMatDiffuse;lastMatEmissive=cache.lastMatEmissive;lastSceneAmbient=cache.lastSceneAmbient;}
+#ifdef SRR2_OLD3DS_UNLIT_PROJECTION
+    sparseUnlitProjection=cache.sparseUnlitProjection;lastFastUnlit=cache.lastFastUnlit;
+    fastUnlitCalls+=cache.fastUnlitCalls;otherProjectionCalls+=cache.otherProjectionCalls;
+#endif
+#ifdef SRR2_OLD3DS_DIRECTIONAL_LIGHT
+    directionalDraws+=cache.directionalDraws;generalLightDraws+=cache.generalLightDraws;
+#endif
+    g_old3dsModelViewUploads+=cache.modelViewUploads;g_old3dsModelViewReuses+=cache.modelViewReuses;
+    Old3dsCount(O3_MV_UPLOAD,cache.modelViewUploads);Old3dsCount(O3_MV_REUSE,cache.modelViewReuses);
+    Old3dsCount(O3_STATE_CHANGE,executor.stateChanges);Old3dsCount(O3_TEX_REQUEST,executor.textureRequests);Old3dsCount(O3_TEX_CHANGE,executor.textureChanges);
+#ifdef SRR2_OLD3DS_QUEUE_METRICS
+    g_picaQueueMetrics.textures+=executor.textureChanges;
+#endif
+    cache.modelViewUploads=cache.modelViewReuses=cache.fastUnlitCalls=cache.otherProjectionCalls=cache.directionalDraws=cache.generalLightDraws=0;
+    executor.stateChanges=executor.textureRequests=executor.textureChanges=0;
+    if(release)executor.End();
+}
+
+bool picaContext::PreparedGeometryRoom()
+{
+    BeginPreparedExecution();
+    if(!preparedExecutor)return false;
+#ifdef SRR2_OLD3DS_PREPARED_THREAD
+    if(preparedWorker && preparedWorker->Active())
+    {
+        if(preparedWorker->GeometryRoom(preparedExecutor->geometry))return true;
+        // Drain conservative reservations before consulting actual remaining room.
+        FlushPreparedExecution(true);BeginPreparedExecution();
+        if(preparedWorker && preparedWorker->Active())return preparedWorker->GeometryRoom(0);
+    }
+#endif
+    if(!preparedExecutor->HasRoomForGeometry())FlushPreparedExecution(false);
+    return preparedExecutor->HasRoomForGeometry();
+}
+
+#ifdef SRR2_OLD3DS_PREPARED_THREAD
+void picaContext::PreparedCommandBuffer(u32** data,u32* size,u32* offset)
+{
+    if(preparedWorker && preparedWorker->Active()){preparedWorker->Buffer(data,size,offset);return;}
+    GPUCMD_GetBuffer(data,size,offset);
+}
+#endif
+
+bool picaContext::QueuePreparedState(const picaPreparedState& input)
+{
+    BeginPreparedExecution();
+    if(!preparedExecutor)return false;
+    if(preparedExecutor->Full())FlushPreparedExecution(false);
+    preparedExecutor->AddState(input);return true;
+}
+
+bool picaContext::QueuePreparedPalette(const picaPreparedSkinPalette& input,unsigned first)
+{
+    BeginPreparedExecution();if(!preparedExecutor)return false;
+    if(preparedExecutor->Full() || preparedExecutor->PaletteFull())FlushPreparedExecution(false);
+    preparedExecutor->AddPalette(input,first);return true;
+}
+bool picaContext::QueuePreparedProgram(shaderProgram_s* program,C3D_AttrInfo* attributes,bool resetEye,unsigned eyeRegister,float convergence)
+{
+    BeginPreparedExecution();if(!preparedExecutor)return false;
+    if(preparedExecutor->Full())FlushPreparedExecution(false);
+    preparedExecutor->AddProgram(program,attributes,resetEye,eyeRegister,convergence);return true;
+}
+bool picaContext::QueuePreparedLayout(C3D_AttrInfo* attributes,bool fixedNormal)
+{
+    BeginPreparedExecution();if(!preparedExecutor)return false;
+    if(preparedExecutor->Full())FlushPreparedExecution(false);
+    preparedExecutor->AddLayout(attributes,fixedNormal);return true;
+}
+void picaContext::SubmitPreparedScissor(GPU_SCISSORMODE mode,u32 a,u32 b,u32 c,u32 d)
+{
+    if(PreparedBatching() && QueuePreparedState({PICA_PREPARED_SCISSOR,unsigned(mode),a,b,c,d,0}))return;
+    FlushPreparedExecution(true);C3D_SetScissor(mode,a,b,c,d);
+}
+
+void picaContext::QueuePreparedGeometry(const picaPreparedGeometry& input)
+{
+    BeginPreparedExecution();
+    picaPreparedExecutor::Require(preparedExecutor!=nullptr,"geometry_arena_allocation");
+    if(preparedExecutor->Full())FlushPreparedExecution(false);
+    preparedExecutor->AddGeometry(input);
+}
+
+OLD3DS_HOT_PATH
+void picaContext::ApplyDrawMaterial(pddiBaseShader* material)
+{
+    if(!g_picaPreparedBackendEnabled || !g_picaInFrame || typeid(*material)!=typeid(picaMat))
+    {
+        picaPreparedDrawInputs* previous=preparedDrawCapture;
+        preparedDrawCapture=nullptr;
+        FlushPreparedExecution(true);
+        ++preparedBackendStats.legacyMaterials;
+        picaPreparedImmediateScope immediate;
+        material->SetMaterial();
+        preparedDrawCapture=previous;
+        return;
+    }
+    if(!preparedInputPool)preparedInputPool=new(std::nothrow)picaPreparedInputPool;
+    if(!preparedInputPool)
+    {
+        material->SetMaterial();
+        return;
+    }
+    const bool immediateProtocol=PreparedBatching() && !picaMat::PreparedPreviousShader();
+    if(immediateProtocol)FlushPreparedExecution(true);
+    else if(PreparedBatching())BeginPreparedExecution();else FlushPreparedExecution(true);
+    // Reserve the material operation before capture. Publishing after capture
+    // would switch pools while its component indices still name the old arena.
+    if(PreparedBatching() && preparedExecutor && preparedExecutor->Full())FlushPreparedExecution(false);
+    picaPreparedDrawInputs input;
+    input.materialOwner=static_cast<picaMat*>(material);
+    picaPreparedDrawInputs* previous=preparedDrawCapture;
+    preparedDrawCapture=&input;
+    // The original UID/pass/PreRender/PostRender protocol still runs once, on
+    // main, in order. Only its SDK execution is deferred until capture ends.
+    if(immediateProtocol){picaPreparedImmediateScope immediate;material->SetMaterial();}
+    else material->SetMaterial();
+    preparedDrawCapture=previous;
+    if(PreparedBatching())BeginPreparedExecution();
+    if(input.hasMaterial && input.material.textureIdentity)
+    {
+        C3D_Tex* texture=const_cast<C3D_Tex*>(input.material.textureIdentity);
+        C3D_TexSetFilter(texture,input.material.filter,input.material.filter);
+        C3D_TexSetWrap(texture,input.material.wrap,input.material.wrap);
+    }
+    if(PreparedBatching() && preparedExecutor)
+    {
+        if(preparedExecutor->Full())FlushPreparedExecution(false);
+        preparedExecutor->AddMaterial(input,*preparedInputPool);
+        preparedBackendStats.materials+=input.hasMaterial;preparedBackendStats.uniforms+=input.hasUniforms;
+        return;
+    }
+    if(input.hasMaterial)
+    {
+        ++preparedBackendStats.materials;
+        picaPreparedMaterialCounters counters;
+        picaApplyPreparedMaterialPass(input.material,g_picaState,counters,
+            const_cast<C3D_Tex*>(input.material.textureIdentity));
+        for(unsigned i=0;i<counters.stateChanges;++i)Old3dsCount(O3_STATE_CHANGE);
+        for(unsigned i=0;i<counters.textureRequests;++i)Old3dsCount(O3_TEX_REQUEST);
+        for(unsigned i=0;i<counters.textureChanges;++i)Old3dsCount(O3_TEX_CHANGE);
+#ifdef SRR2_OLD3DS_QUEUE_METRICS
+        g_picaQueueMetrics.textures+=counters.textureChanges;
+#endif
+        const unsigned rasterChanges=picaApplyPreparedMaterialRaster(input.raster,g_picaState);
+        for(unsigned i=0;i<rasterChanges;++i)Old3dsCount(O3_STATE_CHANGE);
+    }
+    if(input.hasUniforms){++preparedBackendStats.uniforms;ExecutePreparedUniforms(preparedInputPool->View(input.uniforms));}
+}
+
+void picaContext::CapturePreparedMaterialRaster(const picaPreparedMaterialPass& material,picaPreparedMaterialRaster& output)
+{
+    output.cull=material.twoSided?GPU_CULL_NONE:cullModeTable[state.renderState->cullMode];
+    output.applyDepth=matWriteMask!=material.writeMask;
+    matWriteMask=material.writeMask;
+    output.depthEnabled=state.renderState->zEnabled;
+    output.depthFunction=output.depthEnabled?compTable[state.renderState->zCompare]:GPU_ALWAYS;
+    unsigned mask=0;
+    if(state.renderState->redWrite && (matWriteMask&PDDI_WRITE_RED))mask|=GPU_WRITE_RED;
+    if(state.renderState->greenWrite && (matWriteMask&PDDI_WRITE_GREEN))mask|=GPU_WRITE_GREEN;
+    if(state.renderState->blueWrite && (matWriteMask&PDDI_WRITE_BLUE))mask|=GPU_WRITE_BLUE;
+    if(state.renderState->alphaWrite && (matWriteMask&PDDI_WRITE_ALPHA))mask|=GPU_WRITE_ALPHA;
+    if(output.depthEnabled && state.renderState->zWrite)mask|=GPU_WRITE_DEPTH;
+    output.depthMask=(GPU_WRITEMASK)mask;
+}
+
+void picaContext::ExecutePreparedUniforms(const picaPreparedUniformView& input)
+{
+    Old3dsOperationScope timing(O3_UNIFORMS,1);
+    bool ignoredSparse=false,ignoredFast=false;
+    unsigned ignoredFastCalls=0,ignoredOtherCalls=0,ignoredDirectional=0,ignoredGeneral=0;
+    (void)ignoredSparse;(void)ignoredFast;(void)ignoredFastCalls;(void)ignoredOtherCalls;(void)ignoredDirectional;(void)ignoredGeneral;
+    // Capture and legacy invalidation already update these shared flags. Epochs
+    // here start current, avoiding a second invalidation at each handoff.
+    picaPreparedUniformCacheRefs cache={
+        modelViewUploaded,projUploaded,lightsUploaded,matUploaded,lastLit,miscUploaded,
+#ifdef SRR2_OLD3DS_UNLIT_PROJECTION
+        sparseUnlitProjection,lastFastUnlit,
+#else
+        ignoredSparse,ignoredFast,
+#endif
+        lastModelView,lastMatAmbient,lastMatDiffuse,lastMatEmissive,lastSceneAmbient,
+        input.invalidationEpoch,input.lightEpoch,input.projectionEpoch,g_old3dsModelViewUploads,g_old3dsModelViewReuses,
+#ifdef SRR2_OLD3DS_UNLIT_PROJECTION
+        fastUnlitCalls,otherProjectionCalls,
+#else
+        ignoredFastCalls,ignoredOtherCalls,
+#endif
+#ifdef SRR2_OLD3DS_DIRECTIONAL_LIGHT
+        directionalDraws,generalLightDraws
+#else
+        ignoredDirectional,ignoredGeneral
+#endif
+    };
+    const unsigned beforeUploads=g_old3dsModelViewUploads,beforeReuses=g_old3dsModelViewReuses;
+    picaApplyPreparedUniforms(input,cache);
+    if(g_old3dsModelViewUploads!=beforeUploads)Old3dsCount(O3_MV_UPLOAD);
+    if(g_old3dsModelViewReuses!=beforeReuses)Old3dsCount(O3_MV_REUSE);
+}
+
+OLD3DS_HOT_PATH
+bool picaContext::CapturePreparedUniformRecord(picaPreparedUniformRecord& output,const void* materialIdentity,
+    unsigned materialUid,bool lit,pddiColour ambient,pddiColour diffuse,pddiColour emissive,const float (*prepared)[4])
+{
+    if(!g_picaInFrame || !preparedInputPool)return false;
+    if(lit && lightsDirty){RebuildLightArray();lightsUploaded=false;}
+    const picaPreparedInputPool::ViewKey viewKey={preparedProjectionEpoch,stereoOn,display->StereoActive()};
+    const picaPreparedInputPool::LightKey lightKey={preparedLightEpoch,state.lightingState->ambient.c};
+    // Native prepared colours come from these exact material colours on main.
+    // Include values as well as UID: direct native colour writers need not change UID.
+    const picaPreparedInputPool::MaterialKey materialKey={materialIdentity,materialUid,ambient.c,diffuse.c,emissive.c,lit,prepared!=nullptr};
+    picaPreparedInputPool::Selection selected;
+    if(!preparedInputPool->Reserve(viewKey,lightKey,materialKey,selected))
+    {
+        // Synchronous bridge only: every earlier input has already executed.
+        // A future worker must fence/retire the batch before taking this branch.
+        FlushPreparedExecution(false);
+        preparedInputPool->Reset();
+        if(!preparedInputPool->Reserve(viewKey,lightKey,materialKey,selected))return false;
+    }
+    if(selected.newView)
+    {
+        ++preparedBackendStats.viewRecords;
+        picaPreparedViewUniforms& view=preparedInputPool->views[selected.view];
+        view.projection=hwProjection;view.stereo=stereoOn;view.stereoActive=viewKey.active;view.epoch=preparedProjectionEpoch;
+    }
+    if(selected.newLight)
+    {
+        ++preparedBackendStats.lightRecords;
+        picaPreparedLightUniforms& light=preparedInputPool->lights[selected.light];
+        light.sceneAmbient=state.lightingState->ambient;light.epoch=preparedLightEpoch;
+        // A first unlit draw must not freeze an empty light set for later lit draws.
+        // Dirty lights get a distinct key when a lit draw rebuilds them.
+        light.count=nActiveLights;
+        memcpy(light.position,lightPos,sizeof(light.position));memcpy(light.colour,lightColour,sizeof(light.colour));
+        memcpy(light.attenuation,lightAtten,sizeof(light.attenuation));
+#ifdef SRR2_OLD3DS_DIRECTIONAL_LIGHT
+        light.directional=directionalOnly;memcpy(light.directionalPosition,directionalPos,sizeof(light.directionalPosition));
+#else
+        light.directional=false;
+#endif
+    }
+    if(selected.newMaterial)
+    {
+        ++preparedBackendStats.materialUniformRecords;
+        picaPreparedMaterialUniforms& material=preparedInputPool->materials[selected.material];
+        material.ambient=ambient;material.diffuse=diffuse;material.emissive=emissive;
+        material.lit=lit;material.hasPreparedColours=prepared!=nullptr;
+        if(prepared)memcpy(material.colours,prepared,sizeof(material.colours));
+    }
+    output.transform.modelView=*state.matrixStack[PDDI_MATRIX_MODELVIEW]->Top();
+    output.transform.invalidationEpoch=preparedUniformEpoch;
+#ifdef SRR2_OLD3DS_GPU_SKIN
+    output.transform.skin=skinProgramBound;
+#else
+    output.transform.skin=false;
+#endif
+    output.view=selected.view;output.light=selected.light;output.material=selected.material;
+    return true;
+}
+
+bool picaContext::CapturePreparedUniforms(picaPreparedUniformInput& out,bool lit,
+    pddiColour ambient,pddiColour diffuse,pddiColour emissive,const float (*prepared)[4])
+{
+    if(!g_picaInFrame)return false;
+    if(lit && lightsDirty){RebuildLightArray();lightsUploaded=false;}
+    out.modelView=*state.matrixStack[PDDI_MATRIX_MODELVIEW]->Top();out.projection=hwProjection;
+    out.ambient=ambient;out.diffuse=diffuse;out.emissive=emissive;out.sceneAmbient=state.lightingState->ambient;
+    out.lit=lit;out.stereo=stereoOn;out.stereoActive=display->StereoActive();
+#ifdef SRR2_OLD3DS_GPU_SKIN
+    out.skin=skinProgramBound;
+#else
+    out.skin=false;
+#endif
+    out.invalidationEpoch=preparedUniformEpoch;out.lightEpoch=preparedLightEpoch;out.projectionEpoch=preparedProjectionEpoch;
+    out.hasPreparedColours=prepared!=nullptr;if(prepared)memcpy(out.colours,prepared,sizeof(out.colours));
+    if(lit) {
+        out.lightCount=nActiveLights;
+        memcpy(out.lightPosition,lightPos,sizeof(out.lightPosition));memcpy(out.lightColour,lightColour,sizeof(out.lightColour));
+        memcpy(out.lightAttenuation,lightAtten,sizeof(out.lightAttenuation));
+#ifdef SRR2_OLD3DS_DIRECTIONAL_LIGHT
+        out.directional=directionalOnly;memcpy(out.directionalPosition,directionalPos,sizeof(out.directionalPosition));
+#else
+        out.directional=false;
+#endif
+    } else {out.lightCount=0;out.directional=false;}
+    return true;
+}
+#endif
+
 void picaContext::SetVertexUniforms(bool lit, pddiColour ambient, pddiColour diffuse, pddiColour emissive, const float (*prepared)[4])
 {
+#ifdef SRR2_OLD3DS_PREPARED_BACKEND
+    FlushPreparedExecution(true);
+#endif
+#ifdef SRR2_OLD3DS_CAUSAL_DIAG
+    O3ExperimentTimer causalUniform(O3E_UNIFORM);
+#endif
 #ifdef SRR2_OLD_3DS
     Old3dsOperationScope timing(O3_UNIFORMS, 1);
 #endif
@@ -1843,8 +2400,13 @@ void picaContext::SetZBias(float bias)
 
 void picaContext::SetZRange(float n, float f)
 {
+#ifdef SRR2_OLD3DS_OCCLUSION
+    picaVisibilityReset(false);
+#endif
     pddiBaseContext::SetZRange(n, f);
-
+#ifdef SRR2_OLD3DS_PREPARED_BACKEND
+    FlushPreparedExecution(true);
+#endif
     C3D_DepthMap(true, -(f - n), n);
 }
 
@@ -1856,6 +2418,9 @@ void picaContext::EnableStencilBuffer(bool enable)
 
 void picaContext::SetupHardwareStencil(void)
 {
+#ifdef SRR2_OLD3DS_PREPARED_BACKEND
+    FlushPreparedExecution(true);
+#endif
     if(state.stencilState->enabled)
     {
         C3D_StencilTest(true,
@@ -1910,6 +2475,9 @@ void picaContext::SetFillMode(pddiFillMode mode)
 
 void picaContext::ApplyFogState(void)
 {
+#ifdef SRR2_OLD3DS_PREPARED_BACKEND
+    FlushPreparedExecution(true);
+#endif
     if(!state.fogState->enabled)
     {
         C3D_FogGasMode(GPU_NO_FOG, GPU_PLAIN_DENSITY, false);
@@ -2105,6 +2673,10 @@ void picaContext::SetNoNormalLayout(bool enabled)
 {
     if(noNormalLayout == enabled) return;
     noNormalLayout = enabled;
+#ifdef SRR2_OLD3DS_PREPARED_BACKEND
+    if(PreparedBatching() && QueuePreparedLayout(enabled ? &noNormalAttrInfo : &attrInfo,enabled))return;
+    FlushPreparedExecution(true);
+#endif
     C3D_SetAttrInfo(enabled ? &noNormalAttrInfo : &attrInfo);
     if(enabled) C3D_FixedAttribSet(1, 0.0f, 0.0f, 1.0f, 0.0f);
     g_picaState.bufInfoSet = false;
@@ -2112,6 +2684,9 @@ void picaContext::SetNoNormalLayout(bool enabled)
 void picaPrimBuffer::ExpandNoNormal()
 {
     if(!noNormalPacked) return;
+#ifdef SRR2_OLD3DS_PREPARED_BACKEND
+    context->FlushPreparedExecution(true);
+#endif
     picaNoNormal::Expand(buffer, allocated);
     noNormalPacked = false;
     GSPGPU_FlushDataCache(buffer, allocated * PICA_VERTEX_STRIDE);
@@ -2418,6 +2993,12 @@ bool picaContext::DrawStaticBatch(pddiShader* material,picaPrimBuffer* const* so
 
 picaPrimBuffer::~picaPrimBuffer()
 {
+#ifdef SRR2_OLD3DS_PREPARED_BACKEND
+    context->FlushPreparedExecution(true);
+#endif
+#ifdef SRR2_OLD3DS_OCCLUSION
+    VisibilityInvalidate();
+#endif
 #ifdef SRR2_OLD3DS_WHEEL_LOD
     wheelLodLiveBytes-=wheelLodBytes;
 #endif
@@ -2464,6 +3045,14 @@ void picaContext::SetWheelPaletteLayout(bool enabled)
 {
     if(wheelPaletteLayout==enabled) return;
     wheelPaletteLayout=enabled;
+#ifdef SRR2_OLD3DS_PREPARED_BACKEND
+    if(PreparedBatching() && QueuePreparedLayout(enabled ? &wheelPaletteAttrInfo :
+#ifdef SRR2_OLD3DS_NO_NORMAL_FETCH
+        noNormalLayout ? &noNormalAttrInfo :
+#endif
+        &attrInfo,false))return;
+    FlushPreparedExecution(true);
+#endif
     C3D_SetAttrInfo(enabled ? &wheelPaletteAttrInfo :
 #ifdef SRR2_OLD3DS_NO_NORMAL_FETCH
         noNormalLayout ? &noNormalAttrInfo :
@@ -2476,6 +3065,9 @@ bool picaContext::DrawWheelPalette(pddiShader* shader,picaPrimBuffer* buffer,con
     if(!g_picaInFrame || bottomPass || !buffer || !buffer->wheelPaletteBuffer) return false;
 #ifdef SRR2_OLD3DS_GPU_SKIN
     if(skinProgramBound) return false;
+#endif
+#ifdef SRR2_OLD3DS_PREPARED_BACKEND
+    FlushPreparedExecution(true);
 #endif
     const pddiMatrix& view=*state.matrixStack[PDDI_MATRIX_MODELVIEW]->Top();
     for(unsigned i=0;i<4;++i)
@@ -2493,6 +3085,9 @@ bool picaContext::DrawWheelPalette(pddiShader* shader,picaPrimBuffer* buffer,con
     }
     C3D_BoolUnifSet(GPU_VERTEX_SHADER,0x6b,true);
     DrawPrimBuffer(shader,buffer);
+#ifdef SRR2_OLD3DS_PREPARED_BACKEND
+    FlushPreparedExecution(true);
+#endif
     C3D_BoolUnifSet(GPU_VERTEX_SHADER,0x6b,false);
     return true;
 }
@@ -2521,11 +3116,19 @@ bool picaContext::DrawWheelSkin(pddiShader* shader,picaPrimBuffer* buffer,const 
     // wheel buffer owns its packed vertices and indices in one fenced allocation.
     SetSkinLayout(true);
     if(!BindSkinProgram(true)) return false;
-    C3D_FVec* destination=C3D_FVUnifWritePtr(GPU_VERTEX_SHADER,20,12);
-    for(unsigned i=0;i<4;++i)for(unsigned r=0;r<3;++r)
+#ifdef SRR2_OLD3DS_PREPARED_BACKEND
+    picaPreparedSkinPalette ownedWheels;ownedWheels.count=4;
+    memcpy(ownedWheels.values,packed,sizeof(packed));
+    if(PreparedBatching() && QueuePreparedPalette(ownedWheels,20))++preparedBackendStats.skinCaptures;
+    else
+#endif
     {
-        destination[3*i+r].x=packed[i][r][0];destination[3*i+r].y=packed[i][r][1];
-        destination[3*i+r].z=packed[i][r][2];destination[3*i+r].w=packed[i][r][3];
+        C3D_FVec* destination=C3D_FVUnifWritePtr(GPU_VERTEX_SHADER,20,12);
+        for(unsigned i=0;i<4;++i)for(unsigned r=0;r<3;++r)
+        {
+            destination[3*i+r].x=packed[i][r][0];destination[3*i+r].y=packed[i][r][1];
+            destination[3*i+r].z=packed[i][r][2];destination[3*i+r].w=packed[i][r][3];
+        }
     }
     g_picaSkinMetrics.vectors+=12;
     buffer->skinDrawing=true;
@@ -2538,6 +3141,9 @@ bool picaContext::DrawWheelSkin(pddiShader* shader,picaPrimBuffer* buffer,const 
 
 void picaPrimBuffer::SetFormat(pddiPrimType type, unsigned vertexFormat)
 {
+#ifdef SRR2_OLD3DS_OCCLUSION
+    VisibilityInvalidate();
+#endif
 #ifdef SRR2_OLD3DS_WHEEL_LOD
     if(type!=primType || vertexFormat!=vertexType) TouchWheelSource();
 #endif
@@ -2614,6 +3220,9 @@ void picaPrimBuffer::AppendColourQuad(const pddiVector* positions,const pddiVect
 
 pddiPrimBufferStream* picaPrimBuffer::Lock()
 {
+#ifdef SRR2_OLD3DS_OCCLUSION
+    VisibilityInvalidate();
+#endif
 #ifdef SRR2_OLD3DS_CLIP_BOUNDS
     clipBoundsValid = false;
 #endif
@@ -2738,6 +3347,9 @@ void picaPrimBuffer::EndUpload()
 #ifdef SRR2_OLD3DS_DRAW_PREP
     PrepareDraw();
 #endif
+#ifdef SRR2_OLD3DS_OCCLUSION
+    VisibilityBuild();
+#endif
 }
 #endif
 
@@ -2792,6 +3404,9 @@ unsigned char* picaPrimBuffer::LockIndexBuffer()
 
 void picaPrimBuffer::UnlockIndexBuffer(int count)
 {
+#ifdef SRR2_OLD3DS_OCCLUSION
+    VisibilityInvalidate();
+#endif
 #ifdef SRR2_OLD3DS_WHEEL_LOD
     TouchWheelSource();
 #endif
@@ -2816,6 +3431,9 @@ void picaPrimBuffer::UnlockIndexBuffer(int count)
 
 void picaPrimBuffer::SetIndices(unsigned short* i, int count)
 {
+#ifdef SRR2_OLD3DS_OCCLUSION
+    VisibilityInvalidate();
+#endif
 #ifdef SRR2_OLD3DS_WHEEL_LOD
     TouchWheelSource();
 #endif
@@ -2875,6 +3493,9 @@ bool picaPrimBuffer::BuildExpanded(void)
 #endif
     if(!expandDirty && expanded != NULL)
         return true;
+#ifdef SRR2_OLD3DS_PREPARED_BACKEND
+    context->FlushPreparedExecution(true);
+#endif
 
     const unsigned needed = indexCount * PICA_VERTEX_STRIDE;
     if(needed == 0)
@@ -2950,8 +3571,122 @@ void picaPrimBuffer::PrepareDraw()
 #endif
 
 OLD3DS_HOT_PATH
+#ifdef SRR2_OLD3DS_PREPARED_BACKEND
+bool picaPrimBuffer::CapturePreparedGeometry(picaPreparedGeometry& output)
+{
+    const unsigned char* vertexData = buffer;
+#ifdef SRR2_OLD3DS_SKIN_RING
+    if(skinVertices) vertexData = skinVertices;
+#endif
+#ifdef SRR2_OLD3DS_GPU_SKIN_SUPPORT
+    if(skinDrawing
+#ifdef SRR2_OLD3DS_WHEEL_SKIN_BATCH
+       && !wheelSkinBuffer
+#endif
+      ) vertexData = (const unsigned char*)(skinAllocation + 1);
+#endif
+    unsigned count;
+
+    bool useElements = false;
+#ifdef SRR2_OLD3DS_DRAW_PREP
+    if(!drawPrepared && !transient) PrepareDraw();
+    if(drawPrepared)
+    {
+        useElements = true;
+        count = nativeCount;
+    }
+    else
+    {
+#endif
+    if(indices != NULL
+#ifndef SRR2_OLD3DS_SHADOW_MESH
+       && !transient
+#endif
+      )
+    {
+        if(elemState < 0)
+            elemState = IndicesInRange() ? 1 : 0;
+        useElements = (elemState == 1);
+    }
+
+    if(useElements)
+    {
+        count = indexCount;
+    }
+    else if(indices != NULL)
+    {
+        if(!BuildExpanded())
+        {
+            return false;
+        }
+        vertexData = expanded;
+        count = indexCount;
+#ifdef SRR2_OLD_3DS
+        Old3dsCount(O3_EXPANDED_DRAW);
+#endif
+    }
+    else
+    {
+        count = total ? total : allocated;
+    }
+
+#ifdef SRR2_OLD3DS_DRAW_PREP
+    }
+#endif
+    if(count == 0)
+        return false;
+
+    output.vertices=vertexData;output.indices=indices;output.indexed=useElements;output.count=count;
+    output.skin=false;output.omitNormal=false;output.wheelPalette=false;
+#ifdef SRR2_OLD3DS_GPU_SKIN_SUPPORT
+    output.skin=skinDrawing;
+#endif
+#ifdef SRR2_OLD3DS_NO_NORMAL_FETCH
+    output.omitNormal=noNormalPacked && vertexData==buffer;
+#endif
+#ifdef SRR2_OLD3DS_WHEEL_GPU_BATCH
+    output.wheelPalette=wheelPaletteBuffer;
+#endif
+    output.stride=PICA_VERTEX_STRIDE;output.attributes=4;output.permutation=0x3210;
+    if(output.skin)
+    {
+#ifdef SRR2_OLD3DS_GPU_SKIN_RIGID_PACK
+        output.stride=picaSkin::PackedStride(skinRigid);
+#else
+        output.stride=picaSkin::VertexStride;
+#endif
+        output.attributes=6;output.permutation=0x543210;
+    }
+#ifdef SRR2_OLD3DS_NO_NORMAL_FETCH
+    else if(output.omitNormal){output.stride=picaNoNormal::Stride;output.attributes=3;output.permutation=0x320;}
+#endif
+#ifdef SRR2_OLD3DS_WHEEL_GPU_BATCH
+    else if(output.wheelPalette)output.stride=sizeof(picaWheelLOD::PaletteVertex);
+#endif
+    output.offset=
+#ifdef SRR2_OLD3DS_DRAW_PREP
+        drawPrepared && vertexData==buffer?nativeOffset:
+#endif
+        osConvertVirtToPhys(vertexData)-PICA_BUFINFO_BASE;
+    output.primitive=
+#ifdef SRR2_OLD3DS_DRAW_PREP
+        drawPrepared?nativePrimitive:
+#endif
+        primTypeTable[primType];
+    ++preparedBackendStats.geometryCaptures;
+    preparedBackendStats.skinCaptures+=output.skin;
+    return true;
+}
+#endif
+
 void picaPrimBuffer::Display(void)
 {
+#ifdef SRR2_OLD3DS_OCCLUSION
+    context->VisibilityBarrier();
+#endif
+#ifdef SRR2_OLD3DS_CAUSAL_DIAG
+    O3ExperimentTimer causalTimer(O3E_SUBMIT);
+#endif
 #ifdef SRR2_OLD_3DS
     Old3dsOperationScope timing(O3_SUBMIT, 1);
 #endif
@@ -2971,6 +3706,86 @@ void picaPrimBuffer::Display(void)
         return;
     }
 
+    #ifdef SRR2_OLD3DS_CAUSAL_DIAG
+    O3ExperimentDraw(indices?indexCount:allocated);
+    if(g_o3WorldDepth && g_o3Mode==O3_SUPPRESS) return;
+#endif
+#ifdef SRR2_OLD3DS_PREPARED_BACKEND
+    picaPreparedGeometry preparedGeometry;
+    const unsigned char* vertexData;
+    unsigned count;
+    bool useElements=false;
+    if(g_picaPreparedBackendEnabled)
+    {
+        if(!CapturePreparedGeometry(preparedGeometry))return;
+        vertexData=preparedGeometry.vertices;count=preparedGeometry.count;useElements=preparedGeometry.indexed;
+    }
+    else
+    {
+        vertexData = buffer;
+#ifdef SRR2_OLD3DS_SKIN_RING
+    if(skinVertices) vertexData = skinVertices;
+#endif
+#ifdef SRR2_OLD3DS_GPU_SKIN_SUPPORT
+    if(skinDrawing
+#ifdef SRR2_OLD3DS_WHEEL_SKIN_BATCH
+       && !wheelSkinBuffer
+#endif
+      ) vertexData = (const unsigned char*)(skinAllocation + 1);
+#endif
+
+
+
+#ifdef SRR2_OLD3DS_DRAW_PREP
+    if(!drawPrepared && !transient) PrepareDraw();
+    if(drawPrepared)
+    {
+        useElements = true;
+        count = nativeCount;
+    }
+    else
+    {
+#endif
+    if(indices != NULL
+#ifndef SRR2_OLD3DS_SHADOW_MESH
+       && !transient
+#endif
+      )
+    {
+        if(elemState < 0)
+            elemState = IndicesInRange() ? 1 : 0;
+        useElements = (elemState == 1);
+    }
+
+    if(useElements)
+    {
+        count = indexCount;
+    }
+    else if(indices != NULL)
+    {
+        if(!BuildExpanded())
+        {
+            return;
+        }
+        vertexData = expanded;
+        count = indexCount;
+#ifdef SRR2_OLD_3DS
+        Old3dsCount(O3_EXPANDED_DRAW);
+#endif
+    }
+    else
+    {
+        count = total ? total : allocated;
+    }
+
+#ifdef SRR2_OLD3DS_DRAW_PREP
+    }
+#endif
+    if(count == 0)
+        return;
+
+    }
+#else
     const unsigned char* vertexData = buffer;
 #ifdef SRR2_OLD3DS_SKIN_RING
     if(skinVertices) vertexData = skinVertices;
@@ -3033,13 +3848,28 @@ void picaPrimBuffer::Display(void)
     if(count == 0)
         return;
 
+#endif
+
     context->ApplyViewport();
+#ifdef SRR2_OLD3DS_CAUSAL_DIAG
+    // Tiny raster region; retain viewport, vertices, material and CPU traversal.
+    if(g_o3WorldDepth && g_o3Mode==O3_COVERAGE)
+        C3D_SetScissor(GPU_SCISSOR_NORMAL,0,0,4,4);
+    else context->SetScissor(&context->state.viewState->scissor);
+#endif
 
     {
         u32* cmdBuf    = NULL;
         u32  cmdSize   = 0;
         u32  cmdOffset = 0;
+#ifdef SRR2_OLD3DS_PREPARED_BACKEND
+        const bool batchRoom=!context->PreparedBatching() || context->PreparedGeometryRoom();
+#endif
+#ifdef SRR2_OLD3DS_PREPARED_THREAD
+        context->PreparedCommandBuffer(&cmdBuf,&cmdSize,&cmdOffset);
+#else
         GPUCMD_GetBuffer(&cmdBuf, &cmdSize, &cmdOffset);
+#endif
 
         const u32 headroom = 2048;
 
@@ -3057,7 +3887,11 @@ void picaPrimBuffer::Display(void)
         }
 #endif
 
-        if(cmdBuf == NULL || (cmdOffset + headroom) > cmdSize)
+        if(cmdBuf == NULL || (cmdOffset + headroom) > cmdSize
+#ifdef SRR2_OLD3DS_PREPARED_BACKEND
+           || !batchRoom
+#endif
+          )
         {
 #ifdef SRR2_OLD_3DS
             ++g_old3dsDrawDroppedNoRoom;
@@ -3078,6 +3912,12 @@ void picaPrimBuffer::Display(void)
     if(!skinDrawing)
 #endif
         context->SetWheelPaletteLayout(wheelPaletteBuffer);
+#endif
+#ifdef SRR2_OLD3DS_PREPARED_BACKEND
+    if(context->PreparedBatching()){}
+    else if(g_picaPreparedBackendEnabled)picaBindPreparedGeometry(preparedGeometry,g_picaState.bufInfoSet);
+    else
+    {
 #endif
     if(!g_picaState.bufInfoSet)
     {
@@ -3111,6 +3951,9 @@ void picaPrimBuffer::Display(void)
                     drawPrepared && vertexData == buffer ? nativeOffset :
 #endif
                     osConvertVirtToPhys(vertexData) - PICA_BUFINFO_BASE);
+#ifdef SRR2_OLD3DS_PREPARED_BACKEND
+    }
+#endif
 
 #ifdef SRR2_OLD_3DS
 #ifdef SRR2_OLD3DS_QUEUE_METRICS
@@ -3138,6 +3981,12 @@ void picaPrimBuffer::Display(void)
 #else
     const GPU_Primitive_t primitive = primTypeTable[primType];
 #endif
+#ifdef SRR2_OLD3DS_PREPARED_BACKEND
+    if(context->PreparedBatching())context->QueuePreparedGeometry(preparedGeometry);
+    else if(g_picaPreparedBackendEnabled)picaSubmitPreparedGeometry(preparedGeometry);
+    else
+    {
+#endif
 #ifdef SRR2_OLD3DS_DRAW_PACKET
     if(useElements)
         picaDrawPacketElements(primitive,(int)count,C3D_UNSIGNED_SHORT,indices);
@@ -3149,6 +3998,9 @@ void picaPrimBuffer::Display(void)
     else
         C3D_DrawArrays(primitive, 0, (int)count);
 #endif
+#ifdef SRR2_OLD3DS_PREPARED_BACKEND
+    }
+#endif
 }
 
 void picaContext::BottomMapPoint(float u, float v, float* bu, float* bv) const
@@ -3159,6 +4011,12 @@ void picaContext::BottomMapPoint(float u, float v, float* bu, float* bv) const
 
 bool picaContext::BeginBottomScreen(float u0, float v0, float u1, float v1)
 {
+#ifdef SRR2_OLD3DS_PREPARED_BACKEND
+    FlushPreparedExecution(true);
+#endif
+#ifdef SRR2_OLD3DS_OCCLUSION
+    picaVisibilityReset(false);
+#endif
     if(bottomPass || (u1 <= u0) || (v1 <= v0) || !display->BeginBottomTarget())
         return false;
 
@@ -3188,6 +4046,12 @@ bool picaContext::BeginBottomScreen(float u0, float v0, float u1, float v1)
 
 void picaContext::EndBottomScreen(void)
 {
+#ifdef SRR2_OLD3DS_PREPARED_BACKEND
+    FlushPreparedExecution(true);
+#endif
+#ifdef SRR2_OLD3DS_OCCLUSION
+    picaVisibilityReset(false);
+#endif
     if(!bottomPass)
         return;
 
@@ -3219,6 +4083,13 @@ extern "C" void picaBottomScreenEnd(void)
 #ifdef SRR2_OLD_3DS
 void picaContext::BeginWorld(void)
 {
+#ifdef SRR2_OLD3DS_PREPARED_BACKEND
+    FlushPreparedExecution(true);
+#endif
+#ifdef SRR2_OLD3DS_OCCLUSION
+    picaVisibilityReset(false);
+    visibilityWorld=true;
+#endif
     if(display->BeginWorldTarget())
     {
         // Reserve presentation vertices before world geometry consumes the ring.
@@ -3232,6 +4103,13 @@ void picaContext::BeginWorld(void)
 
 void picaContext::EndWorld(void)
 {
+#ifdef SRR2_OLD3DS_PREPARED_BACKEND
+    FlushPreparedExecution(true);
+#endif
+#ifdef SRR2_OLD3DS_OCCLUSION
+    visibilityWorld=false;
+    picaVisibilityReset(false);
+#endif
     if(!display->IsWorldTarget()) return;
     // FrameSplit may start the queue before EndFrame flushes the streams.
     FlushStreams();
@@ -3409,6 +4287,10 @@ void picaContext::SetSkinLayout(bool rigid)
     skinRigidLayout = rigid;
     if(skinProgramBound)
     {
+#ifdef SRR2_OLD3DS_PREPARED_BACKEND
+        if(PreparedBatching() && QueuePreparedLayout(rigid?&skinRigidAttrInfo:&skinAttrInfo,false))return;
+        FlushPreparedExecution(true);
+#endif
         C3D_SetAttrInfo(rigid ? &skinRigidAttrInfo : &skinAttrInfo);
         g_picaState.bufInfoSet = false;
     }
@@ -3428,6 +4310,25 @@ bool picaContext::BindSkinProgram(bool enabled)
     noNormalLayout = false;
 #endif
     skinProgramBound = enabled;
+#ifdef SRR2_OLD3DS_PREPARED_BACKEND
+    if(PreparedBatching() && QueuePreparedProgram(enabled?&skinProgram:&shaderProgram,enabled?
+#ifdef SRR2_OLD3DS_GPU_SKIN_RIGID_PACK
+        (skinRigidLayout?&skinRigidAttrInfo:&skinAttrInfo)
+#else
+        &skinAttrInfo
+#endif
+        :&attrInfo,
+#ifdef SRR2_OLD3DS_GPU_SKIN_COMPACT
+        !enabled,
+#else
+        false,
+#endif
+        VSH_FVEC_u_eye,PICA_STEREO_CONVERGENCE))
+    {
+        InvalidateUniformCache();++g_picaSkinMetrics.switches;return true;
+    }
+    FlushPreparedExecution(true);
+#endif
     C3D_BindProgram(enabled ? &skinProgram : &shaderProgram);
 
 #ifdef SRR2_OLD3DS_GPU_SKIN_COMPACT
@@ -3589,7 +4490,12 @@ bool picaPrimBuffer::TryGpuSkin(pddiShader *material, const pddiMatrix *const *m
     if (reason == picaSkin::Ready)
     {
         u64 start = svcGetSystemTick();
+#ifdef SRR2_OLD3DS_PREPARED_BACKEND
+        picaPreparedSkinPalette packed;
+        packed.count=count;
+#else
         float packed[picaSkin::MaxBones][3][4];
+#endif
 #ifdef SRR2_OLD3DS_GPU_SKIN_EYE_PALETTE
         float view[4][4];
         const pddiMatrix* modelView = context->state.matrixStack[PDDI_MATRIX_MODELVIEW]->Top();
@@ -3630,6 +4536,33 @@ bool picaPrimBuffer::TryGpuSkin(pddiShader *material, const pddiMatrix *const *m
             context->SetSkinLayout(skinRigid);
 #endif
             context->BindSkinProgram(true);
+#ifdef SRR2_OLD3DS_PREPARED_BACKEND
+            if(g_picaPreparedBackendEnabled)
+            {
+                const bool uploaded=(context->PreparedBatching() && context->QueuePreparedPalette(packed,
+#ifdef SRR2_OLD3DS_GPU_SKIN_EYE_PALETTE
+                    20
+#else
+                    VSH_FVEC_u_bones
+#endif
+                )) || picaUploadPreparedSkinPalette(packed,
+#ifdef SRR2_OLD3DS_GPU_SKIN_EYE_PALETTE
+                    20
+#else
+                    VSH_FVEC_u_bones
+#endif
+                );
+                if(!uploaded)
+                {
+                    context->BindSkinProgram(false);
+                    ++g_picaSkinMetrics.fallback[picaSkin::MatrixInvalid];
+                    g_picaSkinMetrics.paletteTicks+=svcGetSystemTick()-start;
+                    return false;
+                }
+            }
+            else
+            {
+#endif
             C3D_FVec *dst = C3D_FVUnifWritePtr(GPU_VERTEX_SHADER,
 #ifdef SRR2_OLD3DS_GPU_SKIN_EYE_PALETTE
                                                         20,
@@ -3645,6 +4578,9 @@ bool picaPrimBuffer::TryGpuSkin(pddiShader *material, const pddiMatrix *const *m
                     dst[3 * i + r].z = packed[i][r][2];
                     dst[3 * i + r].w = packed[i][r][3];
                 }
+#ifdef SRR2_OLD3DS_PREPARED_BACKEND
+            }
+#endif
             g_picaSkinMetrics.vectors += 3 * count;
             g_picaSkinMetrics.paletteTicks += svcGetSystemTick() - start;
             skinDrawing = true;
@@ -3660,9 +4596,14 @@ bool picaPrimBuffer::TryGpuSkin(pddiShader *material, const pddiMatrix *const *m
             g_picaSkinMetrics.avoidedFlushBytes += mem;
             u32 *commands;
             u32 size, offset;
+#ifdef SRR2_OLD3DS_PREPARED_BACKEND
+            if(!context->PreparedBatching())
+#endif
+            {
             GPUCMD_GetBuffer(&commands, &size, &offset);
             if (offset > g_picaSkinMetrics.maxCommand)
                 g_picaSkinMetrics.maxCommand = offset;
+            }
             return true;
         }
         g_picaSkinMetrics.paletteTicks += svcGetSystemTick() - start;

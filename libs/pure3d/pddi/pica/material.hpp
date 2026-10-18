@@ -4,6 +4,10 @@
 #include <pddi/pica/pica.hpp>
 #include <pddi/base/baseshader.hpp>
 
+#ifdef SRR2_OLD3DS_PREPARED_BACKEND
+struct picaPreparedMaterialPass;
+#endif
+
 const int picaMaxPasses = 1;
 
 struct picaTextureEnv
@@ -82,6 +86,10 @@ public:
     int  CountDevPasses(void);
     void SetDevPass(unsigned);
     void PreRender(void);
+#ifdef SRR2_OLD3DS_PREPARED_BACKEND
+    bool CapturePreparedPass(picaPreparedMaterialPass&);
+    static bool PreparedPreviousShader();
+#endif
 #ifdef SRR2_OLD3DS_WHEEL_LOD
     bool WheelLodOpaque() const { return texEnv[0].alphaBlendMode==PDDI_BLEND_NONE && texEnv[0].diffuse.Alpha()==255; }
 #endif

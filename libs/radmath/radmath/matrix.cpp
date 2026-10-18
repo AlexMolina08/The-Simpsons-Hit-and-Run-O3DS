@@ -1,3 +1,6 @@
+#ifdef SRR2_OLD3DS_NATIVE_MATRIX
+#include <radmath/nativematrix.hpp>
+#endif
 #ifdef SRR2_OLD3DS_MATRIX_NO_ALIAS
 #include <radmath/affineproduct.hpp>
 #endif
@@ -483,6 +486,10 @@ void Matrix::Mult(const Matrix& a, const Matrix& b)
     assert(b.m[1][3] == 0.0f);
     assert(b.m[2][3] == 0.0f);
     assert(b.m[3][3] == 1.0f);
+#ifdef SRR2_OLD3DS_NATIVE_MATRIX
+    old3dsNativeMatrixMultiply(m,a.m,b.m);
+    return;
+#endif
 #ifdef SRR2_OLD3DS_MATRIX_NO_ALIAS
     if(rmtAffineProduct::Separate(this,&a,&b))
     {

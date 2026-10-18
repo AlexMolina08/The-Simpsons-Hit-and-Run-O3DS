@@ -31,6 +31,19 @@ class picaPrimBuffer;
 #ifdef SRR2_OLD3DS_STATIC_BATCH
 #include <pddi/pica/staticbatch.hpp>
 #endif
+namespace picaOcclusion {struct Geometry;}
+struct picaPreparedUniformInput;
+struct picaPreparedDrawInputs;
+struct picaPreparedGeometry;
+struct picaPreparedMaterialPass;
+struct picaPreparedMaterialRaster;
+struct picaPreparedState;
+struct picaPreparedSkinPalette;
+struct picaPreparedUniformView;
+struct picaPreparedUniformRecord;
+class picaPreparedInputPool;
+class picaPreparedExecutor;
+class picaPreparedWorker;
 class picaContext : public pddiBaseContext
 {
 public:
@@ -45,6 +58,12 @@ public:
 #endif
 
     void Clear(unsigned bufferMask);
+#ifdef SRR2_OLD3DS_OCCLUSION
+    bool VisibilityPrepare();
+    bool VisibilityQuery(picaPrimBuffer* buffer);
+    void VisibilityRaster(picaPrimBuffer* buffer);
+    void VisibilityBarrier();
+#endif
 
     void SetScissor(pddiRect* rect);
 
@@ -146,6 +165,32 @@ public:
     picaDisplay* GetDisplay(void) { return display; }
     bool ExtBGRA(void)            { return false; }
 
+#ifdef SRR2_OLD3DS_PREPARED_BACKEND
+    picaPreparedDrawInputs* preparedDrawCapture=nullptr;
+    void ApplyDrawMaterial(pddiBaseShader*);
+    picaPreparedInputPool* preparedInputPool=nullptr;
+    picaPreparedExecutor* preparedExecutor=nullptr;
+#ifdef SRR2_OLD3DS_PREPARED_THREAD
+    picaPreparedWorker* preparedWorker=nullptr;
+    bool preparedWorkerAttempted=false;
+    void PreparedCommandBuffer(u32**,u32*,u32*);
+#endif
+    bool preparedBatchFailed=false,preparedBatchReady=false;
+    bool PreparedBatching() const;
+    void BeginPreparedExecution();
+    void FlushPreparedExecution(bool release);
+    bool PreparedGeometryRoom();
+    void QueuePreparedGeometry(const picaPreparedGeometry&);
+    bool QueuePreparedState(const picaPreparedState&);
+    bool QueuePreparedPalette(const picaPreparedSkinPalette&,unsigned);
+    bool QueuePreparedProgram(shaderProgram_s*,C3D_AttrInfo*,bool,unsigned,float);
+    bool QueuePreparedLayout(C3D_AttrInfo*,bool);
+    void SubmitPreparedScissor(GPU_SCISSORMODE,u32,u32,u32,u32);
+    void ExecutePreparedUniforms(const picaPreparedUniformView&);
+    bool CapturePreparedUniformRecord(picaPreparedUniformRecord&,const void*,unsigned,bool,pddiColour,pddiColour,pddiColour,const float (*)[4]);
+    void CapturePreparedMaterialRaster(const picaPreparedMaterialPass&,picaPreparedMaterialRaster&);
+    bool CapturePreparedUniforms(picaPreparedUniformInput&,bool,pddiColour,pddiColour,pddiColour,const float (*)[4]);
+#endif
     void SetVertexUniforms(bool lit, pddiColour ambient, pddiColour diffuse, pddiColour emissive, const float (*prepared)[4] = NULL);
     void SetMaterialWriteMask(int mask);
 
@@ -232,6 +277,9 @@ public:
 
 private:
     bool  bottomPass;
+#ifdef SRR2_OLD3DS_OCCLUSION
+    bool visibilityWorld = false;
+#endif
 #ifdef SRR2_OLD3DS_WHEEL_LOD
     float wheelLodPixelScale = 0.0f;
 #ifdef SRR2_OLD3DS_WHEEL_GPU_BATCH
@@ -291,6 +339,9 @@ private:
 #ifdef SRR2_OLD_3DS
     bool       modelViewUploaded;
     pddiMatrix lastModelView;
+#endif
+#ifdef SRR2_OLD3DS_PREPARED_BACKEND
+    unsigned preparedUniformEpoch=0,preparedLightEpoch=0,preparedProjectionEpoch=0;
 #endif
     bool       projUploaded;
     bool       lightsUploaded;
@@ -374,6 +425,19 @@ public:
 #endif
     unsigned GetVertexFormat() { return vertexType; }
     void Display(void);
+#ifdef SRR2_OLD3DS_PREPARED_BACKEND
+    bool CapturePreparedGeometry(picaPreparedGeometry&);
+#endif
+#ifdef SRR2_OLD3DS_OCCLUSION
+    void VisibilityBuild();
+    void VisibilityInvalidate();
+    const picaOcclusion::Geometry* VisibilityGeometry() const;
+    unsigned VisibilityVertexCount() const {return indices?indexCount:allocated;}
+    picaOcclusion::Geometry* visibilityGeometry=nullptr;
+#endif
+#ifdef SRR2_OLD3DS_CAUSAL_DIAG
+    unsigned DiagnosticVertexCount() const { return indices?indexCount:allocated; }
+#endif
 #ifdef SRR2_OLD3DS_CLIP_BOUNDS
     void UpdateClipBounds();
     bool CullNative();

@@ -54,14 +54,21 @@ extern "C" unsigned g_old3dsSimpleShadowCalls;
 extern "C" unsigned g_old3dsSimpleShadowDrawn; // calls issuing at least one draw
 
 #include <3ds.h>
+#include <main/old3dsexperiment.h>
 #include <main/old3dssampling.h>
 class Old3dsRenderScope
 {
 public:
-    explicit Old3dsRenderScope(unsigned slot) : slot(slot), draws(g_old3dsDrawCalls), tick(svcGetSystemTick()) {}
+    explicit Old3dsRenderScope(unsigned slot) : slot(slot), draws(g_old3dsDrawCalls), tick(
+#ifdef SRR2_OLD3DS_CAUSAL_DIAG
+        g_o3Detail ? svcGetSystemTick() : 0
+#else
+        svcGetSystemTick()
+#endif
+    ) {}
     ~Old3dsRenderScope()
     {
-        g_old3dsPhase2Ticks[slot] += svcGetSystemTick() - tick;
+        if(tick) g_old3dsPhase2Ticks[slot] += svcGetSystemTick() - tick;
         g_old3dsPhase2Draws[slot] += g_old3dsDrawCalls - draws;
     }
 private:
@@ -95,7 +102,7 @@ extern "C" int g_old3dsActiveEntity;
 extern "C" bool g_old3dsDrawBlended, g_old3dsDrawAlphaTested;
 inline void Old3dsCount(unsigned counter, unsigned units = 1)
 {
-    if(g_old3dsActiveEntity >= 0) g_old3dsBackend[counter] += units;
+    g_old3dsBackend[counter] += units;
 }
 // One entity in four, one backend operation in 32. Counts/units are unsampled.
 // Nested operation times overlap and must never be added to the parent totals.
@@ -104,7 +111,10 @@ class Old3dsOperationScope
 public:
     Old3dsOperationScope(unsigned operation, unsigned units = 1, bool outsideEntity = false) : stats(0), tick(0)
     {
-        if(g_old3dsActiveEntity < 0 && !outsideEntity) return;
+        #ifdef SRR2_OLD3DS_CAUSAL_DIAG
+        if(!g_o3Detail) return;
+#endif
+        (void)outsideEntity; // Include backend work outside tracked entities.
         stats = &g_old3dsOperations[operation];
         stats->units += units;
         if(Old3dsRotatingSample(stats->calls++,5)) { ++stats->samples; tick = svcGetSystemTick(); }
@@ -120,12 +130,24 @@ class Old3dsEntityScope
 public:
     explicit Old3dsEntityScope(unsigned category) : previous(g_old3dsActiveEntity), tick(0), draws(g_old3dsDrawCalls)
     {
+        #ifdef SRR2_OLD3DS_CAUSAL_DIAG
+        // Unsampled entity counts remain live for workload matching.
+#endif
         g_old3dsActiveEntity = category < O3_CATEGORY_COUNT ? category : O3_OTHER;
         stats = &g_old3dsEntities[g_old3dsActiveEntity];
-        if(Old3dsRotatingSample(stats->calls++,2)) { ++stats->samples; tick = svcGetSystemTick(); }
+        const unsigned ordinal=stats->calls++;
+#ifdef SRR2_OLD3DS_CAUSAL_DIAG
+        if(g_o3Detail && Old3dsRotatingSample(ordinal,2))
+#else
+        if(Old3dsRotatingSample(ordinal,2))
+#endif
+        { ++stats->samples; tick = svcGetSystemTick(); }
     }
     ~Old3dsEntityScope()
     {
+        #ifdef SRR2_OLD3DS_CAUSAL_DIAG
+        if(!stats) return;
+#endif
         if(tick) stats->ticks += svcGetSystemTick() - tick;
         stats->draws += g_old3dsDrawCalls - draws;
         g_old3dsActiveEntity = previous;
@@ -157,6 +179,9 @@ public:
     Old3dsAnimScope(unsigned long long uid, const char* name, bool particle, bool translated)
         : stats(0), draws(g_old3dsDrawCalls), translated(translated), tick(0)
     {
+        #ifdef SRR2_OLD3DS_CAUSAL_DIAG
+        if(!g_o3Detail) return;
+#endif
         for(unsigned i = 0; i < 8; ++i)
         {
             if(!g_old3dsAnimStats[i].calls || g_old3dsAnimStats[i].uid == uid)
