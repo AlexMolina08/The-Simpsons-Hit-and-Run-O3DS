@@ -6,6 +6,9 @@
 #ifdef SRR2_OLD3DS_JOINT_VECTOR_REUSE
 #include "simphysics/jointvectorcache.hpp"
 #endif
+#ifdef SRR2_OLD3DS_INERTIA_TENSOR_CACHE
+#include "simphysics/inertiatensorcache.hpp"
+#endif
 #include "poser/posedriver.hpp"
 #include "poser/pose.hpp"
 #include "poser/joint.hpp"
@@ -137,6 +140,9 @@ protected:
     SymMatrix                  mLocalInertiaMatrix0;
     rmt::Vector                mDCMPosition;          // vector from joint origin to joint cm 
     rmt::Vector                mDCMPositioni;         // vector from joint origin to joint cm in joint space
+#ifdef SRR2_OLD3DS_INERTIA_TENSOR_CACHE
+    inertiaTensorCache::Cache mLocalInertiaRotation;
+#endif
     rmt::Vector                mAxis;
     rmt::Matrix                mTransform;
 #ifdef SRR2_OLD3DS_JOINT_VECTOR_REUSE

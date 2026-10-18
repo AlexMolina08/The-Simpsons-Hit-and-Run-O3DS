@@ -4,6 +4,9 @@
 
 
 #include "simphysics/physicsobject.hpp"
+#ifdef SRR2_OLD3DS_VEHICLE_JOINT_PIPELINE
+#include "simphysics/jointpipeline.hpp"
+#endif
 #include "simphysics/physicsjoint.hpp"
 #include "simcommon/skeletoninfo.hpp"
 #include "simcommon/simstatearticulated.hpp"
@@ -47,7 +50,16 @@ public:
     const SkeletonInfo::JointInfo& JointInfo(int index) const { return mSkeletonInfo->mJointInfo[index]; }
     SkeletonInfo* GetSkeletonInfo() const { return mSkeletonInfo; }
     void JointAxis(int inIndex, rmt::Vector& axis, bool recompute = true) const;
-    const rmt::Matrix& JointTransform(int inIndex) const { return mPose->GetJoint(inIndex)->GetWorldTransform().GetMatrix(); }
+    const rmt::Matrix& JointTransform(int inIndex) const
+    {
+#ifdef SRR2_OLD3DS_VEHICLE_JOINT_PIPELINE
+        if(mJointTransformView)
+            return mJointTransformView->Resolve(unsigned(inIndex),[&]() -> const rmt::Matrix& {
+                return mPose->GetJoint(inIndex)->GetWorldTransform().GetMatrix();
+            });
+#endif
+        return mPose->GetJoint(inIndex)->GetWorldTransform().GetMatrix();
+    }
     
     float TimeStep() const { return mTimeStep; }
     
@@ -104,6 +116,10 @@ protected:
     pPhysicsJoint* mJoints;                         // joint array
     int            mNumSimJoints;                   // num joint part of the simulation
     int            mNumJoints;                      // num joints in the pose
+#ifdef SRR2_OLD3DS_VEHICLE_JOINT_PIPELINE
+    mutable jointPipeline::View<rmt::Matrix>* mJointTransformView = NULL;
+    bool mJointPipelineSafe = false;
+#endif
     poser::Pose*   mPose;                           // ref on the pose
     
     float          mTimeSinceComputeInertiaMatrix;

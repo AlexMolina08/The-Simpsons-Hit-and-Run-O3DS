@@ -12,6 +12,7 @@ namespace sim
 {
 
 class CollisionObject;
+class SimState;
 class CollisionVolume;
 
 enum CollisionVolumeTypeEnum { CollisionVolumeType=0, SphereVolumeType, CylinderVolumeType, OBBoxVolumeType, WallVolumeType, BBoxVolumeType, MaxCollisionVolumeEnum };
@@ -101,6 +102,10 @@ protected:
     
 #ifdef SRR2_OLD3DS_COLL_PREP
     void UpdatePosRot();
+#ifdef SRR2_OLD3DS_COLL_TRANSFORM_ONCE
+    void UpdatePosRot(CollisionObject* stableOwner, SimState* stableState);
+    virtual void SetRotationFromTransform(const rmt::Matrix&) { SetRotation(); }
+#endif
 #endif
     void UpdateRot();
     void UpdatePos();
@@ -196,6 +201,9 @@ public:
 protected:
     CylinderVolume() {}
     virtual void SetRotation();
+#ifdef SRR2_OLD3DS_COLL_TRANSFORM_ONCE
+    void SetRotationFromTransform(const rmt::Matrix& matrix) override;
+#endif
     virtual void SetClone(CollisionVolume* clone);
     void OptimizeAxis();
     
@@ -246,6 +254,9 @@ protected:
     OBBoxVolume() {}
     void SubCorner(rmt::Vector& n, int i) const;
     virtual void SetRotation();
+#ifdef SRR2_OLD3DS_COLL_TRANSFORM_ONCE
+    void SetRotationFromTransform(const rmt::Matrix& matrix) override;
+#endif
     virtual void SetClone(CollisionVolume* clone);
 
     void OptimizeAxis();
@@ -282,6 +293,9 @@ public:
 protected:
     WallVolume();
     virtual void SetRotation();
+#ifdef SRR2_OLD3DS_COLL_TRANSFORM_ONCE
+    void SetRotationFromTransform(const rmt::Matrix& matrix) override;
+#endif
     virtual void SetClone(CollisionVolume* clone);
     void OptimizeAxis();
 

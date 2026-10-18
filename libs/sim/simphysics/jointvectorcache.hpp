@@ -26,11 +26,13 @@ public:
     bool Matches(const float oldMatrix[4][4], const float newMatrix[4][4],
                  const void* inputCenter, const void* inputAxis, unsigned inputControl) const
     {
+        // Rotation changes dominate misses on moving vehicles. Reject those
+        // before comparing the usually unchanged local center and joint axis.
         return valid && control==inputControl &&
-            !std::memcmp(center,inputCenter,12) && !std::memcmp(axis,inputAxis,12) &&
             !std::memcmp(oldMatrix[0],newMatrix[0],12) &&
             !std::memcmp(oldMatrix[1],newMatrix[1],12) &&
-            !std::memcmp(oldMatrix[2],newMatrix[2],12);
+            !std::memcmp(oldMatrix[2],newMatrix[2],12) &&
+            !std::memcmp(center,inputCenter,12) && !std::memcmp(axis,inputAxis,12);
     }
     void Store(const void* inputCenter,const void* inputAxis,unsigned inputControl,bool finite)
     {
