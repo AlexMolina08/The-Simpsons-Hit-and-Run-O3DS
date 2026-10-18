@@ -87,8 +87,15 @@ static void Old3dsWriteReport(const Old3dsReport& record)
     for(unsigned i = 0; i < 8; ++i)
     {
         const Old3dsAnimStats& a = record.anim[i];
-        if(a.calls) printf("OLD3DS_ANIM uid=%llu name=%s calls=%u draws=%u particle_calls=%u translated_calls=%u translated_draws=%u\n",
-            a.uid, a.name, a.calls, a.draws, a.particleCalls, a.translatedCalls, a.translatedDraws);
+        if(a.calls)
+        {
+            unsigned samples=0;
+            for(unsigned ordinal=0;ordinal<a.calls;++ordinal)
+                samples+=Old3dsRotatingSample(ordinal,5);
+            printf("OLD3DS_ANIM uid=%llu name=%s calls=%u draws=%u particle_calls=%u translated_calls=%u translated_draws=%u sampled_calls=%u sampled_ms=%.6f timing_saturated=%u\n",
+                a.uid, a.name, a.calls, a.draws, a.particleCalls, a.translatedCalls, a.translatedDraws,
+                samples,a.sampledTicks*1000.0/SYSCLOCK_ARM11,a.sampledTicks==~0u);
+        }
     }
     printf("OLD3DS_WEIGHTS loaded=%u rigid=%u second_zero=%u third_zero=%u fourth_zero=%u\n",
         record.weights[0], record.weights[1], record.weights[2], record.weights[3], record.weights[4]);

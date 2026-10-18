@@ -18,7 +18,7 @@
 #include <render/DSG/StaticEntityDSG.h>
 #include <memory/srrmemory.h>
 #include <p3d/utility.hpp>
-#ifdef SRR2_OLD3DS_MATERIAL_QUEUE
+#if defined(SRR2_OLD3DS_MATERIAL_QUEUE) || defined(SRR2_OLD3DS_STATIC_BATCH)
 #include <typeinfo>
 #include <pddi/pica/context.hpp>
 #endif
@@ -433,5 +433,22 @@ bool StaticEntityDSG::MaterialQueueSafe() const
     // Pure tGeometry calls have no animation, particle or streaming side effects.
     return typeid(*this) == typeid(StaticEntityDSG) && !(mIsGeo & IS_SHADOW) &&
            mpDrawstuff && typeid(*mpDrawstuff) == typeid(tGeometry);
+}
+#endif
+
+#ifdef SRR2_OLD3DS_STATIC_BATCH
+#include <p3d/primgroup.hpp>
+bool StaticEntityDSG::StaticBatchSource(pddiShader*& shader,pddiPrimBuffer*& buffer)
+{
+    // Exact static Display has no transform, light, animation or shader callbacks.
+    if(IS_DRAW_LONG || typeid(*this)!=typeid(StaticEntityDSG) || !(mIsGeo&GEO) ||
+       (mIsGeo&IS_SHADOW) || !mpDrawstuff || typeid(*mpDrawstuff)!=typeid(tGeometry)) return false;
+    tGeometry* geometry=static_cast<tGeometry*>(mpDrawstuff);
+    if(geometry->GetNumPrimGroup()!=1) return false;
+    tPrimGroup* group=geometry->GetPrimGroup(0);
+    if(!group || typeid(*group)!=typeid(tPrimGroupOptimised) || !group->GetShader()) return false;
+    shader=group->GetShader()->GetShader();
+    buffer=static_cast<tPrimGroupOptimised*>(group)->GetBuffer();
+    return shader && buffer && static_cast<picaPrimBuffer*>(buffer)->StaticBatchSource();
 }
 #endif

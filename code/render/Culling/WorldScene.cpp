@@ -18,7 +18,7 @@
 #ifdef SRR2_OLD3DS_QUEUE_METRICS
 #include <pddi/pica/queuemetrics.hpp>
 #endif
-#ifdef SRR2_OLD3DS_MATERIAL_QUEUE
+#if defined(SRR2_OLD3DS_MATERIAL_QUEUE) || defined(SRR2_OLD3DS_STATIC_BATCH)
 #include <pddi/pica/context.hpp>
 #include <typeinfo>
 #endif
@@ -1744,7 +1744,32 @@ DSG_SET_PROFILE('O')
 BEGIN_PROFILE("qsort display")	
  	for(int i=mpZSorts.size() - 1; i>-1; i--)
 	{
-//BEGIN_PROFILE("opaque inner")	
+//BEGIN_PROFILE("opaque inner")
+#ifdef SRR2_OLD3DS_STATIC_BATCH
+        // Consume only consecutive exact static calls in their existing order.
+        // A fallback executes the original Display, including every custom override.
+        picaPrimBuffer* sources[picaStaticBatch::Capacity];
+        pddiShader* material=nullptr;
+        unsigned count=0;
+        for(int next=i;next>=0 && count<picaStaticBatch::Capacity;--next)
+        {
+            IEntityDSG* entity=mpZSorts[next].entityPtr;
+            if(!entity || typeid(*entity)!=typeid(StaticEntityDSG)) break;
+            pddiShader* shader=nullptr;pddiPrimBuffer* buffer=nullptr;
+            if(!static_cast<StaticEntityDSG*>(entity)->StaticBatchSource(shader,buffer) || (count && shader!=material)) break;
+            material=shader;sources[count++]=static_cast<picaPrimBuffer*>(buffer);
+            if(count>1)
+            {
+                unsigned vertices,indices;
+                if(!picaPrimBuffer::StaticBatchSize(sources,count,vertices,indices)) {--count;break;}
+            }
+        }
+        if(count>1 && static_cast<picaContext*>(p3d::pddi)->DrawStaticBatch(material,sources,count))
+        {
+            i-=count-1;
+            continue;
+        }
+#endif
 #ifdef SRR2_OLD3DS_MATERIAL_QUEUE
         picaContext* queueContext = static_cast<picaContext*>(p3d::pddi);
         const bool queueSafe = picaQueue::Enabled() && (queueContext->staticQueueActive || CanQueueStaticEntity(mpZSorts[i].entityPtr));

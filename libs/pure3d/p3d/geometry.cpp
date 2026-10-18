@@ -94,6 +94,10 @@ void tGeometry::ProcessShaders(ShaderCallback& callback)
 
 void tGeometry::SetPrimGroup(int i, tPrimGroup* group)
 {
+#ifdef SRR2_OLD3DS_VEHICLE_RENDER_BINDINGS
+    // Saturation permanently disables prepared slot reuse for this geometry.
+    if(shaderBindingRevision != ~0u) ++shaderBindingRevision;
+#endif
     tRefCounted::Assign(primGroup[i], group);
 }
 

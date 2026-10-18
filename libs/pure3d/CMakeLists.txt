@@ -212,6 +212,10 @@ if(SRR2_P3D_PDDI STREQUAL "PICA")
         set(PICA_SHADER_SRC "${CMAKE_CURRENT_SOURCE_DIR}/pddi/pica/shaders/pddi_directional.v.pica")
     endif()
 
+    if(SRR2_OLD_3DS AND SRR2_OLD3DS_WHEEL_GPU_BATCH)
+        set(PICA_SHADER_SRC "${CMAKE_CURRENT_SOURCE_DIR}/pddi/pica/shaders/pddi_wheel_palette.v.pica")
+    endif()
+
 	add_custom_command(
 		OUTPUT  "${CMAKE_CURRENT_BINARY_DIR}/pddi.shbin"
 		        "${CMAKE_CURRENT_BINARY_DIR}/pddi_shbin.h"
@@ -237,6 +241,19 @@ if(SRR2_P3D_PDDI STREQUAL "PICA")
 endif()
 
 set(SRR2_P3D_CG_PATH "C:/Program Files (x86)/NVIDIA Corporation/Cg")
+if(SRR2_OLD3DS_DRAW_PACKET)
+    if(NOT SRR2_P3D_PDDI STREQUAL "PICA")
+        message(FATAL_ERROR "DRAW_PACKET requires PICA")
+    endif()
+    # The packet adapter uses the exact private ABI of this supported library.
+    # Refuse a changed dependency rather than guessing its context layout.
+    find_library(SRR2_DRAW_PACKET_CITRO3D NAMES citro3d HINTS "$ENV{DEVKITPRO}/libctru/lib" REQUIRED)
+    file(SHA256 "${SRR2_DRAW_PACKET_CITRO3D}" packet_citro3d_hash)
+    if(NOT packet_citro3d_hash STREQUAL "3f34eff859c1f1e60ebe597b6df9cf5e5e74563d9e64ca01a7b3292fde63016a")
+        message(FATAL_ERROR "DRAW_PACKET requires the audited Citro3D 1.7.1 library")
+    endif()
+    list(APPEND PDDI_SOURCES "pddi/pica/drawpacket.c")
+endif()
 add_library(pddi STATIC ${PDDI_SOURCES})
 target_include_directories(pddi PUBLIC "")
 if(SRR2_P3D_PDDI STREQUAL GXM)
@@ -245,7 +262,11 @@ elseif(SRR2_P3D_PDDI STREQUAL GLES2)
 	target_include_directories(pddi PRIVATE "pddi/gles/glad/include/")
 elseif(SRR2_P3D_PDDI STREQUAL PICA)
 	target_include_directories(pddi PRIVATE "${CMAKE_CURRENT_BINARY_DIR}")
-	target_link_libraries(pddi citro3d)
+    if(SRR2_OLD3DS_DRAW_PACKET)
+        target_link_libraries(pddi "${SRR2_DRAW_PACKET_CITRO3D}")
+    else()
+        target_link_libraries(pddi citro3d)
+    endif()
 else()
 	target_include_directories(pddi PRIVATE "pddi/gl/glad/include/")
 endif()

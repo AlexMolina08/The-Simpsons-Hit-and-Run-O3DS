@@ -35,7 +35,13 @@ DisplayList::~DisplayList()
 }
 
 void DisplayList::Display(void)
-{   
+{
+#ifdef SRR2_OLD3DS_DISPLAY_LIST_PREP
+    // Empty lists have no callbacks or owned references to release. Preserve
+    // Purge's sorted state without copying and reloading the matrix stack.
+    if(!nDrawablesEndPos) { sorted=true; return; }
+#endif
+
     p3d::stack->Push();
 
     Sort();
@@ -145,6 +151,11 @@ void DisplayList::Sort(void)
    if(sorted)
         return;
 
+#ifdef SRR2_OLD3DS_DISPLAY_LIST_PREP
+    // A single entry has no ordering decision. Add still evaluates its bounds,
+    // retains its reference and captures its matrix at the original point.
+    if(nDrawablesEndPos>1)
+#endif
     qsort(toSort, nDrawablesEndPos, sizeof(Drawable*), DisplayList::ZSortCompare);
     sorted = true;
 }

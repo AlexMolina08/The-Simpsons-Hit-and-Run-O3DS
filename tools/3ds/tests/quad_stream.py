@@ -129,6 +129,9 @@ int main(){
  auto*stream=c.BeginQuadStream(&shader,3);pddiVector p[4]={};pddiVector2 uv[4]={};
  assert(!c.EmitQuad(nullptr,p,uv,pddiColour(0),0));assert(!c.EmitQuad(stream,p,uv,pddiColour(0),4));
  assert(c.EmitQuad(stream,p,uv,pddiColour(0),0));c.EndPrims(stream);assert(c.buffer.indexCount==6&&c.buffer.total==4);
+ c.immVertexUsed=c.immIndexUsed=0;
+ stream=c.BeginQuadStream(&shader,3);assert(stream);c.EndPrims(stream);
+ assert(c.buffer.indices && c.buffer.indexCount==0 && c.buffer.total==0);
  unsigned short indices[6];assert(picaQuad::Indices(indices,16383,picaQuad::Particle));assert(indices[4]==65535);assert(!picaQuad::Indices(indices,16384,picaQuad::Particle));
  printf("PASS: %u quads across 5000 production backend streams; exact expanded 36-byte records, all triangle orders, four writes, uint16 bounds, flush spans, reservation fallback, rollback and partial completion\n",quads);
 }

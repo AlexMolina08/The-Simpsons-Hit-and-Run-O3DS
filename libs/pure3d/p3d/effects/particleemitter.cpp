@@ -1,3 +1,23 @@
+#ifdef SRR2_OLD3DS_PARTICLE_CLIP
+#include <pddi/pica/particleclip.hpp>
+#include <cstdio>
+static unsigned particleClipTested=0,particleClipRejected=0;
+extern "C" void old3dsDumpParticleClip()
+{
+    std::printf("PARTICLE_CLIP tested=%u rejected=%u\n",particleClipTested,particleClipRejected);
+}
+#endif
+#ifdef SRR2_OLD3DS_PARTICLE_TRIG_REUSE
+#include <pddi/pica/particletrigcache.hpp>
+#include <cstdio>
+static unsigned particleTrigCalls=0,particleTrigHits=0;
+static picaParticleTrig::Table particleTrigCache;
+extern "C" void old3dsDumpParticleTrig()
+{
+    std::printf("PARTICLE_TRIG calls=%u hits=%u cache_bytes=%u\n",
+        particleTrigCalls,particleTrigHits,unsigned(sizeof(picaParticleTrig::Table)));
+}
+#endif
 #ifdef SRR2_OLD3DS_QUAD_STREAM
 #include <pddi/pica/quadstream.hpp>
 #endif
@@ -796,23 +816,56 @@ void tSpriteEmitter::Display()
 #ifdef SRR2_OLD3DS_QUAD_STREAM
         stream=picaBeginQuadStream(shader->GetShader(),numLiveParticles);
 #endif
+#ifdef SRR2_OLD3DS_PARTICLE_CLIP
+        // Sparse output requires the indexed quad stream's actual written count.
+        // A failed reservation retains the complete original triangle stream.
+        picaClipBounds::Transform particleClip={};
+        const bool canClip=stream && picaPrepareParticleClip(&particleClip);
+#endif
         if(!stream) stream = p3d::pddi->BeginPrims(shader->GetShader(), PDDI_PRIM_TRIANGLES, PDDI_V_CT, 6 * numLiveParticles);
 
+#ifdef SRR2_OLD3DS_PARTICLE_TRIG_REUSE
+        picaParticleTrig::Table& trigCache=particleTrigCache;
+#endif
         for (int i = 0; i < numLiveParticles; i++)
         {                                              
             tSpriteParticle* current = (tSpriteParticle*)liveParticles[i];
 
-            float x, y;
-            rmt::SinCos(current->spin + rmt::PI_BY4, &y, &x);
-
-            x *= current->size;
-            y *= current->size;
-
             rmt::Vector currPos;
+            const auto preparePosition=[&]()
+            {
             const rmt::Vector& temp = current->currPos;
             currPos.x = transform.m[0][0]*temp.x + transform.m[1][0]*temp.y + transform.m[2][0]*temp.z + transform.m[3][0];
             currPos.y = transform.m[0][1]*temp.x + transform.m[1][1]*temp.y + transform.m[2][1]*temp.z + transform.m[3][1];
             currPos.z = transform.m[0][2]*temp.x + transform.m[1][2]*temp.y + transform.m[2][2]*temp.z + transform.m[3][2];
+            };
+#ifdef SRR2_OLD3DS_PARTICLE_CLIP
+            if(canClip)
+            {
+                preparePosition();
+                ++particleClipTested;
+                const float center[3]={currPos.x,currPos.y,currPos.z};
+                if(picaParticleClip::Reject(particleClip,center,current->size,current->spin))
+                {++particleClipRejected;continue;}
+            }
+#endif
+
+            float x, y;
+#ifdef SRR2_OLD3DS_PARTICLE_TRIG_REUSE
+            ++particleTrigCalls;
+            particleTrigHits+=trigCache.Compute(current->spin+rmt::PI_BY4,&y,&x,
+                [](float angle,float* sine,float* cosine){rmt::SinCos(angle,sine,cosine);});
+#else
+            rmt::SinCos(current->spin + rmt::PI_BY4, &y, &x);
+#endif
+
+            x *= current->size;
+            y *= current->size;
+
+#ifdef SRR2_OLD3DS_PARTICLE_CLIP
+            if(!canClip)
+#endif
+                preparePosition();
 
 #ifdef SRR2_OLD3DS_QUAD_STREAM
             const pddiVector positions[4]={

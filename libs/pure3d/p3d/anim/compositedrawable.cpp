@@ -20,6 +20,28 @@
 #include <p3d/file.hpp>
 #include <constants/chunks.h>
 #include <radmath/util.hpp>
+#ifdef SRR2_OLD3DS_WHEEL_LOD
+#include <p3d/geometry.hpp>
+#include <p3d/primgroup.hpp>
+#include <p3d/shader.hpp>
+#include <pddi/pica/context.hpp>
+#include <pddi/pica/wheellod.hpp>
+#include <pddi/pica/material.hpp>
+#include <typeinfo>
+#include <cstdio>
+#endif
+#ifdef SRR2_OLD3DS_VEHICLE_RENDER_BINDINGS
+#include <p3d/geometry.hpp>
+#include <p3d/primgroup.hpp>
+#include <p3d/anim/vehicleshaderbindings.hpp>
+#include <cstdio>
+static unsigned vehicleBindingsPrepared=0, vehicleBindingsCalls=0, vehicleBindingsFallbacks=0, vehicleBindingsSlots=0;
+extern "C" void old3dsDumpVehicleBindings()
+{
+    std::printf("OLD3DS_VEHICLE_BINDINGS prepared=%u calls=%u fallback=%u slots=%u\n",
+        vehicleBindingsPrepared,vehicleBindingsCalls,vehicleBindingsFallbacks,vehicleBindingsSlots);
+}
+#endif
 #include <float.h>
 #include <string.h>
 
@@ -52,6 +74,14 @@ tCompositeDrawable::tCompositeDrawable(int initialElementSize) :
 
 tCompositeDrawable::~tCompositeDrawable()
 {
+#ifdef SRR2_OLD3DS_VEHICLE_RENDER_BINDINGS
+    delete preparedVehicleShaders;
+#endif
+#ifdef SRR2_OLD3DS_WHEEL_LOD
+    if(wheelLodBuffer) wheelLodBuffer->Release();
+    if(wheelLodSource) wheelLodSource->Release();
+    if(wheelLodDrawable) wheelLodDrawable->Release();
+#endif
     for( unsigned i=0; i< elements.Size( ); i++)
     {
         if( elements[ i ] )
@@ -134,6 +164,20 @@ tCompositeDrawable* tCompositeDrawable::Clone(tPose* pose)
     //
     compDraw->translucentObjects.SetSize( elements.Size( ) );
 
+#ifdef SRR2_OLD3DS_WHEEL_LOD
+    // Immutable baked geometry is shared. Distance hysteresis belongs to each car.
+    compDraw->wheelLodAttempted=wheelLodAttempted;
+    compDraw->wheelLodFirst=wheelLodFirst;compDraw->wheelLodVersion=wheelLodVersion;
+    compDraw->wheelLodRadius=wheelLodRadius;compDraw->wheelLodExtent=wheelLodExtent;
+    compDraw->wheelLodJoints=wheelLodJoints;compDraw->wheelLodDrawable=wheelLodDrawable;
+    memcpy(compDraw->wheelLodPose,wheelLodPose,sizeof(wheelLodPose));
+    memcpy(compDraw->wheelLodCenters,wheelLodCenters,sizeof(wheelLodCenters));
+    memcpy(compDraw->wheelLodAxes,wheelLodAxes,sizeof(wheelLodAxes));
+    compDraw->wheelLodBuffer=wheelLodBuffer;compDraw->wheelLodSource=wheelLodSource;
+    if(wheelLodBuffer) wheelLodBuffer->AddRef();
+    if(wheelLodSource) wheelLodSource->AddRef();
+    if(wheelLodDrawable) wheelLodDrawable->AddRef();
+#endif
     return compDraw;
 }
 
@@ -143,6 +187,134 @@ tCompositeDrawable* tCompositeDrawable::Clone(tPose* pose)
 // that can display themselves. The hierarchical 
 // drawables used to take a "tpose" to draw... 
 //
+#ifdef SRR2_OLD3DS_WHEEL_LOD
+static unsigned wheelLodPrepared=0,wheelLodBatches=0,wheelLodRequests=0,wheelLodPoseFallbacks=0;
+static unsigned wheelLodAttempts=0,wheelLodGeometry=0,wheelLodGroups=0,wheelLodBounds=0,wheelLodCompatible=0;
+extern "C" void old3dsDumpWheelLOD()
+{
+    printf("WHEEL_LOD prepared=%u batches=%u avoided_draw_requests=%u pose_fallbacks=%u\n",
+        wheelLodPrepared,wheelLodBatches,wheelLodRequests,wheelLodPoseFallbacks);
+    printf("WHEEL_PREP attempts=%u geometry=%u groups=%u bounds=%u compatible=%u\n",
+        wheelLodAttempts,wheelLodGeometry,wheelLodGroups,wheelLodBounds,wheelLodCompatible);
+}
+void tCompositeDrawable::PrepareWheelLOD()
+{
+    // Called on vehicle masters before Clone, never during a render callback.
+    if(wheelLodAttempted) return;
+    wheelLodAttempted=true;++wheelLodAttempts;
+    if(!skeleton || billboard || skeleton->GetNumJoint()<1) return;
+    for(unsigned first=0;first+4<=elements.Size();++first)
+    {
+        DrawableElement* element=elements[first];
+        if(!element || typeid(*element)!=typeid(DrawablePropElement) || element->IsTranslucent()) continue;
+        tDrawable* drawable=element->GetDrawable();
+        if(!drawable || typeid(*drawable)!=typeid(tGeometry)) continue;
+        // Release builds retain UIDs but discard name text. These four wheel
+        // names cover the audited car assets; unknown art keeps ordinary draws.
+        static const tUID wheelNames[]={tEntity::MakeUID("wShape0"),tEntity::MakeUID("wShape1"),
+                                        tEntity::MakeUID("wShape2"),tEntity::MakeUID("wShape3")};
+        const tUID uid=drawable->GetUID();
+        if(uid!=wheelNames[0] && uid!=wheelNames[1] && uid!=wheelNames[2] && uid!=wheelNames[3]) continue;
+        ++wheelLodGeometry;
+        tGeometry* geometry=static_cast<tGeometry*>(drawable);
+        if(geometry->GetNumPrimGroup()!=1) continue;
+        tPrimGroup* group=geometry->GetPrimGroup(0);
+        if(!group || typeid(*group)!=typeid(tPrimGroupOptimised)) continue;
+        ++wheelLodGroups;
+        rmt::Sphere sphere;rmt::Box3D box;geometry->GetBoundingSphere(&sphere);geometry->GetBoundingBox(&box);
+        const rmt::Vector span=box.high-box.low;
+        // Small cylindrical wheels only; avoid large or differently oriented art.
+        if(!std::isfinite(sphere.radius) || sphere.radius<=0 || sphere.radius>.65f ||
+           !(span.x<.75f*span.y && span.x<.75f*span.z)) continue;
+        ++wheelLodBounds;
+        bool compatible=true;rmt::Matrix rest[4];
+        for(unsigned i=0;i<4;++i)
+        {
+            DrawableElement* next=elements[first+i];
+            if(!next || typeid(*next)!=typeid(DrawablePropElement) || next->IsTranslucent() || next->GetDrawable()!=drawable)
+            {compatible=false;break;}
+            const int index=static_cast<DrawablePropElement*>(next)->GetPoseIndex();
+            if(index<0 || index>=skeleton->GetNumJoint()){compatible=false;break;}
+            wheelLodPose[i]=index;
+            rest[i].Mult(skeleton->GetJoint(index)->worldMatrix,skeleton->GetJoint(0)->inverseWorldMatrix);
+        }
+        if(!compatible) continue;
+        ++wheelLodCompatible;
+        picaPrimBuffer* source=static_cast<picaPrimBuffer*>(static_cast<tPrimGroupOptimised*>(group)->GetBuffer());
+        if(!source || source->WheelSourceVersion()==~0u) return;
+        picaPrimBuffer* baked=source->BakeWheelCopies(rest,4);
+        if(!baked) return;
+        for(unsigned i=0;i<4;++i)
+        {
+            memcpy(wheelLodCenters[i],&rest[i].Row(3),sizeof(wheelLodCenters[i]));
+            memcpy(wheelLodAxes[i],&rest[i].Row(0),sizeof(wheelLodAxes[i]));
+        }
+        wheelLodRadius=sphere.radius;
+        wheelLodExtent=sphere.radius;
+        for(unsigned i=0;i<4;++i)
+            wheelLodExtent=std::fmax(wheelLodExtent,rest[i].Row(3).Magnitude()+sphere.radius+sphere.centre.Magnitude());
+        wheelLodBuffer=baked;baked->AddRef();wheelLodSource=source;source->AddRef();
+        wheelLodVersion=source->WheelSourceVersion();wheelLodFirst=first;
+        wheelLodDrawable=drawable;drawable->AddRef();wheelLodJoints=skeleton->GetNumJoint();++wheelLodPrepared;
+        return;
+    }
+}
+bool tCompositeDrawable::DrawWheelLOD(tPose* p)
+{
+    if(!wheelLodBuffer || !g_picaInFrame || billboard || p->GetNumJoint()!=int(wheelLodJoints) ||
+       wheelLodSource->WheelSourceVersion()!=wheelLodVersion || wheelLodVersion==~0u ||
+       wheelLodFirst+4>elements.Size()) return false;
+#if !defined(SRR2_OLD3DS_WHEEL_GPU_BATCH) && !defined(SRR2_OLD3DS_WHEEL_SKIN_BATCH)
+    const rmt::Matrix& root=p->GetJoint(0)->worldMatrix;
+    rmt::Matrix modelView;modelView.Mult(root,*p3d::stack->GetMatrix());
+    const rmt::Vector& cameraPosition=modelView.Row(3);
+    wheelLodFar=picaWheelLOD::WantFar(wheelLodFar,cameraPosition.MagnitudeSqr());
+    if(!wheelLodFar) return false;
+    float view[4][4];memcpy(view,&modelView,sizeof(view));
+    if(!picaWheelLOD::SmallEnough(static_cast<picaContext*>(p3d::pddi)->WheelLodPixelScale(),
+                                 wheelLodRadius,wheelLodExtent,view)) return false;
+#endif
+#if defined(SRR2_OLD3DS_WHEEL_GPU_BATCH) || defined(SRR2_OLD3DS_WHEEL_SKIN_BATCH)
+    pddiMatrix wheels[4];
+#else
+    float wheels[4][4][4];
+#endif
+    for(unsigned i=0;i<4;++i)
+    {
+        DrawableElement* element=elements[wheelLodFirst+i];
+        if(!element || typeid(*element)!=typeid(DrawablePropElement) || !element->IsVisible() ||
+           element->IsTranslucent() || element->GetDrawable()!=wheelLodDrawable ||
+           static_cast<DrawablePropElement*>(element)->GetPoseIndex()!=int(wheelLodPose[i])) return false;
+        memcpy(&wheels[i],&p->GetJoint(wheelLodPose[i])->worldMatrix,sizeof(wheels[i]));
+    }
+    tGeometry* geometry=static_cast<tGeometry*>(wheelLodDrawable);
+    if(geometry->GetNumPrimGroup()!=1) return false;
+    tPrimGroup* group=geometry->GetPrimGroup(0);
+    if(!group || typeid(*group)!=typeid(tPrimGroupOptimised) ||
+       static_cast<tPrimGroupOptimised*>(group)->GetBuffer()!=wheelLodSource) return false;
+    if(!group->GetShader() || !group->GetShader()->GetShader()) return false;
+#ifdef SRR2_OLD3DS_WHEEL_SKIN_BATCH
+    if(!static_cast<picaContext*>(p3d::pddi)->DrawWheelSkin(group->GetShader()->GetShader(),wheelLodBuffer,
+            wheels)) return false;
+#elif defined(SRR2_OLD3DS_WHEEL_GPU_BATCH)
+    if(!static_cast<picaContext*>(p3d::pddi)->DrawWheelPalette(group->GetShader()->GetShader(),wheelLodBuffer,
+            wheels)) return false;
+#else
+    if(!static_cast<picaMat*>(group->GetShader()->GetShader())->WheelLodOpaque()) return false;
+    float matrix[4][4];memcpy(matrix,&root,sizeof(matrix));
+    if(!picaWheelLOD::PoseClose(matrix,wheelLodCenters,wheelLodAxes,wheels))
+    {++wheelLodPoseFallbacks;return false;}
+    // Only exact, adjacent geometry callbacks are replaced. SetPose still runs
+    // for every element, and all other effects, visibility and simulation stay live.
+    p3d::stack->PushMultiply(root);
+    p3d::pddi->DrawPrimBuffer(group->GetShader()->GetShader(),wheelLodBuffer);
+    p3d::stack->Pop();
+#endif
+    ++wheelLodBatches;wheelLodRequests+=3;
+    return true;
+}
+#endif
+
 void tCompositeDrawable::Display(tPose* p)
 {
     if (billboard)
@@ -169,6 +341,9 @@ void tCompositeDrawable::Display(tPose* p)
     //
     // Display elements
     //
+#ifdef SRR2_OLD3DS_WHEEL_LOD
+    bool wheelLodDrawn=false;
+#endif
     for( unsigned i=0; i< elements.Size( ); i++)
     {
         if(elements[i])
@@ -176,6 +351,10 @@ void tCompositeDrawable::Display(tPose* p)
             elements[i]->SetPose(p);
             if (elements[i]->IsVisible())
             {
+#ifdef SRR2_OLD3DS_WHEEL_LOD
+                if(wheelLodDrawn && i>wheelLodFirst && i<wheelLodFirst+4) continue;
+                if(wheelLodBuffer && i==wheelLodFirst && DrawWheelLOD(p)){wheelLodDrawn=true;continue;}
+#endif
                 if (elements[i]->IsTranslucent())
                 {
                     //if( BillboardQuadManager::sEnabled )    
@@ -200,13 +379,53 @@ void tCompositeDrawable::Display(tPose* p)
     }
 }
 
+#ifdef SRR2_OLD3DS_VEHICLE_RENDER_BINDINGS
+void tCompositeDrawable::PrepareShaderBindings()
+{
+    delete preparedVehicleShaders;
+    preparedVehicleShaders = new(std::nothrow) tPreparedVehicleShaders;
+    if(preparedVehicleShaders && !preparedVehicleShaders->Prepare(*this))
+    {
+        delete preparedVehicleShaders;
+        preparedVehicleShaders = NULL;
+    }
+    if(preparedVehicleShaders) ++vehicleBindingsPrepared;
+}
+
+void tCompositeDrawable::ProcessElementShaders(unsigned index, ShaderCallback& callback)
+{
+    DrawableElement* element = elements[index];
+    if(!element) return;
+    tDrawable* current = element->GetDrawable();
+    if(preparedVehicleShaders)
+    {
+        const unsigned before=preparedVehicleShaders->preparedCalls;
+        const unsigned legacy=preparedVehicleShaders->legacyCalls;
+        const unsigned slots=preparedVehicleShaders->slotCalls;
+        preparedVehicleShaders->Process(index,current,callback);
+        vehicleBindingsCalls+=preparedVehicleShaders->preparedCalls-before;
+        vehicleBindingsFallbacks+=preparedVehicleShaders->legacyCalls-legacy;
+        vehicleBindingsSlots+=preparedVehicleShaders->slotCalls-slots;
+    }
+    else
+    {
+        ++vehicleBindingsFallbacks;
+        current->ProcessShaders(callback);
+    }
+}
+#endif
+
 void tCompositeDrawable::ProcessShaders(ShaderCallback& callback)
 {
     for( unsigned i=0; i< elements.Size( ); i++)
     {
         if(elements[i])
         {
+#ifdef SRR2_OLD3DS_VEHICLE_RENDER_BINDINGS
+            ProcessElementShaders(i,callback);
+#else
             elements[i]->GetDrawable()->ProcessShaders(callback);
+#endif
         }
     }
 }

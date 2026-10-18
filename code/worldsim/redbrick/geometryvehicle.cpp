@@ -685,6 +685,9 @@ BEGIN_PROFILE("GeometryVehicle::Display SetUp")
                 //This will be the axis we rotate around.
                 // Note that the reflection map is relative to the object so we need to transform everything
                 //into the object's space.
+#ifndef SRR2_OLD3DS_NO_ENV_WORK
+                // PICA accepts neither ROTVEC nor ENVBLEND. Its vehicle reflection
+                // setup cannot change shader state; other backends retain it.
                 rmt::Matrix carOri = mVehicleOwner->GetTransform();
                 carOri.Invert();
                 carOri.FillTranslate( rmt::Vector( 0.0f, 0.0f, 0.0f ) );
@@ -702,6 +705,7 @@ BEGIN_PROFILE("GeometryVehicle::Display SetUp")
                 {
                     axis.CrossProduct(carRelMovement, camRelCar);
                 }
+#endif
                 // Check if the car is moving towards or away from the camera.
                 mCurEnvMapRotation += distance * 0.05f;
                 while( mCurEnvMapRotation >= rmt::PI_2 )
@@ -712,6 +716,7 @@ BEGIN_PROFILE("GeometryVehicle::Display SetUp")
                 {
                     mCurEnvMapRotation += rmt::PI_2;
                 }
+#ifndef SRR2_OLD3DS_NO_ENV_WORK
                 float mag;
                 float angle;
                 CartesianToPolar( axis.x, axis.y, &mag, &angle );
@@ -722,8 +727,13 @@ BEGIN_PROFILE("GeometryVehicle::Display SetUp")
                 {
                     tCompositeDrawable::DrawableElement* pElement = mCompositeDrawable->GetDrawableElement( i );
                     tDrawable* pDrawable = pElement->GetDrawable();
+                    #ifdef SRR2_OLD3DS_VEHICLE_RENDER_BINDINGS
+                    mCompositeDrawable->ProcessElementShaders(i, cbPos);
+#else
                     pDrawable->ProcessShaders( cbPos );
+#endif
                 }
+#endif
             }
             // Remember the position of the car for next time
             //
@@ -801,6 +811,7 @@ BEGIN_PROFILE("GeometryVehicle::Display SetUp")
                                     mRightWheelParticleAttr, mVehicleOwner->mTransform);       
     }
 
+#ifndef SRR2_OLD3DS_NO_ENV_WORK
 //    if( mVehicleOwner->mVehicleType == VT_USER )
     {
         // Change the vehicle environment reflection
@@ -823,10 +834,15 @@ BEGIN_PROFILE("GeometryVehicle::Display SetUp")
         {
             tCompositeDrawable::DrawableElement* pElement = mCompositeDrawable->GetDrawableElement (i);
             tDrawable* pDrawable = pElement->GetDrawable ();
-            pDrawable->ProcessShaders( envBlend );
+            #ifdef SRR2_OLD3DS_VEHICLE_RENDER_BINDINGS
+                    mCompositeDrawable->ProcessElementShaders(i, envBlend);
+#else
+                    pDrawable->ProcessShaders( envBlend );
+#endif
         }
     }
 
+#endif
 END_PROFILE("GeometryVehicle::Display SetUp")
 BEGIN_PROFILE("GeometryVehicle::Display Render")
 
@@ -889,8 +905,16 @@ BEGIN_PROFILE("GeometryVehicle::Display Render")
         {
             tCompositeDrawable::DrawableElement* pElement = mCompositeDrawable->GetDrawableElement( j );
             tDrawable* pDrawable = pElement->GetDrawable();
-            pDrawable->ProcessShaders( blendMode );
-            pDrawable->ProcessShaders( emissive );
+            #ifdef SRR2_OLD3DS_VEHICLE_RENDER_BINDINGS
+                    mCompositeDrawable->ProcessElementShaders(j, blendMode);
+#else
+                    pDrawable->ProcessShaders( blendMode );
+#endif
+            #ifdef SRR2_OLD3DS_VEHICLE_RENDER_BINDINGS
+                    mCompositeDrawable->ProcessElementShaders(j, emissive);
+#else
+                    pDrawable->ProcessShaders( emissive );
+#endif
         }
 
         // so since we just made EVERY SHADER alpha blend, we need to take
@@ -2022,6 +2046,9 @@ bool GeometryVehicle::GetArt( const char* name)
     }
 #endif
 
+#ifdef SRR2_OLD3DS_WHEEL_LOD
+    master->PrepareWheelLOD();
+#endif
     mCompositeDrawable = master->Clone();
 
     //mCompositeDrawable = p3d::find<tCompositeDrawable>(name);
@@ -2382,7 +2409,11 @@ bool GeometryVehicle::GetArt( const char* name)
     HeapMgr()->PopHeap(GMA_LEVEL_OTHER);
 
 
-    return FindDamageShadersAndTextures(name);
+    const bool damageTexturesFound = FindDamageShadersAndTextures(name);
+#ifdef SRR2_OLD3DS_VEHICLE_RENDER_BINDINGS
+    mCompositeDrawable->PrepareShaderBindings();
+#endif
+    return damageTexturesFound;
     //return true;
 
 }

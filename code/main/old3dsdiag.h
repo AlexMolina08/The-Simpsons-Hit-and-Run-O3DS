@@ -144,7 +144,10 @@ struct Old3dsAnimStats
     unsigned long long uid;
     char name[32];
     unsigned calls, draws, particleCalls, translatedCalls, translatedDraws;
+    // Uses the prior structure's tail padding; capture storage stays bounded.
+    unsigned sampledTicks;
 };
+static_assert(sizeof(Old3dsAnimStats)==64,"Bounded animated-object timing");
 extern "C" Old3dsAnimStats g_old3dsAnimStats[8];
 extern "C" unsigned g_old3dsAnimQueries[4]; // all, particles, translated, table overflow
 extern "C" unsigned g_old3dsWeights[5]; // cumulative loaded vertices, rigid, zero w1/w2/w3
@@ -152,7 +155,7 @@ class Old3dsAnimScope
 {
 public:
     Old3dsAnimScope(unsigned long long uid, const char* name, bool particle, bool translated)
-        : stats(0), draws(g_old3dsDrawCalls), translated(translated)
+        : stats(0), draws(g_old3dsDrawCalls), translated(translated), tick(0)
     {
         for(unsigned i = 0; i < 8; ++i)
         {
@@ -166,7 +169,8 @@ public:
                     if(name) for(; j < 31 && name[j]; ++j) stats->name[j] = name[j];
                     stats->name[j] = 0;
                 }
-                ++stats->calls;
+                const unsigned ordinal=stats->calls++;
+                if(Old3dsRotatingSample(ordinal,5)) tick=svcGetSystemTick();
                 if(particle) ++stats->particleCalls;
                 if(translated) ++stats->translatedCalls;
                 break;
@@ -181,12 +185,19 @@ public:
             const unsigned submitted = g_old3dsDrawCalls - draws;
             stats->draws += submitted;
             if(translated) stats->translatedDraws += submitted;
+            if(tick)
+            {
+                const u64 elapsed=svcGetSystemTick()-tick;
+                const unsigned room=~0u-stats->sampledTicks;
+                stats->sampledTicks+=elapsed>room ? room : static_cast<unsigned>(elapsed);
+            }
         }
     }
 private:
     Old3dsAnimStats* stats;
     unsigned draws;
     bool translated;
+    u64 tick;
 };
 
 // Linear allocation failures, separate from the ordinary heap.

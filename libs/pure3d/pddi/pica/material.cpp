@@ -100,6 +100,59 @@ static const GPU_BLENDFACTOR blendFactor[8][2] =
     { GPU_SRC_ALPHA, GPU_SRC_ALPHA }
 };
 
+#ifdef SRR2_OLD3DS_MATERIAL_WRITES
+static unsigned picaMaterialWriteCalls=0,picaMaterialWriteReuses=0;
+extern "C" void picaDumpMaterialWrites()
+{
+    printf("MATERIAL_WRITES calls=%u unchanged=%u\n",picaMaterialWriteCalls,picaMaterialWriteReuses);
+}
+bool picaMat::SetInt(unsigned parameter,int value)
+{
+    ++picaMaterialWriteCalls;
+    const picaTextureEnv& e=texEnv[pass];
+    bool unchanged=false;
+    switch(parameter)
+    {
+        case PDDI_SP_BLENDMODE: unchanged=e.alphaBlendMode==value;break;
+        case PDDI_SP_EMISSIVEALPHA:
+        {
+            const int alpha=value<255 ? 0 : 255;
+            unchanged=e.diffuse.Alpha()==value && e.ambient.Alpha()==alpha &&
+                e.specular.Alpha()==alpha && e.emissive.Alpha()==alpha;
+            break;
+        }
+        default: break;
+    }
+    // An identical scalar write changes neither native state nor uniforms.
+    // Texture writes, unsupported parameters and all real changes retain the
+    // original dispatch/UID protocol. PreRender still runs on every draw.
+    if(unchanged) {++picaMaterialWriteReuses;return true;}
+    return pddiBaseShader::SetInt(parameter,value);
+}
+bool picaMat::SetColour(unsigned parameter,pddiColour value)
+{
+    ++picaMaterialWriteCalls;
+    const picaTextureEnv& e=texEnv[pass];
+    bool unchanged=false;
+    switch(parameter)
+    {
+        case PDDI_SP_AMBIENT: unchanged=e.ambient.c==value.c;break;
+        case PDDI_SP_DIFFUSE: unchanged=e.diffuse.c==value.c;break;
+        case PDDI_SP_SPECULAR: unchanged=e.specular.c==value.c;break;
+        case PDDI_SP_EMISSIVE:
+        {
+            const int alpha=value.Alpha()<255 ? 0 : 255;
+            unchanged=e.emissive.c==value.c && e.diffuse.Alpha()==value.Alpha() &&
+                e.ambient.Alpha()==alpha && e.specular.Alpha()==alpha;
+            break;
+        }
+        default: break;
+    }
+    if(unchanged) {++picaMaterialWriteReuses;return true;}
+    return pddiBaseShader::SetColour(parameter,value);
+}
+#endif
+
 picaMat::picaMat(picaContext* c)
 {
     context = c;

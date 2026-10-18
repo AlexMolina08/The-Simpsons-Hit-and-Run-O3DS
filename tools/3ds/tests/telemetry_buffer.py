@@ -12,6 +12,7 @@ prelude=r'''
 #include <cstdarg>
 #include <cstring>
 #include <string>
+#include <main/old3dssampling.h>
 using u64=unsigned long long;
 const u64 SYSCLOCK_ARM11=1000;
 static u64 tick=1;
@@ -31,8 +32,16 @@ void FakeClear(FILE*) {}
 #define clearerr FakeClear
 '''
 structs=extract('enum Old3dsCategory','extern "C" Old3dsEntityStats')+extract('struct Old3dsAnimStats','extern "C" Old3dsAnimStats')
-code=prelude+structs+'\n#include <main/old3dsreport.h>\n'+r'''
+scope=extract('class Old3dsAnimScope','// Linear allocation failures')
+fixtures='Old3dsAnimStats g_old3dsAnimStats[8]={}; unsigned g_old3dsDrawCalls=0,g_old3dsAnimQueries[4]={};\n'
+code=prelude+structs+fixtures+scope+'\n#include <main/old3dsreport.h>\n'+r'''
 int main() {
+ for(unsigned i=0;i<2048;++i){Old3dsAnimScope sample(7,"fixture",false,false);++g_old3dsDrawCalls;}
+ assert(g_old3dsAnimStats[0].calls==2048 && g_old3dsAnimStats[0].draws==2048);
+ assert(g_old3dsAnimStats[0].sampledTicks==640);
+ g_old3dsAnimStats[0].calls=0;g_old3dsAnimStats[0].sampledTicks=~0u-3;
+ {Old3dsAnimScope sample(7,"fixture",false,false);}
+ assert(g_old3dsAnimStats[0].sampledTicks==~0u);
  Old3dsRing<unsigned,3> ring;
  for(unsigned i=0;i<10;++i) ring.Push()=i;
  assert(ring.Size()==3 && ring.Overwritten()==7);

@@ -37,6 +37,9 @@ public:
 #ifdef SRR2_OLD3DS_MATERIAL_QUEUE
    bool MaterialQueueSafe() const;
 #endif
+#ifdef SRR2_OLD3DS_STATIC_BATCH
+   bool StaticBatchSource(pddiShader*& shader,pddiPrimBuffer*& buffer);
+#endif
    StaticEntityDSG();
    ~StaticEntityDSG();
 

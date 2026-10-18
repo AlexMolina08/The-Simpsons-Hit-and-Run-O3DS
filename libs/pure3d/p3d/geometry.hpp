@@ -42,6 +42,9 @@ public:
     virtual rmt::Vector* GetFaceNormals()           { return NULL; }
 
     virtual void ProcessShaders(ShaderCallback&);
+#ifdef SRR2_OLD3DS_VEHICLE_RENDER_BINDINGS
+    unsigned ShaderBindingRevision() const { return shaderBindingRevision; }
+#endif
 
     virtual int  CastsShadow()                       { return mCastsShadow; }
     virtual void SetCastsShadow(int iCastsShadow)    { mCastsShadow = iCastsShadow; }                
@@ -58,6 +61,9 @@ protected:
     rmt::Sphere sphere;
 
     int mCastsShadow;
+#ifdef SRR2_OLD3DS_VEHICLE_RENDER_BINDINGS
+    unsigned shaderBindingRevision = 1;
+#endif
     //int nFaceNormal;
     //rmt::Vector* faceNormal;
     tPtrArray<tPrimGroup *> primGroup;

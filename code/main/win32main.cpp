@@ -1,8 +1,33 @@
+#ifdef SRR2_OLD3DS_PARTICLE_CLIP
+extern "C" void old3dsDumpParticleClip();
+#endif
+#ifdef SRR2_OLD3DS_PARTICLE_TRIG_REUSE
+extern "C" void old3dsDumpParticleTrig();
+#endif
+#ifdef SRR2_OLD3DS_VEHICLE_JOINT_PIPELINE
+extern "C" void old3dsDumpJointPipeline();
+#endif
+#ifdef SRR2_OLD3DS_VEHICLE_RENDER_BINDINGS
+extern "C" void old3dsDumpVehicleBindings();
+#endif
+#ifdef SRR2_OLD3DS_WHEEL_LOD
+extern "C" void old3dsDumpWheelLOD();
+extern "C" void picaDumpWheelLodMemory();
+#endif
 #ifdef SRR2_OLD3DS_JOINT_AXIS_ONCE
 extern "C" void old3dsDumpJointAxisReuse();
 #endif
 #ifdef SRR2_OLD3DS_BONE_USAGE
 extern "C" void old3dsDumpBoneUsage();
+#endif
+#ifdef SRR2_OLD3DS_COLL_TRANSFORM_ONCE
+extern "C" void old3dsDumpCollisionTransforms();
+#endif
+#ifdef SRR2_OLD3DS_MATERIAL_WRITES
+extern "C" void picaDumpMaterialWrites();
+#endif
+#ifdef SRR2_OLD3DS_INERTIA_TENSOR_CACHE
+extern "C" void old3dsDumpInertiaTensors();
 #endif
 #ifdef SRR2_OLD3DS_JOINT_VECTOR_REUSE
 extern "C" void old3dsDumpJointVectors();
@@ -271,8 +296,33 @@ extern "C" int main( int argc, char *argv[] )
 #if defined(SRR2_OLD_3DS) && defined(SRR2_OLD3DS_COLL_PREP)
     old3dsDumpPairTail();
 #endif
+#ifdef SRR2_OLD3DS_COLL_TRANSFORM_ONCE
+    old3dsDumpCollisionTransforms();
+#endif
+#ifdef SRR2_OLD3DS_PARTICLE_CLIP
+    old3dsDumpParticleClip();
+#endif
+#ifdef SRR2_OLD3DS_PARTICLE_TRIG_REUSE
+    old3dsDumpParticleTrig();
+#endif
+#ifdef SRR2_OLD3DS_MATERIAL_WRITES
+    picaDumpMaterialWrites();
+#endif
+#ifdef SRR2_OLD3DS_INERTIA_TENSOR_CACHE
+    old3dsDumpInertiaTensors();
+#endif
 #ifdef SRR2_OLD3DS_JOINT_VECTOR_REUSE
     old3dsDumpJointVectors();
+#endif
+#ifdef SRR2_OLD3DS_VEHICLE_JOINT_PIPELINE
+    old3dsDumpJointPipeline();
+#endif
+#ifdef SRR2_OLD3DS_VEHICLE_RENDER_BINDINGS
+    old3dsDumpVehicleBindings();
+#endif
+#ifdef SRR2_OLD3DS_WHEEL_LOD
+    old3dsDumpWheelLOD();
+    picaDumpWheelLodMemory();
 #endif
 #ifdef SRR2_OLD3DS_JOINT_AXIS_ONCE
     old3dsDumpJointAxisReuse();

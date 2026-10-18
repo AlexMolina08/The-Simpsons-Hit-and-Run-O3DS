@@ -36,13 +36,13 @@ struct pddiBaseShader:pddiShader {bool IsCurrent(){return false;}void SetMateria
 struct pddiPrimBuffer {};
 struct picaContext {
  Display d;Display* display=&d;State state;C3D_Mtx hwProjection;
- bool bottomPass=false,clipPrepared=false;pddiMatrix clipModelView;C3D_Mtx clipProjection;
+ bool bottomPass=false,clipPrepared=false,skinProgramBound=false;pddiMatrix clipModelView;C3D_Mtx clipProjection;
 #ifdef SRR2_OLD3DS_CLIP_PLANE_PREP
  picaClipBounds::ProjectionPlanes clipProjectionPlanes;
 #endif
  picaClipBounds::Transform clipTransform;unsigned clipTested=0,clipRejected=0;
  pddiBaseShader defaultMaterial;pddiShader* defaultShader=&defaultMaterial;
- bool CullBounds(const float[3],const float[3]);void DrawPrimBuffer(pddiShader*,pddiPrimBuffer*);
+ bool PrepareParticleClip(picaClipBounds::Transform&) const;bool CullBounds(const float[3],const float[3]);void DrawPrimBuffer(pddiShader*,pddiPrimBuffer*);
 };
 bool PrimIsDrawable(unsigned p){return p<2;}
 struct picaPrimBuffer:pddiPrimBuffer {
@@ -52,12 +52,20 @@ struct picaPrimBuffer:pddiPrimBuffer {
 };
 '''
 methods='\n'.join(extract(sig) for sig in [
+ 'bool picaContext::PrepareParticleClip(picaClipBounds::Transform& output) const',
  'bool picaContext::CullBounds(const float low[3], const float high[3])',
  'void picaPrimBuffer::UpdateClipBounds()', 'bool picaPrimBuffer::CullNative()',
  'void picaContext::DrawPrimBuffer(pddiShader* mat, pddiPrimBuffer* buffer)'])
 tests=r'''
 int main(){
  picaContext c;c.hwProjection.r[0].x=c.hwProjection.r[1].y=c.hwProjection.r[2].z=c.hwProjection.r[3].w=1;
+ picaClipBounds::Transform particle;assert(c.PrepareParticleClip(particle)&&particle.valid);
+ c.skinProgramBound=true;assert(!c.PrepareParticleClip(particle)&&!particle.valid);c.skinProgramBound=false;
+ g_picaInFrame=false;assert(!c.PrepareParticleClip(particle));g_picaInFrame=true;
+ c.bottomPass=true;assert(!c.PrepareParticleClip(particle));c.bottomPass=false;
+ c.d.stereo=true;assert(!c.PrepareParticleClip(particle));c.d.stereo=false;
+ c.state.view.projectionMode=0;assert(!c.PrepareParticleClip(particle));c.state.view.projectionMode=1;
+ assert(c.PrepareParticleClip(particle));
  alignas(16) unsigned char data[3*36]={};
  for(unsigned i=0;i<3;++i){float p[]={3+float(i),float(i)/10,0};memcpy(data+i*36,p,12);}
  picaPrimBuffer b;b.context=&c;b.buffer=data;b.UpdateClipBounds();assert(b.clipBoundsValid&&b.clipLow[0]==3&&b.clipHigh[0]==5);
