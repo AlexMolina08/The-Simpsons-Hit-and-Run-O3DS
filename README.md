@@ -64,6 +64,17 @@ To prepare data without building:
 python3 tools/3ds/setup_sd.py "/path/to/PC game"
 ```
 
+## Make a new CIA release
+
+On macOS, double-click **Release CIA.command** and choose the suggested version.
+Commit your source changes on `main` first. The launcher builds the game, packages
+the complete CIA, creates a version tag and uploads a test release to GitHub.
+It verifies uploaded checksums before publishing and never replaces an existing
+public version.
+
+Use the [release guide](docs/OLD3DS.md#local-release-launcher) for prerequisites,
+local-only builds and resuming an interrupted upload.
+
 ## Credits
 
 Based on [x2apic's New 3DS port](https://github.com/x2apic/The-Simpsons-Hit-and-Run-N3DS)

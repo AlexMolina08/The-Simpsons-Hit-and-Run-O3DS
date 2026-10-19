@@ -8,12 +8,16 @@ from pathlib import Path
 import shutil
 import subprocess
 import tempfile
+import sys
+
+from release_version import parse
 
 REPO = Path(__file__).resolve().parents[2]
 
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument('--version', default='0.1.0', help='CIA and release version, for example 0.1.1-rc.1')
     parser.add_argument('--data', type=Path, default=REPO / 'sdcard/3ds/simpsons')
     parser.add_argument('--movies', type=Path, help='Optional separate converted movie directory')
     parser.add_argument('--elf', type=Path, default=REPO / 'out/old3ds-build/code/SRR2.elf')
@@ -21,6 +25,10 @@ def main():
     parser.add_argument('--bannertool', required=True, type=Path)
     parser.add_argument('--out', type=Path, default=REPO / 'out/release/Simpsons-Hit-and-Run-3DS.cia')
     args = parser.parse_args()
+    try:
+        version, (major, minor, patch) = parse(args.version)
+    except ValueError as error:
+        parser.error(str(error))
     args.out = args.out.resolve()
     args.out.parent.mkdir(parents=True, exist_ok=True)
     movies = args.movies or args.data / 'movies'
@@ -29,7 +37,7 @@ def main():
             parser.error(f'Missing build prerequisite: {path}')
     if len(list(movies.glob('*.3dm'))) < 17:
         parser.error('All 17 converted movies are required for a complete package')
-    subprocess.run(['python3', str(REPO / 'tools/3ds/check_old3ds_memory.py'), str(args.elf)], check=True)
+    subprocess.run([sys.executable, str(REPO / 'tools/3ds/check_old3ds_memory.py'), str(args.elf)], check=True)
     with tempfile.TemporaryDirectory(prefix='srr2-cia-', dir=args.out.parent) as work:
         work = Path(work)
         romfs = work / 'romfs'
@@ -63,18 +71,18 @@ def main():
         subprocess.run([str(args.bannertool.resolve()), 'makebanner', '-i', str(branding / 'banner.png'),
                         '-a', str(branding / 'banner.wav'), '-o', str(work / 'banner.bnr')], check=True)
         subprocess.run([str(args.bannertool.resolve()), 'makesmdh', '-s', 'The Simpsons: Hit & Run',
-                        '-l', 'Nintendo 3DS port; optimized for original models', '-p', 'Hit & Run 3DS contributors',
+                        '-l', f'Nintendo 3DS port v{version}; optimized for original models', '-p', 'Hit & Run 3DS contributors',
                         '-i', str(branding / 'icon.png'), '-r', 'regionfree', '-f', 'visible,recordusage',
                         '-o', str(work / 'icon.smdh')], check=True)
         temporary = work / 'game.cia'
         subprocess.run([str(args.makerom.resolve()), '-f', 'cia', '-o', str(temporary), '-target', 't',
                         '-rsf', str(branding / 'game.rsf'), '-DROMFS_ROOT=' + str(romfs),
                         '-elf', str(args.elf.resolve()), '-icon', str(work / 'icon.smdh'),
-                        '-banner', str(work / 'banner.bnr'), '-major', '0', '-minor', '1', '-micro', '0'], check=True)
+                        '-banner', str(work / 'banner.bnr'), '-major', str(major), '-minor', str(minor), '-micro', str(patch)], check=True)
         os.replace(temporary, args.out)
     with args.out.open('rb') as cia:
         digest = hashlib.file_digest(cia, 'sha256').hexdigest()
-    manifest = {'title_id': '000400000f3a1100', 'model': 'Nintendo 3DS; original-model 64 MiB mode',
+    manifest = {'version': version, 'title_id': '000400000f3a1100', 'model': 'Nintendo 3DS; original-model 64 MiB mode',
                 'cia_bytes': args.out.stat().st_size, 'cia_sha256': digest, 'assets': assets,
                 'validation': 'Packaging only; installed-console validation required before release'}
     args.out.with_suffix('.manifest.json').write_text(json.dumps(manifest, indent=2) + '\n')

@@ -86,6 +86,50 @@ Successful packaging does not establish release readiness. Test the installed
 CIA with no loose game assets, including movies, saving/loading and HOME/resume,
 on original hardware before distributing a release.
 
+## Local release launcher
+
+On macOS, double-click `Release CIA.command` in the repository root. The terminal
+asks for a version and suggests the next available test version. Source changes
+must already be committed on `main`; the launcher uses your configured Git name
+and email for the release tag.
+
+Use the build prerequisites above, Python 3.11 or later, CMake 3.28 or later and
+GitHub CLI. Sign in once with `gh auth login`. Prepared retail data and all 17
+original-model movies must exist locally. The launcher also recognizes the
+separate `out/old3ds-movies/` conversion cache used during development.
+
+Release tools are reused from PATH or `out/release-tools/`. On Apple Silicon
+macOS, missing makerom is downloaded from its pinned official release and checked
+against SHA-256. Missing bannertool is built from a pinned upstream revision with
+a Clang portability fix. Other hosts can supply `--makerom` and `--bannertool`.
+
+The launcher rebuilds, packages a CIA with its selected install version, writes
+checksums and an asset manifest, then creates an annotated Git tag and pushes
+`main` and that tag to this repository. GitHub uploads remain a draft until every
+asset's server checksum matches. Published releases are never overwritten.
+Test releases are the default; use `--stable` only for a validated stable version.
+
+Each version has its own output folder under `out/releases/vVERSION/`. An existing
+build or ongoing console transfer is not replaced. To build locally without
+uploading:
+
+```sh
+python3 tools/3ds/release_cia.py --version 0.1.1-rc.1 --no-upload
+```
+
+To resume an interrupted upload without rebuilding:
+
+```sh
+python3 tools/3ds/release_cia.py --version 0.1.1-rc.1 --resume
+```
+
+Resume checks both the source commit and the CIA checksum. `--dry-run` shows the
+plan without changing files or GitHub. `--notes-file /path/to/notes.md` supplies
+custom release notes. `--game "/path/to/PC game"` prepares retail data first when
+needed. Versions follow `MAJOR.MINOR.PATCH`, optionally with `-rc.N`, `-beta.N`
+or `-alpha.N`. CIA fields allow major/minor up to 63 and patch up to 15; the
+suggested next version rolls over those fields automatically.
+
 ## Controls
 
 | Input | Action |
