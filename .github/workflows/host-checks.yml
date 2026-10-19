@@ -28,3 +28,5 @@ jobs:
         run: python3 tools/3ds/tests/movie_setup.py
       - name: Bundled reads and writable saves
         run: python3 tools/3ds/tests/bundled_assets.py
+      - name: Title navigation and camera settings
+        run: python3 tools/3ds/tests/gui_input.py

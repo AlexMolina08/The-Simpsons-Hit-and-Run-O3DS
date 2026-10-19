@@ -11,3 +11,4 @@ sdcard/
 __pycache__/
 .venv/
 .DS_Store
+docs/FULLY_CONNECTED_MAP.md

@@ -496,6 +496,33 @@ FePage* FeProjectChunkHandler::LoadPageChunk( tChunkFile* file )
         }
         file->EndChunk();
     }
+#ifdef RAD_3DS
+    if(strcmp(name, "PauseSettings.pag") == 0 && !returnMe->GetGroup("InvertCamControl"))
+    {
+        // Retail PC assets omit the console camera-inversion row. Add it to
+        // the existing menu so the engine can use its normal setting and save bit.
+        FeGroup* menu = dynamic_cast<FeGroup*>(returnMe->GetGroup("Menu"));
+        if(menu)
+        {
+            FeGroup* invert = menu->AddGroup("InvertCamControl");
+            FeText* label = invert->AddText("InvertCamControl", 80, 264);
+            label->SetBoundingBoxSize(245, 18);
+            label->SetTextStyle("font1_14");
+            label->AddHardCodedString("Invert Camera");
+            FeText* value = invert->AddText("InvertCamControl_Value", 375, 264);
+            value->SetBoundingBoxSize(160, 18);
+            value->SetTextStyle("font1_14");
+            value->SetHorizontalJustification(Scrooby::Centre);
+            value->AddHardCodedString("OFF");
+            value->AddHardCodedString("ON");
+
+            // Keep six rows evenly spaced inside the original menu bounds.
+            menu->GetGroup("JumpCamera")->Translate(0, 12);
+            menu->GetGroup("IntersectNavSystem")->Translate(0, -24);
+            menu->GetGroup("Radar")->Translate(0, -12);
+        }
+    }
+#endif
     return returnMe;
 }
 

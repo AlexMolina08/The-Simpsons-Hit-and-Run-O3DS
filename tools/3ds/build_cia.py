@@ -82,7 +82,7 @@ def main():
         os.replace(temporary, args.out)
     with args.out.open('rb') as cia:
         digest = hashlib.file_digest(cia, 'sha256').hexdigest()
-    manifest = {'version': version, 'title_id': '000400000f3a1100', 'model': 'Nintendo 3DS; original-model 64 MiB mode',
+    manifest = {'version': version, 'title_id': '000400000f3a1100', 'model': 'Old and New Nintendo 3DS; 64 MiB mode; New 3DS CPU and L2 acceleration',
                 'cia_bytes': args.out.stat().st_size, 'cia_sha256': digest, 'assets': assets,
                 'validation': 'Packaging only; installed-console validation required before release'}
     args.out.with_suffix('.manifest.json').write_text(json.dumps(manifest, indent=2) + '\n')

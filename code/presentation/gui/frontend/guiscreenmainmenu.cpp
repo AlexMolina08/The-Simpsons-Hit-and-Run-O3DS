@@ -727,7 +727,21 @@ void CGuiScreenMainMenu::HandleMessage
         if( m_pMenu != NULL )
         {
             // relay message to menu
+#ifdef RAD_3DS
+            // The bottom-screen rows are values of one menu item. Let vertical
+            // controller input browse those values, just like left/right.
+            eGuiMessage menuMessage = message;
+            if( m_pMenu->GetSelection() == MENU_ITEM_MAIN_MENU )
+            {
+                if( message == GUI_MSG_CONTROLLER_UP )
+                    menuMessage = GUI_MSG_CONTROLLER_LEFT;
+                else if( message == GUI_MSG_CONTROLLER_DOWN )
+                    menuMessage = GUI_MSG_CONTROLLER_RIGHT;
+            }
+            m_pMenu->HandleMessage( menuMessage, param1, param2 );
+#else
             m_pMenu->HandleMessage( message, param1, param2 );
+#endif
         }
     }
     else if( m_state == GUI_WINDOW_STATE_INTRO )

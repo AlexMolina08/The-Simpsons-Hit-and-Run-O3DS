@@ -165,7 +165,9 @@ loading uses the original newspaper art below, without static. Cinematics play o
 the top screen only. Small interface text is enlarged for the native display and
 uses smooth alpha coverage.
 
-Original-model builds disable stereoscopic rendering and New 3DS CPU acceleration.
+Original-model builds disable stereoscopic rendering. The same build runs on New
+3DS and New 2DS XL with CPU and L2 acceleration enabled automatically, while
+original 3DS and 2DS retain their normal CPU settings and 64 MiB application mode.
 The loop targets 30 FPS, but busy scenes and streaming can run slower. An emulator's
 frame rate does not predict performance on the original console.
 

@@ -168,11 +168,10 @@ extern "C" int main( int argc, char *argv[] )
 	chdir( "ux0:data/simpsons" );
 #endif
 #ifdef RAD_3DS
-#ifdef SRR2_OLD_3DS
-    osSetSpeedupEnable( false );
-#else
-    osSetSpeedupEnable( true );
-#endif
+    bool isNew3DS = false;
+    const bool new3dsSpeedup = R_SUCCEEDED( APT_CheckNew3DS( &isNew3DS ) ) && isNew3DS;
+    // Keep original-model compatibility while enabling New 3DS CPU and L2 acceleration.
+    osSetSpeedupEnable( new3dsSpeedup );
     gfxInitDefault();
     romfsInit();
     // Installed titles keep bundled assets in RomFS and writable saves on SD.
@@ -182,12 +181,11 @@ extern "C" int main( int argc, char *argv[] )
 #ifdef SRR2_OLD_3DS
     freopen("old3ds.log", "w", stdout);
     setvbuf(stdout, NULL, _IOLBF, 0);
-    bool isNew3DS = false;
-    APT_CheckNew3DS(&isNew3DS);
     printf("OLD3DS_BOOT model=%s loader_region=%lu heap_limit=%lu linear_limit=%lu linear_free=%lu\n",
         isNew3DS ? "new" : "old", (unsigned long)osGetMemRegionSize(MEMREGION_APPLICATION),
         (unsigned long)__ctru_heap_size, (unsigned long)__ctru_linear_heap_size,
         (unsigned long)linearSpaceFree());
+    printf("OLD3DS_CPU new3ds_speedup=%u\n", new3dsSpeedup ? 1u : 0u);
     // Tie a log to the executable that produced it. The earlier hardware log
     // carried no build identifier, so it could not be matched to a binary.
     printf("OLD3DS_BUILD id=%s date=%s time=%s\n",

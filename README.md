@@ -1,12 +1,16 @@
-# Hit & Run for Nintendo 3DS
+# The Simpsons: Hit & Run for Nintendo 3DS
 
 **You must own a legal copy of The Simpsons: Hit & Run to use this port.**
 
 A homebrew port for Nintendo 3DS, optimized for the original Nintendo 3DS and 2DS.
+The same CIA also supports New 3DS and New 2DS XL, enabling their faster CPU and
+L2 cache automatically while retaining the original-model memory budget.
 Based on x2apic's New 3DS port, with original-model rendering, memory, controls
 and software movie playback work.
 Building from source requires your own legal copy of the PC game. Game assets and DSP
 firmware are not included in this source repository.
+
+<img src="images/game.jpg" width="320" alt="The Simpsons: Hit & Run on Nintendo 3DS">
 
 ## Install the CIA
 

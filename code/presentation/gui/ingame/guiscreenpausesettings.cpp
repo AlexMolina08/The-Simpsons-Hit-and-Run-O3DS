@@ -44,7 +44,7 @@ enum ePauseSettingsMenuItem
 {
     MENU_ITEM_CAMERA,
     MENU_ITEM_JUMP_CAMERAS,
-#if !defined(RAD_PC) && !defined(RAD_3DS)
+#if !defined(RAD_PC)
     MENU_ITEM_INVERT_CAM_CONTROL,
 #endif
     MENU_ITEM_INTERSECT_NAV_SYSTEM,
@@ -62,7 +62,7 @@ const char* PAUSE_SETTINGS_MENU_ITEMS[] =
 {
     "Camera",
     "JumpCamera",
-#if !defined(RAD_PC) && !defined(RAD_3DS)
+#if !defined(RAD_PC)
     "InvertCamControl",
 #endif
     "IntersectNavSystem",
@@ -383,7 +383,7 @@ void CGuiScreenPauseSettings::InitIntro()
     //
     bool isSettingOn = false;
 
-#if !defined(RAD_PC) && !defined(RAD_3DS)
+#if !defined(RAD_PC)
     isSettingOn = GetSuperCamManager()->GetSCC( 0 )->IsInvertedCameraEnabled();
     m_pMenu->SetSelectionValue( MENU_ITEM_INVERT_CAM_CONTROL,
                                 isSettingOn ? 1 : 0 );
@@ -463,7 +463,7 @@ void CGuiScreenPauseSettings::InitOutro()
     rAssert( m_pMenu != NULL );
     bool isSettingOn = false;
 
-#if !defined(RAD_PC) && !defined(RAD_3DS)
+#if !defined(RAD_PC)
     isSettingOn = (m_pMenu->GetSelectionValue( MENU_ITEM_INVERT_CAM_CONTROL ) == 1);
     GetSuperCamManager()->GetSCC( 0 )->EnableInvertedCamera( isSettingOn );
 #endif
