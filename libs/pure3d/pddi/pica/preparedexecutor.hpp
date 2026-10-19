@@ -12,6 +12,8 @@
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
+#include <new>
+#include <type_traits>
 
 // Ordered coarse execution stage. Only main runs it for now. The producer owns
 // each input pool until Flush completes; a future worker must use the same lease
@@ -84,20 +86,21 @@ public:
     {
         Require(valid && !Full(),"material_capacity");
         Operation& operation=items[operations++];operation.kind=Material;
-        operation.pool=&pool;
-        operation.material.hasMaterial=input.hasMaterial;operation.material.hasUniforms=input.hasUniforms;
+        new (&operation.material) MaterialOperation;
+        operation.material.pool=&pool;
+        operation.material.input.hasMaterial=input.hasMaterial;operation.material.input.hasUniforms=input.hasUniforms;
 #ifdef SRR2_OLD3DS_RETAINED_MATERIAL
-        operation.material.retained=input.retained;
+        operation.material.input.retained=input.retained;
         if(input.retained){input.retained->Retain();ownedOperations=operations;}
 #endif
         if(input.hasMaterial){
 #ifdef SRR2_OLD3DS_RETAINED_MATERIAL
             if(!input.retained)
 #endif
-            memcpy(&operation.material.material,&input.material,sizeof(input.material));
-            operation.material.raster=input.raster;
+            memcpy(&operation.material.input.material,&input.material,sizeof(input.material));
+            operation.material.input.raster=input.raster;
         }
-        if(input.hasUniforms)operation.material.uniforms=input.uniforms;
+        if(input.hasUniforms)operation.material.input.uniforms=input.uniforms;
     }
 #if defined(SRR2_OLD3DS_RETAINED_MATERIAL) || defined(SRR2_OLD3DS_DEFERRED_SKIN)
     // Call only on main after the consumer has completed, including error paths.
@@ -106,7 +109,7 @@ public:
         for(unsigned i=0;i<ownedOperations;++i){
             auto& operation=items[i];
 #ifdef SRR2_OLD3DS_RETAINED_MATERIAL
-            if(operation.kind==Material && operation.material.retained){operation.material.retained->Release();operation.material.retained=nullptr;}
+            if(operation.kind==Material && operation.material.input.retained){operation.material.input.retained->Release();operation.material.input.retained=nullptr;}
 #endif
 #ifdef SRR2_OLD3DS_DEFERRED_SKIN
             if(operation.kind==Driver && operation.deferredSkin){operation.deferredSkin->Release();operation.deferredSkin=nullptr;}
@@ -119,7 +122,7 @@ public:
     void AddGeometry(const picaPreparedGeometry& input)
     {
         Require(valid && !Full(),"geometry_capacity");
-        Operation& operation=items[operations++];operation.kind=Geometry;operation.geometry=input;++geometry;
+        Operation& operation=items[operations++];operation.kind=Geometry;new (&operation.geometry) picaPreparedGeometry(input);++geometry;
     }
     bool PaletteFull()const{return paletteCount==PaletteCapacity;}
     void AddPalette(const picaPreparedSkinPalette& input,unsigned first)
@@ -143,7 +146,7 @@ public:
     void AddState(const picaPreparedState& input)
     {
         Require(valid && !Full(),"state_capacity");
-        Operation& operation=items[operations++];operation.kind=State;operation.state=input;
+        Operation& operation=items[operations++];operation.kind=State;new (&operation.state) picaPreparedState(input);
     }
     const char* failureReason=nullptr;
     OLD3DS_HOT_PATH bool TryFlush()
@@ -157,7 +160,7 @@ public:
             Operation& operation=items[i];
             if(operation.kind==Material)
             {
-                picaPreparedDrawInputs& input=operation.material;
+                picaPreparedDrawInputs& input=operation.material.input;
 #ifdef SRR2_OLD3DS_RETAINED_MATERIAL
                 const auto* retained=input.retained;
 #endif
@@ -174,7 +177,7 @@ public:
                     stateChanges+=counters.stateChanges+picaApplyPreparedMaterialRaster(input.raster,state);
                     textureRequests+=counters.textureRequests;textureChanges+=counters.textureChanges;
                 }
-                if(input.hasUniforms)picaApplyPreparedUniforms(operation.pool->View(input.uniforms
+                if(input.hasUniforms)picaApplyPreparedUniforms(operation.material.pool->View(input.uniforms
 #ifdef SRR2_OLD3DS_RETAINED_MATERIAL
                     ,retained?&retained->uniforms:nullptr
 #endif
@@ -234,11 +237,22 @@ private:
     static void nullptrDriver(const void*){}
 #endif
     enum Kind {Material,Geometry,State,Program,Layout,Palette,Driver};
+    struct MaterialOperation {
+        const picaPreparedInputPool* pool;
+        picaPreparedDrawInputs input;
+    };
     struct Operation {
-        Kind kind;const picaPreparedInputPool* pool;
-        picaPreparedDrawInputs material;
-        picaPreparedGeometry geometry;
-        picaPreparedState state;
+        Kind kind;
+        // A command consumes exactly one payload. Sharing its storage avoids
+        // pulling unused geometry/state/material data through the CPU caches.
+        // Placement construction in the writers starts the selected lifetime;
+        // retained references are still released explicitly after consumer join.
+        union {
+            MaterialOperation material;
+            picaPreparedGeometry geometry;
+            picaPreparedState state;
+        };
+        Operation() {}
         shaderProgram_s* program;C3D_AttrInfo* attributes;
         unsigned palette,first;float convergence;bool normal;
         DriverCall driver;
@@ -247,6 +261,10 @@ private:
         bool (*driverTry)(const void*);
 #endif
     };
+    static_assert(std::is_trivially_copyable<Operation>::value,
+                  "Frame validation snapshots require trivial command copies");
+    static_assert(std::is_trivially_destructible<Operation>::value,
+                  "Command references retire explicitly after consumer completion");
     static constexpr unsigned PaletteCapacity=8;
     Operation items[Capacity];
     picaPreparedSkinPalette palettes[PaletteCapacity];

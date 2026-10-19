@@ -14,6 +14,8 @@ prepared=(root/'libs/pure3d/pddi/pica/preparedmaterial.hpp').read_text()
 methods=''.join(extract(material,x) for x in ['void picaMat::PrepareNative(', 'void picaMat::SetDevPass(', 'bool picaMat::CapturePreparedPass('])
 tables=material[material.index('static const GPU_TEXTURE_FILTER_PARAM'):material.index('#ifdef SRR2_OLD3DS_MATERIAL_WRITES')]
 source=r'''
+#define O3_MAIN_SCOPE(...) do {} while (0)
+
 #include <vector>
 #include <array>
 #include <cassert>
