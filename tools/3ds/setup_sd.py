@@ -282,7 +282,7 @@ def main():
     elif not (sd / "SimpsonsNTSC.3dsx").exists():
         log("no SimpsonsNTSC.3dsx yet: build it and copy it in, or pass --3dsx")
 
-    old_readme = """The Simpsons Hit & Run - experimental Old Nintendo 3DS build
+    old_readme = """The Simpsons Hit & Run - Nintendo 3DS (optimized for original models) build
 
 Copy the 3ds folder to the root of your SD card. Launch
 sd:/3ds/simpsons/SimpsonsNTSC.3dsx with the Homebrew Launcher.
@@ -296,8 +296,7 @@ Y: attack/handbrake. D-pad: move/steer while using the camera.
 
 Movies use the Old 3DS software decoder. Stereoscopic rendering is disabled.
 The gameplay image remains 400x240.
-Physical Old 3DS performance has not yet been verified. See docs/OLD3DS.md
-in the source checkout for the exact test scope and remaining checks.
+Performance varies by scene; demanding areas do not maintain 30 FPS.
 """
     (args.out.resolve() / "README.txt").write_text(old_readme if args.old3ds else README)
     log("done")
