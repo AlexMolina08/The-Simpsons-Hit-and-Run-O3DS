@@ -1480,7 +1480,8 @@ namespace
         if( !picaBottomScreenInterfaceBegin() ) return;
         view->BeginRender();
         if( mainMenu ) picaBottomScreenStatic();
-        if( !startupLoading ) picaBottomScreenPanel(list ? selection : selectedRow-first,
+        else picaBottomScreenPanel(-1,0);
+        if( !startupLoading && (list || visibleRows>0) ) picaBottomScreenPanel(list ? selection : selectedRow-first,
             list ? count : visibleRows);
         p3d::pddi->PushState( PDDI_STATE_RENDER );
         p3d::pddi->PushState( PDDI_STATE_VIEW );
@@ -1530,7 +1531,17 @@ namespace
                 const float y=picaBottomFrame::MenuTop(visibleRows)+row*picaBottomFrame::MenuRowHeight+17;
                 const tColour colour=!menu->IsMenuItemEnabled(index) ? tColour(128,128,128) :
                     first+row==selectedRow ? tColour(255,235,0) : tColour(225,219,234);
-                BottomLabel(label->GetFont(),label->GetStringBuffer(),49,y,13,colour,
+                const bool single=visibleRows==1 && !separate && !slider;
+                const float height=single ? 16.0f : 13.0f;
+                float x=49;
+                if( single && label->GetFont()->GetFontHeight()>0 )
+                {
+                    float width=label->GetFont()->GetTextWidth(label->GetStringBuffer())*
+                        height/label->GetFont()->GetFontHeight();
+                    if(width>230)width=230;
+                    x=(320-width)*0.5f;
+                }
+                BottomLabel(label->GetFont(),label->GetStringBuffer(),x,y,height,colour,
                     separate || slider ? 142 : 230);
                 if( separate && value->GetFont() )
                     BottomLabel(value->GetFont(),value->GetStringBuffer(),202,y,12,colour,78);
