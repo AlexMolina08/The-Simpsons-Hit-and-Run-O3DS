@@ -1,19 +1,19 @@
-# The Simpsons: Hit & Run for Nintendo 3DS
+# Hit & Run for Nintendo 3DS
+
+**You must own a legal copy of The Simpsons: Hit & Run to use this port.**
 
 A homebrew port for Nintendo 3DS, optimized for the original Nintendo 3DS and 2DS.
 Based on x2apic's New 3DS port, with original-model rendering, memory, controls
 and software movie playback work.
-Building from source requires your own copy of the PC game. Game assets and DSP
+Building from source requires your own legal copy of the PC game. Game assets and DSP
 firmware are not included in this source repository.
-
-<img src="images/game.jpg" width="320" alt="The Simpsons: Hit & Run on Nintendo 3DS">
 
 ## Install the CIA
 
 The complete CIA test build is available under
 [Releases](https://github.com/AlexMolina08/The-Simpsons-Hit-and-Run-O3DS/releases).
-Install it with FBI on a console configured to run homebrew CIAs. Game data and
-all 17 converted movies are bundled; no separate game-data copy is needed.
+Install it with FBI on a console configured to run homebrew CIAs. No separate
+game-data copy is needed.
 Saves and settings use `sd:/3ds/simpsons/`. Audio requires your console's DSP
 firmware at `sd:/3ds/dspfirm.cdc`, dumped with DSP1.
 
@@ -75,9 +75,31 @@ public version.
 Use the [release guide](docs/OLD3DS.md#local-release-launcher) for prerequisites,
 local-only builds and resuming an interrupted upload.
 
+## Development
+
+See [CONTRIBUTING.md](CONTRIBUTING.md) for host checks, patch guidelines and
+hardware test reports. The [build guide](docs/OLD3DS.md) covers the toolchain,
+controls and packaging. Report reproducible problems through
+[Issues](https://github.com/AlexMolina08/The-Simpsons-Hit-and-Run-O3DS/issues).
+
 ## Credits
 
 Based on [x2apic's New 3DS port](https://github.com/x2apic/The-Simpsons-Hit-and-Run-N3DS)
 and [ZenoArrows' Switch and PS Vita port](https://github.com/ZenoArrows/The-Simpsons-Hit-and-Run).
 Movie playback follows [REGTA-3DSPort-Complete](https://github.com/Epic0522/REGTA-3DSPort-Complete) by Epic0522.
 Built with devkitPro, libctru and Citro3D.
+
+## Install with a QR code
+
+Open **FBI → Remote Install → Scan QR Code** on your Nintendo 3DS.
+This QR code links directly to the v0.1.1-rc.1 CIA preview for testing.
+This is a test build, not a stable release. We recommend obtaining a legal copy
+of the original game before testing this port.
+
+<img src="images/cia-install-qr.png" width="392" alt="Direct CIA installation QR code">
+
+[Download the CIA](https://github.com/AlexMolina08/The-Simpsons-Hit-and-Run-O3DS/releases/download/v0.1.1-rc.1/Simpsons-Hit-and-Run-3DS-v0.1.1-rc.1.cia)
+
+The download is approximately 1.90 GB. See the
+[release notes](https://github.com/AlexMolina08/The-Simpsons-Hit-and-Run-O3DS/releases/tag/v0.1.1-rc.1)
+for requirements and the current test-build status.

@@ -191,7 +191,7 @@ def main():
             notes = folder / 'release-notes.md'
             notes.write_text(f'''The Simpsons: Hit & Run for Nintendo 3DS {tag}.
 
-Optimized for Nintendo 3DS and 2DS. The complete CIA includes game data and all 17 converted cinematics. Install with FBI; no separate game-data copy is needed. Saves and settings use `sd:/3ds/simpsons/`. Audio requires your console's DSP firmware at `sd:/3ds/dspfirm.cdc`.
+Optimized for Nintendo 3DS and 2DS. Install with FBI; no separate game-data copy is needed. Saves and settings use `sd:/3ds/simpsons/`. Audio requires your console's DSP firmware at `sd:/3ds/dspfirm.cdc`.
 
 Source: `{commit}`. Build and packaging checks passed.
 

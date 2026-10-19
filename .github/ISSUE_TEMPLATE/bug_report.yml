@@ -1,0 +1,54 @@
+name: Bug report
+description: Report a reproducible problem with the port.
+title: ""
+labels: []
+body:
+  - type: input
+    id: version
+    attributes:
+      label: Release or commit
+      placeholder: v0.1.1-rc.1, or the source commit
+    validations:
+      required: true
+  - type: dropdown
+    id: model
+    attributes:
+      label: Console or emulator
+      options:
+        - Original Nintendo 3DS
+        - Original Nintendo 3DS XL
+        - Nintendo 2DS
+        - New Nintendo 3DS
+        - New Nintendo 3DS XL
+        - New Nintendo 2DS XL
+        - Emulator (include name and version below)
+    validations:
+      required: true
+  - type: dropdown
+    id: installation
+    attributes:
+      label: Installation method
+      options:
+        - CIA release
+        - Homebrew Launcher (3DSX)
+        - Built from source
+    validations:
+      required: true
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Steps to reproduce
+      description: Include the level, mission or menu and the actions that trigger the problem.
+    validations:
+      required: true
+  - type: textarea
+    id: behavior
+    attributes:
+      label: Expected and actual behavior
+    validations:
+      required: true
+  - type: textarea
+    id: evidence
+    attributes:
+      label: Screenshots, error codes or logs
+      description: Include emulator details here if applicable. Remove personal information from logs.

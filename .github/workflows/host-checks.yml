@@ -1,0 +1,30 @@
+name: Host checks
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: host-checks-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  host-checks:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: '3.11'
+      - name: Release integrity and version handling
+        run: python3 tools/3ds/tests/release_workflow.py
+      - name: SD setup routing
+        run: python3 tools/3ds/tests/movie_setup.py
+      - name: Bundled reads and writable saves
+        run: python3 tools/3ds/tests/bundled_assets.py
