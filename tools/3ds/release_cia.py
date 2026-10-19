@@ -9,6 +9,7 @@ import re
 import shutil
 import subprocess
 import sys
+import time
 
 from release_tools import locate
 from release_version import next_version, parse
@@ -66,6 +67,16 @@ def release_info(repository, tag):
     raise RuntimeError(result.stderr.strip() or 'Cannot check the existing GitHub release')
 
 
+def wait_for_release(repository, tag):
+    for attempt in range(5):
+        info = release_info(repository, tag)
+        if info is not None:
+            return info
+        if attempt < 4:
+            time.sleep(attempt + 1)
+    raise RuntimeError('GitHub has not exposed the new draft yet; retry with --resume after a short wait')
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--version', help='For example 0.1.1-rc.1; prompts with the next version when omitted')
@@ -87,7 +98,7 @@ def main():
         parser.error('--repo must be OWNER/REPOSITORY')
     if git('branch', '--show-current') != 'main':
         raise RuntimeError('Switch to main before releasing; the launcher never rewrites or merges branches')
-    commit = git('rev-parse', 'HEAD')
+    head = commit = git('rev-parse', 'HEAD')
     dirty = bool(git('status', '--porcelain'))
     if dirty and not args.dry_run:
         raise RuntimeError('Commit the source changes on main before releasing. No files were staged or committed automatically')
@@ -133,6 +144,15 @@ def main():
     if args.resume:
         if not cia.is_file() or not manifest.is_file():
             raise RuntimeError('No complete CIA and manifest exist for this version; choose a new version to rebuild')
+        saved = json.loads(manifest.read_text())
+        commit = saved.get('source_commit', '')
+        if not re.fullmatch(r'[0-9a-f]{40}', commit):
+            raise RuntimeError('The saved release has no valid source commit')
+        ancestor = run(['git', 'merge-base', '--is-ancestor', commit, head], capture=True, check=False)
+        if ancestor.returncode:
+            raise RuntimeError('The saved release source is not part of main; refusing to resume')
+        # Resume uploads the exact original artifact. Later tooling fixes on main
+        # do not change its recorded source revision or move the release tag.
         metadata = verify_artifact(cia, manifest, commit)
     else:
         makerom, bannertool = locate(REPO, args.makerom, args.bannertool)
@@ -151,7 +171,7 @@ def main():
         metadata.update(source_commit=commit, elf_sha256=digest(REPO / 'out/old3ds-build/code/SRR2.elf'))
         manifest.write_text(json.dumps(metadata, indent=2) + '\n')
         verify_artifact(cia, manifest, commit)
-    if git('status', '--porcelain') or git('rev-parse', 'HEAD') != commit:
+    if git('status', '--porcelain') or git('rev-parse', 'HEAD') != head:
         raise RuntimeError('Source changed during the build. The CIA is kept locally; publishing was stopped')
     if args.no_upload:
         print(f'\nVerified local CIA: {cia}\nSHA-256: {metadata["cia_sha256"]}')
@@ -181,7 +201,7 @@ The checksum and manifest identify the exact CIA and bundled assets.
         if not args.stable:
             command.append('--prerelease')
         run(command)
-    info = release_info(args.repo, tag)
+    info = wait_for_release(args.repo, tag)
     present = {asset['name']: asset for asset in info['assets']}
     pending = []
     for file in (cia, manifest, checksum):
@@ -193,7 +213,7 @@ The checksum and manifest identify the exact CIA and bundled assets.
     if pending:
         print('Uploading release files...', flush=True)
         run(['gh', 'release', 'upload', tag, *pending, '--repo', args.repo])
-    info = release_info(args.repo, tag)
+    info = wait_for_release(args.repo, tag)
     uploaded = {asset['name']: asset for asset in info['assets']}
     for file in (cia, manifest, checksum):
         asset = uploaded.get(file.name)

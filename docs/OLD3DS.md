@@ -123,7 +123,9 @@ To resume an interrupted upload without rebuilding:
 python3 tools/3ds/release_cia.py --version 0.1.1-rc.1 --resume
 ```
 
-Resume checks both the source commit and the CIA checksum. `--dry-run` shows the
+Resume verifies the recorded source commit, its unchanged release tag and the CIA
+checksum. It can upload the same artifact after release-tooling fixes advance
+`main`; the original release source stays unchanged. `--dry-run` shows the
 plan without changing files or GitHub. `--notes-file /path/to/notes.md` supplies
 custom release notes. `--game "/path/to/PC game"` prepares retail data first when
 needed. Versions follow `MAJOR.MINOR.PATCH`, optionally with `-rc.N`, `-beta.N`
