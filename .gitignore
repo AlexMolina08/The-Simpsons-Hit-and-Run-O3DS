@@ -9,4 +9,5 @@ CMakeSettings.json
 ext_data/
 sdcard/
 __pycache__/
+.venv/
 .DS_Store

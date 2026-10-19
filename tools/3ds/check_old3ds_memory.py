@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """Reject fixed-heap binaries exceeding the Old 3DS 64 MiB application budget."""
-import argparse,json,struct,subprocess
+import argparse,json,os,struct,subprocess
 from pathlib import Path
 p=argparse.ArgumentParser(description=__doc__);p.add_argument('elf',type=Path);a=p.parse_args()
 b=a.elf.read_bytes();assert b[:6]==b'\x7fELF\x01\x01','Expected little-endian ELF32'
@@ -9,7 +9,7 @@ phoff=struct.unpack_from('<I',b,28)[0];entsize,num=struct.unpack_from('<HH',b,42
 loads=[struct.unpack_from('<8I',b,phoff+i*entsize) for i in range(num)]
 loads=[x for x in loads if x[0]==1]
 image=sum((x[5]+4095)&~4095 for x in loads)
-symbols={s.split()[-1]:int(s.split()[0],16) for s in subprocess.check_output(['/opt/devkitpro/devkitARM/bin/arm-none-eabi-nm',str(a.elf)],text=True).splitlines() if len(s.split())==3 and s.split()[-1] in ['__ctru_heap_size','__ctru_linear_heap_size']}
+symbols={s.split()[-1]:int(s.split()[0],16) for s in subprocess.check_output([str(Path(os.environ.get('DEVKITPRO', '/opt/devkitpro')) / 'devkitARM/bin/arm-none-eabi-nm'),str(a.elf)],text=True).splitlines() if len(s.split())==3 and s.split()[-1] in ['__ctru_heap_size','__ctru_linear_heap_size']}
 def value(name):
  address=symbols[name]
  for x in loads:
