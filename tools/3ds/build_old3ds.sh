@@ -2,6 +2,10 @@
 # Build from source without installing packages into the system toolchain.
 set -euo pipefail
 repo=$(cd "$(dirname "$0")/../.." && pwd)
+if [[ ! -s "$repo/romfs/art/frontend/scrooby/bootup.p3d" ]]; then
+    echo 'Missing boot assets. Run tools/3ds/setup_sd.py with your PC game and --old3ds first.' >&2
+    exit 1
+fi
 export DEVKITPRO=${DEVKITPRO:-/opt/devkitpro}
 jobs=${JOBS:-8}
 
@@ -50,7 +54,7 @@ cmake --install "$deps/old3ds-sdl-build"
 bash "$source_root/tools/3ds/build_old3ds_ffmpeg.sh" "$source_root" "$jobs"
 
 build="$source_root/out/old3ds-build"
-cmake -S "$source_root" -B "$build" "${common[@]}" \
+cmake -S "$source_root" -B "$build" -C "$source_root/cmake/old3ds-release.cmake" "${common[@]}" \
     -DCMAKE_POLICY_VERSION_MINIMUM=3.5 -DSRR2_OLD_3DS=ON -DSRR2_3DS_MOVIES=ON \
     "-DSDL2_DIR=$prefix/lib/cmake/SDL2" \
     "-DPNG_LIBRARY=$prefix/lib/liblibpng16_static.a" "-DPNG_PNG_INCLUDE_DIR=$prefix/include" \
@@ -63,5 +67,6 @@ printf '%s\n' "$attributes" > "$repo/out/old3ds/elf-attributes.txt"
     echo "Unexpected executable architecture; inspect out/old3ds/elf-attributes.txt" >&2
     exit 1
 }
+python3 "$repo/tools/3ds/check_old3ds_memory.py" "$build/code/SRR2.elf" > "$repo/out/old3ds/memory.json"
 cp "$build/SimpsonsNTSC.3dsx" "$repo/out/old3ds/SimpsonsNTSC.3dsx"
 echo "Built: $repo/out/old3ds/SimpsonsNTSC.3dsx"
