@@ -5,10 +5,11 @@ import json
 from pathlib import Path
 import sys
 import tempfile
+from unittest.mock import patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from release_version import parse, next_version
-from release_cia import verify_artifact
+from release_cia import verify_artifact, wait_for_release
 
 assert parse('v1.2.3-rc.4') == ('1.2.3-rc.4', (1, 2, 3))
 assert parse('63.63.15')[1] == (63, 63, 15)
@@ -43,4 +44,13 @@ with tempfile.TemporaryDirectory() as directory:
         pass
     else:
         raise AssertionError('Resume accepted changed CIA bytes')
+with patch('release_cia.release_info', side_effect=[None, None, {'assets': []}]), patch('release_cia.time.sleep'):
+    assert wait_for_release('owner/repo', 'v1.2.3') == {'assets': []}
+with patch('release_cia.release_info', return_value=None), patch('release_cia.time.sleep'):
+    try:
+        wait_for_release('owner/repo', 'v1.2.3')
+    except RuntimeError:
+        pass
+    else:
+        raise AssertionError('An invisible draft was accepted')
 print('PASS: CIA version limits and rollover; resumed uploads reject changed source and corrupted artifacts.')

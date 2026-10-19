@@ -128,7 +128,7 @@ def main():
     movies = args.movies or args.data / 'movies'
     if not movies.is_dir() and (REPO / 'out/old3ds-movies').is_dir():
         movies = REPO / 'out/old3ds-movies'
-    print(f'\nVersion: {tag}\nSource:  {commit}\nOutput:  {cia}\nGitHub:  {args.repo}\nMode:    {"stable" if args.stable else "test release"}\n', flush=True)
+    print(f'\nVersion: {tag}\nCheckout: {commit}\nOutput:  {cia}\nGitHub:  {args.repo}\nMode:    {"stable" if args.stable else "test release"}\n', flush=True)
     if args.dry_run:
         print('Plan: check clean main; prepare tools; build; package; verify; tag; push; upload; verify GitHub hashes; publish.')
         if dirty:
@@ -154,6 +154,7 @@ def main():
         # Resume uploads the exact original artifact. Later tooling fixes on main
         # do not change its recorded source revision or move the release tag.
         metadata = verify_artifact(cia, manifest, commit)
+        print(f"Resuming the saved CIA from source {commit}", flush=True)
     else:
         makerom, bannertool = locate(REPO, args.makerom, args.bannertool)
         if args.game:
