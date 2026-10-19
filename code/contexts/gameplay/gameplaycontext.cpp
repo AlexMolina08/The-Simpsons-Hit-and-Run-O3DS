@@ -1,3 +1,7 @@
+#ifdef SRR2_OLD_3DS
+#include <3ds.h>
+extern double g_old3dsUpdateStages[4];
+#endif
 //=============================================================================
 // Copyright (C) 2002 Radical Entertainment Ltd.  All rights reserved.
 //
@@ -495,9 +499,15 @@ void GameplayContext::OnUpdate( unsigned int elapsedTime )
 
 	    BEGIN_PROFILE( "Update Particles" );
 
+#ifdef SRR2_OLD_3DS
+        const u64 effectsTick = svcGetSystemTick();
+#endif
 	    GetParticleManager()->Update( elapsedTime );
         GetBreakablesManager()->Update( elapsedTime );
 	    GetAnimEntityDSGManager()->Update( elapsedTime );
+#ifdef SRR2_OLD_3DS
+        g_old3dsUpdateStages[3] += (svcGetSystemTick() - effectsTick) * 1000.0 / SYSCLOCK_ARM11;
+#endif
 
 	    END_PROFILE( "Update Particles" );
 
@@ -506,13 +516,25 @@ void GameplayContext::OnUpdate( unsigned int elapsedTime )
     #endif 
 
     BEGIN_PROFILE("WorldPhysics");
+        #ifdef SRR2_OLD_3DS
+        const u64 stage0Tick = svcGetSystemTick();
+#endif
         GetWorldPhysicsManager()->Update(elapsedTime);
+#ifdef SRR2_OLD_3DS
+        g_old3dsUpdateStages[0] += (svcGetSystemTick() - stage0Tick) * 1000.0 / SYSCLOCK_ARM11;
+#endif
     END_PROFILE("WorldPhysics");
 
         // ordering is important. Unless other parts of code change, we must call
         // this before WorldPhysManager::Update() because PedestrianManager
         // sets the flags for all characters to be updated in WorldPhys Update 
+        #ifdef SRR2_OLD_3DS
+        const u64 stage1Tick = svcGetSystemTick();
+#endif
         PedestrianManager::GetInstance()->Update( elapsedTime );
+#ifdef SRR2_OLD_3DS
+        g_old3dsUpdateStages[1] += (svcGetSystemTick() - stage1Tick) * 1000.0 / SYSCLOCK_ARM11;
+#endif
 
     #ifdef DEBUGWATCH
         mDebugTimeDelta = elapsedTime;
@@ -524,7 +546,13 @@ void GameplayContext::OnUpdate( unsigned int elapsedTime )
     END_PROFILE("TriggerVolumeTracker");
 
     BEGIN_PROFILE("TrafficManager");
+        #ifdef SRR2_OLD_3DS
+        const u64 stage2Tick = svcGetSystemTick();
+#endif
         TrafficManager::GetInstance()->Update( elapsedTime );
+#ifdef SRR2_OLD_3DS
+        g_old3dsUpdateStages[2] += (svcGetSystemTick() - stage2Tick) * 1000.0 / SYSCLOCK_ARM11;
+#endif
     END_PROFILE("TrafficManager");
 
     BEGIN_PROFILE("ActorManager");

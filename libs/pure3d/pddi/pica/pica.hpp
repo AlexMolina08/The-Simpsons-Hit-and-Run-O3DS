@@ -5,6 +5,7 @@
 
 extern "C" int g_picaMipmapsAllowed;
 extern "C" int g_picaKeepFullSize;
+extern "C" int g_picaFontTexture;
 
 const unsigned PICA_MIPMAP_LINEAR_RESERVE = 6 * 1024 * 1024;
 

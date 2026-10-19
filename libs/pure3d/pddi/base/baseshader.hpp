@@ -1,3 +1,8 @@
+#ifdef SRR2_OLD3DS_MAIN_PROFILE
+#include <main/old3dsmainprofile.h>
+#else
+#define O3_MAIN_SCOPE(stage) ((void)0)
+#endif
 //=============================================================================
 // Copyright (c) 2002 Radical Games Ltd.  All rights reserved.
 //=============================================================================
@@ -75,6 +80,10 @@ struct pddiShadeMatrixTable
 // a shader allocation funciton
 typedef pddiBaseShader* (*pddiShadeAllocFunc)(pddiRenderContext* context, const char* name, const char* aux);
 
+#ifdef SRR2_OLD3DS_PREPARED_BACKEND
+#include <pddi/pica/preparedbackend.h>
+#endif
+
 // the base class of all shaders
 class pddiBaseShader : public pddiShader
 {
@@ -108,6 +117,7 @@ public:
 
     void SetMaterial(int pass = 0)  
     {
+    O3_MAIN_SCOPE(MaterialProtocol);
         if(uid != currentUID)
         { 
             if(lastShader) lastShader->PostRender();
@@ -125,6 +135,13 @@ public:
 
     static void ClearCurrentShader(void)
     {
+#ifdef SRR2_OLD3DS_PREPARED_BACKEND
+#ifdef SRR2_OLD3DS_FRAME_PIPELINE
+        picaPreparedImmediateScope immediate(picaPreparedShaderNeedsFence(lastShader));
+#else
+        picaPreparedImmediateScope immediate;
+#endif
+#endif
         if(lastShader) lastShader->PostRender();
         currentUID = 0xffffffff;  
         lastShader = NULL;

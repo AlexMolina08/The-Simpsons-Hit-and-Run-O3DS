@@ -18,6 +18,10 @@
 #include <render/DSG/StaticEntityDSG.h>
 #include <memory/srrmemory.h>
 #include <p3d/utility.hpp>
+#if defined(SRR2_OLD3DS_MATERIAL_QUEUE) || defined(SRR2_OLD3DS_STATIC_BATCH)
+#include <typeinfo>
+#include <pddi/pica/context.hpp>
+#endif
 
 //************************************************************************
 //
@@ -223,6 +227,11 @@ void StaticEntityDSG::Display()
 #endif
     if(IS_DRAW_LONG) return;
     DSG_BEGIN_PROFILE(profileName)
+#ifdef SRR2_OLD3DS_MATERIAL_QUEUE
+    picaContext* queueContext = static_cast<picaContext*>(p3d::pddi);
+    const bool localQueue = picaQueue::Enabled() && !queueContext->staticQueueActive && MaterialQueueSafe();
+    if(localQueue) queueContext->BeginStaticQueue();
+#endif
 
     if(mIsGeo & IS_SHADOW)
     {
@@ -234,6 +243,9 @@ void StaticEntityDSG::Display()
     {
         mpDrawstuff->Display();
     }
+#ifdef SRR2_OLD3DS_MATERIAL_QUEUE
+    if(localQueue) queueContext->EndStaticQueue();
+#endif
     DSG_END_PROFILE(profileName)
 }
 
@@ -413,3 +425,30 @@ void StaticEntityDSG::SetInternalState()
 //************************************************************************
 
 
+
+#ifdef SRR2_OLD3DS_MATERIAL_QUEUE
+bool StaticEntityDSG::MaterialQueueSafe() const
+{
+    // Instance subclasses push matrices and can draw shadows; exact type only.
+    // Pure tGeometry calls have no animation, particle or streaming side effects.
+    return typeid(*this) == typeid(StaticEntityDSG) && !(mIsGeo & IS_SHADOW) &&
+           mpDrawstuff && typeid(*mpDrawstuff) == typeid(tGeometry);
+}
+#endif
+
+#ifdef SRR2_OLD3DS_STATIC_BATCH
+#include <p3d/primgroup.hpp>
+bool StaticEntityDSG::StaticBatchSource(pddiShader*& shader,pddiPrimBuffer*& buffer)
+{
+    // Exact static Display has no transform, light, animation or shader callbacks.
+    if(IS_DRAW_LONG || typeid(*this)!=typeid(StaticEntityDSG) || !(mIsGeo&GEO) ||
+       (mIsGeo&IS_SHADOW) || !mpDrawstuff || typeid(*mpDrawstuff)!=typeid(tGeometry)) return false;
+    tGeometry* geometry=static_cast<tGeometry*>(mpDrawstuff);
+    if(geometry->GetNumPrimGroup()!=1) return false;
+    tPrimGroup* group=geometry->GetPrimGroup(0);
+    if(!group || typeid(*group)!=typeid(tPrimGroupOptimised) || !group->GetShader()) return false;
+    shader=group->GetShader()->GetShader();
+    buffer=static_cast<tPrimGroupOptimised*>(group)->GetBuffer();
+    return shader && buffer && static_cast<picaPrimBuffer*>(buffer)->StaticBatchSource();
+}
+#endif

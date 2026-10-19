@@ -1,3 +1,9 @@
+#ifdef SRR2_OLD3DS_FRAME_PIPELINE
+#include <citro3d.h>
+#include <pddi/pica/preparedbackend.h>
+#define C3D_GetProcessingTime picaFrameProcessingTime
+#define C3D_GetDrawingTime picaFrameDrawingTime
+#endif
 //=============================================================================
 // Copyright (C) 2002 Radical Entertainment Ltd.  All rights reserved.
 //
@@ -14,6 +20,10 @@
 //========================================
 // Standard Library
 #include <stdlib.h>
+#include <main/nativebench.h>
+#ifdef SRR2_OLD3DS_GPU_SKIN_SUPPORT
+#include <pddi/pica/skinning.hpp>
+#endif
 #include <string.h>
 // Foundation Tech
 #include <raddebug.hpp>
@@ -33,6 +43,76 @@
 
 #ifdef RAD_3DS
 #include <3ds.h>
+#ifdef SRR2_OLD_3DS
+#include <citro3d.h>
+#include <malloc.h>
+#include <main/old3dsdiag.h>
+extern "C" unsigned g_picaPresentedFrames;
+extern unsigned g_old3dsModelViewUploads;
+extern unsigned g_old3dsModelViewReuses;
+// Physics includes character simulation. The other counters are disjoint
+// update stages; all are subsets of update_ms in OLD3DS_PROFILE.
+double g_old3dsUpdateStages[4] = {};
+
+// Old 3DS instrumentation counters. See code/main/old3dsdiag.h. Each is read
+// and cleared once per diagnostic interval by Game::Run().
+unsigned g_old3dsPhysicsFrames[3] = {};
+unsigned g_old3dsPhysicsSubsteps = 0;
+unsigned g_old3dsPhysicsAreas = 0;
+unsigned g_old3dsCollisionPairs = 0;
+unsigned g_old3dsFrameBeginOk = 0;
+unsigned g_old3dsFrameBeginBusy = 0;
+unsigned g_old3dsFrameBeginNoDraw = 0;
+unsigned g_old3dsFramePresented = 0;
+unsigned g_old3dsDrawCalls = 0;
+unsigned g_old3dsDrawVerts = 0;
+unsigned g_old3dsDrawDroppedNoFrame = 0;
+unsigned g_old3dsDrawDroppedNotDrawable = 0;
+unsigned g_old3dsDrawDroppedNoRoom = 0;
+unsigned g_old3dsCmdHighWater = 0;
+unsigned g_old3dsCmdSize = 0;
+double   g_old3dsRenderPhases[6] = {};
+unsigned long long g_old3dsPhase2Ticks[4] = {};
+unsigned g_old3dsPhase2Draws[4] = {};
+unsigned g_old3dsPhase2Entities[2] = {};
+unsigned g_old3dsSimpleShadowCalls = 0;
+unsigned g_old3dsSimpleShadowDrawn = 0;
+Old3dsEntityStats g_old3dsEntities[O3_CATEGORY_COUNT] = {};
+Old3dsOperationStats g_old3dsOperations[O3_OPERATION_COUNT] = {};
+unsigned g_old3dsBackend[O3_COUNTER_COUNT] = {};
+Old3dsAnimStats g_old3dsAnimStats[8] = {};
+unsigned g_old3dsAnimQueries[4] = {};
+unsigned g_old3dsWeights[5] = {};
+int g_old3dsActiveEntity = -1;
+bool g_old3dsDrawBlended = false, g_old3dsDrawAlphaTested = false;
+unsigned g_old3dsLinearFailures = 0;
+unsigned g_old3dsLinearFailureBytes = 0;
+unsigned g_old3dsDetectPasses = 0;
+unsigned g_old3dsPairUpdates = 0;
+unsigned g_old3dsUpdateAllCalls = 0;
+unsigned g_old3dsUpdateAllRedundant = 0;
+unsigned g_old3dsUpdateAllStaticSkip = 0;
+unsigned g_old3dsUpdateAllSamples = 0;
+double   g_old3dsUpdateAllMs = 0.0;
+unsigned g_old3dsUpdateAllRedundantSamples = 0;
+double   g_old3dsUpdateAllRedundantMs = 0.0;
+unsigned g_old3dsUpdateAllVerified = 0;
+unsigned g_old3dsUpdateAllVerifyMismatch = 0;
+unsigned g_old3dsTriQueries = 0;
+unsigned g_old3dsTriHits = 0;
+unsigned g_old3dsTriMisses = 0;
+unsigned g_old3dsTriEmptyLeaf = 0;
+unsigned g_old3dsTriCandidates = 0;
+unsigned g_old3dsTriPlaneTests = 0;
+unsigned g_old3dsTriWorst = 0;
+unsigned g_old3dsTriExhausted = 0;
+unsigned g_old3dsTriRescanAvoided = 0;
+unsigned g_old3dsTriSamples = 0;
+double   g_old3dsTriMs = 0.0;
+extern "C" int g_picaWorldScaleAllowed;
+extern "C" double g_picaFrameWaitMs;
+extern "C" double g_picaFrameSubmitMs;
+#endif
 
 extern "C" int      srr2SuspendFiles( void );
 extern "C" int      srr2ResumeFiles( void );
@@ -474,8 +554,15 @@ const unsigned PROFILE_CHANNEL_AI = 1;
 const unsigned PROFILE_CHANNEL_RENDER = 2;
 const unsigned PROFILE_CHANNEL_LOAD = 3;
 
+#ifdef SRR2_OLD_3DS
+#include <main/old3dsreport.h>
+#endif
+
 void Game::Run() 
 {
+#ifdef SRR2_OLD_3DS
+    printf("OLD3DS_RUN enter\n");
+#endif
     extern bool g_AllowDebugOutput;
     
 #ifdef DEMO_MODE_PROFILER
@@ -511,9 +598,18 @@ void Game::Run()
     static aptHookCookie s_aptCookie;
     aptHook( &s_aptCookie, srr2AptHook, NULL );
 #endif
+#ifdef SRR2_OLD_3DS
+    double updateMs = 0.0, renderMs = 0.0, serviceMs = 0.0, loadMs = 0.0;
+    unsigned profileFrames = 0;
+    double workMs = 0.0, peakWorkMs = 0.0;
+    unsigned overBudgetFrames = 0;
+#endif
     unsigned time = radTimeGetMilliseconds();
     while( !mExitNow )
     {
+#ifdef SRR2_OLD_3DS
+        if(mFrameCount == 0) printf("OLD3DS_RUN loop\n");
+#endif
 #ifdef RAD_3DS
         if( !aptMainLoop() )
         {
@@ -522,8 +618,167 @@ void Game::Run()
         }
 
         hidScanInput();
+#ifdef SRR2_OLD_3DS
+        if(mFrameCount == 0) printf("OLD3DS_RUN input\n");
+#endif
 
         const ContextEnum ctx = GetGameFlow() ? GetGameFlow()->GetCurrentContext() : CONTEXT_ENTRY;
+#ifdef SRR2_OLD_3DS
+        static u64 lastDiagnosticTick = svcGetSystemTick();
+        static unsigned lastPresented = g_picaPresentedFrames;
+        // Pause first, then press SELECT to dump. Hold L as well to exit cleanly.
+        // Never dump while simulation runs.
+        #ifdef SRR2_OLD3DS_CAUSAL_DIAG
+        if(ctx == CONTEXT_PAUSE && (hidKeysDown() & KEY_SELECT) && (hidKeysHeld() & KEY_R))
+            O3ExperimentArm((hidKeysHeld() & KEY_X)!=0);
+        else
+#endif
+        if(ctx == CONTEXT_PAUSE && (hidKeysDown() & KEY_SELECT))
+        {
+            const unsigned dumpStart = radTimeGetMilliseconds();
+            const u64 dumpStartTick = svcGetSystemTick();
+            const bool dumped = Old3dsDumpReports("pause-chord");
+            time += radTimeGetMilliseconds() - dumpStart;
+            lastDiagnosticTick += svcGetSystemTick() - dumpStartTick;
+            if(dumped && (hidKeysHeld() & KEY_L))
+            {
+                Stop();
+                break;
+            }
+        }
+#endif
+#ifdef SRR2_OLD_3DS
+        #ifdef SRR2_OLD3DS_CAUSAL_DIAG
+        // Begin after the interval capture resets its counters below.
+#endif
+        const u64 frameStartTick = svcGetSystemTick();
+        const u64 diagnosticTick = svcGetSystemTick();
+        const u64 sampleTicks = diagnosticTick - lastDiagnosticTick;
+        if(sampleTicks >= (u64)SYSCLOCK_ARM11 * 5)
+        {
+            const u64 captureStart = svcGetSystemTick();
+            const unsigned presented = g_picaPresentedFrames;
+            Old3dsReport& record = s_old3dsReports.Push();
+            record.ctx = (int)ctx;
+            record.mFrameCount = mFrameCount;
+            record.profileFrames = profileFrames;
+            record.updateMs = updateMs;
+            record.renderMs = renderMs;
+            record.serviceMs = serviceMs;
+            record.loadMs = loadMs;
+            record.workMs = workMs;
+            record.peakWorkMs = peakWorkMs;
+            record.overBudgetFrames = overBudgetFrames;
+            record.fps = (presented - lastPresented) * (double)SYSCLOCK_ARM11 / sampleTicks;
+            record.paused = mpPlatform->PausedForErrors();
+            record.linearFree = (unsigned long)linearSpaceFree();
+            record.heapUsed = mallinfo().uordblks;
+            record.cpuMs = C3D_GetProcessingTime();
+            record.gpuMs = C3D_GetDrawingTime();
+            memcpy(record.g_old3dsBackend, g_old3dsBackend, sizeof(g_old3dsBackend));
+            record.g_old3dsCmdHighWater = g_old3dsCmdHighWater;
+            record.g_old3dsCmdSize = g_old3dsCmdSize;
+            record.g_old3dsCollisionPairs = g_old3dsCollisionPairs;
+            record.g_old3dsDetectPasses = g_old3dsDetectPasses;
+            record.g_old3dsDrawCalls = g_old3dsDrawCalls;
+            record.g_old3dsDrawDroppedNoFrame = g_old3dsDrawDroppedNoFrame;
+            record.g_old3dsDrawDroppedNoRoom = g_old3dsDrawDroppedNoRoom;
+            record.g_old3dsDrawDroppedNotDrawable = g_old3dsDrawDroppedNotDrawable;
+            record.g_old3dsDrawVerts = g_old3dsDrawVerts;
+            memcpy(record.g_old3dsEntities, g_old3dsEntities, sizeof(g_old3dsEntities));
+            record.g_old3dsFrameBeginBusy = g_old3dsFrameBeginBusy;
+            record.g_old3dsFrameBeginNoDraw = g_old3dsFrameBeginNoDraw;
+            record.g_old3dsFrameBeginOk = g_old3dsFrameBeginOk;
+            record.g_old3dsFramePresented = g_old3dsFramePresented;
+            record.g_old3dsLinearFailureBytes = g_old3dsLinearFailureBytes;
+            record.g_old3dsLinearFailures = g_old3dsLinearFailures;
+            record.g_old3dsModelViewReuses = g_old3dsModelViewReuses;
+            record.g_old3dsModelViewUploads = g_old3dsModelViewUploads;
+            memcpy(record.g_old3dsOperations, g_old3dsOperations, sizeof(g_old3dsOperations));
+            record.g_old3dsPairUpdates = g_old3dsPairUpdates;
+            memcpy(record.g_old3dsPhase2Draws, g_old3dsPhase2Draws, sizeof(g_old3dsPhase2Draws));
+            memcpy(record.g_old3dsPhase2Entities, g_old3dsPhase2Entities, sizeof(g_old3dsPhase2Entities));
+            memcpy(record.g_old3dsPhase2Ticks, g_old3dsPhase2Ticks, sizeof(g_old3dsPhase2Ticks));
+            record.g_old3dsPhysicsAreas = g_old3dsPhysicsAreas;
+            memcpy(record.g_old3dsPhysicsFrames, g_old3dsPhysicsFrames, sizeof(g_old3dsPhysicsFrames));
+            record.g_old3dsPhysicsSubsteps = g_old3dsPhysicsSubsteps;
+            memcpy(record.g_old3dsRenderPhases, g_old3dsRenderPhases, sizeof(g_old3dsRenderPhases));
+            record.g_old3dsSimpleShadowCalls = g_old3dsSimpleShadowCalls;
+            record.g_old3dsSimpleShadowDrawn = g_old3dsSimpleShadowDrawn;
+            record.g_old3dsUpdateAllCalls = g_old3dsUpdateAllCalls;
+            record.g_old3dsUpdateAllMs = g_old3dsUpdateAllMs;
+            record.g_old3dsUpdateAllRedundant = g_old3dsUpdateAllRedundant;
+            record.g_old3dsUpdateAllRedundantMs = g_old3dsUpdateAllRedundantMs;
+            record.g_old3dsUpdateAllRedundantSamples = g_old3dsUpdateAllRedundantSamples;
+            record.g_old3dsUpdateAllSamples = g_old3dsUpdateAllSamples;
+            record.g_old3dsUpdateAllStaticSkip = g_old3dsUpdateAllStaticSkip;
+            record.g_old3dsUpdateAllVerified = g_old3dsUpdateAllVerified;
+            record.g_old3dsUpdateAllVerifyMismatch = g_old3dsUpdateAllVerifyMismatch;
+            record.g_old3dsTriQueries = g_old3dsTriQueries;
+            record.g_old3dsTriHits = g_old3dsTriHits;
+            record.g_old3dsTriMisses = g_old3dsTriMisses;
+            record.g_old3dsTriEmptyLeaf = g_old3dsTriEmptyLeaf;
+            record.g_old3dsTriCandidates = g_old3dsTriCandidates;
+            record.g_old3dsTriPlaneTests = g_old3dsTriPlaneTests;
+            record.g_old3dsTriWorst = g_old3dsTriWorst;
+            record.g_old3dsTriExhausted = g_old3dsTriExhausted;
+            record.g_old3dsTriRescanAvoided = g_old3dsTriRescanAvoided;
+            record.g_old3dsTriSamples = g_old3dsTriSamples;
+            record.g_old3dsTriMs = g_old3dsTriMs;
+            memcpy(record.g_old3dsUpdateStages, g_old3dsUpdateStages, sizeof(g_old3dsUpdateStages));
+            record.g_picaFrameSubmitMs = g_picaFrameSubmitMs;
+            record.g_picaFrameWaitMs = g_picaFrameWaitMs;
+            memcpy(record.anim, g_old3dsAnimStats, sizeof(g_old3dsAnimStats));
+            memcpy(record.animQueries, g_old3dsAnimQueries, sizeof(g_old3dsAnimQueries));
+            memcpy(record.weights, g_old3dsWeights, sizeof(g_old3dsWeights));
+            memset(g_old3dsAnimStats, 0, sizeof(g_old3dsAnimStats));
+            memset(g_old3dsAnimQueries, 0, sizeof(g_old3dsAnimQueries));
+            g_old3dsModelViewUploads = g_old3dsModelViewReuses = 0;
+            memset(g_old3dsPhysicsFrames, 0, sizeof(g_old3dsPhysicsFrames));
+            g_old3dsPhysicsSubsteps = g_old3dsPhysicsAreas = g_old3dsCollisionPairs = 0;
+            g_old3dsFrameBeginOk = g_old3dsFrameBeginBusy = g_old3dsFrameBeginNoDraw = 0;
+            g_old3dsFramePresented = 0;
+            g_old3dsDrawCalls = g_old3dsDrawVerts = 0;
+            g_old3dsDrawDroppedNoFrame = g_old3dsDrawDroppedNotDrawable = 0;
+            g_old3dsDrawDroppedNoRoom = 0;
+            g_old3dsCmdHighWater = g_old3dsCmdSize = 0;
+            memset(g_old3dsRenderPhases, 0, sizeof(g_old3dsRenderPhases));
+            memset(g_old3dsEntities, 0, sizeof(g_old3dsEntities));
+            memset(g_old3dsOperations, 0, sizeof(g_old3dsOperations));
+            memset(g_old3dsBackend, 0, sizeof(g_old3dsBackend));
+            memset(g_old3dsPhase2Ticks, 0, sizeof(g_old3dsPhase2Ticks));
+            memset(g_old3dsPhase2Draws, 0, sizeof(g_old3dsPhase2Draws));
+            memset(g_old3dsPhase2Entities, 0, sizeof(g_old3dsPhase2Entities));
+            g_old3dsSimpleShadowCalls = g_old3dsSimpleShadowDrawn = 0;
+            g_old3dsLinearFailures = g_old3dsLinearFailureBytes = 0;
+            g_old3dsDetectPasses = g_old3dsPairUpdates = 0;
+            g_old3dsUpdateAllCalls = g_old3dsUpdateAllRedundant = 0;
+            g_old3dsUpdateAllStaticSkip = g_old3dsUpdateAllSamples = 0;
+            g_old3dsUpdateAllMs = 0.0;
+            g_old3dsUpdateAllRedundantSamples = 0;
+            g_old3dsUpdateAllRedundantMs = 0.0;
+            g_old3dsUpdateAllVerified = g_old3dsUpdateAllVerifyMismatch = 0;
+            g_old3dsTriQueries = g_old3dsTriHits = g_old3dsTriMisses = 0;
+            g_old3dsTriEmptyLeaf = g_old3dsTriCandidates = g_old3dsTriPlaneTests = 0;
+            g_old3dsTriWorst = g_old3dsTriExhausted = g_old3dsTriRescanAvoided = 0;
+            g_old3dsTriSamples = 0;
+            g_old3dsTriMs = 0.0;
+
+            memset(g_old3dsUpdateStages, 0, sizeof(g_old3dsUpdateStages));
+            updateMs = renderMs = serviceMs = loadMs = 0.0;
+            g_picaFrameWaitMs = g_picaFrameSubmitMs = 0.0;
+            profileFrames = 0;
+            workMs = peakWorkMs = 0.0;
+            overBudgetFrames = 0;
+            s_old3dsCaptureTicks += svcGetSystemTick() - captureStart;
+            ++s_old3dsCaptures;
+            lastDiagnosticTick = diagnosticTick;
+            lastPresented = presented;
+        }
+#endif
+#ifdef SRR2_OLD_3DS
+        g_picaWorldScaleAllowed = (ctx == CONTEXT_GAMEPLAY || ctx == CONTEXT_PAUSE);
+#endif
         g_picaMipmapsAllowed =
             ( ctx == CONTEXT_LOADING_GAMEPLAY || ctx == CONTEXT_GAMEPLAY || ctx == CONTEXT_PAUSE ||
               ctx == CONTEXT_LOADING_SUPERSPRINT || ctx == CONTEXT_SUPERSPRINT ||
@@ -539,6 +794,18 @@ void Game::Run()
         unsigned newTime =  radTimeGetMilliseconds();
         unsigned elapsed = newTime - time;
         time = newTime;
+#ifdef SRR2_OLD3DS_NATIVE_BENCH
+        elapsed=NativeBench::Begin(elapsed,ctx);
+#ifdef SRR2_OLD3DS_CAUSAL_DIAG
+        O3ExperimentExternalCapture(NativeBench::collecting);
+#endif
+#endif
+#ifdef SRR2_OLD3DS_CAUSAL_DIAG
+        O3ExperimentBegin(mFrameCount,ctx==CONTEXT_GAMEPLAY);
+#endif
+#ifdef SRR2_OLD3DS_CAUSAL_DIAG
+        if(ctx==CONTEXT_GAMEPLAY && O3ExperimentFixed()) elapsed=50;
+#endif
 
         //
         // Service the windows message loop.
@@ -577,17 +844,46 @@ void Game::Run()
         // Service the GameFlow and RenderFlow.
         //
 
+#ifdef SRR2_OLD_3DS
+        u64 phaseTick = svcGetSystemTick();
+#ifdef SRR2_OLD3DS_GPU_SKIN_SUPPORT
+        u64 skinUpdateTicks=0, skinRenderTicks=0;
+#endif
+#endif
         if ( !mpPlatform->PausedForErrors() )
         {
+#ifdef SRR2_OLD_3DS
+            if(mFrameCount == 0) printf("OLD3DS_RUN flow\n");
+#endif
             DEMOPROFILE( g_DemoProfiler.Start(PROFILE_CHANNEL_AI); )
             mpTimerList->Service(); //nv
-            mpGameFlow->OnTimerDone(elapsed, NULL);
+            { NB_SCOPE(Update); mpGameFlow->OnTimerDone(elapsed, NULL); }
+#ifdef SRR2_OLD_3DS
+            const u64 updateTicks=svcGetSystemTick()-phaseTick;
+#ifdef SRR2_OLD3DS_CAUSAL_DIAG
+            O3ExperimentPhase(0,updateTicks);
+#endif
+            updateMs += updateTicks * 1000.0 / SYSCLOCK_ARM11;
+#ifdef SRR2_OLD3DS_GPU_SKIN_SUPPORT
+            skinUpdateTicks=updateTicks;
+#endif
+            phaseTick = svcGetSystemTick();
+#endif
+#ifdef SRR2_OLD_3DS
+            if(mFrameCount == 0) printf("OLD3DS_RUN render\n");
+#endif
             DEMOPROFILE( g_DemoProfiler.Stop(PROFILE_CHANNEL_AI); )
 
             if( !mExitNow )
             {
                 DEMOPROFILE( g_DemoProfiler.Start(PROFILE_CHANNEL_RENDER); )
-                mpRenderFlow->OnTimerDone(elapsed, NULL);
+                {
+#ifdef SRR2_OLD3DS_CAUSAL_DIAG
+                    O3ExperimentTimer causalRender(O3E_RENDER);
+#endif
+                    NB_SCOPE(Render);
+                    mpRenderFlow->OnTimerDone(elapsed, NULL);
+                }
                 DEMOPROFILE( g_DemoProfiler.Stop(PROFILE_CHANNEL_RENDER); )
             }
         }
@@ -608,7 +904,21 @@ void Game::Run()
         //
         // Service FTech subsystems.
         //
+#ifdef SRR2_OLD_3DS
+        const u64 renderTicks=svcGetSystemTick()-phaseTick;
+#ifdef SRR2_OLD3DS_CAUSAL_DIAG
+        O3ExperimentPhase(1,renderTicks);
+#endif
+        renderMs += renderTicks * 1000.0 / SYSCLOCK_ARM11;
+#ifdef SRR2_OLD3DS_GPU_SKIN_SUPPORT
+        skinRenderTicks=renderTicks;
+#endif
+        phaseTick = svcGetSystemTick();
+#endif
         ::radFileService();
+#ifdef SRR2_OLD_3DS
+        if(mFrameCount == 0) printf("OLD3DS_RUN files\n");
+#endif
         ::radDbgComService();
         ::radDebugConsoleService();
         
@@ -621,6 +931,9 @@ void Game::Run()
         // Service the sound renderer.
         //
         SoundManager::GetInstance()->Update();
+#ifdef SRR2_OLD_3DS
+        if(mFrameCount == 0) printf("OLD3DS_RUN sound\n");
+#endif
 
         if ( mpPlatform->PausedForErrors() )
         {
@@ -636,10 +949,48 @@ void Game::Run()
         // Spin Pure3D async loading.
         //
         DEMOPROFILE( g_DemoProfiler.Start(PROFILE_CHANNEL_LOAD); )
-        p3d::loadManager->SwitchTask();
+#ifdef SRR2_OLD_3DS
+        const u64 serviceTicks=svcGetSystemTick()-phaseTick;
+#ifdef SRR2_OLD3DS_CAUSAL_DIAG
+        O3ExperimentPhase(2,serviceTicks);
+#endif
+        serviceMs += serviceTicks * 1000.0 / SYSCLOCK_ARM11;
+        phaseTick = svcGetSystemTick();
+#endif
+        { NB_SCOPE(Stream); p3d::loadManager->SwitchTask(); }
+#ifdef SRR2_OLD_3DS
+        const u64 loadTicks=svcGetSystemTick()-phaseTick;
+#ifdef SRR2_OLD3DS_CAUSAL_DIAG
+        O3ExperimentPhase(3,loadTicks);
+#endif
+        loadMs += loadTicks * 1000.0 / SYSCLOCK_ARM11;
+        ++profileFrames;
+#endif
         DEMOPROFILE( g_DemoProfiler.Stop(PROFILE_CHANNEL_LOAD); )
 
         ++mFrameCount;
+#ifdef SRR2_OLD_3DS
+        // The original backend can spin while FrameBegin skips a busy GPU.
+        // A 30 Hz deadline gives simulation, loading and input one bounded frame
+        // budget and lets other threads run on the original ARM11 hardware.
+        const u64 frameBudgetTicks = (u64)SYSCLOCK_ARM11 / 30;
+        const u64 frameTicks = svcGetSystemTick() - frameStartTick;
+        const double currentWorkMs = frameTicks * 1000.0 / SYSCLOCK_ARM11;
+#ifdef SRR2_OLD3DS_CAUSAL_DIAG
+        O3ExperimentEnd(frameTicks,elapsed);
+#endif
+#ifdef SRR2_OLD3DS_GPU_SKIN_SUPPORT
+        picaSkinEndFrame(frameTicks,skinUpdateTicks,skinRenderTicks,ctx==CONTEXT_GAMEPLAY);
+#endif
+#ifdef SRR2_OLD3DS_NATIVE_BENCH
+        if(NativeBench::End(frameTicks,ctx)) mExitNow=true;
+#endif
+        workMs += currentWorkMs;
+        if(currentWorkMs > peakWorkMs) peakWorkMs = currentWorkMs;
+        if(frameTicks > frameBudgetTicks) ++overBudgetFrames;
+        if(frameTicks < frameBudgetTicks)
+            svcSleepThread((s64)((frameBudgetTicks - frameTicks) * 1000000000ULL / SYSCLOCK_ARM11));
+#endif
 
         DEMOPROFILE( g_DemoProfiler.Stop(PROFILE_CHANNEL_ALL); )
 
@@ -679,6 +1030,12 @@ void Game::Run()
 
         END_PROFILER_FRAME();
     }
+#ifdef SRR2_OLD_3DS
+    Old3dsDumpReports("clean-exit");
+#endif
+#ifdef RAD_3DS
+    aptUnhook(&s_aptCookie);
+#endif
 }
 
 
@@ -705,7 +1062,12 @@ unsigned Game::GetRandomSeed ()
 {
     radDate date;
     ::radTimeGetDate (&date);
-    return ( ( date.m_Year << 16 ) | (  date.m_Month << 8 ) | ( date.m_Day ) ) ^ ( ( date.m_Second << 24 ) | ( date.m_Minute << 8 ) | ( date.m_Hour ) );
+    unsigned value=( ( date.m_Year << 16 ) | (  date.m_Month << 8 ) | ( date.m_Day ) ) ^ ( ( date.m_Second << 24 ) | ( date.m_Minute << 8 ) | ( date.m_Hour ) );
+#ifdef SRR2_OLD3DS_NATIVE_BENCH
+    return NativeBench::Seed(value);
+#else
+    return value;
+#endif
 }
 
 

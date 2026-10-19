@@ -1,3 +1,4 @@
+#include <main/old3dshot.h>
 /*===========================================================================
    physicslocomotion.cpp
 
@@ -1160,6 +1161,7 @@ void PhysicsLocomotion::PreUpdate()
 // Return:      void 
 //
 //=============================================================================
+OLD3DS_HOT_PATH
 void PhysicsLocomotion::Update(float dt)
 {
 

@@ -44,6 +44,8 @@ class SpatialNode;
 //////////////////////////////////////////////////////////////////////////
 //
 //////////////////////////////////////////////////////////////////////////
+#include <main/old3dsdiag.h>
+
 class IEntityDSG : 
     public tDrawable,
     public tDrawable::ShaderCallback
@@ -51,6 +53,9 @@ class IEntityDSG :
 {
 public:
    IEntityDSG();
+#ifdef SRR2_OLD_3DS
+   virtual unsigned Old3dsCategory() const { return O3_OTHER; }
+#endif
 
    virtual rmt::Vector*       pPosition() = 0;
    virtual const rmt::Vector& rPosition() = 0;

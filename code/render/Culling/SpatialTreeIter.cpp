@@ -229,6 +229,9 @@ void SpatialTreeIter::MarkAll( int                 iCurNodeOffset,
                                   SphereSP&    irDesiredVolume, 
                                   tMark               iMark )
 {
+#ifdef SRR2_OLD3DS_SPATIAL_WALK_FAST
+   MarkSpherePlanes(iCurNodeOffset, irDesiredVolume, iMark);
+#else
    ContiguousBinNode< SpatialNode >* pCurNode = (mpRootNode+iCurNodeOffset);
 
    SpatialNode* pFuckinCast;
@@ -271,6 +274,7 @@ void SpatialTreeIter::MarkAll( int                 iCurNodeOffset,
             MarkAll( iCurNodeOffset + pCurNode->RChildOffset(), irBoxPts, irDesiredVolume, iMark );
        }
    }
+#endif
 #if 0
    if( irBoxPts.TestNotOutside( irDesiredVolume ) < 0.0f ) 
    {
@@ -643,3 +647,109 @@ void SpatialTreeIter::BuildBBoxes( BoxPts iBoxPts, int iCurNodeOffset )
 // Private Member Functions
 //
 //******************************************************************************
+
+#ifdef SRR2_OLD3DS_SPATIAL_WALK_FAST
+void SpatialTreeIter::MarkSpherePlanes(int node, SphereSP& sphere, tMark mark)
+{
+    // Tail-walk one child; recurse only when a sphere spans both partitions.
+    // Node insertion, mark accumulation and left-before-right order stay exact.
+    for(;;)
+    {
+        ContiguousBinNode<SpatialNode>* current = mpRootNode + node;
+        mCurNodes.Add(&current->mData);
+        mNodeMarks[node] |= mark;
+        if(current->GetSubTreeSize() == 0) return;
+        const float side = sphere.CompareTo(current->mData.mSubDivPlane);
+        if(side == 0.0f)
+            MarkSpherePlanes(node + current->LChildOffset(), sphere, mark);
+        node += side > 0.0f ? current->LChildOffset() : current->RChildOffset();
+    }
+}
+#endif
+
+#ifdef SRR2_OLD3DS_SPHERE_WALK_CACHE
+void SpatialTreeIter::MarkSphereQuery(SphereSP& sphere, tMark mark)
+{
+    ++Old3dsSphereWalkCache::Metrics().queries;
+    // Split planes are immutable after loading. Only node selection is cached;
+    // every IntersectManager query still reads and tests the current entities.
+    if(!Old3dsSphereWalkCache::ScalarControls() || mpRootNode->GetSubTreeSize()>=65535)
+    {
+        ++Old3dsSphereWalkCache::Metrics().fallback;
+        MarkSpherePlanes(0,sphere,mark);
+        return;
+    }
+    float bounds[6];
+    uint32_t key[6];
+    sphere.PlaneBounds(bounds);
+    if(!Old3dsSphereWalkCache::MakeKey(bounds,key))
+    {
+        ++Old3dsSphereWalkCache::Metrics().fallback;
+        MarkSpherePlanes(0,sphere,mark);
+        return;
+    }
+    const Old3dsSphereWalkCache::Entry* cached=mSphereWalkCache.Find(key);
+#ifdef SRR2_OLD3DS_SPHERE_REGION_REUSE
+    if(!cached)
+    {
+        cached=mSphereWalkCache.FindRegion(bounds);
+        if(cached) ++Old3dsSphereWalkCache::Metrics().regionHits;
+    }
+#endif
+    if(cached)
+    {
+        ++Old3dsSphereWalkCache::Metrics().hits;
+        Old3dsSphereWalkCache::Metrics().replayedNodes+=cached->count;
+        for(unsigned i=0; i<cached->count; ++i)
+        {
+            const unsigned node=cached->nodes[i];
+            mCurNodes.Add(&mpRootNode[node].mData);
+            mNodeMarks[node]|=mark;
+        }
+        return;
+    }
+    Old3dsSphereWalkCache::Entry* record=mSphereWalkCache.Begin(key);
+    MarkSphereBounds(0,bounds,mark,record);
+    mSphereWalkCache.Commit(record);
+    if(!record->valid) ++Old3dsSphereWalkCache::Metrics().oversized;
+}
+
+void SpatialTreeIter::MarkSphereBounds(int node, const float bounds[6], tMark mark,
+                                       Old3dsSphereWalkCache::Entry* record)
+{
+    for(;;)
+    {
+        ContiguousBinNode<SpatialNode>* current=mpRootNode+node;
+        mCurNodes.Add(&current->mData);
+        mNodeMarks[node]|=mark;
+        Old3dsSphereWalkCache::Record(record,node);
+        if(current->GetSubTreeSize()==0) return;
+        const AAPlane3f& plane=current->mData.mSubDivPlane;
+        const int axis=plane.mAxis;
+        // Keep CompareTo's upper-bound test first, including negative radii.
+        const float side=plane.mPosn>bounds[axis+3] ? 1.0f :
+                         plane.mPosn<bounds[axis] ? -1.0f : 0.0f;
+#ifdef SRR2_OLD3DS_SPHERE_REGION_REUSE
+        mSphereWalkCache.RecordPlane(axis,plane.mPosn,side);
+#endif
+        if(side==0.0f)
+            MarkSphereBounds(node+current->LChildOffset(),bounds,mark,record);
+        node+=side>0.0f ? current->LChildOffset() : current->RChildOffset();
+    }
+}
+#endif
+
+#ifdef SRR2_OLD3DS_SPHERE_WALK_CACHE
+#include <stdio.h>
+extern "C" void old3dsDumpSphereWalkCache()
+{
+    const Old3dsSphereWalkCache::Counters& counters=Old3dsSphereWalkCache::Metrics();
+    printf("OLD3DS_SPHERE_WALK queries=%u hits=%u replayed_nodes=%u oversized=%u fallback=%u bytes_per_walker=%u\n",
+           counters.queries,counters.hits,counters.replayedNodes,counters.oversized,
+           counters.fallback,(unsigned)sizeof(Old3dsSphereWalkCache));
+#ifdef SRR2_OLD3DS_SPHERE_REGION_REUSE
+    printf("OLD3DS_SPHERE_REGION hits=%u bytes_per_walker=%u\n",
+           counters.regionHits,(unsigned)sizeof(Old3dsSphereWalkCache));
+#endif
+}
+#endif

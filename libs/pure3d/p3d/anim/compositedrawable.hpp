@@ -17,7 +17,14 @@
 #include <p3d/array.hpp>
  
 class tSkeleton;
+#ifdef SRR2_OLD3DS_VEHICLE_RENDER_BINDINGS
+class tPreparedVehicleShaders;
+#endif
+
 class tCompositeDrawable;
+#ifdef SRR2_OLD3DS_WHEEL_LOD
+class picaPrimBuffer;
+#endif
 class DrawableElement;
 
 
@@ -43,6 +50,13 @@ public:
     void EnableBillboard(bool on) { billboard = on; }
 
     virtual void ProcessShaders(ShaderCallback&);
+#ifdef SRR2_OLD3DS_VEHICLE_RENDER_BINDINGS
+    void PrepareShaderBindings();
+    void ProcessElementShaders(unsigned index, ShaderCallback&);
+#endif
+#ifdef SRR2_OLD3DS_WHEEL_LOD
+    void PrepareWheelLOD();
+#endif
 
     //
     // Drawable Element Wrappers
@@ -169,6 +183,19 @@ public:
 
 private:
 
+#ifdef SRR2_OLD3DS_VEHICLE_RENDER_BINDINGS
+    tPreparedVehicleShaders* preparedVehicleShaders = NULL;
+#endif
+#ifdef SRR2_OLD3DS_WHEEL_LOD
+    bool DrawWheelLOD(tPose* pose);
+    bool wheelLodAttempted=false,wheelLodFar=false;
+    unsigned wheelLodFirst=0,wheelLodPose[4]={},wheelLodVersion=0,wheelLodJoints=0;
+    float wheelLodCenters[4][3]={},wheelLodAxes[4][3]={};
+    float wheelLodRadius=0.0f,wheelLodExtent=0.0f;
+    tDrawable* wheelLodDrawable=nullptr; // owned; protects identity if every wheel element is replaced
+    picaPrimBuffer* wheelLodBuffer=nullptr;
+    picaPrimBuffer* wheelLodSource=nullptr; // owned; protects source identity/version
+#endif
     rmt::Box3D boundingBox;
     rmt::Sphere boundingSphere;
     //

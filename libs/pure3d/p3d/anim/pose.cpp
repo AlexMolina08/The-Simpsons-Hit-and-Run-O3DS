@@ -1,3 +1,8 @@
+#ifdef SRR2_OLD3DS_MAIN_PROFILE
+#include <main/old3dsmainprofile.h>
+#else
+#define O3_MAIN_SCOPE(stage) ((void)0)
+#endif
 /*===========================================================================
     pose.cpp
     30-Nov-99 Created by Neall
@@ -97,6 +102,7 @@ int tPose::FindJointIndex(const tUID uid) const
 
 void tPose::Evaluate(const Matrix* root)
 {
+    O3_MAIN_SCOPE(PoseEvaluate);
     P3DASSERT(nJoint);
     if(!poseReady)
     {
@@ -150,6 +156,7 @@ void tPose::EvaluateJointPosition(const tUID uid, const Matrix* root, Vector* po
 
 void tPose::EvaluateJointMatrix(unsigned index, const Matrix* root)
 {
+    O3_MAIN_SCOPE(PoseJoint);
    Joint* j = &joint[index];
    if(j->parent == NULL)
    {

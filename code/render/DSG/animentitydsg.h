@@ -71,6 +71,9 @@ class AnimEntityDSG
 : public IEntityDSG
 {
     public:
+#ifdef SRR2_OLD_3DS
+    virtual unsigned Old3dsCategory() const { return O3_ANIM; }
+#endif
         AnimEntityDSG();
         ~AnimEntityDSG();
     

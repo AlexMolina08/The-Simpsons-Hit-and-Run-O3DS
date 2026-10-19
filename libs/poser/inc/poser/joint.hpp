@@ -4,6 +4,9 @@
 
 #ifndef POSER_JOINT_HPP
 #define POSER_JOINT_HPP
+#ifdef SRR2_OLD3DS_JOINT_ROTATION_REUSE
+#include <string.h>
+#endif
 
 
 #include <poser/constants.hpp>
@@ -19,6 +22,9 @@ class Joint
 public:
 
     Joint();
+#if defined(SRR2_OLD3DS_JOINT_ROTATION_REUSE) && defined(RAD_3DS)
+    static void ValidateRotationReuse();
+#endif
     Joint(const Joint& joint);
     ~Joint();
     
@@ -34,7 +40,14 @@ public:
     const Joint* GetParentJoint() const
         { return m_ParentJoint; }
     void SetParentJoint(Joint* parent)
-        { m_ParentJoint = parent; }
+        { m_ParentJoint = parent;
+#ifdef SRR2_OLD3DS_JOINT_WORLD_REUSE
+          m_WorldCoherent = false;
+#ifdef SRR2_OLD3DS_JOINT_ROTATION_REUSE
+          m_RotationCoherent = false;
+#endif
+#endif
+        }
     
     int GetChildJointCount() const
         { return m_ChildJointCount; }
@@ -107,8 +120,16 @@ public:
 private:
     friend class Pose;
     
-    void NotifyWorldModified() const;
-    void ParentWorldModified();
+    void NotifyWorldModified(bool unchanged = false
+#ifdef SRR2_OLD3DS_JOINT_ROTATION_REUSE
+        , bool rotationUnchanged = false
+#endif
+        ) const;
+    void ParentWorldModified(bool unchanged = false
+#ifdef SRR2_OLD3DS_JOINT_ROTATION_REUSE
+        , bool rotationUnchanged = false
+#endif
+        );
     
     int m_Index;
     Joint* m_ParentJoint;
@@ -128,6 +149,36 @@ private:
     };
     
     Dirty m_Dirty;
+#ifdef SRR2_OLD3DS_JOINT_WORLD_REUSE
+    bool m_WorldCoherent = false;
+#ifdef SRR2_OLD3DS_JOINT_ROTATION_REUSE
+    bool m_RotationCoherent = false;
+    static bool RotationReuseAllowed()
+    {
+#ifdef RAD_3DS
+        return NativeRotationReuseAllowed();
+#else
+        return true;
+#endif
+    }
+#ifdef RAD_3DS
+    static bool NativeRotationReuseAllowed();
+#endif
+    static void MultiplyTranslation(rmt::Matrix& result,const rmt::Matrix& a,const rmt::Matrix& b)
+    {
+        for(unsigned j=0;j<3;++j)
+            result.m[3][j]=(a.m[3][0]*b.m[0][j])+(a.m[3][1]*b.m[1][j])+
+                           (a.m[3][2]*b.m[2][j])+b.m[3][j];
+        result.m[0][3]=result.m[1][3]=result.m[2][3]=0.0f;
+        result.m[3][3]=1.0f;
+    }
+    static bool SameRotation(const rmt::Matrix& a, const rmt::Matrix& b)
+    {
+        return memcmp(a.m[0],b.m[0],12)==0 && memcmp(a.m[1],b.m[1],12)==0 &&
+               memcmp(a.m[2],b.m[2],12)==0;
+    }
+#endif
+#endif
 };
 
 

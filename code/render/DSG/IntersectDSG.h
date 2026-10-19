@@ -24,6 +24,9 @@
 //=================================================
 #include <render/DSG/IEntityDSG.h>
 #include <render/Culling/ReserveArray.h>
+#ifdef SRR2_OLD3DS_TRI_BLOCKS
+#include <render/DSG/triblocks.h>
+#endif
 
 //========================================================================
 //
@@ -44,6 +47,12 @@ public:
    int mFlatTriFast( int& orTriNum, rmt::Vector* iopTriPts, rmt::Vector& orTriNorm );
    int mTri( int inTri, rmt::Vector* opTriPts, rmt::Vector& orTriNorm );
    int nTris();
+#ifdef SRR2_OLD3DS_TRI_BLOCKS
+   // Terrain vertices and indices are immutable after loader publication.
+   void BuildTriangleBlocks();
+   TriBlocks::Bounds* mTriangleBlocks = NULL;
+   unsigned mTriangleBlockBytes = 0;
+#endif
 
    virtual void GetBoundingBox(rmt::Box3D* box);
    virtual void GetBoundingSphere(rmt::Sphere* sphere);

@@ -13,6 +13,9 @@
 #include <p3d/loadmanager.hpp>
 #include <p3d/anim/expressionoffsets.hpp>
 #include <p3d/array.hpp>
+#ifdef SRR2_OLD3DS_BONE_USAGE
+#include <p3d/anim/boneusage.hpp>
+#endif
 
 class tPose;
 class tSkeleton;
@@ -46,6 +49,9 @@ protected:
 
     rmt::Matrix* boneMatrix; // restpose -> joint -> world space matrices
 
+#ifdef SRR2_OLD3DS_BONE_USAGE
+    p3dSkin::BoneUsage boneUsage;
+#endif
     tPtrArray<tPrimGroup*> primGroup;
     tExpressionOffsets* exprAnimOffsets;  // stores all tOffsetLists for this skin
 

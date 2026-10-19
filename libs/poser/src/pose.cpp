@@ -1,9 +1,17 @@
+#ifdef SRR2_OLD3DS_MAIN_PROFILE
+#include <main/old3dsmainprofile.h>
+#else
+#define O3_MAIN_SCOPE(stage) ((void)0)
+#endif
 /*
  * poser/pose.cpp
  */
 
 #include <poser/pose.hpp>
 #include <poser/joint.hpp>
+#ifdef SRR2_OLD3DS_POSE_REUSE
+#include <string.h>
+#endif
 
 #include <p3d/error.hpp>
 #include <p3d/anim/skeleton.hpp>
@@ -101,6 +109,9 @@ Pose::~Pose()
 
 void Pose::Assign(Pose* pose)
 {
+#ifdef SRR2_OLD3DS_POSE_REUSE
+    m_ReuseWorlds = false;
+#endif
     tSkeleton *skel = pose->m_Skeleton;
     
     if (skel != m_Skeleton)
@@ -170,6 +181,7 @@ void Pose::Assign(Pose* pose)
 
 void Pose::Assign(tPose* p3dPose)
 {
+    O3_MAIN_SCOPE(PoserAssign);
     tSkeleton *skel = p3dPose->GetSkeleton();
     
     if (skel != m_Skeleton)
@@ -234,10 +246,62 @@ void Pose::Assign(tPose* p3dPose)
         // initialize pose
         for (int i = 0; i < jointCount; ++i)
         {
+#ifdef SRR2_OLD3DS_POSE_REUSE
+            Joint& joint = m_Joints[i];
+            const rmt::Matrix& object = p3dPose->GetJoint(i)->objectMatrix;
+            // Root world is retained by the reference assignment and its getter.
+            // Other worlds depend on the full local matrix and their parent's world.
+            // Parent-first skeleton order makes invalidation transitive without a cache.
+            const bool parentDirty = joint.m_ParentJoint &&
+                joint.m_ParentJoint->m_ParentJoint &&
+                joint.m_ParentJoint->m_Dirty == Joint::DIRTY_WORLD;
+            // Direct world writes followed by inverse-local conversion can round.
+            // Only a previously evaluated local/parent product proves reuse safe.
+            const bool worldProductValid = !joint.m_ParentJoint
+#ifdef SRR2_OLD3DS_JOINT_WORLD_REUSE
+                || joint.m_WorldCoherent
+#endif
+                ;
+            const bool retainWorld = worldProductValid && m_ReuseWorlds && joint.m_Dirty == Joint::DIRTY_NONE && !parentDirty &&
+                memcmp(&joint.m_Object.GetMatrix(), &object, sizeof(object)) == 0;
+#ifdef SRR2_OLD3DS_JOINT_ROTATION_REUSE
+            const bool parentRotationDirty=joint.m_ParentJoint &&
+                joint.m_ParentJoint->m_ParentJoint &&
+                joint.m_ParentJoint->m_Dirty==Joint::DIRTY_WORLD &&
+                !joint.m_ParentJoint->m_RotationCoherent;
+            joint.m_RotationCoherent=joint.m_RotationCoherent && m_ReuseWorlds && joint.m_Dirty==Joint::DIRTY_NONE &&
+                !parentRotationDirty && Joint::RotationReuseAllowed() && Joint::SameRotation(joint.m_Object.GetMatrix(),object);
+#endif
+            // Keep the reference quaternion invalidation even when the matrix is equal.
+            joint.m_Object.SetMatrix(object);
+            if(!retainWorld) joint.m_Dirty = Joint::DIRTY_WORLD;
+            else if(joint.m_ParentJoint)
+            {
+                // Reference world evaluation also invalidates a cached quaternion.
+                // Keep that canonical matrix-derived representation without multiplying.
+                joint.m_World.SetMatrix(joint.m_World.GetMatrix());
+            }
+#else
             m_Joints[i].m_Object.SetMatrix(p3dPose->GetJoint(i)->objectMatrix);
             m_Joints[i].m_Dirty = Joint::DIRTY_WORLD;
+#endif
         }
     }
+#ifdef SRR2_OLD3DS_JOINT_WORLD_REUSE
+#ifdef SRR2_OLD3DS_JOINT_COHERENCE_CHAIN
+    // Retain an existing product proof; a clean direct-world write alone does
+    // not prove that inverse-local/parent multiplication reproduces its bits.
+    // Preserve that proof for unchanged setters in the following driver pass.
+    for(int i = 0; i < GetJointCount(); ++i)
+        m_Joints[i].m_WorldCoherent = m_Joints[i].m_WorldCoherent &&
+            m_Joints[i].m_Dirty == Joint::DIRTY_NONE;
+#else
+    for(int i = 0; i < GetJointCount(); ++i) m_Joints[i].m_WorldCoherent = false;
+#endif
+#endif
+#ifdef SRR2_OLD3DS_POSE_REUSE
+    m_ReuseWorlds = true;
+#endif
 }
 
 int Pose::GetJointCount() const
@@ -254,6 +318,12 @@ void Pose::SetRestPose()
     // initialize pose
     for (int i = 0; i < jointCount; ++i)
     {
+#ifdef SRR2_OLD3DS_JOINT_WORLD_REUSE
+        m_Joints[i].m_WorldCoherent = false;
+#ifdef SRR2_OLD3DS_JOINT_ROTATION_REUSE
+        m_Joints[i].m_RotationCoherent = false;
+#endif
+#endif
         m_Joints[i].m_Object.SetMatrix(m_Skeleton->GetJoint(i)->restPose);
         m_Joints[i].m_Dirty = Joint::DIRTY_WORLD;
     }
@@ -262,6 +332,7 @@ void Pose::SetRestPose()
 
 void Pose::FillP3DPose(tPose* p3dPose, bool fillObjectMatrices) const
 {
+    O3_MAIN_SCOPE(PoserFill);
     // make sure these are compatible poses
     // Not no more we dont (nbrooke 29/1/03)
 //    P3DASSERT(p3dPose->GetSkeleton() == m_Skeleton);
@@ -301,6 +372,9 @@ void Pose::FillP3DPose(tPose* p3dPose, bool fillObjectMatrices) const
 
 void Pose::Clean()
 {
+#ifdef SRR2_OLD3DS_POSE_REUSE
+    m_ReuseWorlds = false;
+#endif
     int jointCount = GetJointCount();
     for (int i = 0; i < jointCount; ++i)
     {

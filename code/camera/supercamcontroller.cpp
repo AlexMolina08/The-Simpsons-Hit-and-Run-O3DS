@@ -92,7 +92,11 @@ void SuperCamController::LoadControllerMappings( unsigned int controllerId )
     Map( "RightThumb",      toggleFirstPerson,  0, controllerId );
     Map( "LeftStickY",      leftStickY,         0, controllerId );
     Map( "Start",           start,              0, controllerId );
+#ifdef SRR2_OLD_3DS
+    Map( "CameraCycle",     cameraToggle,       0, controllerId );
+#else
     Map( "Black",           cameraToggle,       0, controllerId );
+#endif
     #endif
 
     #ifdef RAD_PS2

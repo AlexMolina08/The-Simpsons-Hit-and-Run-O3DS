@@ -16,6 +16,9 @@
 
 #include <radmath/quaternion.hpp>
 #include <radmath/matrix.hpp>
+#ifdef SRR2_OLD3DS_SLERP_CACHE
+#include <radmath/slerpcache.hpp>
+#endif
 
 namespace RadicalMathLibrary
 {
@@ -326,8 +329,18 @@ void Quaternion::Slerp(const Quaternion& q1, const Quaternion& q2, const float t
     else
     {
         // angle between qS and qE is NOT small enough - do spherical interpolation
-        float omega = ACos(cos_omega);  //  angle between qS and qE
-        float one_over_sin_omega = 1.0f / Sin(omega);
+        float omega;
+        float one_over_sin_omega;
+#ifdef SRR2_OLD3DS_SLERP_CACHE
+        if(!slerpCache::Find(cos_omega, omega, one_over_sin_omega))
+#endif
+        {
+            omega = ACos(cos_omega);  //  angle between qS and qE
+            one_over_sin_omega = 1.0f / Sin(omega);
+#ifdef SRR2_OLD3DS_SLERP_CACHE
+            slerpCache::Store(cos_omega, omega, one_over_sin_omega);
+#endif
+        }
         scale_qS = Sin((1.0f - t) * omega) * one_over_sin_omega;
         scale_qE *= Sin(t*omega) * one_over_sin_omega;
     }
@@ -340,3 +353,10 @@ void Quaternion::Slerp(const Quaternion& q1, const Quaternion& q2, const float t
 
 } // namespace RadicalMathLibrary
 
+
+#ifdef SRR2_OLD3DS_SLERP_CACHE
+extern "C" bool radmathSlerpCacheStats(unsigned* hits, unsigned* misses)
+{
+    return RadicalMathLibrary::slerpCache::ReadStats(hits, misses);
+}
+#endif

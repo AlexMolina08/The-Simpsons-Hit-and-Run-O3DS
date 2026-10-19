@@ -32,6 +32,10 @@
 #include <p3d/view.hpp>
 #include <p3d/effects/particlesystem.hpp>
 #include <pddi/pddi.hpp>
+#ifdef SRR2_OLD3DS_SHADOW_MESH
+#include <pddi/pica/context.hpp>
+#include <pddi/pica/blobtopology.hpp>
+#endif
 #include <p3d/utility.hpp>
 #include <typeinfo>
 #include <p3d/anim/visibilityanimation.hpp>
@@ -681,6 +685,9 @@ BEGIN_PROFILE("GeometryVehicle::Display SetUp")
                 //This will be the axis we rotate around.
                 // Note that the reflection map is relative to the object so we need to transform everything
                 //into the object's space.
+#ifndef SRR2_OLD3DS_NO_ENV_WORK
+                // PICA accepts neither ROTVEC nor ENVBLEND. Its vehicle reflection
+                // setup cannot change shader state; other backends retain it.
                 rmt::Matrix carOri = mVehicleOwner->GetTransform();
                 carOri.Invert();
                 carOri.FillTranslate( rmt::Vector( 0.0f, 0.0f, 0.0f ) );
@@ -698,6 +705,7 @@ BEGIN_PROFILE("GeometryVehicle::Display SetUp")
                 {
                     axis.CrossProduct(carRelMovement, camRelCar);
                 }
+#endif
                 // Check if the car is moving towards or away from the camera.
                 mCurEnvMapRotation += distance * 0.05f;
                 while( mCurEnvMapRotation >= rmt::PI_2 )
@@ -708,6 +716,7 @@ BEGIN_PROFILE("GeometryVehicle::Display SetUp")
                 {
                     mCurEnvMapRotation += rmt::PI_2;
                 }
+#ifndef SRR2_OLD3DS_NO_ENV_WORK
                 float mag;
                 float angle;
                 CartesianToPolar( axis.x, axis.y, &mag, &angle );
@@ -718,8 +727,13 @@ BEGIN_PROFILE("GeometryVehicle::Display SetUp")
                 {
                     tCompositeDrawable::DrawableElement* pElement = mCompositeDrawable->GetDrawableElement( i );
                     tDrawable* pDrawable = pElement->GetDrawable();
+                    #ifdef SRR2_OLD3DS_VEHICLE_RENDER_BINDINGS
+                    mCompositeDrawable->ProcessElementShaders(i, cbPos);
+#else
                     pDrawable->ProcessShaders( cbPos );
+#endif
                 }
+#endif
             }
             // Remember the position of the car for next time
             //
@@ -797,6 +811,7 @@ BEGIN_PROFILE("GeometryVehicle::Display SetUp")
                                     mRightWheelParticleAttr, mVehicleOwner->mTransform);       
     }
 
+#ifndef SRR2_OLD3DS_NO_ENV_WORK
 //    if( mVehicleOwner->mVehicleType == VT_USER )
     {
         // Change the vehicle environment reflection
@@ -819,10 +834,15 @@ BEGIN_PROFILE("GeometryVehicle::Display SetUp")
         {
             tCompositeDrawable::DrawableElement* pElement = mCompositeDrawable->GetDrawableElement (i);
             tDrawable* pDrawable = pElement->GetDrawable ();
-            pDrawable->ProcessShaders( envBlend );
+            #ifdef SRR2_OLD3DS_VEHICLE_RENDER_BINDINGS
+                    mCompositeDrawable->ProcessElementShaders(i, envBlend);
+#else
+                    pDrawable->ProcessShaders( envBlend );
+#endif
         }
     }
 
+#endif
 END_PROFILE("GeometryVehicle::Display SetUp")
 BEGIN_PROFILE("GeometryVehicle::Display Render")
 
@@ -885,8 +905,16 @@ BEGIN_PROFILE("GeometryVehicle::Display Render")
         {
             tCompositeDrawable::DrawableElement* pElement = mCompositeDrawable->GetDrawableElement( j );
             tDrawable* pDrawable = pElement->GetDrawable();
-            pDrawable->ProcessShaders( blendMode );
-            pDrawable->ProcessShaders( emissive );
+            #ifdef SRR2_OLD3DS_VEHICLE_RENDER_BINDINGS
+                    mCompositeDrawable->ProcessElementShaders(j, blendMode);
+#else
+                    pDrawable->ProcessShaders( blendMode );
+#endif
+            #ifdef SRR2_OLD3DS_VEHICLE_RENDER_BINDINGS
+                    mCompositeDrawable->ProcessElementShaders(j, emissive);
+#else
+                    pDrawable->ProcessShaders( emissive );
+#endif
         }
 
         // so since we just made EVERY SHADER alpha blend, we need to take
@@ -1337,6 +1365,29 @@ void GeometryVehicle::DisplayShadow( BlobShadowParams* BlobParams )
     blobShader->SetInt( PDDI_SP_ISLIT, 0 );
     blobShader->SetInt( PDDI_SP_ALPHATEST, 0 );
     blobShader->SetInt( PDDI_SP_SHADEMODE, PDDI_SHADE_GOURAUD );
+#ifdef SRR2_OLD3DS_SHADOW_MESH
+    pddiVector vertices[picaBlob::VertexCount];
+    vertices[0].Set(0.0f, 0.0f, 0.0f);
+    for(int i = 0; i < NumPoints * 2; ++i)
+    {
+        int index = i;
+        int mirrorX = int((index * (1.0f / NumPoints))) % 2;
+        index %= NumPoints;
+        index = rmt::Abs((mirrorX * 5) - index);
+        mirrorX = 1 - (mirrorX * 2);
+        int adjust = rmt::Clamp(index - 1, 0, NumPoints - 3);
+        float inX = (Points[index][0] + mShadowPointAdjustments[adjust][0]) * BlobParams->ShadowScale;
+        float inY = (Points[index][1] + mShadowPointAdjustments[adjust][1]) * BlobParams->ShadowScale;
+        inX *= mirrorX;
+        vertices[1 + 2 * i].Set(inX, inY, 0.0f);
+        vertices[2 + 2 * i].Set(inX + Fades[index][0] * mirrorX * BlobParams->ShadowScale,
+                               inY + Fades[index][1] * BlobParams->ShadowScale, 0.0f);
+    }
+    const bool submitted = static_cast<picaContext*>(p3d::pddi)->DrawBlobShadow(
+        blobShader, vertices, insideColour, OutsideColour);
+    if(!submitted)
+    {
+#endif
     pddiPrimStream* blob = p3d::pddi->BeginPrims( blobShader, PDDI_PRIM_TRIANGLES, PDDI_V_C, 6 * NumPoints );
 	for( int i = 0; i < NumPoints * 2; ++i )
 	{
@@ -1390,6 +1441,9 @@ void GeometryVehicle::DisplayShadow( BlobShadowParams* BlobParams )
         blob->Coord( inX, inY, 0.0f );
     }
     p3d::pddi->EndPrims( blob );
+#ifdef SRR2_OLD3DS_SHADOW_MESH
+    }
+#endif
 	p3d::stack->Pop();
     END_PROFILE("GeometryVehicle::DisplayShadow")
 }
@@ -1992,6 +2046,9 @@ bool GeometryVehicle::GetArt( const char* name)
     }
 #endif
 
+#ifdef SRR2_OLD3DS_WHEEL_LOD
+    master->PrepareWheelLOD();
+#endif
     mCompositeDrawable = master->Clone();
 
     //mCompositeDrawable = p3d::find<tCompositeDrawable>(name);
@@ -2352,7 +2409,11 @@ bool GeometryVehicle::GetArt( const char* name)
     HeapMgr()->PopHeap(GMA_LEVEL_OTHER);
 
 
-    return FindDamageShadersAndTextures(name);
+    const bool damageTexturesFound = FindDamageShadersAndTextures(name);
+#ifdef SRR2_OLD3DS_VEHICLE_RENDER_BINDINGS
+    mCompositeDrawable->PrepareShaderBindings();
+#endif
+    return damageTexturesFound;
     //return true;
 
 }

@@ -1,3 +1,5 @@
+#include <main/old3dsmainprofile.h>
+#include <main/old3dshot.h>
 //=============================================================================
 // Copyright (C) 2002 Radical Entertainment Ltd.  All rights reserved.
 //
@@ -14,10 +16,17 @@
 //========================================
 
 #include <raddebug.hpp>
+#ifdef SRR2_OLD3DS_GROUND_REUSE
+#include <string.h>
+#endif
 
 #include <simcommon/simstatearticulated.hpp>         
 #include <simcommon/simenvironment.hpp>         
 #include <simcollision/collisionmanager.hpp>
+#include <main/old3dsdiag.h>
+#ifdef SRR2_OLD3DS_AREA_MEMBERSHIP
+#include <worldsim/old3dsslotindex.hpp>
+#endif
 #include <simcommon/physicsproperties.hpp>
 
 #include <simcollision/collisionvolume.hpp>
@@ -1161,13 +1170,22 @@ void WorldPhysicsManager::SetSimUnits()
 // Return:      void 
 //
 //=============================================================================
+OLD3DS_HOT_PATH
 void WorldPhysicsManager::Update(unsigned int timeDeltaMilliSeconds)
 {
+    O3_MAIN_SCOPE(PhysicsUpdate);
+#ifdef SRR2_OLD3DS_CAUSAL_DIAG
+    O3ExperimentTimer causalPhysics(O3E_PHYSICS);
+#endif
 
 
     BEGIN_PROFILE("WorldPhysicsManager::Update")
 
   
+    {
+#ifdef SRR2_OLD_3DS
+    Old3dsOperationScope timing(O3_PHYS_AREAS, 1, true);
+#endif
     BEGIN_PROFILE("Vehicle Submits")
     GetVehicleCentral()->SubmitStatics();
     GetVehicleCentral()->SubmitAnimCollisions();
@@ -1184,11 +1202,17 @@ void WorldPhysicsManager::Update(unsigned int timeDeltaMilliSeconds)
     BEGIN_PROFILE("Cam Submits")
     GetSuperCamManager()->SubmitStatics();
     END_PROFILE("Cam Submits")
+    }
     
                 
+    {
+#ifdef SRR2_OLD_3DS
+    Old3dsOperationScope timing(O3_PHYS_GROUND, 1, true);
+#endif
     BEGIN_PROFILE("Update Ground")
     UpdateSimluatingDynamicObjectGroundPlanes();
     END_PROFILE("Update Ground")
+    }
 
     // new substep logic - nbrooke 12/7/03
     //
@@ -1203,6 +1227,18 @@ void WorldPhysicsManager::Update(unsigned int timeDeltaMilliSeconds)
     {
         numSubsteps = (timeDeltaMilliSeconds + 34) / 35;
     }
+
+#ifdef SRR2_OLD_3DS
+    // Record the substep count this update selected. mLastTime is not yet
+    // updated, so this mirrors the threshold above exactly.
+    {
+        unsigned bucket = 0;
+        if(numSubsteps >= 3)      bucket = 2;
+        else if(numSubsteps == 2) bucket = 1;
+        ++g_old3dsPhysicsFrames[bucket];
+        g_old3dsPhysicsSubsteps += numSubsteps;
+    }
+#endif
 
     mLastTime = timeDeltaMilliSeconds;
 
@@ -1224,6 +1260,10 @@ void WorldPhysicsManager::Update(unsigned int timeDeltaMilliSeconds)
         mTimerTime += dt;
     }
     
+    {
+#ifdef SRR2_OLD_3DS
+    Old3dsOperationScope timing(O3_PHYS_PRE, 1, true);
+#endif
     BEGIN_PROFILE("WorldPhysicsManager::PreSubstepUpdate")
 
     GetVehicleCentral()->PreSubstepUpdate(dt);
@@ -1233,12 +1273,16 @@ void WorldPhysicsManager::Update(unsigned int timeDeltaMilliSeconds)
     BEGIN_PROFILE("PreSim")
     GetCharacterManager( )->PreSimUpdate( dt );
     END_PROFILE("PreSim")
+    }
 
     bool firstSubstep = true;
     //while(countDown > timestep)// * 1.5f)
     for(unsigned i = 0; i < numSubsteps; i++)
     {
         // do shit
+        #ifdef SRR2_OLD3DS_CAUSAL_DIAG
+        O3ExperimentTimer causalSubstep(O3E_SUBSTEP);
+#endif
         WorldSimSubstepGuts(substep, firstSubstep);
         firstSubstep = false;
     }
@@ -1476,6 +1520,7 @@ void WorldPhysicsManager::DebugInfoDisplay()
 //=============================================================================
 void WorldPhysicsManager::WorldSimSubstepGuts(float dt, bool firstSubstep)
 {
+    O3_MAIN_SCOPE(PhysicsSubstep);
     BEGIN_PROFILE("WorldSimSubstepGuts")
 
     mTotalTime += dt;
@@ -1484,12 +1529,22 @@ void WorldPhysicsManager::WorldSimSubstepGuts(float dt, bool firstSubstep)
     BEGIN_PROFILE("VC::PreCollisionPrep")
     if(!mInInterior)
     {
+        {
+#ifdef SRR2_OLD_3DS
+        Old3dsOperationScope timing(O3_PHYS_VEHICLEPREP, 1, true);
+#endif
         GetVehicleCentral()->PreCollisionPrep(dt, firstSubstep);
+    }
     }
     END_PROFILE("VC::PreCollisionPrep")
 
     BEGIN_PROFILE("CharMgr::PreSimUpdate")
-    GetCharacterManager()->PreSubstepUpdate( dt );
+    {
+#ifdef SRR2_OLD_3DS
+        Old3dsOperationScope timing(O3_PHYS_CHARPREP, 1, true);
+#endif
+        GetCharacterManager()->PreSubstepUpdate( dt );
+    }
     END_PROFILE("CharMgr::PreSimUpdate")
 
     BEGIN_PROFILE("ABMgr::Update")
@@ -1508,23 +1563,53 @@ void WorldPhysicsManager::WorldSimSubstepGuts(float dt, bool firstSubstep)
 
 BEGIN_PROFILE("DetectCollisions")
     bool printOut = false;
+#ifdef SRR2_OLD_3DS
+    // Record the collision workload this substep was handed, so cost can be
+    // related to scene complexity rather than only to elapsed time.
+    g_old3dsPhysicsAreas += (unsigned)mCollisionManager->GetActivatedAreaCount();
+    g_old3dsCollisionPairs += mCollisionManager->GetActivatedPairCount();
+#endif
     mCollisionManager->ClearCollisions();
-    mCollisionManager->DetectCollision(dt, mTotalTime, printOut );
-    mCollisionManager->SolveCollision(dt, mTotalTime);
+    {
+#ifdef SRR2_OLD_3DS
+        Old3dsOperationScope timing(O3_PHYS_DETECT, 1, true);
+#endif
+        mCollisionManager->DetectCollision(dt, mTotalTime, printOut );
+    }
+    {
+#ifdef SRR2_OLD_3DS
+        Old3dsOperationScope timing(O3_PHYS_SOLVE, 1, true);
+#endif
+        mCollisionManager->SolveCollision(dt, mTotalTime);
+    }
 
 END_PROFILE("DetectCollisions")
     
     
     BEGIN_PROFILE("GetVehicleCentral()->Update")
-    GetVehicleCentral()->Update(dt);
+    {
+#ifdef SRR2_OLD_3DS
+        Old3dsOperationScope timing(O3_PHYS_VEHICLEUPDATE, 1, true);
+#endif
+        GetVehicleCentral()->Update(dt);
+    }
     END_PROFILE("GetVehicleCentral()->Update")
     BEGIN_PROFILE("GetCharacterManager()->Update")
+    {
+#ifdef SRR2_OLD_3DS
+    Old3dsOperationScope timing(O3_PHYS_CHARUPDATE, 1, true);
+#endif
     GetCharacterManager()->Update( dt );
     END_PROFILE("GetCharacterManager()->Update")
     BEGIN_PROFILE("GetCharacterManager()->PostSimUpdate")
     GetCharacterManager()->PostSubstepUpdate(dt);
     END_PROFILE("GetCharacterManager()->PostSimUpdate")
+    }
 
+    {
+#ifdef SRR2_OLD_3DS
+    Old3dsOperationScope timing(O3_PHYS_CAMERA, 1, true);
+#endif
     //Update the position of the super camers
     BEGIN_PROFILE("GetSuperCamManager()->Update")
     GetSuperCamManager()->Update( rmt::FtoL(dt * 1000.0f), firstSubstep );
@@ -1543,6 +1628,7 @@ END_PROFILE("DetectCollisions")
     //Correct the position of the super camera
     GetSuperCamManager()->GetSCC( 0 )->UpdateForPhysics( rmt::FtoL(dt * 1000.0f) );
 
+    }
     END_PROFILE("WorldSimSubstepGuts")
 }
 
@@ -1596,7 +1682,12 @@ void WorldPhysicsManager::SubmitStaticsPseudoCallback(rmt::Vector& position, flo
 
     BEGIN_PROFILE( "SubmitStaticsPseudoCallback" );
 
-    ReserveArray<StaticPhysDSG*> staticPhysDSGList;     
+#ifdef SRR2_OLD3DS_QUERY_SCRATCH
+    StaticPhysDSG* queryStorage[200];
+    ReserveArray<StaticPhysDSG*> staticPhysDSGList(queryStorage, 200);
+#else
+    ReserveArray<StaticPhysDSG*> staticPhysDSGList;
+#endif
     
     int i;  
     for(i = 0; i < mMaxStatics; i++)
@@ -1628,6 +1719,13 @@ void WorldPhysicsManager::SubmitStaticsPseudoCallback(rmt::Vector& position, flo
     }
 
 
+#ifdef SRR2_OLD3DS_AREA_MEMBERSHIP
+    Old3dsSlotIndex<StaticPhysDSG*> membership(mMaxStatics <= 64 && numResults >= 4);
+    if(membership.Enabled())
+        for(int slot = 0; slot < mMaxStatics; ++slot)
+            membership.Insert(mCurrentStatics[collisionAreaIndex][slot].mStaticPhysDSG, slot);
+#endif
+
     for(i = 0; i < numResults; i++)
     {
         // go through results and submit to collision.
@@ -1637,6 +1735,18 @@ void WorldPhysicsManager::SubmitStaticsPseudoCallback(rmt::Vector& position, flo
 
         int j;
         bool alreadyIn = false;
+#ifdef SRR2_OLD3DS_AREA_MEMBERSHIP
+        if(membership.Enabled() && curr)
+        {
+            j = membership.Find(curr);
+            if(j >= 0)
+            {
+                mCurrentStatics[collisionAreaIndex][j].clean = true;
+                alreadyIn = true;
+            }
+        }
+        else
+#endif
         for(j = 0; j < mMaxStatics; j++)
         {
             if(mCurrentStatics[collisionAreaIndex][j].mStaticPhysDSG == curr)
@@ -1661,6 +1771,9 @@ void WorldPhysicsManager::SubmitStaticsPseudoCallback(rmt::Vector& position, flo
                 {
                     // here is a slot
                     mCurrentStatics[collisionAreaIndex][k].mStaticPhysDSG = curr;
+#ifdef SRR2_OLD3DS_AREA_MEMBERSHIP
+                    membership.Insert(curr, k);
+#endif
                     mCurrentStatics[collisionAreaIndex][k].mStaticPhysDSG->AddRef();
                     mCurrentStatics[collisionAreaIndex][k].clean = true;
                     
@@ -1730,7 +1843,12 @@ void WorldPhysicsManager::SubmitAnimCollisionsPseudoCallback(rmt::Vector& positi
 {
     rAssert( collisionAreaIndex > WorldPhysicsManager::INVALID_COLLISION_AREA );
 
-    ReserveArray<AnimCollisionEntityDSG*> animCollisionEntityDSGList;     
+#ifdef SRR2_OLD3DS_QUERY_SCRATCH
+    AnimCollisionEntityDSG* queryStorage[200];
+    ReserveArray<AnimCollisionEntityDSG*> animCollisionEntityDSGList(queryStorage, 200);
+#else
+    ReserveArray<AnimCollisionEntityDSG*> animCollisionEntityDSGList;
+#endif
     
     int i;  
     for(i = 0; i < mMaxAnimCollisions; i++)
@@ -1749,6 +1867,13 @@ void WorldPhysicsManager::SubmitAnimCollisionsPseudoCallback(rmt::Vector& positi
     }
 
 
+#ifdef SRR2_OLD3DS_AREA_MEMBERSHIP
+    Old3dsSlotIndex<AnimCollisionEntityDSG*> membership(mMaxAnimCollisions <= 64 && numResults >= 4);
+    if(membership.Enabled())
+        for(int slot = 0; slot < mMaxAnimCollisions; ++slot)
+            membership.Insert(mCurrentAnimCollisions[collisionAreaIndex][slot].mAnimCollisionEntityDSG, slot);
+#endif
+
     for(i = 0; i < numResults; i++)
     {
         // go through results and submit to collision.
@@ -1758,6 +1883,18 @@ void WorldPhysicsManager::SubmitAnimCollisionsPseudoCallback(rmt::Vector& positi
 
         int j;
         bool alreadyIn = false;
+#ifdef SRR2_OLD3DS_AREA_MEMBERSHIP
+        if(membership.Enabled() && curr)
+        {
+            j = membership.Find(curr);
+            if(j >= 0)
+            {
+                mCurrentAnimCollisions[collisionAreaIndex][j].clean = true;
+                alreadyIn = true;
+            }
+        }
+        else
+#endif
         for(j = 0; j < mMaxAnimCollisions; j++)
         {
             if(mCurrentAnimCollisions[collisionAreaIndex][j].mAnimCollisionEntityDSG == curr)
@@ -1782,6 +1919,9 @@ void WorldPhysicsManager::SubmitAnimCollisionsPseudoCallback(rmt::Vector& positi
                 {
                     // here is a slot
                     mCurrentAnimCollisions[collisionAreaIndex][k].mAnimCollisionEntityDSG = curr;
+#ifdef SRR2_OLD3DS_AREA_MEMBERSHIP
+                    membership.Insert(curr, k);
+#endif
                     mCurrentAnimCollisions[collisionAreaIndex][k].mAnimCollisionEntityDSG->AddRef( );
                     mCurrentAnimCollisions[collisionAreaIndex][k].clean = true;
                     
@@ -1830,7 +1970,12 @@ void WorldPhysicsManager::SubmitAnimCollisionsForUpdateOnly(rmt::Vector& positio
 {
     rAssert( collisionAreaIndex > WorldPhysicsManager::INVALID_COLLISION_AREA );
 
-    ReserveArray<AnimCollisionEntityDSG*> animCollisionEntityDSGList;     
+#ifdef SRR2_OLD3DS_QUERY_SCRATCH
+    AnimCollisionEntityDSG* queryStorage[200];
+    ReserveArray<AnimCollisionEntityDSG*> animCollisionEntityDSGList(queryStorage, 200);
+#else
+    ReserveArray<AnimCollisionEntityDSG*> animCollisionEntityDSGList;
+#endif
     
     int i;  
     for(i = 0; i < mMaxUpdateAnimCollisions; i++)
@@ -1849,6 +1994,13 @@ void WorldPhysicsManager::SubmitAnimCollisionsForUpdateOnly(rmt::Vector& positio
     }
 
 
+#ifdef SRR2_OLD3DS_AREA_MEMBERSHIP
+    Old3dsSlotIndex<AnimCollisionEntityDSG*> membership(mMaxUpdateAnimCollisions <= 64 && numResults >= 4);
+    if(membership.Enabled())
+        for(int slot = 0; slot < mMaxUpdateAnimCollisions; ++slot)
+            membership.Insert(mCurrentUpdateAnimCollisions[collisionAreaIndex][slot].mAnimCollisionEntityDSG, slot);
+#endif
+
     for(i = 0; i < numResults; i++)
     {
         // go through results and submit to collision.
@@ -1858,6 +2010,18 @@ void WorldPhysicsManager::SubmitAnimCollisionsForUpdateOnly(rmt::Vector& positio
 
         int j;
         bool alreadyIn = false;
+#ifdef SRR2_OLD3DS_AREA_MEMBERSHIP
+        if(membership.Enabled() && curr)
+        {
+            j = membership.Find(curr);
+            if(j >= 0)
+            {
+                mCurrentUpdateAnimCollisions[collisionAreaIndex][j].clean = true;
+                alreadyIn = true;
+            }
+        }
+        else
+#endif
         for(j = 0; j < mMaxUpdateAnimCollisions; j++)
         {
             if(mCurrentUpdateAnimCollisions[collisionAreaIndex][j].mAnimCollisionEntityDSG == curr)
@@ -1882,6 +2046,9 @@ void WorldPhysicsManager::SubmitAnimCollisionsForUpdateOnly(rmt::Vector& positio
                 {
                     // here is a slot
                     mCurrentUpdateAnimCollisions[collisionAreaIndex][k].mAnimCollisionEntityDSG = curr;
+#ifdef SRR2_OLD3DS_AREA_MEMBERSHIP
+                    membership.Insert(curr, k);
+#endif
                     // Hang on to this object.
                     //
                     mCurrentUpdateAnimCollisions[collisionAreaIndex][k].mAnimCollisionEntityDSG->AddRef( );
@@ -1927,7 +2094,12 @@ void WorldPhysicsManager::SubmitDynamicsPseudoCallback(rmt::Vector& position, fl
 
     // hmmm...
     // safe to make this an InstDynaPhysDSG list?? - doesn't compile
-    ReserveArray<DynaPhysDSG*> dynamicsPhysDSGList;     
+#ifdef SRR2_OLD3DS_QUERY_SCRATCH
+    DynaPhysDSG* queryStorage[200];
+    ReserveArray<DynaPhysDSG*> dynamicsPhysDSGList(queryStorage, 200);
+#else
+    ReserveArray<DynaPhysDSG*> dynamicsPhysDSGList;
+#endif
     
     int i;  
     for(i = 0; i < mMaxDynamics; i++)
@@ -2295,6 +2467,17 @@ void WorldPhysicsManager::PurgeDynamics( int collisionAreaIndex )
 //=============================================================================
 void WorldPhysicsManager::UpdateSimluatingDynamicObjectGroundPlanes()
 {
+#ifdef SRR2_OLD3DS_GROUND_REUSE
+    // This synchronous pass changes ground planes only, never terrain or object poses.
+    // Keep query outputs, not entity pointers; repeated plane writes still execute.
+    struct GroundQuery
+    {
+        rmt::Vector position, normal, point;
+        bool found;
+    };
+    GroundQuery queries[64];
+    unsigned long long queryValid = 0;
+#endif
     int i;
     for(i = 0; i < mNumCollisionAreas; i++)
     {        
@@ -2333,10 +2516,43 @@ void WorldPhysicsManager::UpdateSimluatingDynamicObjectGroundPlanes()
                 rmt::Vector planePosition;
 
 
+#ifdef SRR2_OLD3DS_GROUND_REUSE
+                // A plane index selects a bounded slot. Position bits authorize reuse,
+                // including signed zero; aliasing slots only cause a cache miss.
+                const unsigned query = static_cast<unsigned>(
+                    mCurrentDynamics[i][j].mDynamicPhysDSG->GetGroundPlaneIndex()) & 63u;
+                const unsigned long long queryBit = 1ULL << query;
+                if((queryValid & queryBit) &&
+                   memcmp(&queries[query].position, &inPosition, sizeof(inPosition)) == 0)
+                {
+                    foundPlane = queries[query].found;
+                    if(foundPlane)
+                    {
+                        planeNormal = queries[query].normal;
+                        planePosition = queries[query].point;
+                    }
+                }
+                else
+#endif
+                {
                 GetIntersectManager()->FindIntersection(inPosition, 
                                                         foundPlane,
                                                         planeNormal,
                                                         planePosition);
+#ifdef SRR2_OLD3DS_GROUND_REUSE
+                    {
+                        GroundQuery& result = queries[query];
+                        queryValid |= queryBit;
+                        result.position = inPosition;
+                        result.found = foundPlane;
+                        if(foundPlane)
+                        {
+                            result.normal = planeNormal;
+                            result.point = planePosition;
+                        }
+                    }
+#endif
+                }
 
 
                 if(foundPlane)
@@ -2524,7 +2740,12 @@ void WorldPhysicsManager::SubmitFencePiecesPseudoCallback(rmt::Vector& position,
 {
     rAssert( collisionAreaIndex > WorldPhysicsManager::INVALID_COLLISION_AREA );
     
-    ReserveArray<FenceEntityDSG*> fenceDSGList;         
+#ifdef SRR2_OLD3DS_QUERY_SCRATCH
+    FenceEntityDSG* queryStorage[200];
+    ReserveArray<FenceEntityDSG*> fenceDSGList(queryStorage, 200);
+#else
+    ReserveArray<FenceEntityDSG*> fenceDSGList;
+#endif
 
     BEGIN_PROFILE( "FindFenceElems" );
     GetIntersectManager()->FindFenceElems(position, radius, fenceDSGList);  

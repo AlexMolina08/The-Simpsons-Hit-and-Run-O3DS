@@ -108,3 +108,65 @@ void picaSwizzle(void* dst, const void* src, int w, int h, int bpp)
             break;
     }
 }
+
+namespace
+{
+struct MovieColourTables
+{
+    short luma[256];
+    unsigned short red[1024], green[1024], blue[1024];
+    MovieColourTables()
+    {
+        for(int i=0; i<256; ++i) luma[i] = ((i - 16) * 76309) >> 16;
+        for(int i=0; i<1024; ++i)
+        {
+            int value = i - 288;
+            if(value < 0) value = 0;
+            if(value > 255) value = 255;
+            red[i] = (value >> 3) << 11;
+            green[i] = (value >> 2) << 5;
+            blue[i] = value >> 3;
+        }
+    }
+};
+
+static inline unsigned short MoviePixel(const MovieColourTables& tables,
+    unsigned char y, int red, int green, int blue)
+{
+    const int base = tables.luma[y] + 288;
+    return tables.red[base + red] | tables.green[base - green] | tables.blue[base + blue];
+}
+}
+
+void picaSwizzleYUV420toRGB565(void* dst, const unsigned char* yPlane,
+    const unsigned char* crPlane, const unsigned char* cbPlane, int width, int height,
+    int textureWidth, int yPitch, int chromaPitch)
+{
+    static const MovieColourTables tables;
+    unsigned short* output = (unsigned short*)dst;
+    // Convert each shared chroma sample once, then write its four luma pixels
+    // directly to the texture tile. No full-frame RGBA intermediate is needed.
+    for(int tileY = 0; tileY < height / 8; ++tileY)
+        for(int tileX = 0; tileX < width / 8; ++tileX)
+        {
+            unsigned short* tile = output + (tileY * (textureWidth / 8) + tileX) * 64;
+            for(int y = 0; y < 8; y += 2)
+            {
+                const unsigned char* luma = yPlane + (tileY * 8 + y) * yPitch + tileX * 8;
+                const int chromaRow = (tileY * 4 + y / 2) * chromaPitch + tileX * 4;
+                for(int x = 0; x < 8; x += 2)
+                {
+                    const int cr = crPlane[chromaRow + x / 2] - 128;
+                    const int cb = cbPlane[chromaRow + x / 2] - 128;
+                    const int red = (cr * 104597) >> 16;
+                    const int green = (cb * 25674 + cr * 53278) >> 16;
+                    const int blue = (cb * 132201) >> 16;
+                    const unsigned offset = tileOrder[y * 8 + x];
+                    tile[offset] = MoviePixel(tables, luma[x], red, green, blue);
+                    tile[offset + 1] = MoviePixel(tables, luma[x + 1], red, green, blue);
+                    tile[offset + 2] = MoviePixel(tables, luma[yPitch + x], red, green, blue);
+                    tile[offset + 3] = MoviePixel(tables, luma[yPitch + x + 1], red, green, blue);
+                }
+            }
+        }
+}

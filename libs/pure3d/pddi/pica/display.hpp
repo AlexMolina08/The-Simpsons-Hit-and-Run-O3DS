@@ -3,6 +3,8 @@
 
 #include <pddi/pica/pica.hpp>
 
+const float PICA_STEREO_CONVERGENCE = 7.0f;
+
 struct SDL_Window;
 
 class picaDisplay : public pddiDisplay
@@ -41,6 +43,15 @@ public:
     C3D_RenderTarget* GetTarget(void) { return target; }
 
     void BeginFrame(void);
+#ifdef SRR2_OLD_3DS
+    bool BeginWorldTarget(void);
+    bool EndWorldTarget(void);
+    bool StereoActive(void) const { return stereoThisFrame; }
+    bool IsWorldTarget(void) const { return worldActive; }
+    int WorldWidth(void) const { return worldWidth; }
+    int WorldHeight(void) const { return worldHeight; }
+    C3D_Tex* WorldTexture(void) { return &worldTexture; }
+#endif
 
     bool BeginBottomTarget(void);
     void EndBottomTarget(void);
@@ -60,6 +71,12 @@ private:
     C3D_RenderTarget* target;
     C3D_RenderTarget* targetRight;
     C3D_RenderTarget* targetBottom;
+#ifdef SRR2_OLD_3DS
+    C3D_Tex worldTexture;
+    C3D_RenderTarget* worldTarget;
+    bool worldActive;
+    int worldWidth, worldHeight;
+#endif
     bool  stereoThisFrame;
 
     void StartTopSegment(void);

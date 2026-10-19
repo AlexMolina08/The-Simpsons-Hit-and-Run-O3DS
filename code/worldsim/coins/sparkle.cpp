@@ -13,6 +13,9 @@
 // System Includes
 //========================================
 
+#ifdef SRR2_OLD3DS_QUAD_STREAM
+#include <pddi/pica/quadstream.hpp>
+#endif
 #include <radmath/matrix.hpp>
 #include <p3d/entity.hpp>
 #include <p3d/view.hpp>
@@ -908,7 +911,11 @@ void Sparkle::Render( eSparkleRenderMode Mode )
         }
 
 
-        sprite = p3d::pddi->BeginPrims( spriteShader, PDDI_PRIM_TRIANGLES, PDDI_V_CT , numWorldSparkles[ ti ] * 6 );
+        sprite=nullptr;
+#ifdef SRR2_OLD3DS_QUAD_STREAM
+        sprite=picaBeginQuadStream(spriteShader,numWorldSparkles[ ti ]);
+#endif
+        if(!sprite) sprite = p3d::pddi->BeginPrims( spriteShader, PDDI_PRIM_TRIANGLES, PDDI_V_CT , numWorldSparkles[ ti ] * 6 );
         for( int i = 0; i < mNumSparkles; ++i )
         {
             ActiveSparkle& s = mActiveSparkles[ i ];
@@ -1076,6 +1083,10 @@ void Sparkle::Render( eSparkleRenderMode Mode )
                 corners[ i ].Add( pos );
             }
 
+#ifdef SRR2_OLD3DS_QUAD_STREAM
+            const pddiVector2 coordinates[4]={pddiVector2(0,0),pddiVector2(1,0),pddiVector2(0,1),pddiVector2(1,1)};
+            if(picaEmitColourQuad(sprite,corners,coordinates,colour,picaQuad::Sparkle)) continue;
+#endif
             // Now draw the triangle.
             // bottom left tri.
             sprite->Colour( colour[ 0 ] );
@@ -1163,7 +1174,11 @@ void Sparkle::HUDRender( void )
         }
         spriteShader->SetTexture( PDDI_SP_BASETEX, mpTextures[ ti ]->GetTexture() );
 
-        sprite = p3d::pddi->BeginPrims( spriteShader, PDDI_PRIM_TRIANGLES, PDDI_V_CT, mNumHUDSparkles[ ti ] * 6 );
+        sprite=nullptr;
+#ifdef SRR2_OLD3DS_QUAD_STREAM
+        sprite=picaBeginQuadStream(spriteShader,mNumHUDSparkles[ ti ]);
+#endif
+        if(!sprite) sprite = p3d::pddi->BeginPrims( spriteShader, PDDI_PRIM_TRIANGLES, PDDI_V_CT, mNumHUDSparkles[ ti ] * 6 );
 
         for( int i = 0; i < mNumSparkles; ++i )
         {
@@ -1182,6 +1197,13 @@ void Sparkle::HUDRender( void )
             rmt::Vector pos = s.Position;
             pos.Scale( 5.0f );
 
+#ifdef SRR2_OLD3DS_QUAD_STREAM
+            const pddiVector positions[4]={pddiVector(pos.x-scale,pos.y-scale,pos.z),
+                pddiVector(pos.x+scale,pos.y-scale,pos.z),pddiVector(pos.x-scale,pos.y+scale,pos.z),
+                pddiVector(pos.x+scale,pos.y+scale,pos.z)};
+            const pddiVector2 coordinates[4]={pddiVector2(0,0),pddiVector2(1,0),pddiVector2(0,1),pddiVector2(1,1)};
+            if(picaEmitQuad(sprite,positions,coordinates,colour,picaQuad::Sparkle)) continue;
+#endif
             // bottom left tri.
             sprite->Colour( colour );
             sprite->UV( 0.0f, 0.0f );

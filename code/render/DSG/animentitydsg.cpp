@@ -25,6 +25,7 @@
 #include <render/IntersectManager/IntersectManager.h>
 #include <p3d/effects/particlesystem.hpp>
 #include <main/game.h>
+#include <main/old3dsdiag.h>
 #include <mission/gameplaymanager.h>
 
 #include <radtime.hpp>
@@ -140,6 +141,13 @@ END_PROFILE( "Anim Destroy" );
 void AnimEntityDSG::Display()
 {
     if(IS_DRAW_LONG) return;
+#ifdef SRR2_OLD_3DS
+    const rmt::Vector& offset = mTransformOffset.Row(3);
+    const bool translatedParticle = mParticleSystemBoundingBox &&
+        (offset.x != 0.0f || offset.y != 0.0f || offset.z != 0.0f);
+    Old3dsAnimScope audit(GetUID(), GetName(), mParticleSystemBoundingBox != NULL, translatedParticle);
+#endif
+
 #ifdef PROFILER_ENABLED
     char profileName[] = "  AnimEntityDSG Display";
 #endif
@@ -407,6 +415,16 @@ void AnimEntityDSG::LoadSetUp( tCompositeDrawable* pDrawable, tMultiController* 
 
 void AnimEntityDSG::GetBoundingBox( rmt::Box3D* box )
 {
+#ifdef SRR2_OLD_3DS
+    ++g_old3dsAnimQueries[0];
+    if(mParticleSystemBoundingBox)
+    {
+        ++g_old3dsAnimQueries[1];
+        const rmt::Vector& offset = mTransformOffset.Row(3);
+        if(offset.x != 0.0f || offset.y != 0.0f || offset.z != 0.0f) ++g_old3dsAnimQueries[2];
+    }
+#endif
+
 
     mpDrawable->GetBoundingBox( &mBoundingBox );
     

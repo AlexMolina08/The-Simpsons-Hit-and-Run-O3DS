@@ -7,6 +7,9 @@
 ===========================================================================*/
 
 #include <p3d/anim/skeleton.hpp>
+#ifdef SRR2_OLD3DS_DEFERRED_SKIN
+#include <pddi/pica/deferredskin.hpp>
+#endif
 #include <p3d/anim/pose.hpp>
 #include <p3d/file.hpp>
 #include <constants/chunks.h>
@@ -22,6 +25,9 @@ tSkeleton::tSkeleton(int nj)
 
 tSkeleton::~tSkeleton()
 {
+#ifdef SRR2_OLD3DS_DEFERRED_SKIN
+    if(deferredSkinRest)deferredSkinRest->Release();
+#endif
 }
 
 tSkeleton::Joint* tSkeleton::FindJoint(const tUID uid) const
@@ -53,8 +59,23 @@ tPose* tSkeleton::NewPose()
     return new tPose(this);
 }
 
+#ifdef SRR2_OLD3DS_DEFERRED_SKIN
+picaDeferredSkin::Rest* tSkeleton::GetDeferredSkinRest()
+{
+    if(deferredSkinRest)return deferredSkinRest;
+    const unsigned count=GetNumJoint();
+    if(!count || count>=picaDeferredSkin::MaximumJoints)return nullptr;
+    const pddiMatrix* matrices[picaDeferredSkin::MaximumJoints];
+    for(unsigned i=0;i<count;++i)matrices[i]=&GetJoint(i)->inverseWorldMatrix;
+    deferredSkinRest=picaDeferredSkin::Rest::Create(matrices,count);return deferredSkinRest;
+}
+#endif
 void tSkeleton::Rebuild()
 {
+#ifdef SRR2_OLD3DS_DEFERRED_SKIN
+    // Published consumers retain their immutable copy across a skeleton rebuild.
+    if(deferredSkinRest){deferredSkinRest->Release();deferredSkinRest=nullptr;}
+#endif
     // build the bone->world matrices, and their inverses
     // based upon the rest-pose local matrix
     joint[0].worldMatrix = joint[0].restPose;

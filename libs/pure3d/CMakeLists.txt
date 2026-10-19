@@ -141,8 +141,12 @@ elseif(SRR2_P3D_PDDI STREQUAL "GLES2")
 		)
 	endif()
 elseif(SRR2_P3D_PDDI STREQUAL "PICA")
+	find_program(PICASSO_EXE picasso
+		HINTS "$ENV{DEVKITPRO}/tools/bin" "/opt/devkitpro/tools/bin" "C:/devkitPro/tools/bin"
+		REQUIRED)
 	list(APPEND PDDI_SOURCES
 		"pddi/pica/context.cpp"
+		"pddi/pica/skinning.cpp"
 		"pddi/pica/device.cpp"
 		"pddi/pica/display.cpp"
 		"pddi/pica/material.cpp"
@@ -170,10 +174,87 @@ else()
 endif()
 
 if(SRR2_P3D_PDDI STREQUAL "PICA")
+    set(PICA_SKIN_SRC "${CMAKE_CURRENT_SOURCE_DIR}/pddi/pica/shaders/skin.v.pica")
+    if(SRR2_OLD_3DS AND SRR2_OLD3DS_LIGHT_LOOP)
+        set(PICA_SKIN_SRC "${CMAKE_CURRENT_SOURCE_DIR}/pddi/pica/shaders/skin_lights.v.pica")
+    endif()
+    if(SRR2_OLD3DS_GPU_SKIN_COMPACT)
+        set(PICA_SKIN_SRC "${CMAKE_CURRENT_SOURCE_DIR}/pddi/pica/shaders/skin_compact.v.pica")
+    endif()
+    if(SRR2_OLD3DS_GPU_SKIN_PACKED)
+        set(PICA_SKIN_SRC "${CMAKE_CURRENT_SOURCE_DIR}/pddi/pica/shaders/skin_eye_packed.v.pica")
+    elseif(SRR2_OLD3DS_GPU_SKIN_EYE_PALETTE)
+        set(PICA_SKIN_SRC "${CMAKE_CURRENT_SOURCE_DIR}/pddi/pica/shaders/skin_eye.v.pica")
+    endif()
+    if(SRR2_OLD_3DS AND SRR2_OLD3DS_DIRECTIONAL_LIGHT)
+        set(PICA_SKIN_SRC "${CMAKE_CURRENT_SOURCE_DIR}/pddi/pica/shaders/skin_eye_directional.v.pica")
+    endif()
+	if(SRR2_OLD3DS_GPU_SKIN)
+        list(APPEND PDDI_SOURCES "${CMAKE_CURRENT_BINARY_DIR}/skin_shbin.c")
+        add_custom_command(OUTPUT "${CMAKE_CURRENT_BINARY_DIR}/skin.shbin" "${CMAKE_CURRENT_BINARY_DIR}/skin_shbin.h"
+            COMMAND "${PICASSO_EXE}" -o "${CMAKE_CURRENT_BINARY_DIR}/skin.shbin"
+                -h "${CMAKE_CURRENT_BINARY_DIR}/skin_shbin.h" "${PICA_SKIN_SRC}"
+            DEPENDS "${PICA_SKIN_SRC}" VERBATIM)
+        add_custom_command(OUTPUT "${CMAKE_CURRENT_BINARY_DIR}/skin_shbin.c"
+            COMMAND "${CMAKE_COMMAND}" "-DINPUT=${CMAKE_CURRENT_BINARY_DIR}/skin.shbin"
+                "-DOUTPUT=${CMAKE_CURRENT_BINARY_DIR}/skin_shbin.c" "-DSYMBOL=pddi_skin_shbin"
+                -P "${CMAKE_SOURCE_DIR}/cmake/bin2c.cmake"
+            DEPENDS "${CMAKE_CURRENT_BINARY_DIR}/skin.shbin" "${CMAKE_SOURCE_DIR}/cmake/bin2c.cmake" VERBATIM)
+    endif()
 	set(PICA_SHADER_SRC "${CMAKE_CURRENT_SOURCE_DIR}/pddi/pica/shaders/pddi.v.pica")
-	find_program(PICASSO_EXE picasso
-		HINTS "$ENV{DEVKITPRO}/tools/bin" "/opt/devkitpro/tools/bin" "C:/devkitPro/tools/bin"
-		REQUIRED)
+    if(SRR2_OLD_3DS AND SRR2_OLD3DS_LIGHT_LOOP)
+        set(PICA_SHADER_SRC "${CMAKE_CURRENT_SOURCE_DIR}/pddi/pica/shaders/pddi_lights.v.pica")
+    endif()
+    if(SRR2_OLD_3DS AND SRR2_OLD3DS_UNLIT_PROJECTION)
+        set(PICA_SHADER_SRC "${CMAKE_CURRENT_SOURCE_DIR}/pddi/pica/shaders/pddi_unlit_projection.v.pica")
+    endif()
+    if(SRR2_OLD_3DS AND SRR2_OLD3DS_DIRECTIONAL_LIGHT)
+        set(PICA_SHADER_SRC "${CMAKE_CURRENT_SOURCE_DIR}/pddi/pica/shaders/pddi_directional.v.pica")
+    endif()
+
+    if(SRR2_OLD_3DS AND SRR2_OLD3DS_WHEEL_GPU_BATCH)
+        set(PICA_SHADER_SRC "${CMAKE_CURRENT_SOURCE_DIR}/pddi/pica/shaders/pddi_wheel_palette.v.pica")
+    endif()
+
+    if(SRR2_OLD3DS_OCCLUSION)
+        list(APPEND PDDI_SOURCES "pddi/pica/occlusion.cpp")
+    endif()
+    if(SRR2_OLD3DS_FRAME_PIPELINE)
+        list(APPEND PDDI_SOURCES "pddi/pica/framepipeline.cpp")
+    endif()
+    if(SRR2_OLD3DS_PREPARED_THREAD)
+        list(APPEND PDDI_SOURCES "pddi/pica/preparedworker.cpp")
+    endif()
+    if(SRR2_OLD3DS_RENDER_WORKER)
+        list(APPEND PDDI_SOURCES "pddi/pica/renderworker.c")
+    endif()
+    if(SRR2_OLD3DS_GPU_LISTS)
+        list(APPEND PDDI_SOURCES "pddi/pica/nativegpulist.c")
+    endif()
+    if(SRR2_OLD3DS_NATIVE_CONTEXT)
+        list(APPEND PDDI_SOURCES "pddi/pica/nativecontext.c")
+    endif()
+    if(SRR2_OLD3DS_NATIVE_UNIFORMS)
+        list(APPEND PDDI_SOURCES "pddi/pica/nativeuniforms.c")
+    endif()
+    if(SRR2_OLD3DS_RESIDENT_SHADERS)
+        find_package(Python3 REQUIRED COMPONENTS Interpreter)
+        set(RESIDENT_SCRIPT "${CMAKE_SOURCE_DIR}/tools/3ds/link_resident_shaders.py")
+        add_custom_command(OUTPUT "${CMAKE_CURRENT_BINARY_DIR}/resident.shbin"
+            COMMAND "${Python3_EXECUTABLE}" "${RESIDENT_SCRIPT}"
+                --picasso "${PICASSO_EXE}" --output "${CMAKE_CURRENT_BINARY_DIR}/resident.shbin"
+                "${PICA_SHADER_SRC}" "${CMAKE_CURRENT_BINARY_DIR}/pddi_shbin.h"
+                "${PICA_SKIN_SRC}" "${CMAKE_CURRENT_BINARY_DIR}/skin_shbin.h"
+            DEPENDS "${RESIDENT_SCRIPT}" "${PICA_SHADER_SRC}" "${PICA_SKIN_SRC}"
+                "${CMAKE_CURRENT_BINARY_DIR}/pddi_shbin.h" "${CMAKE_CURRENT_BINARY_DIR}/skin_shbin.h"
+            VERBATIM)
+        add_custom_command(OUTPUT "${CMAKE_CURRENT_BINARY_DIR}/resident_shbin.c"
+            COMMAND "${CMAKE_COMMAND}" "-DINPUT=${CMAKE_CURRENT_BINARY_DIR}/resident.shbin"
+                "-DOUTPUT=${CMAKE_CURRENT_BINARY_DIR}/resident_shbin.c" "-DSYMBOL=pddi_resident_shbin"
+                -P "${CMAKE_SOURCE_DIR}/cmake/bin2c.cmake"
+            DEPENDS "${CMAKE_CURRENT_BINARY_DIR}/resident.shbin" "${CMAKE_SOURCE_DIR}/cmake/bin2c.cmake" VERBATIM)
+        list(APPEND PDDI_SOURCES "${CMAKE_CURRENT_BINARY_DIR}/resident_shbin.c")
+    endif()
 
 	add_custom_command(
 		OUTPUT  "${CMAKE_CURRENT_BINARY_DIR}/pddi.shbin"
@@ -200,6 +281,21 @@ if(SRR2_P3D_PDDI STREQUAL "PICA")
 endif()
 
 set(SRR2_P3D_CG_PATH "C:/Program Files (x86)/NVIDIA Corporation/Cg")
+if(SRR2_OLD3DS_DRAW_PACKET OR SRR2_OLD3DS_NATIVE_CONTEXT)
+    if(NOT SRR2_P3D_PDDI STREQUAL "PICA")
+        message(FATAL_ERROR "Native draw adapters require PICA")
+    endif()
+    # The packet adapter uses the exact private ABI of this supported library.
+    # Refuse a changed dependency rather than guessing its context layout.
+    find_library(SRR2_DRAW_PACKET_CITRO3D NAMES citro3d HINTS "$ENV{DEVKITPRO}/libctru/lib" REQUIRED)
+    file(SHA256 "${SRR2_DRAW_PACKET_CITRO3D}" packet_citro3d_hash)
+    if(NOT packet_citro3d_hash STREQUAL "3f34eff859c1f1e60ebe597b6df9cf5e5e74563d9e64ca01a7b3292fde63016a")
+        message(FATAL_ERROR "Native draw adapters require the audited Citro3D 1.7.1 library")
+    endif()
+    if(SRR2_OLD3DS_DRAW_PACKET)
+        list(APPEND PDDI_SOURCES "pddi/pica/drawpacket.c")
+    endif()
+endif()
 add_library(pddi STATIC ${PDDI_SOURCES})
 target_include_directories(pddi PUBLIC "")
 if(SRR2_P3D_PDDI STREQUAL GXM)
@@ -208,7 +304,11 @@ elseif(SRR2_P3D_PDDI STREQUAL GLES2)
 	target_include_directories(pddi PRIVATE "pddi/gles/glad/include/")
 elseif(SRR2_P3D_PDDI STREQUAL PICA)
 	target_include_directories(pddi PRIVATE "${CMAKE_CURRENT_BINARY_DIR}")
-	target_link_libraries(pddi citro3d)
+    if(SRR2_OLD3DS_DRAW_PACKET OR SRR2_OLD3DS_NATIVE_CONTEXT)
+        target_link_libraries(pddi "${SRR2_DRAW_PACKET_CITRO3D}")
+    else()
+        target_link_libraries(pddi citro3d)
+    endif()
 else()
 	target_include_directories(pddi PRIVATE "pddi/gl/glad/include/")
 endif()

@@ -1,3 +1,64 @@
+#ifdef SRR2_OLD3DS_PARTICLE_CLIP
+extern "C" void old3dsDumpParticleClip();
+#endif
+#ifdef SRR2_OLD3DS_PARTICLE_TRIG_REUSE
+extern "C" void old3dsDumpParticleTrig();
+#endif
+#ifdef SRR2_OLD3DS_VEHICLE_JOINT_PIPELINE
+extern "C" void old3dsDumpJointPipeline();
+#endif
+#ifdef SRR2_OLD3DS_VEHICLE_RENDER_BINDINGS
+extern "C" void old3dsDumpVehicleBindings();
+#endif
+#ifdef SRR2_OLD3DS_WHEEL_LOD
+extern "C" void old3dsDumpWheelLOD();
+extern "C" void picaDumpWheelLodMemory();
+#endif
+#ifdef SRR2_OLD3DS_JOINT_AXIS_ONCE
+extern "C" void old3dsDumpJointAxisReuse();
+#endif
+#ifdef SRR2_OLD3DS_BONE_USAGE
+extern "C" void old3dsDumpBoneUsage();
+#endif
+#ifdef SRR2_OLD3DS_COLL_TRANSFORM_ONCE
+extern "C" void old3dsDumpCollisionTransforms();
+#endif
+#ifdef SRR2_OLD3DS_MATERIAL_WRITES
+extern "C" void picaDumpMaterialWrites();
+#endif
+#ifdef SRR2_OLD3DS_INERTIA_TENSOR_CACHE
+extern "C" void old3dsDumpInertiaTensors();
+#endif
+#ifdef SRR2_OLD3DS_JOINT_VECTOR_REUSE
+extern "C" void old3dsDumpJointVectors();
+#endif
+#ifdef SRR2_OLD3DS_IO_WAIT_YIELD
+extern "C" void old3dsDumpIoWait();
+#endif
+#if defined(SRR2_OLD_3DS) && defined(SRR2_OLD3DS_COLL_PREP)
+extern "C" void old3dsDumpPairTail();
+#endif
+#ifdef SRR2_OLD3DS_SPHERE_WALK_CACHE
+extern "C" void old3dsDumpSphereWalkCache();
+#endif
+#ifdef SRR2_OLD3DS_JOINT_ROTATION_REUSE
+extern "C" void old3dsValidateJointRotationReuse();
+#endif
+#ifdef SRR2_OLD3DS_VRAM_TEXTURES
+extern "C" void picaDumpVramTextures();
+#endif
+#ifdef SRR2_OLD3DS_VEHICLE_PROFILE
+extern "C" void old3dsDumpVehicleProfile();
+#endif
+#ifdef SRR2_OLD3DS_CLIP_BOUNDS
+extern "C" void picaDumpClipBoundsStats();
+#endif
+#ifdef SRR2_OLD3DS_PGO_GENERATE
+extern "C" void old3dsDumpProfile();
+#endif
+#ifdef SRR2_OLD3DS_UNLIT_PROJECTION
+extern "C" void picaDumpUnlitProjectionStats();
+#endif
 //=============================================================================
 // Copyright (C) 2002 Radical Entertainment Ltd.  All rights reserved.
 //
@@ -45,6 +106,11 @@ unsigned int __stacksize__
 __attribute__((used, retain, section(".data.__stacksize__")))
 = 2 * 1024 * 1024;
 u32 __ctru_linear_heap_size = 28 * 1024 * 1024;
+#ifdef SRR2_OLD_3DS
+// Bound emulation to a 64 MiB application budget, including executable and
+// linear memory. Do not let an emulator's larger homebrew region hide overflow.
+u32 __ctru_heap_size = 30 * 1024 * 1024;
+#endif
 }
 #endif
 
@@ -52,6 +118,7 @@ u32 __ctru_linear_heap_size = 28 * 1024 * 1024;
 // Project Includes
 //========================================
 #include <main/game.h>
+#include <main/nativebench.h>
 #include <main/win32platform.h>
 #include <main/singletons.h>
 #include <main/commandlineoptions.h>
@@ -100,10 +167,28 @@ extern "C" int main( int argc, char *argv[] )
 	chdir( "ux0:data/simpsons" );
 #endif
 #ifdef RAD_3DS
+#ifdef SRR2_OLD_3DS
+    osSetSpeedupEnable( false );
+#else
     osSetSpeedupEnable( true );
+#endif
     gfxInitDefault();
     romfsInit();
     chdir( SRR2_3DS_DATA_PATH );
+#ifdef SRR2_OLD_3DS
+    freopen("old3ds.log", "w", stdout);
+    setvbuf(stdout, NULL, _IOLBF, 0);
+    bool isNew3DS = false;
+    APT_CheckNew3DS(&isNew3DS);
+    printf("OLD3DS_BOOT model=%s loader_region=%lu heap_limit=%lu linear_limit=%lu linear_free=%lu\n",
+        isNew3DS ? "new" : "old", (unsigned long)osGetMemRegionSize(MEMREGION_APPLICATION),
+        (unsigned long)__ctru_heap_size, (unsigned long)__ctru_linear_heap_size,
+        (unsigned long)linearSpaceFree());
+    // Tie a log to the executable that produced it. The earlier hardware log
+    // carried no build identifier, so it could not be matched to a binary.
+    printf("OLD3DS_BUILD id=%s date=%s time=%s\n",
+        SRR2_OLD3DS_BUILD_ID, __DATE__, __TIME__);
+#endif
 #endif
 
     //
@@ -112,14 +197,27 @@ extern "C" int main( int argc, char *argv[] )
     CommandLineOptions::InitDefaults();
     ProcessCommandLineArguments( argc, argv );
     ProcessCommandLineArgumentsFromFile();
+#ifdef SRR2_OLD3DS_NATIVE_BENCH
+    NativeBench::Init(argc,argv);
+#endif
+#ifdef SRR2_OLD_3DS
+    printf("OLD3DS_INIT commandline_complete\n");
+#endif
 
     //
     // Initialize SDL subsystems
     //
 #if defined RAD_3DS
     SDL_Init( SDL_INIT_EVENTS | SDL_INIT_GAMECONTROLLER );
+#ifdef SRR2_OLD_3DS
+    printf("OLD3DS_INIT sdl_complete error=%s\n", SDL_GetError());
+#endif
 
     SDL_LogSetOutputFunction( LogOutputFunction, NULL );
+#ifdef SRR2_OLD_3DS
+    extern bool g_AllowDebugOutput;
+    g_AllowDebugOutput = true;
+#endif
 #elif SDL_MAJOR_VERSION < 3
     SDL_Init( SDL_INIT_EVENTS | SDL_INIT_VIDEO | SDL_INIT_GAMECONTROLLER );
 
@@ -140,6 +238,9 @@ extern "C" int main( int argc, char *argv[] )
         return 0;
     }
     Win32Platform::InitializeFoundation();
+#ifdef SRR2_OLD_3DS
+    printf("OLD3DS_INIT foundation_complete\n");
+#endif
 
     srand (Game::GetRandomSeed ());
 
@@ -159,6 +260,9 @@ extern "C" int main( int argc, char *argv[] )
     // Instantiate all the singletons before doing anything else.
     //
     CreateSingletons();
+#ifdef SRR2_OLD_3DS
+    printf("OLD3DS_INIT singletons_complete\n");
+#endif
 
     //
     // Construct the platform object.
@@ -177,13 +281,91 @@ extern "C" int main( int argc, char *argv[] )
     // Initialize the game.
     //
     pGame->Initialize();
+#ifdef SRR2_OLD_3DS
+    printf("OLD3DS_INIT game_complete\n");
+#endif
 
     HeapMgr()->PopHeap (GMA_PERSISTENT);
 
     //
     // Run it!  Control will not return from here until the game is stopped.
     //
+#ifdef SRR2_OLD3DS_JOINT_ROTATION_REUSE
+    old3dsValidateJointRotationReuse();
+#endif
     pGame->Run();
+#ifdef SRR2_OLD3DS_NATIVE_BENCH
+    NativeBench::Dump();
+#endif
+#ifdef SRR2_OLD3DS_IO_WAIT_YIELD
+    old3dsDumpIoWait();
+#endif
+#if defined(SRR2_OLD_3DS) && defined(SRR2_OLD3DS_COLL_PREP)
+    old3dsDumpPairTail();
+#endif
+#ifdef SRR2_OLD3DS_COLL_TRANSFORM_ONCE
+    old3dsDumpCollisionTransforms();
+#endif
+#ifdef SRR2_OLD3DS_PARTICLE_CLIP
+    old3dsDumpParticleClip();
+#endif
+#ifdef SRR2_OLD3DS_PARTICLE_TRIG_REUSE
+    old3dsDumpParticleTrig();
+#endif
+#ifdef SRR2_OLD3DS_MATERIAL_WRITES
+    picaDumpMaterialWrites();
+#endif
+#ifdef SRR2_OLD3DS_INERTIA_TENSOR_CACHE
+    old3dsDumpInertiaTensors();
+#endif
+#ifdef SRR2_OLD3DS_JOINT_VECTOR_REUSE
+    old3dsDumpJointVectors();
+#endif
+#ifdef SRR2_OLD3DS_VEHICLE_JOINT_PIPELINE
+    old3dsDumpJointPipeline();
+#endif
+#ifdef SRR2_OLD3DS_VEHICLE_RENDER_BINDINGS
+    old3dsDumpVehicleBindings();
+#endif
+#ifdef SRR2_OLD3DS_WHEEL_LOD
+    old3dsDumpWheelLOD();
+    picaDumpWheelLodMemory();
+#endif
+#ifdef SRR2_OLD3DS_JOINT_AXIS_ONCE
+    old3dsDumpJointAxisReuse();
+#endif
+#ifdef SRR2_OLD3DS_BONE_USAGE
+    old3dsDumpBoneUsage();
+#endif
+#ifdef SRR2_OLD3DS_SPHERE_WALK_CACHE
+    old3dsDumpSphereWalkCache();
+#endif
+#ifdef SRR2_OLD3DS_VRAM_TEXTURES
+    picaDumpVramTextures();
+#endif
+#ifdef SRR2_OLD3DS_VEHICLE_PROFILE
+    old3dsDumpVehicleProfile();
+#endif
+#ifdef SRR2_OLD3DS_CLIP_BOUNDS
+    picaDumpClipBoundsStats();
+#endif
+#ifdef SRR2_OLD3DS_PGO_GENERATE
+    old3dsDumpProfile();
+#endif
+#ifdef SRR2_OLD3DS_UNLIT_PROJECTION
+    picaDumpUnlitProjectionStats();
+#endif
+#ifdef SRR2_OLD3DS_GPU_SKIN_SUPPORT
+    extern void picaSkinDump();
+    picaSkinDump();
+#endif
+#ifdef SRR2_OLD3DS_QUEUE_METRICS
+    // The 3DS shutdown uses _exit, which bypasses renderer destructors/atexit.
+    // Write the independent graphics experiment buffer only after gameplay ends.
+    extern void picaQueueDump();
+    picaQueueDump();
+#endif
+
 
 #ifdef RAD_3DS
     radSoundHal3dsShutdownForExit( );

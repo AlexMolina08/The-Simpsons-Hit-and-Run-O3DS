@@ -22,6 +22,13 @@
 // Project Includes
 //========================================
 #include <render/DSG/IntersectDSG.h>
+#ifdef SRR2_OLD3DS_TRI_BLOCKS
+#include <cstdlib>
+static unsigned sTriangleBlockBytes;
+#endif
+#ifdef SRR2_OLD_3DS
+#include <main/old3dsdiag.h>
+#endif
 
 //************************************************************************
 //
@@ -88,6 +95,10 @@ IntersectDSG::IntersectDSG()
 //========================================================================
 IntersectDSG::~IntersectDSG()
 {
+#ifdef SRR2_OLD3DS_TRI_BLOCKS
+    std::free(mTriangleBlocks);
+    sTriangleBlockBytes -= mTriangleBlockBytes;
+#endif
 }
 //========================================================================
 // intersectdsg::
@@ -317,6 +328,10 @@ int IntersectDSG::mFlatTriFast
     rAssert(mTriIndices.IsSetUp());
 
     int i, j;
+#ifdef SRR2_OLD3DS_TRI_BLOCKS
+    const float xLow = posnRef.x - PT_EPSILON, xHigh = posnRef.x + PT_EPSILON;
+    const float zLow = posnRef.z - PT_EPSILON, zHigh = posnRef.z + PT_EPSILON;
+#endif
 
     if(msbInScratchPad)
     {
@@ -390,7 +405,35 @@ int IntersectDSG::mFlatTriFast
     {
         for(i=orTriNum; Mask!=IntersectDSG::FOUND_PT && i>-1; i--)
         {
+#ifdef SRR2_OLD3DS_TRI_BLOCKS
+#ifdef SRR2_OLD3DS_TRI_HIERARCHY
+            if(mTriangleBlocks)
+            {
+                const int first = TriBlocks::Skip(mTriangleBlocks, mTriIndices.mUseSize / 3,
+                                                   i, orTriNum, xLow,xHigh,zLow,zHigh);
+                if(first >= 0)
+                {
+                    i = first;
+                    continue;
+                }
+            }
+#else
+            if(mTriangleBlocks && (i == orTriNum || (i % TriBlocks::Size) == TriBlocks::Size - 1) &&
+               mTriangleBlocks[i / TriBlocks::Size].Reject(xLow,xHigh,zLow,zHigh))
+            {
+                i -= i % TriBlocks::Size;
+                continue;
+            }
+#endif
+#endif
+#ifdef SRR2_OLD_3DS
+            ++g_old3dsTriCandidates;
+#endif
+#ifdef SRR2_OLD3DS_FLAT_TRI_FAST
+            Mask = IntersectDSG::INIT_PT;
+#else
             Mask |= IntersectDSG::INIT_PT;
+#endif
         //////////////////////////////////////////////////////////////////////////
             // Intentional Copy n Paste is done to ensure inlining
             //////////////////////////////////////////////////////////////////////////
@@ -439,6 +482,9 @@ int IntersectDSG::mFlatTriFast
                 }
             }
         }
+#ifdef SRR2_OLD3DS_FLAT_TRI_FAST
+        orTriNum = -1;
+#endif
     }
     return -1;
     //rTuneAssert(orTriNum==i+1);
@@ -712,6 +758,9 @@ void IntersectDSG::GenIDSG( tGeometry* ipGeometry )
       }
    }
    CalcAllFields();
+#ifdef SRR2_OLD3DS_TRI_BLOCKS
+   BuildTriangleBlocks();
+#endif
 }
 //========================================================================
 // IntersectDSG::
@@ -999,3 +1048,39 @@ void IntersectDSG::CalcAllFields()
 // Private Member Functions : IntersectDSG 
 //
 //************************************************************************
+
+#ifdef SRR2_OLD3DS_TRI_BLOCKS
+void IntersectDSG::BuildTriangleBlocks()
+{
+    std::free(mTriangleBlocks);
+    sTriangleBlockBytes -= mTriangleBlockBytes;
+    mTriangleBlocks = NULL;
+    mTriangleBlockBytes = 0;
+    const unsigned triangles = mTriIndices.mUseSize / 3;
+    if(triangles < TriBlocks::Size || msbInScratchPad) return;
+    const unsigned blocks = (triangles + TriBlocks::Size - 1) / TriBlocks::Size;
+    const unsigned bytes = TriBlocks::Count(triangles) * sizeof(TriBlocks::Bounds);
+    if(bytes > TriBlocks::Budget - sTriangleBlockBytes) return;
+    TriBlocks::Bounds* bounds = static_cast<TriBlocks::Bounds*>(std::malloc(bytes));
+    if(!bounds) return;
+    for(unsigned b = 0; b < blocks; ++b) bounds[b].Reset();
+    for(unsigned t = 0; t < triangles; ++t)
+        for(unsigned corner = 0; corner < 3; ++corner)
+        {
+            const int index = mTriIndices[t * 3 + corner];
+            if(index < 0 || index >= mTriPts.mUseSize)
+            {
+                std::free(bounds);
+                return;
+            }
+            const rmt::Vector& p = mTriPts[index];
+            bounds[t / TriBlocks::Size].Add(p.x,p.z);
+        }
+#ifdef SRR2_OLD3DS_TRI_HIERARCHY
+    TriBlocks::BuildHierarchy(bounds, triangles);
+#endif
+    mTriangleBlocks = bounds;
+    mTriangleBlockBytes = bytes;
+    sTriangleBlockBytes += bytes;
+}
+#endif

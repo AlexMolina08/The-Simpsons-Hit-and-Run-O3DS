@@ -14,6 +14,9 @@
 #include <radmath/radmath.hpp>
 
 #include <string.h>
+#ifdef SRR2_OLD3DS_POSE_BINDINGS
+#include <p3d/anim/posebindings.hpp>
+#endif
 
 using namespace RadicalMathLibrary;
 
@@ -134,6 +137,9 @@ void tPoseAnimationController::UpdateNoBlending()
 //---------------------------------------------------------
 void tPoseAnimationController::UpdateWithBlending()
 {
+#ifdef SRR2_OLD3DS_POSE_BINDINGS
+    Old3dsPoseBindings<tAnimation, tAnimationGroup> groupBindings;
+#endif
     int i;
     int nJoint = pose->GetNumJoint();
 
@@ -158,7 +164,12 @@ void tPoseAnimationController::UpdateWithBlending()
             
             // prime the accumulation buffer by evaluating the first animation in the buffer
             tAnimation *anim = playInfo[0].GetAnimation();
-            const tAnimationGroup* animGroup = anim->GetGroupByUID(joint->uid);
+            const tAnimationGroup* animGroup =
+#ifdef SRR2_OLD3DS_POSE_BINDINGS
+                groupBindings.Get(anim, 0, i, joint->uid);
+#else
+                anim->GetGroupByUID(joint->uid);
+#endif
             const tVectorChannel* translation = NULL;
 
             if(animGroup)
@@ -184,7 +195,12 @@ void tPoseAnimationController::UpdateWithBlending()
             for(int j=1; j < nAnim; j++)
             {
                 anim = playInfo[j].GetAnimation();
-                animGroup = anim->GetGroupByUID(joint->uid);
+                animGroup =
+#ifdef SRR2_OLD3DS_POSE_BINDINGS
+                groupBindings.Get(anim, j, i, joint->uid);
+#else
+                anim->GetGroupByUID(joint->uid);
+#endif
                 translation = NULL;
                 if(animGroup)
                 {
@@ -215,7 +231,12 @@ void tPoseAnimationController::UpdateWithBlending()
 
         // Prime the accumulation buffer by evaluating the first animation in the buffer.  
         tAnimation *anim = playInfo[0].GetAnimation();      
-        const tAnimationGroup* animGroup = anim->GetGroupByUID(joint->uid);
+        const tAnimationGroup* animGroup =
+#ifdef SRR2_OLD3DS_POSE_BINDINGS
+                groupBindings.Get(anim, 0, i, joint->uid);
+#else
+                anim->GetGroupByUID(joint->uid);
+#endif
         const tRotationChannel* rotation = NULL;
 
         if(animGroup)
@@ -238,7 +259,12 @@ void tPoseAnimationController::UpdateWithBlending()
         for(int j=1; j < nAnim; j++)
         {
             anim = playInfo[j].GetAnimation();
-            animGroup = anim->GetGroupByUID(joint->uid);
+            animGroup =
+#ifdef SRR2_OLD3DS_POSE_BINDINGS
+                groupBindings.Get(anim, j, i, joint->uid);
+#else
+                anim->GetGroupByUID(joint->uid);
+#endif
             rotation = NULL;
             if(animGroup)
             {

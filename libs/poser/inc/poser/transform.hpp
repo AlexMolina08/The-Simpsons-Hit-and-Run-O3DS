@@ -63,7 +63,10 @@ private:
     {
         DIRTY_NONE,
         DIRTY_MATRIX,
-        DIRTY_QUATERNION
+        DIRTY_QUATERNION,
+#ifdef SRR2_OLD3DS_QUATERNION_REUSE
+        DIRTY_NONE_CANONICAL,
+#endif
     };
     
     Dirty m_Dirty;

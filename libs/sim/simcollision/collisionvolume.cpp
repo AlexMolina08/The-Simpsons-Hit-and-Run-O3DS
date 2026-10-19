@@ -5,6 +5,24 @@
 #include "simcollision/collisionobject.hpp"
 
 #include <radmath/radmath.hpp>
+#ifdef SRR2_OLD3DS_COLL_TRANSFORM_ONCE
+#include <simcommon/simstatearticulated.hpp>
+#include <typeinfo>
+#include <cstdio>
+static unsigned collisionTransformReads=0,collisionTransformReuses=0;
+static inline void CollisionTransformCount(unsigned& counter)
+{
+#ifdef SRR2_OLD3DS_PARALLEL_COLLISION
+    __atomic_fetch_add(&counter,1u,__ATOMIC_RELAXED);
+#else
+    ++counter;
+#endif
+}
+extern "C" void old3dsDumpCollisionTransforms()
+{
+    std::printf("COLL_TRANSFORM reads=%u reused=%u retained_bytes=0\n",__atomic_load_n(&collisionTransformReads,__ATOMIC_RELAXED),__atomic_load_n(&collisionTransformReuses,__ATOMIC_RELAXED));
+}
+#endif
 
 using namespace RadicalMathLibrary;
 
@@ -22,6 +40,9 @@ CollisionVolume::CollisionVolume()
     mSubVolumeList(NULL),
     mVisible(true),
     mUpdated(false)
+#ifdef SRR2_OLD_3DS
+    , mUpdatePassStamp(0)
+#endif
 {
     mPosition.Set(0, 0, 0);
     mBoxSize.Set(0, 0, 0);
@@ -251,10 +272,70 @@ void CollisionVolume::SetClone(CollisionVolume* clone)
 
 void CollisionVolume::UpdateAll()
 {
+#ifdef SRR2_OLD3DS_COLL_PREP
+    UpdatePosRot();
+#else
     UpdatePos();
     UpdateRot();
+#endif
     UpdateBBox();
 }
+
+#ifdef SRR2_OLD3DS_COLL_PREP
+void CollisionVolume::UpdatePosRot()
+{
+#ifdef SRR2_OLD3DS_COLL_TRANSFORM_ONCE
+    // Only these exact SimStates share a read-only transform within this node.
+    // Flexible/custom states retain their original reads and scratch lifetime.
+    SimState* state=mCollisionObject ? mCollisionObject->GetSimState() : nullptr;
+    const bool known=state && (typeid(*state)==typeid(SimState) ||
+        typeid(*state)==typeid(SimStateArticulated));
+    UpdatePosRot(known ? mCollisionObject : nullptr,state);
+#else
+    // Rotation implementations read only this volume and its owner's transform.
+    // Finish each node while it is hot, retaining the separate bottom-up bounds
+    // pass. No transform pointer survives another GetTransform call: flexible
+    // SimStates return shared scratch storage.
+    if(mCollisionObject != NULL)
+    {
+        mUpdated = false;
+        if(mType != BBoxVolumeType && !mCollisionObject->IsManualUpdate())
+            mCollisionObject->GetTransform(mObjRefIndex).Transform(mDP, &mPosition);
+        SetRotation();
+    }
+    else
+        mUpdated = true;
+    if(mSubVolumeList != NULL)
+        for(int i = 0; i < mSubVolumeList->GetSize(); ++i)
+            mSubVolumeList->GetAt(i)->UpdatePosRot();
+#endif
+}
+#ifdef SRR2_OLD3DS_COLL_TRANSFORM_ONCE
+void CollisionVolume::UpdatePosRot(CollisionObject* stableOwner, SimState* stableState)
+{
+    if(mCollisionObject)
+    {
+        mUpdated=false;
+        if(mType!=BBoxVolumeType && !mCollisionObject->IsManualUpdate())
+        {
+            CollisionTransformCount(collisionTransformReads);
+            const Matrix& matrix=mCollisionObject->GetTransform(mObjRefIndex);
+            matrix.Transform(mDP,&mPosition);
+            // A custom earlier node can replace its owner's SimState. The
+            // read-sharing contract must still hold at this node's dispatch.
+            if(mCollisionObject==stableOwner && mCollisionObject->GetSimState()==stableState)
+                SetRotationFromTransform(matrix);
+            else SetRotation();
+        }
+        else SetRotation();
+    }
+    else mUpdated=true;
+    if(mSubVolumeList)
+        for(int i=0;i<mSubVolumeList->GetSize();++i)
+            mSubVolumeList->GetAt(i)->UpdatePosRot(stableOwner,stableState);
+}
+#endif
+#endif
 
 void CollisionVolume::UpdateBSphere()
 {
@@ -1350,3 +1431,33 @@ void OBBoxVolume::InertiaSelf(SymMatrix& m) const
 
 } // sim
 
+
+#ifdef SRR2_OLD3DS_COLL_TRANSFORM_ONCE
+namespace sim {
+void CylinderVolume::SetRotationFromTransform(const Matrix& matrix)
+{
+    if(typeid(*this)!=typeid(CylinderVolume)) {SetRotation();return;}
+    mUpdated=true;CollisionTransformCount(collisionTransformReuses);
+    matrix.RotateVector(mAxisRef,&mAxis);
+}
+void OBBoxVolume::SetRotationFromTransform(const Matrix& matrix)
+{
+    if(typeid(*this)!=typeid(OBBoxVolume)) {SetRotation();return;}
+    mUpdated=true;CollisionTransformCount(collisionTransformReuses);
+    const Matrix m=matrix;
+    m.RotateVector(mAxisRef[0],&mAxis[0]);
+    m.RotateVector(mAxisRef[1],&mAxis[1]);
+    m.RotateVector(mAxisRef[2],&mAxis[2]);
+    rAssert(mAxisOrientation==VolAxisNotOriented);
+#ifdef OBBoxStorePoints
+    for(int i=0;i<4;++i) SubCorner(mC[i],i);
+#endif
+}
+void WallVolume::SetRotationFromTransform(const Matrix& matrix)
+{
+    if(typeid(*this)!=typeid(WallVolume)) {SetRotation();return;}
+    mUpdated=true;CollisionTransformCount(collisionTransformReuses);
+    matrix.RotateVector(mNormalRef,&mNormal);
+}
+}
+#endif

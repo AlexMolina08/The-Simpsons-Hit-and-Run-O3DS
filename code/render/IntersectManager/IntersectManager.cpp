@@ -23,6 +23,9 @@
 #include <debug/profiler.h>
 
 #include <render/IntersectManager/IntersectManager.h>
+#ifdef SRR2_OLD_3DS
+#include <main/old3dsdiag.h>
+#endif
 #include <render/RenderManager/RenderManager.h>
 #include <render/Culling/SphereSP.h>
 #include <render/Culling/WorldScene.h>
@@ -1376,16 +1379,42 @@ static rmt::Vector4 alignedDistFromPlane __attribute__((aligned(16)));//vf8
 
 #else
     obFoundPlane = false;
+#ifdef SRR2_OLD_3DS
+    bool reachedTris = false;
+    Old3dsTriScope triScope(obFoundPlane, reachedTris);
+#endif
 //    time = radTimeGetMicroseconds64();
     for( int i=rCurrentLeaf.mIntersectElems.mUseSize-1; i>-1; i-- )
     {
         rCurrentLeaf.mIntersectElems[i]->IntoTheVoid_WithGoFastaStripes();
         for( int j=rCurrentLeaf.mIntersectElems[i]->nTris()-1; j>-1; j-- )
         {
-            //foundTerrainType = rCurrentLeaf.mIntersectElems[i]->mTri(j,TriPts,TriNorm );//TriCtr, 
+#ifdef SRR2_OLD_3DS
+            reachedTris = true;
+#endif
+            const int searchStart = j;
             TriPts[0] = irPosn;
             foundTerrainType = rCurrentLeaf.mIntersectElems[i]->mFlatTriFast(j,TriPts,TriNorm );
-            if(foundTerrainType==-1) continue;
+            if(foundTerrainType==-1)
+            {
+#ifdef SRR2_OLD_3DS
+                ++g_old3dsTriExhausted;
+#endif
+#ifdef SRR2_OLD3DS_FLAT_TRI_FAST
+                if(searchStart > 0)
+                {
+#ifdef SRR2_OLD_3DS
+                    g_old3dsTriRescanAvoided += (unsigned)((searchStart * (searchStart + 1)) / 2);
+#endif
+                }
+                break;
+#else
+                continue;
+#endif
+            }
+#ifdef SRR2_OLD_3DS
+            ++g_old3dsTriPlaneTests;
+#endif
             // This first test finds the ground plane directly beneath the sphere (on the y axis)
 
             // make tmpVect a vector from the sphere position towards the ground

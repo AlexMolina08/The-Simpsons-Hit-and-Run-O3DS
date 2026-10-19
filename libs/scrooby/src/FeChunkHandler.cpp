@@ -136,6 +136,38 @@ FeGroup* FeProjectChunkHandler::LoadGroupChunk( tChunkFile* file )
         subEntity->SetParent( returnMe );
         returnMe->AddChild( subEntity );
     }
+#ifdef SRR2_OLD_3DS
+    if(strcmp(name, "ActionButton") == 0)
+    {
+        // The PC HUD bakes its control-key hint into a sprite. Replace that
+        // group with native text, keeping the existing visibility/pulse logic.
+        returnMe->DeleteChildren();
+        FeText* prompt = new FeText("ActionButton3DS", 240, 92);
+        prompt->SetBoundingBoxSize(160, 32);
+        prompt->SetTextStyle("font0_24");
+        prompt->SetColour(tColour(255, 235, 0));
+        prompt->SetDisplayOutline(true);
+        prompt->AddHardCodedString("X Interact");
+        prompt->SetParent(returnMe);
+        returnMe->AddChild(prompt);
+    }
+#endif
+#ifdef SRR2_OLD_3DS
+    if(strcmp(name, "IconAndMessage") == 0 && returnMe->GetSprite("TutorialMessage"))
+    {
+        // Use the native font atlas instead of the small PC letter sprites.
+        FeText* message = new FeText("TutorialMessage3DS", 85, 300);
+        message->SetBoundingBoxSize(470, 200);
+        message->SetTextStyle("font0_16");
+        message->SetTextMode(Scrooby::TEXT_WRAP);
+        message->SetDisplayShadow(true);
+        message->SetShadowColour(tColour(0, 0, 0));
+        message->SetShadowOffset(1, -1);
+        message->AddHardCodedString("");
+        message->SetParent(returnMe);
+        returnMe->AddChild(message);
+    }
+#endif
     return returnMe;
 }
 

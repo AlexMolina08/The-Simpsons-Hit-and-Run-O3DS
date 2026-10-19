@@ -12,6 +12,7 @@ namespace sim
 {
 
 class CollisionObject;
+class SimState;
 class CollisionVolume;
 
 enum CollisionVolumeTypeEnum { CollisionVolumeType=0, SphereVolumeType, CylinderVolumeType, OBBoxVolumeType, WallVolumeType, BBoxVolumeType, MaxCollisionVolumeEnum };
@@ -39,6 +40,17 @@ public:
     inline CollisionVolumeTypeEnum Type()     const { return mType; }
     inline bool IsVisible() const                     { return mVisible; }
     inline TList<CollisionVolume*>* SubVolumeList()   { return mSubVolumeList; }
+
+#ifdef SRR2_OLD_3DS
+    // Diagnostic-only pass stamp. The detector uses this to detect that it has
+    // already updated this volume during the current collision-detection pass.
+    inline unsigned UpdatePassStamp() const  { return mUpdatePassStamp; }
+    inline void SetUpdatePassStamp(unsigned s) { mUpdatePassStamp = s; }
+#ifdef SRR2_OLD3DS_COLL_PREP
+    void CapturePreparedUpdated() { mPreparedUpdated = mUpdated; }
+    void RestorePreparedUpdated() { mUpdated = mPreparedUpdated; }
+#endif
+#endif
     
     void AddSubVolume(CollisionVolume* point);
     bool RemoveSubVolume(CollisionVolume* el);
@@ -88,6 +100,13 @@ protected:
 
     void ConvertToRigidBody();
     
+#ifdef SRR2_OLD3DS_COLL_PREP
+    void UpdatePosRot();
+#ifdef SRR2_OLD3DS_COLL_TRANSFORM_ONCE
+    void UpdatePosRot(CollisionObject* stableOwner, SimState* stableState);
+    virtual void SetRotationFromTransform(const rmt::Matrix&) { SetRotation(); }
+#endif
+#endif
     void UpdateRot();
     void UpdatePos();
     virtual void SetRotation() {}
@@ -100,9 +119,19 @@ protected:
     CollisionObject* mCollisionObject;
     TList<CollisionVolume*>* mSubVolumeList;
     
-    bool mVisible;    
+    bool mVisible;
     bool mUpdated;
     rmt::Vector mDP; // relative position of the Volume and its parent object
+
+#ifdef SRR2_OLD_3DS
+    // Diagnostic only. Identifies the collision-detection pass that last updated
+    // this volume, so repeated updates of one volume within a single pass can be
+    // counted. Never read outside the detector's pair loop.
+    unsigned mUpdatePassStamp;
+#ifdef SRR2_OLD3DS_COLL_PREP
+    bool mPreparedUpdated;
+#endif
+#endif
     
     tColour mColour;
 
@@ -172,6 +201,9 @@ public:
 protected:
     CylinderVolume() {}
     virtual void SetRotation();
+#ifdef SRR2_OLD3DS_COLL_TRANSFORM_ONCE
+    void SetRotationFromTransform(const rmt::Matrix& matrix) override;
+#endif
     virtual void SetClone(CollisionVolume* clone);
     void OptimizeAxis();
     
@@ -222,6 +254,9 @@ protected:
     OBBoxVolume() {}
     void SubCorner(rmt::Vector& n, int i) const;
     virtual void SetRotation();
+#ifdef SRR2_OLD3DS_COLL_TRANSFORM_ONCE
+    void SetRotationFromTransform(const rmt::Matrix& matrix) override;
+#endif
     virtual void SetClone(CollisionVolume* clone);
 
     void OptimizeAxis();
@@ -258,6 +293,9 @@ public:
 protected:
     WallVolume();
     virtual void SetRotation();
+#ifdef SRR2_OLD3DS_COLL_TRANSFORM_ONCE
+    void SetRotationFromTransform(const rmt::Matrix& matrix) override;
+#endif
     virtual void SetClone(CollisionVolume* clone);
     void OptimizeAxis();
 

@@ -1,3 +1,5 @@
+#include <main/old3dsmainprofile.h>
+#include <main/old3dshot.h>
 //=============================================================================
 // Copyright (C) 2001 Radical Entertainment Ltd.  All rights reserved.
 //
@@ -13,6 +15,12 @@
 //========================================
 // System Includes
 //========================================
+#ifdef SRR2_OLD3DS_VEHICLE_PROFILE
+#include <worldsim/redbrick/old3dsvehicleprofile.h>
+Old3dsVehicleProfile::Counters Old3dsVehicleProfile::counters={};
+Old3dsVehicleProfile::ExternalCounters Old3dsVehicleProfile::externalCounters={};
+extern "C" void old3dsDumpVehicleProfile(){Old3dsVehicleProfile::Dump();}
+#endif
 #include <p3d/anim/skeleton.hpp>
 #include <p3d/matrixstack.hpp>
 #include <simcommon/simstate.hpp>
@@ -1965,6 +1973,7 @@ void Vehicle::PreSubstepUpdate(float dt)
 // Return:      void 
 //
 //=============================================================================
+OLD3DS_HOT_PATH
 void Vehicle::PreCollisionPrep(float dt, bool firstSubstep)
 {
     BEGIN_PROFILE("mGeometryVehicle->Update")
@@ -2198,8 +2207,13 @@ void Vehicle::TurboOnHorn()
 // Return:      void 
 //
 //=============================================================================
+OLD3DS_HOT_PATH
 void Vehicle::Update(float dt)
 {
+    O3_MAIN_SCOPE(VehicleUpdate);
+#ifdef SRR2_OLD3DS_VEHICLE_PROFILE
+    Old3dsVehicleProfile::Sample vehicleProfile(mLoco==VL_PHYSICS);
+#endif
     // Update gas, if the change in gas is significant
     
     if(mLocoSwitchedToPhysicsThisFrame)
@@ -2237,9 +2251,15 @@ void Vehicle::Update(float dt)
     // break up of work into pre and post update, outside of update, is a bit arbitrary 
     // I suppose
     
-    mSimStateArticulated->StoreJointState(dt);  
+    mSimStateArticulated->StoreJointState(dt);
+#ifdef SRR2_OLD3DS_VEHICLE_PROFILE
+    vehicleProfile.End(Old3dsVehicleProfile::StateStore);
+#endif
 
     mVehicleLocomotion->PreUpdate();
+#ifdef SRR2_OLD3DS_VEHICLE_PROFILE
+    vehicleProfile.End(Old3dsVehicleProfile::LocomotionPre);
+#endif
 
     if(mVehicleType != VT_AI && GetGameplayManager()->GetGameType() != GameplayManager::GT_SUPERSPRINT)
     {
@@ -2258,6 +2278,9 @@ void Vehicle::Update(float dt)
     }
 
     mVehicleLocomotion->Update(dt);
+#ifdef SRR2_OLD3DS_VEHICLE_PROFILE
+    vehicleProfile.End(Old3dsVehicleProfile::LocomotionUpdate);
+#endif
     // basically - the only thing that is different after this is the mTransform,
     // whether traffic or physics
     //
@@ -2266,6 +2289,9 @@ void Vehicle::Update(float dt)
     
 
     mVehicleLocomotion->PostUpdate();
+#ifdef SRR2_OLD3DS_VEHICLE_PROFILE
+    vehicleProfile.End(Old3dsVehicleProfile::LocomotionPost);
+#endif
     
        
     // TODO - trust these are normalized?
@@ -2285,6 +2311,9 @@ void Vehicle::Update(float dt)
     // just have to make sure that mSuspensionPointVelocities are correct
     // and it will use mSteeringWheelAngle if set.
     UpdateWheelRenderingInfo(dt);
+#ifdef SRR2_OLD3DS_VEHICLE_PROFILE
+    vehicleProfile.End(Old3dsVehicleProfile::BasisWheels);
+#endif
    
     SetGeometryVehicleWheelSmokeLevel();
 
@@ -2308,6 +2337,9 @@ void Vehicle::Update(float dt)
 
 
     mSpeedKmh = mSpeed * 3.6f;  // for watcher...
+#ifdef SRR2_OLD3DS_VEHICLE_PROFILE
+    vehicleProfile.End(Old3dsVehicleProfile::Events);
+#endif
         
                        
     int i;
@@ -2316,6 +2348,9 @@ void Vehicle::Update(float dt)
         mPoseEngine->Advance(i, dt);
         mPoseEngine->Update(i);
     }
+#ifdef SRR2_OLD3DS_VEHICLE_PROFILE
+    vehicleProfile.End(Old3dsVehicleProfile::Pose);
+#endif
 
     // calculate forced door opening as a result of character getting into/out of car
     // TODO : this should probably be doen in the poseengine , but I don't yet understand 
@@ -2341,6 +2376,9 @@ void Vehicle::Update(float dt)
     {      
         mSimStateArticulated->UpdateJointState(dt);
     }
+#ifdef SRR2_OLD3DS_VEHICLE_PROFILE
+    vehicleProfile.End(Old3dsVehicleProfile::DoorsJoint);
+#endif
  
  
     // for debugging:
@@ -2348,8 +2386,14 @@ void Vehicle::Update(float dt)
     // TODO - want to call this here! every frame!!
     CollisionObject* collObj = mSimStateArticulated->GetCollisionObject();
     collObj->Update();
+#ifdef SRR2_OLD3DS_VEHICLE_PROFILE
+    vehicleProfile.End(Old3dsVehicleProfile::Collision);
+#endif
 
     DSGUpdateAndMove();
+#ifdef SRR2_OLD3DS_VEHICLE_PROFILE
+    vehicleProfile.End(Old3dsVehicleProfile::SceneMove);
+#endif
 
     //--------------------------
     // do some gear and rpm shit
@@ -3734,7 +3778,12 @@ void Vehicle::Display()
     //p3d::pddi->SetFillMode(PDDI_FILL_WIRE);        
 
       
+    {
+#ifdef SRR2_OLD_3DS
+        Old3dsOperationScope poseTiming(O3_VEHICLEPOSE);
+#endif
     mPoseEngine->End();     // copy over what we're gonna render
+    }
     mGeometryVehicle->Display();
 
 

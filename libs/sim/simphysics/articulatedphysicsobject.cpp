@@ -1,8 +1,29 @@
+#include <main/old3dshot.h>
 
 #include "simphysics/articulatedphysicsobject.hpp"
 
 #include "p3d/anim/skeleton.hpp"
 #include <string.h>
+#ifdef SRR2_OLD3DS_VEHICLE_JOINT_PIPELINE
+#include <typeinfo>
+#include <cstdio>
+static unsigned jointPipelinePasses=0, jointPipelineHits=0, jointPipelineMisses=0, jointPipelineFallbacks=0;
+extern "C" void old3dsDumpJointPipeline()
+{
+    std::printf("OLD3DS_JOINT_PIPELINE passes=%u hits=%u misses=%u fallbacks=%u stack_bytes=%u\n",
+        jointPipelinePasses,jointPipelineHits,jointPipelineMisses,jointPipelineFallbacks,
+        (unsigned)sizeof(sim::jointPipeline::View<rmt::Matrix>));
+}
+#endif
+#ifdef SRR2_OLD3DS_INERTIA_TENSOR_CACHE
+#include <cstdio>
+static unsigned inertiaTensorCalls=0,inertiaTensorHits=0;
+extern "C" void old3dsDumpInertiaTensors()
+{
+    std::printf("INERTIA_TENSOR calls=%u hits=%u bytes_per_joint=%u\n",
+        inertiaTensorCalls,inertiaTensorHits,(unsigned)sizeof(sim::inertiaTensorCache::Cache));
+}
+#endif
 #include "simcommon/simutility.hpp"
 
 using namespace RadicalMathLibrary;
@@ -101,6 +122,15 @@ void ArticulatedPhysicsObject::SetSkeletonInfo(SkeletonInfo* inSkeletonInfo)
 
 void ArticulatedPhysicsObject::InitFromPose()
 {
+#ifdef SRR2_OLD3DS_VEHICLE_JOINT_PIPELINE
+    // Only these exact SetTransform implementations have been audited as pose
+    // readers. Unknown subclasses may write the pose or invoke external callbacks.
+    mJointPipelineSafe = mPose->GetJointCount() <= 64;
+    for(int i=0; i<mNumSimJoints && mJointPipelineSafe; ++i)
+        mJointPipelineSafe = typeid(*mSimJoints[i])==typeid(PhysicsJoint0D) ||
+            typeid(*mSimJoints[i])==typeid(PhysicsJoint1D) ||
+            typeid(*mSimJoints[i])==typeid(PhysicsJoint3D);
+#endif
     // not all the pose joint has physicsjoint => mNumSimJoints < pose->GetNumJoint()
     // we need a quick access from poseJointIndex to physicsJoint.
     tSkeleton* skel = mPose->GetSkeleton();
@@ -257,7 +287,11 @@ void ArticulatedPhysicsObject::JointAxis(int inIndex, rmt::Vector& axis, bool re
 {
     if (recompute || mJoints[inIndex] == NULL)
     {
+#ifdef SRR2_OLD3DS_VEHICLE_JOINT_PIPELINE
+        JointTransform(inIndex).RotateVector(JointInfo(inIndex).mAxis, &axis);
+#else
         mPose->GetJoint(inIndex)->GetWorldMatrix().RotateVector(JointInfo(inIndex).mAxis, &axis);
+#endif
     }
     else
         axis = mJoints[inIndex]->mAxis;
@@ -321,6 +355,7 @@ void ArticulatedPhysicsObject::SetClone(ArticulatedPhysicsObject* clone, SimStat
     mTimeStep = 0;
 }
 
+OLD3DS_HOT_PATH
 void ArticulatedPhysicsObject::Update(float inDt)
 {
     mTimeStep = inDt;
@@ -350,15 +385,30 @@ void ArticulatedPhysicsObject::Update(float inDt)
     }
 }
 
+OLD3DS_HOT_PATH
 void ArticulatedPhysicsObject::UpdatePoseMatrix()
 {
     if (!ConvertedToRigidBody())
     {
+#ifdef SRR2_OLD3DS_VEHICLE_JOINT_PIPELINE
+        jointPipeline::View<Matrix> resolved;
+        jointPipeline::Scope<Matrix> scope(mJointTransformView,mJointPipelineSafe?&resolved:NULL);
+        if(mJointPipelineSafe) ++jointPipelinePasses;
+        else ++jointPipelineFallbacks;
+#endif
         for (int i=0; i<mNumSimJoints; i++)
         {
+#ifdef SRR2_OLD3DS_VEHICLE_JOINT_PIPELINE
+            mSimJoints[i]->SetTransform(JointTransform(mSimJoints[i]->mIndex));
+#else
             mSimJoints[i]->SetTransform(mPose->GetJoint(mSimJoints[i]->mIndex)->GetWorldMatrix());
+#endif
         }
         ComputeInertiaMatrix();
+#ifdef SRR2_OLD3DS_VEHICLE_JOINT_PIPELINE
+        jointPipelineHits+=resolved.hits;
+        jointPipelineMisses+=resolved.misses;
+#endif
     }
 }
 
@@ -372,6 +422,7 @@ void ArticulatedPhysicsObject::UpdateForPhysicsProperties()
     }
 }
 
+OLD3DS_HOT_PATH
 void ArticulatedPhysicsObject::ComputeInertiaMatrix()
 {
     if (mMass > 0 && mTimeSinceComputeInertiaMatrix >= mTimeComputeInertiaMatrix && !ConvertedToRigidBody())
@@ -414,8 +465,14 @@ void ArticulatedPhysicsObject::ComputeInertiaMatrix()
                 v.Add(mSimJoints[i]->mDCMPosition, mSimJoints[i]->Origin());
                 v.Sub(mCMPosition);
                 ComputePointMassInertia(tmp, v, mSimJoints[i]->mLocalMass);
+#ifdef SRR2_OLD3DS_INERTIA_TENSOR_CACHE
+                ++inertiaTensorCalls;
+                inertiaTensorHits+=mSimJoints[i]->mLocalInertiaRotation.Apply(jtmp,
+                    mSimJoints[i]->mLocalInertiaMatrix0,JointTransform(i));
+#else
                 jtmp = mSimJoints[i]->mLocalInertiaMatrix0;
                 jtmp.TransformSelf(JointTransform(i));
+#endif
             
                 tmp.Add(jtmp);
                 mInertiaMatrix.Add(tmp);

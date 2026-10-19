@@ -66,6 +66,10 @@ protected:
     
 private:
     
+#ifdef SRR2_OLD3DS_POSE_REUSE
+    // Clean() can deliberately clear flags without evaluating cached worlds.
+    bool m_ReuseWorlds = false;
+#endif
     tSkeleton* m_Skeleton;
     Joint* m_Joints;
     Joint** m_Children;

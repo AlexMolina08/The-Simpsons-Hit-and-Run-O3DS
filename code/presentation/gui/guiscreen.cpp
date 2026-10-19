@@ -223,11 +223,31 @@ CGuiScreen::CGuiScreen
             // resize the button icon
             //
             Scrooby::Sprite* icon = m_buttonIcons[ BUTTON_ICON_ACCEPT ]->GetSprite( "Accept" );
+#ifdef SRR2_OLD_3DS
+            // PC keycap sprites are unreadable on the 400-pixel display.
+            // Use the console's actual button name in the existing label.
+            if(icon) icon->SetVisible(false);
+            Scrooby::Text* buttonText = m_buttonIcons[ BUTTON_ICON_ACCEPT ]->GetText("Accept");
+            if(buttonText)
+            {
+                buttonText->SetTextMode(Scrooby::TEXT_OVERLAP);
+                buttonText->SetString(0, "A Select");
+                Scrooby::Group* label = m_buttonIcons[ BUTTON_ICON_ACCEPT ];
+                for(unsigned childIndex = 0; childIndex < label->Size(); ++childIndex)
+                {
+                    Scrooby::Drawable* child = label->GetChildDrawable(childIndex);
+                    if(child && child != buttonText &&
+                       (dynamic_cast<Scrooby::Sprite*>(child) || dynamic_cast<Scrooby::Text*>(child)))
+                        child->SetVisible(false);
+                }
+            }
+#else
             if( icon )
             {
                 icon->ResetTransformation();
                 icon->ScaleAboutCenter( BUTTON_SCALE );
             }
+#endif
 #else
             // add text outline to accept text
             //
@@ -252,11 +272,31 @@ CGuiScreen::CGuiScreen
             // resize the button icon
             //
             Scrooby::Sprite* icon = m_buttonIcons[ BUTTON_ICON_BACK ]->GetSprite( "Back" );
+#ifdef SRR2_OLD_3DS
+            // PC keycap sprites are unreadable on the 400-pixel display.
+            // Use the console's actual button name in the existing label.
+            if(icon) icon->SetVisible(false);
+            Scrooby::Text* buttonText = m_buttonIcons[ BUTTON_ICON_BACK ]->GetText("Back");
+            if(buttonText)
+            {
+                buttonText->SetTextMode(Scrooby::TEXT_OVERLAP);
+                buttonText->SetString(0, "B Back");
+                Scrooby::Group* label = m_buttonIcons[ BUTTON_ICON_BACK ];
+                for(unsigned childIndex = 0; childIndex < label->Size(); ++childIndex)
+                {
+                    Scrooby::Drawable* child = label->GetChildDrawable(childIndex);
+                    if(child && child != buttonText &&
+                       (dynamic_cast<Scrooby::Sprite*>(child) || dynamic_cast<Scrooby::Text*>(child)))
+                        child->SetVisible(false);
+                }
+            }
+#else
             if( icon )
             {
                 icon->ResetTransformation();
                 icon->ScaleAboutCenter( BUTTON_SCALE );
             }
+#endif
 #else
             // add text outline to accept text
             //
@@ -839,7 +879,7 @@ CGuiScreen::RestoreButtons()
         if( m_buttonIcons[ i ] != NULL )
         {
             m_buttonIcons[ i ]->SetVisible( true );
-#if defined( RAD_WIN32 ) && !defined( RAD_PC )
+#if defined( RAD_WIN32 ) && !defined( RAD_PC ) && !defined( SRR2_OLD_3DS )
             Scrooby::BoundedDrawable* buttonIcon = dynamic_cast< Scrooby::BoundedDrawable* >( m_buttonIcons[ i ]->GetChildDrawable( 1 ) );
             if( buttonIcon )
             {

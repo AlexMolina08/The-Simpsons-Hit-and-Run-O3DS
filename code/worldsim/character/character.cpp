@@ -1,3 +1,4 @@
+#include <main/old3dshot.h>
 #include <worldsim/character/character.h>
 
 #include <choreo/animation.hpp>
@@ -1494,6 +1495,7 @@ Return:         void
 
 =============================================================================
 */
+OLD3DS_HOT_PATH
 void Character::PreSimUpdate( float timeins )
 {
 #ifdef RAD_DEBUG
@@ -1998,6 +2000,7 @@ Return:         void
 
 =============================================================================
 */
+OLD3DS_HOT_PATH
 void Character::PostSimUpdate( float timeins )
 {
     TestInAnyonesFrustrum();
@@ -4853,6 +4856,9 @@ void Character::Display(void)
         return;
     }
     
+#ifdef SRR2_OLD_3DS
+    Old3dsOperationScope poseTiming(O3_CHARACTERPREP);
+#endif
     if( mbNeedChoreoUpdate)
     {
         mpPuppet->UpdatePose( );
@@ -4919,7 +4925,13 @@ void Character::Display(void)
     for(int i = 0; i < pose->GetNumJoint(); i++)
     {
         rmt::Matrix tmp;
+#ifdef SRR2_OLD3DS_JOINT_TRANSLATE
+        // Row-vector affine convention: A * T changes only translation.
+        tmp = pose->GetJoint(i)->worldMatrix;
+        tmp.Row(3).Add(backToTheOrigin.Row(3));
+#else
         tmp.Mult(pose->GetJoint(i)->worldMatrix, backToTheOrigin);
+#endif
         if(shouldScale)
         {
             rmt::Matrix scale;
@@ -4939,6 +4951,9 @@ void Character::Display(void)
     p3d::stack->Push();
     p3d::stack->Translate(rootPos);
 
+#ifdef SRR2_OLD_3DS
+    poseTiming.Finish();
+#endif
     mpCharacterRenderable->Display( mSphere.centre, pose );
 
     p3d::stack->Pop();

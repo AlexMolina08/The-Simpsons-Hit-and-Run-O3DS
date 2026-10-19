@@ -31,6 +31,15 @@
 class StaticEntityDSG : public IEntityDSG
 {
 public:
+#ifdef SRR2_OLD_3DS
+    virtual unsigned Old3dsCategory() const { return O3_STATIC; }
+#endif
+#ifdef SRR2_OLD3DS_MATERIAL_QUEUE
+   bool MaterialQueueSafe() const;
+#endif
+#ifdef SRR2_OLD3DS_STATIC_BATCH
+   bool StaticBatchSource(pddiShader*& shader,pddiPrimBuffer*& buffer);
+#endif
    StaticEntityDSG();
    ~StaticEntityDSG();
 

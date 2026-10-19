@@ -5,9 +5,16 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#ifdef RAD_MOVIEPLAYER_CTR_SOFTWARE
+#include "ctrsoftwaredecoder.hpp"
+#endif
 
 #include <raddebug.hpp>
 #include <radmovie2.hpp>
+#ifdef RAD_MOVIEPLAYER_CTR_SOFTWARE
+bool radMovieUploadSoftwareFrame(IRadMovieRenderStrategy*, const unsigned char*, const unsigned char*,
+    const unsigned char*, unsigned, unsigned, unsigned, unsigned);
+#endif
 #include <radobject.hpp>
 
 extern "C" int  radSoundCtrAllocChannel( void );
@@ -36,7 +43,11 @@ namespace
         u32  videoBytes;
     };
 
+#ifdef RAD_MOVIEPLAYER_CTR_SOFTWARE
+    const u32 MOVIE_VERSION      = 2;
+#else
     const u32 MOVIE_VERSION      = 1;
+#endif
     const u32 NAL_START_CAPACITY = 32 * 1024;
     const int AUDIO_BUFFERS      = 4;
     const u32 AUDIO_BUFFER_BYTES = 8 * 1024;
@@ -57,6 +68,7 @@ namespace
         strncat( out, ".3dm", outSize - strlen( out ) - 1 );
     }
 
+#ifndef RAD_MOVIEPLAYER_CTR_SOFTWARE
     bool HasDecoder( void )
     {
         s64 emulator = 0;
@@ -95,6 +107,7 @@ namespace
 
         return ( R_SUCCEEDED( rcRefs ) && byRefs > 0 ) ? byRefs : 0;
     }
+#endif
 }
 
 class radCtrMoviePlayer
@@ -138,6 +151,11 @@ class radCtrMoviePlayer
 
     private:
 
+#ifdef RAD_MOVIEPLAYER_CTR_SOFTWARE
+    SoftwareMovieDecoder* m_SoftwareVideo;
+    SoftwareMovieFrame m_SoftwareFrame;
+    u32 m_FramesPresented;
+#endif
     bool OpenFiles( void );
     void CloseFiles( void );
     bool StartAudio( void );
@@ -230,6 +248,11 @@ radCtrMoviePlayer::radCtrMoviePlayer( void )
     m_Volume( 1.0f ),
     m_Pan( 0.0f )
 {
+#ifdef RAD_MOVIEPLAYER_CTR_SOFTWARE
+    m_SoftwareVideo = NULL;
+    m_FramesPresented = 0;
+    memset(&m_SoftwareFrame, 0, sizeof(m_SoftwareFrame));
+#endif
     m_Path[ 0 ] = '\0';
     memset( &m_Header, 0, sizeof( m_Header ) );
     memset( &m_Config, 0, sizeof( m_Config ) );
@@ -286,6 +309,9 @@ void radCtrMoviePlayer::Load( const char * pFileName, unsigned int audioTrackInd
     m_State = Loading;
     ConvertedName( pFileName, m_Path, sizeof( m_Path ) );
 
+#ifdef RAD_MOVIEPLAYER_CTR_SOFTWARE
+    m_FramesPresented = 0;
+#endif
     m_FramesDecoded  = 0;
     m_FrameReady     = false;
     m_PresentationMs = 0;
@@ -309,6 +335,51 @@ void radCtrMoviePlayer::Load( const char * pFileName, unsigned int audioTrackInd
         return;
     }
 
+#ifdef RAD_MOVIEPLAYER_CTR_SOFTWARE
+    if(m_Header.width > 400 || m_Header.height > 240 ||
+       (u64)m_Header.fpsNum > 30ull * m_Header.fpsDen || m_Header.frameCount == 0 ||
+       (m_Header.width & 7) || (m_Header.height & 7) ||
+       m_Header.audioOffset < sizeof(MovieHeader) ||
+       (u64)m_Header.audioOffset + m_Header.audioBytes > m_Header.videoOffset ||
+       m_Header.videoBytes < 7 || m_Header.audioBytes % 4 ||
+       (m_Header.audioBytes && (m_Header.audioRate != 32000 || m_Header.audioChannels != 2)))
+    {
+        Fail();
+        return;
+    }
+    if(fseek(m_Video, 0, SEEK_END) != 0 ||
+       (u64)m_Header.videoOffset + m_Header.videoBytes > (u64)ftell(m_Video))
+    {
+        Fail();
+        return;
+    }
+    m_VideoPos = m_Header.videoOffset;
+    if(fseek(m_Video, (long)m_VideoPos, SEEK_SET) != 0)
+    {
+        Fail();
+        return;
+    }
+    // Validate the MPEG sequence dimensions before the decoder allocates frames.
+    u8 sequence[7];
+    if(fread(sequence, 1, sizeof(sequence), m_Video) != sizeof(sequence) ||
+       memcmp(sequence, "\0\0\1\xb3", 4) != 0 ||
+       (((unsigned)sequence[4] << 4) | (sequence[5] >> 4)) != m_Header.width ||
+       (((unsigned)(sequence[5] & 15) << 8) | sequence[6]) != m_Header.height)
+    {
+        Fail();
+        return;
+    }
+    fseek(m_Video, (long)m_VideoPos, SEEK_SET);
+    m_SoftwareVideo = CreateSoftwareMovieDecoder(m_Header.width, m_Header.height);
+    if(!m_SoftwareVideo)
+    {
+        Fail();
+        return;
+    }
+    printf("OLD3DS_MOVIE load path=%s width=%u height=%u frames=%lu fps=%.3f\n",
+        m_Path, m_Header.width, m_Header.height, (unsigned long)m_Header.frameCount,
+        (double)m_Header.fpsNum / m_Header.fpsDen);
+#else
     if( !HasDecoder( ) )
     {
         Fail( );
@@ -368,10 +439,16 @@ void radCtrMoviePlayer::Load( const char * pFileName, unsigned int audioTrackInd
     m_VideoPos = m_Header.videoOffset;
     fseek( m_Video, (long) m_VideoPos, SEEK_SET );
 
+#endif
+
     if( audioTrackIndex != radMovie_NoAudioTrack && m_Header.audioBytes > 0 &&
         m_Header.audioRate > 0 && m_Header.audioChannels > 0 )
     {
-        StartAudio( );
+        const bool audioStarted = StartAudio();
+#ifdef RAD_MOVIEPLAYER_CTR_SOFTWARE
+        printf("OLD3DS_MOVIE audio started=%d rate=%lu channels=%u\n", audioStarted,
+            (unsigned long)m_Header.audioRate, m_Header.audioChannels);
+#endif
     }
 
     m_refRenderStrategy->ChangeParameters( m_Header.width, m_Header.height );
@@ -396,6 +473,10 @@ void radCtrMoviePlayer::Fail( void )
 void radCtrMoviePlayer::FreeResources( void )
 {
     StopAudio( );
+#ifdef RAD_MOVIEPLAYER_CTR_SOFTWARE
+    if(m_SoftwareVideo) { DestroySoftwareMovieDecoder(m_SoftwareVideo); m_SoftwareVideo = NULL; }
+    memset(&m_SoftwareFrame, 0, sizeof(m_SoftwareFrame));
+#endif
     if( m_MvdUp )
     {
         mvdstdExit( );
@@ -412,6 +493,11 @@ void radCtrMoviePlayer::Unload( void )
 {
     if( m_State != NoData )
     {
+#ifdef RAD_MOVIEPLAYER_CTR_SOFTWARE
+        printf("OLD3DS_MOVIE unload frame=%lu expected=%lu presented=%lu elapsed_ms=%llu\n",
+            (unsigned long)m_FramesDecoded, (unsigned long)m_Header.frameCount, (unsigned long)m_FramesPresented,
+            (unsigned long long)Elapsed());
+#endif
         FreeResources( );
         m_State = NoData;
     }
@@ -627,6 +713,25 @@ u64 radCtrMoviePlayer::Elapsed( void ) const
 
 bool radCtrMoviePlayer::DecodeFrame( void )
 {
+#ifdef RAD_MOVIEPLAYER_CTR_SOFTWARE
+    if(!m_SoftwareVideo || m_FramesDecoded >= m_Header.frameCount) return false;
+    const u64 beginTick = svcGetSystemTick();
+    if(!DecodeSoftwareMovieFrame(m_SoftwareVideo, m_Video,
+        m_Header.videoOffset + m_Header.videoBytes, &m_VideoPos, &m_SoftwareFrame))
+    {
+        printf("OLD3DS_MOVIE end frame=%lu expected=%lu position=%lu end=%lu\n",
+            (unsigned long)m_FramesDecoded, (unsigned long)m_Header.frameCount,
+            (unsigned long)m_VideoPos, (unsigned long)(m_Header.videoOffset + m_Header.videoBytes));
+        return false;
+    }
+    ++m_FramesDecoded;
+    if(m_FramesDecoded == 1 || m_FramesDecoded % 150 == 0)
+        printf("OLD3DS_MOVIE decode frame=%lu decode_ms=%.2f elapsed_ms=%llu\n",
+            (unsigned long)m_FramesDecoded,
+            (svcGetSystemTick() - beginTick) * 1000.0 / SYSCLOCK_ARM11,
+            (unsigned long long)Elapsed());
+    return true;
+#else
     for( ;; )
     {
         u32 size = 0;
@@ -672,13 +777,31 @@ bool radCtrMoviePlayer::DecodeFrame( void )
         m_FramesDecoded++;
         return true;
     }
+#endif
 }
 
 void radCtrMoviePlayer::CopyFrameToStrategy( void )
 {
     const u32 w = m_Header.width;
     const u32 h = m_Header.height;
+#ifdef RAD_MOVIEPLAYER_CTR_SOFTWARE
+    const u64 uploadTick = svcGetSystemTick();
+    if(m_SoftwareFrame.y && radMovieUploadSoftwareFrame(m_refRenderStrategy,
+        m_SoftwareFrame.y, m_SoftwareFrame.cr, m_SoftwareFrame.cb,
+        w, h, m_SoftwareFrame.yPitch, m_SoftwareFrame.chromaPitch))
+    {
+        if(m_FramesDecoded == 1 || m_FramesDecoded % 150 == 0)
+            printf("OLD3DS_MOVIE upload frame=%lu convert_upload_ms=%.2f\n", (unsigned long)m_FramesDecoded,
+                (svcGetSystemTick() - uploadTick) * 1000.0 / SYSCLOCK_ARM11);
+    }
+    else
+    {
+        printf("OLD3DS_MOVIE upload_failed frame=%lu\n", (unsigned long)m_FramesDecoded);
+    }
+#else
+#ifndef RAD_MOVIEPLAYER_CTR_SOFTWARE
     GSPGPU_InvalidateDataCache( m_Out, w * h * 2 );
+#endif
 
     m_refRenderStrategy->ResetDestinations( );
 
@@ -701,6 +824,7 @@ void radCtrMoviePlayer::CopyFrameToStrategy( void )
         }
         m_refRenderStrategy->UnlockDestination( );
     }
+#endif
 }
 
 void radCtrMoviePlayer::Service( void )
@@ -747,6 +871,9 @@ void radCtrMoviePlayer::Service( void )
 bool radCtrMoviePlayer::Render( void )
 {
     const bool ret = m_refRenderStrategy->Render( );
+#ifdef RAD_MOVIEPLAYER_CTR_SOFTWARE
+    if(m_FrameReady && ret) ++m_FramesPresented;
+#endif
     m_FrameReady = false;
     return ret;
 }

@@ -1,0 +1,9 @@
+mode=realtime
+seconds=25
+warmup=8
+detail=0
+validate=0
+seed=231171
+step_ms=67
+reload=0
+hold=0

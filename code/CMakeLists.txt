@@ -1,3 +1,18 @@
+if(SRR2_OLD3DS_GPU_LISTS)
+    add_link_options(-Wl,--wrap=GPUCMD_Split)
+endif()
+if(SRR2_OLD3DS_RENDER_WORKER)
+    add_link_options(-Wl,--wrap=GPUCMD_Add -Wl,--wrap=GPUCMD_AddRawCommands -Wl,--wrap=GPUCMD_Split -Wl,--wrap=C3D_FrameSplit -Wl,--wrap=C3D_FrameEnd)
+endif()
+if(SRR2_OLD3DS_NATIVE_CONTEXT AND NOT SRR2_OLD3DS_SUBMIT_PROFILE)
+    add_link_options(-Wl,--wrap=C3Di_UpdateContext)
+endif()
+if(SRR2_OLD3DS_NATIVE_BENCH AND SRR2_OLD3DS_SUBMIT_PROFILE)
+    add_link_options(-Wl,--wrap=C3Di_UpdateContext -Wl,--wrap=C3D_UpdateUniforms -Wl,--wrap=shaderProgramConfigure)
+endif()
+if(SRR2_OLD3DS_CAUSAL_DIAG)
+    add_link_options(-Wl,--wrap=gfxScreenSwapBuffers -Wl,--wrap=gspSetEventCallback)
+endif()
 set(SRR2_SOURCES
 	"ai/actionbuttonhandler.cpp"
 	"ai/actionbuttonmanager.cpp"
@@ -139,6 +154,10 @@ set(SRR2_SOURCES
 	"main/linearlock3ds.cpp"
 	"main/commandlineoptions.cpp"
 	"main/game.cpp"
+    "main/old3dsexperiment.cpp"
+    "main/nativebench.cpp"
+    "main/old3dsmainprofile.cpp"
+    "main/nativesubmitprofile.cpp"
 	"main/pchsrr2.cpp"
 	"main/singletons.cpp"
 	"main/tuidunaligned.cpp"

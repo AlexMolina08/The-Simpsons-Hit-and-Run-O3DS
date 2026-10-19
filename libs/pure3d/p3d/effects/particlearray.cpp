@@ -12,6 +12,9 @@
 #include <p3d/effects/particlepool.hpp>
 #include <p3d/effects/particlearray.hpp>
 #include <string.h>
+#ifdef SRR2_OLD3DS_SPRITE_UPDATE
+#include <typeinfo>
+#endif
 
 //*****************************************************************************
 //
@@ -126,7 +129,17 @@ void tParticleArray::UpdateParticles(float deltaTime, float deltaFrame, tBaseEmi
     }
     for (int i = 0; i < numLiveParticles; i++)
     {
+#ifdef SRR2_OLD3DS_SPRITE_UPDATE
+        // Only the exact built-in particle can use the qualified call. Mutable
+        // particle arrays and derived particle callbacks retain virtual dispatch.
+        tBaseParticle* particle = liveParticles[i];
+        if(typeid(*particle) == typeid(tSpriteParticle))
+            static_cast<tSpriteParticle*>(particle)->tSpriteParticle::Update(deltaTime,deltaFrame,emitter);
+        else
+            particle->Update(deltaTime,deltaFrame,emitter);
+#else
         liveParticles[i]->Update(deltaTime,deltaFrame,emitter);
+#endif
     }
 }
 

@@ -14,6 +14,9 @@ namespace sim
 {
 
 class CollisionObject;
+#ifdef SRR2_OLD3DS_PARALLEL_COLLISION
+class ParallelCollisionState;
+#endif
 
 typedef unsigned CollisionManagerAttributes;
 const CollisionManagerAttributes CM_DetectIfMoving     = 1<<1;
@@ -58,6 +61,34 @@ public:
     TArray<Collision>* GetCollisionList(int inArea = 0) { return &mAreaArray[inArea].mCollisionList; }
     TList<CollisionObject*>* GetCollisionObjectList(int inArea = 0) { return &mAreaArray[inArea].mObjectList; }
     TArray<CollisionObjectPair>* GetCollisionObjectPairList(int inArea = 0) { return &mAreaArray[inArea].mPairList; }
+
+    // Diagnostic workload summary: the number of areas DetectCollision() would
+    // actually visit, and the total candidate pairs in those areas. Read-only.
+    int GetActivatedAreaCount()
+    {
+        int count = 0;
+        for (int i = 0; i < mCacheActivatedArea.GetSize(); ++i)
+        {
+            if (mAreaArray[mCacheActivatedArea[i]].mActivated)
+            {
+                ++count;
+            }
+        }
+        return count;
+    }
+
+    unsigned GetActivatedPairCount()
+    {
+        unsigned total = 0;
+        for (int i = 0; i < mCacheActivatedArea.GetSize(); ++i)
+        {
+            if (mAreaArray[mCacheActivatedArea[i]].mActivated)
+            {
+                total += (unsigned)mAreaArray[mCacheActivatedArea[i]].mPairList.GetSize();
+            }
+        }
+        return total;
+    }
     
     // adds in the list the collision object interfering with the ray and ordered according to their distance to the source.
     // use RayIntersectionInfo::SetMethod(method) to set the method
@@ -93,6 +124,10 @@ protected:
     ~CollisionManager();
     
     void EndDetectCollision();
+#ifdef SRR2_OLD3DS_PARALLEL_COLLISION
+    ParallelCollisionState* mParallelCollision;
+    bool DetectParallel(float dt,float gameTime,bool printOut);
+#endif
 
     CollisionDetector mCollisionDetector;
     ImpulseBasedCollisionSolver mImpulseBasedCollisionSolver;

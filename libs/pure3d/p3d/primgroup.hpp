@@ -5,6 +5,9 @@
 
 #ifndef _PRIMGROUP_HPP_
 #define _PRIMGROUP_HPP_
+#ifdef SRR2_OLD3DS_BONE_USAGE
+#include <p3d/anim/boneusage.hpp>
+#endif
 
 #include <p3d/p3dtypes.hpp>
 #include <p3d/refcounted.hpp>
@@ -178,6 +181,17 @@ protected:
 #ifndef RAD_PS2
 class tPrimGroupSkinnedPC : public tPrimGroupSkinnedOptimised
 {
+#ifdef SRR2_OLD3DS_GPU_SKIN_SUPPORT
+public:
+    void PrepareGpuSkin(bool selected, bool pedestrian = false, bool named = false);
+#ifdef SRR2_OLD3DS_DEFERRED_SKIN
+    bool CanDeferSkin(const rmt::Matrix* base,unsigned joints) const;
+#endif
+#ifdef SRR2_OLD3DS_BONE_USAGE
+    bool CollectBoneUsage(p3dSkin::BoneUsage& usage,const rmt::Matrix* base) const;
+#endif
+private:
+#endif
     tPrimGroupSkinnedPC(int nVertex, unsigned format, int nIndex, bool allocate = false);
     virtual ~tPrimGroupSkinnedPC();
 

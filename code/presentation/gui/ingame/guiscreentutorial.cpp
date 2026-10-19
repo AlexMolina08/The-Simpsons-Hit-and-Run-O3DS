@@ -84,6 +84,11 @@ CGuiScreenTutorial::CGuiScreenTutorial
     rAssert( m_tutorialMessage != NULL );
     m_tutorialMessage->SetSpriteMode( Scrooby::SPRITE_BITMAP_TEXT );
     m_tutorialMessage->CreateBitmapTextBuffer( MAX_TUTORIAL_MESSAGE_LENGTH );
+#ifdef SRR2_OLD_3DS
+    m_nativeTutorialMessage = iconAndMessage->GetText("TutorialMessage3DS");
+    rAssert(m_nativeTutorialMessage);
+    m_tutorialMessage->SetVisible(false);
+#endif
 #ifdef RAD_WIN32
     m_tutorialMessage->ScaleAboutCenter( 0.25f );
     m_tutorialMessage->SetBitmapTextLineSpacing( 30 );
@@ -96,6 +101,12 @@ CGuiScreenTutorial::CGuiScreenTutorial
     iconAndMessage->Translate( 0, 15 );
 #endif // PAL
 
+#ifdef SRR2_OLD_3DS
+    Scrooby::Page* continuePage = m_pScroobyScreen->GetPage("Continue");
+    if(continuePage)
+        continuePage->GetGroup("AcceptLabel")->GetText("Accept")->SetString(0, "A Continue");
+#endif
+
     m_disableTutorial = pPage->GetGroup( "DisableTutorial" );
     rAssert( m_disableTutorial != NULL );
 
@@ -104,12 +115,22 @@ CGuiScreenTutorial::CGuiScreenTutorial
     {
         disableTutorial->SetDisplayOutline( true );
         disableTutorial->SetTextMode( Scrooby::TEXT_WRAP );
+#ifdef SRR2_OLD_3DS
+        disableTutorial->SetString(0, "X: Hide tutorials");
+        for(unsigned child = 0; child < m_disableTutorial->Size(); ++child)
+            if(m_disableTutorial->GetChildDrawable(child) != disableTutorial)
+                m_disableTutorial->GetChildDrawable(child)->SetVisible(false);
+#endif
     }
 #ifdef RAD_WIN32
     Scrooby::Sprite* disableTutorialIcon = m_disableTutorial->GetSprite( "DisableTutorial" );
     if( disableTutorialIcon != NULL )
     {
+#ifdef SRR2_OLD_3DS
+        disableTutorialIcon->SetVisible(false);
+#else
         disableTutorialIcon->ScaleAboutCenter( 0.375f );
+#endif
     }
 #endif
 
@@ -117,6 +138,11 @@ CGuiScreenTutorial::CGuiScreenTutorial
     if( pPageSmallBoard != NULL )
     {
         this->AutoScaleFrame( pPageSmallBoard );
+#ifdef SRR2_OLD_3DS
+        // The lower display needs room for larger, reflowed tutorial text.
+        Scrooby::Group* bottomFrame=pPageSmallBoard->GetGroup("Frame");
+        if( bottomFrame ) bottomFrame->ScaleAboutCenter(1.25f,1.3f,1.0f);
+#endif
 
 #ifdef PAL
         Scrooby::Group* frame = pPageSmallBoard->GetGroup( "Frame" );
@@ -205,7 +231,11 @@ void CGuiScreenTutorial::HandleMessage(	eGuiMessage message,
     #endif // !FINAL
 */
                 {
+#ifdef SRR2_OLD_3DS
+                    this->SetButtonVisible( BUTTON_ICON_ACCEPT, true );
+#else
                     this->SetButtonVisible( BUTTON_ICON_ACCEPT, !GetTutorialManager()->IsDialogPlaying() );
+#endif
 
 //                    rAssert( m_disableTutorial != NULL );
 //                    m_disableTutorial->SetVisible( !GetTutorialManager()->IsDialogPlaying() );
@@ -241,13 +271,19 @@ void CGuiScreenTutorial::HandleMessage(	eGuiMessage message,
             }
             case GUI_MSG_CONTROLLER_SELECT:
             {
-#ifdef WAIT_UNTIL_DIALOG_DONE
+#if defined(WAIT_UNTIL_DIALOG_DONE) && !defined(SRR2_OLD_3DS)
                 if( !this->IsButtonVisible( BUTTON_ICON_ACCEPT ) )
                 {
                     // ignore input
                     //
                     return;
                 }
+#endif
+#ifdef SRR2_OLD_3DS
+                // A dismisses this panel even when tutorial speech cannot finish.
+                if(GetTutorialManager()->IsDialogPlaying() && !CommandLineOptions::Get(CLO_MUTE))
+                    GetEventManager()->TriggerEvent(EVENT_CONVERSATION_SKIP);
+                GetTutorialManager()->MarkDialogFinished();
 #endif
                 GetEventManager()->TriggerEvent( EVENT_FE_MENU_SELECT ); // sound effect
 
@@ -318,7 +354,23 @@ void CGuiScreenTutorial::InitIntro()
     }
 
     rAssert( m_tutorialMessage != NULL );
+#ifdef SRR2_OLD_3DS
+    P3D_UNICODE nativeText[MAX_TUTORIAL_MESSAGE_LENGTH];
+    unsigned length = 0;
+    bool previousBreak = false;
+    for(const P3D_UNICODE* c = text; c && *c && length + 1 < MAX_TUTORIAL_MESSAGE_LENGTH; ++c)
+    {
+        const bool lineBreak = *c == '\\';
+        if(!lineBreak || !previousBreak) nativeText[length++] = lineBreak ? '\n' : *c;
+        previousBreak = lineBreak;
+    }
+    nativeText[length] = 0;
+    UnicodeString message;
+    message.ReadUnicode(nativeText);
+    m_nativeTutorialMessage->SetString(0, message);
+#else
     m_tutorialMessage->SetBitmapText( text );
+#endif
 
 #ifdef WAIT_UNTIL_DIALOG_DONE
     this->SetButtonVisible( BUTTON_ICON_ACCEPT, false ); // hide by default

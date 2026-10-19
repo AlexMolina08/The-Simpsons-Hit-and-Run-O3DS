@@ -12,6 +12,14 @@ public:
    /////////////////////////////////////////
    // Constructors/Destructors
    /////////////////////////////////////////
+#ifdef SRR2_OLD3DS_QUERY_SCRATCH
+   // Storage belongs to the synchronous caller. Larger requests retain heap fallback.
+   ReserveArray(T* storage, int capacity) : mSize(capacity), mUseSize(0), mpData(storage), mBorrowed(true)
+   {
+      rAssert(storage != NULL && capacity > 0);
+   }
+#endif
+
    ~ReserveArray()
    {
       Clear();
@@ -19,10 +27,16 @@ public:
 
    ReserveArray() : mUseSize(0), mpData(NULL)
    {
+#ifdef SRR2_OLD3DS_QUERY_SCRATCH
+      mBorrowed = false;
+#endif
    }
 
    ReserveArray( int iSize ) : mUseSize(0), mpData(NULL)
    {
+#ifdef SRR2_OLD3DS_QUERY_SCRATCH
+      mBorrowed = false;
+#endif
       Allocate( iSize );
    }
 
@@ -107,6 +121,13 @@ public:
    void Allocate( int iSize )
    {
       rAssert( mUseSize == 0 );
+#ifdef SRR2_OLD3DS_QUERY_SCRATCH
+      if(mBorrowed && iSize <= mSize)
+      {
+         mUseSize = 0;
+         return;
+      }
+#endif
       //TODO: wha?
       if( !IsSetUp() )
          iSize += mUseSize;
@@ -131,10 +152,16 @@ public:
    {
       if( mpData != NULL )
       {
+#ifdef SRR2_OLD3DS_QUERY_SCRATCH
+         if(!mBorrowed)
+#endif
          delete[] mpData;
       }
       mpData = NULL;
       mUseSize = 0;
+#ifdef SRR2_OLD3DS_QUERY_SCRATCH
+      mBorrowed = false;
+#endif
    }
 
    bool IsSetUp()
@@ -161,6 +188,9 @@ private:
    //    -Not accessible
    //    -Use will error at Compile
    /////////////////////////////////////////
+#ifdef SRR2_OLD3DS_QUERY_SCRATCH
+   bool mBorrowed;
+#endif
    ReserveArray( const ReserveArray& iSource );
    ReserveArray& operator=( const ReserveArray& iSource );
 

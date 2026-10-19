@@ -1,3 +1,9 @@
+#ifdef SRR2_OLD3DS_MAIN_PROFILE
+#include <main/old3dsmainprofile.h>
+#else
+#define O3_MAIN_SCOPE(stage) ((void)0)
+#endif
+#include <main/old3dshot.h>
 
 #include "simcommon/simstatearticulated.hpp"
 #include "simcommon/dline2.hpp"
@@ -298,6 +304,7 @@ void SimStateArticulated::SetTransform(const rmt::Matrix& inTransform, float inD
     SimState::SetTransform(inTransform, inDt);
 }
 
+OLD3DS_HOT_PATH
 void SimStateArticulated::UpdateJointState(float inDt)
 {
     if (mSimulatedObject)
@@ -610,8 +617,10 @@ SimState* SimStateArticulated::CreateJointSimState(int inJoint, const char* inNa
         return NULL;
 }
 
+OLD3DS_HOT_PATH
 void SimStateArticulated::StoreJointState(float inDt)
 {
+    O3_MAIN_SCOPE(StoreJoints);
     for (int i=0; i<mPose->GetJointCount(); i++)
     {
         mJointState[i].StoreJointState(inDt);
@@ -814,6 +823,7 @@ void SimStateArticulated::JointState::DebugDisplay()
 {
 }
 
+OLD3DS_HOT_PATH
 void SimStateArticulated::JointState::StoreJointState(float dt)
 {
     if (dt == 0)
@@ -839,6 +849,7 @@ void SimStateArticulated::JointState::GetVelocity(const rmt::Vector& inPosition,
     oVelocity.Add(mVelocityState.mLinear);
 }
 
+OLD3DS_HOT_PATH
 void SimStateArticulated::JointState::UpdateVelocity()
 {
     if (!mVelocityUpdated)

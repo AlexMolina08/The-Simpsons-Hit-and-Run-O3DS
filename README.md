@@ -1,35 +1,46 @@
-# The Simpsons Hit & Run - New Nintendo 3DS
+# The Simpsons: Hit & Run for Nintendo 3DS
 
-A port of The Simpsons Hit & Run to the New Nintendo 3DS, using the data from the PC version of the game.
+A homebrew port for Nintendo 3DS, including the original 3DS and 2DS.
+You need your own copy of the PC game. Game assets and DSP firmware are not included.
 
-<img src="images/game.jpg" width="320">
+<img src="images/game.jpg" width="320" alt="The Simpsons: Hit & Run on Nintendo 3DS">
 
-You need a New 3DS or New 2DS XL and a copy of the PC game (the official release).
+## Original 3DS and 2DS
 
-## Building
+See [building and controls](docs/OLD3DS.md).
 
-Install [devkitPro](https://devkitpro.org/wiki/Getting_Started) with `3ds-dev`, `3ds-sdl` and `3ds-libpng`, and Python with `pip install imageio-ffmpeg`. Then:
+The original models use a single 400×240 gameplay view. The lower screen shows a
+TV menu with touch selection, a frame-synced gameplay map, and the original newspaper loading art.
+Performance varies by scene; demanding areas do not maintain 30 FPS.
 
+```sh
+python3 tools/3ds/setup_sd.py "/path/to/PC game" --old3ds
+bash tools/3ds/build_old3ds.sh
+cp out/old3ds/SimpsonsNTSC.3dsx sdcard/3ds/simpsons/
 ```
+
+Copy `sdcard/3ds` to the SD card root. Launch through the Homebrew Launcher.
+Sound requires your console's DSP firmware at `sd:/3ds/dspfirm.cdc`, dumped with DSP1.
+
+## New 3DS and New 2DS XL
+
+Install devkitPro with `3ds-dev`, `3ds-sdl` and `3ds-libpng`, plus Python and
+`imageio-ffmpeg`. On Windows:
+
+```bat
 build.bat "C:\Program Files (x86)\Vivendi Universal Games\The Simpsons Hit & Run"
 ```
 
-This converts the game data and movies into `sdcard/`, builds the game and puts `SimpsonsNTSC.3dsx` next to the data. Copy `sdcard/3ds` to the root of the SD card and launch it from the Homebrew Launcher.
+This builds the game and prepares its data under `sdcard/`.
+To prepare data without building:
 
-Sound needs `sd:/3ds/dspfirm.cdc`, dumped once with the DSP1 homebrew.
-
-## Preparing the data only
-
+```sh
+python3 tools/3ds/setup_sd.py "/path/to/PC game"
 ```
-python tools/3ds/setup_sd.py "C:\Program Files (x86)\Vivendi Universal Games\The Simpsons Hit & Run"
-```
-
-Converts the game data into `sdcard/` without building. Add `--3dsx SimpsonsNTSC.3dsx` to copy a built game in.
 
 ## Credits
 
-Based on [ZenoArrows' Switch and PS Vita port](https://github.com/ZenoArrows/The-Simpsons-Hit-and-Run).
-
+Based on [x2apic's New 3DS port](https://github.com/x2apic/The-Simpsons-Hit-and-Run-N3DS)
+and [ZenoArrows' Switch and PS Vita port](https://github.com/ZenoArrows/The-Simpsons-Hit-and-Run).
 Movie playback follows [REGTA-3DSPort-Complete](https://github.com/Epic0522/REGTA-3DSPort-Complete) by Epic0522.
-
-Built with devkitPro, libctru and citro3d.
+Built with devkitPro, libctru and Citro3D.

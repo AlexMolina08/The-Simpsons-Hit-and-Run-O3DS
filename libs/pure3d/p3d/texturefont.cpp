@@ -14,6 +14,10 @@
 #include <p3d/matrixstack.hpp>
 
 #include <string.h>
+#ifdef SRR2_OLD_3DS
+extern "C" int g_picaKeepFullSize;
+extern "C" int g_picaFontTexture;
+#endif
 static const unsigned TEXTURE_FONT_VERSION = 0;
 
 const unsigned int BACKGROUND_GLYPH_INDEX = 0;
@@ -244,6 +248,7 @@ tTextureFont::DisplayLine(const P3D_UNICODE* text, int formatting) const
 
     if (!stream)
     {
+        p3d::stack->Pop();
         return;
     }
     while ((text[currChar]) && (text[currChar]!=(P3D_UNICODE)'\n'))
@@ -415,6 +420,13 @@ tTextureFontLoader::LoadObject(tChunkFile* f, tEntityStore* store)
         shader->SetInt(PDDI_SP_FILTER,PDDI_FILTER_BILINEAR);
         shader->SetInt(PDDI_SP_ALPHATEST, 0);
     }
+#ifdef SRR2_OLD_3DS
+    // Loaded font shaders also need smooth coverage at native 240p. The PC
+    // alpha-test threshold can remove the thin edges of downscaled glyphs.
+    shader->SetInt(PDDI_SP_FILTER,PDDI_FILTER_BILINEAR);
+    shader->SetInt(PDDI_SP_BLENDMODE,PDDI_BLEND_ALPHA);
+    shader->SetInt(PDDI_SP_ALPHATEST,0);
+#endif
     font->SetShader(shader);
 
     font->fontSize = f->GetFloat();
@@ -438,7 +450,19 @@ tTextureFontLoader::LoadObject(tChunkFile* f, tEntityStore* store)
             case Pure3D::Texture::TEXTURE:
             {
                 P3DASSERT(currTex<font->numTextures);
+#ifdef SRR2_OLD_3DS
+                // Glyph atlases must retain their source resolution. Reducing an
+                // atlas also reduces every glyph before screen-space filtering.
+                const int previousFullSize = g_picaKeepFullSize;
+                const int previousFontTexture = g_picaFontTexture;
+                g_picaKeepFullSize = 1;
+                g_picaFontTexture = 1;
+#endif
                 tTexture* texture = loader->LoadTexture(f);
+#ifdef SRR2_OLD_3DS
+                g_picaKeepFullSize = previousFullSize;
+                g_picaFontTexture = previousFontTexture;
+#endif
                 tRefCounted::Assign(font->textures[currTex],texture);
                 currTex++;
                 break;

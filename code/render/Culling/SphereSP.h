@@ -53,6 +53,17 @@ public:
    virtual void SetTo( Bounds3f& irBounds );
    void SetTo( rmt::Vector irCenter, float iRadius );
 
+#ifdef SRR2_OLD3DS_SPHERE_WALK_CACHE
+   void PlaneBounds(float bounds[6]) const
+   {
+      for(int axis=0; axis<3; ++axis)
+      {
+         bounds[axis]=mCenter[axis]-mRadius-msIntersectionEpsilon;
+         bounds[axis+3]=mCenter[axis]+mRadius+msIntersectionEpsilon;
+      }
+   }
+#endif
+
    rmt::Vector mCenter;
    float       mRadius;
 private:

@@ -1,3 +1,4 @@
+#include <main/old3dsmainprofile.h>
 //=============================================================================
 // Copyright (C) 2002 Radical Entertainment Ltd.  All rights reserved.
 //
@@ -227,6 +228,7 @@ void GameFlow::SetContext( ContextEnum context )
 //==============================================================================
 void GameFlow::OnTimerDone( unsigned int elapsedtime, void* pUserData )
 {
+    O3_MAIN_SCOPE(GameUpdate);
     //////////////////////////////////////////////////
     // Debugging stuff.
     //////////////////////////////////////////////////

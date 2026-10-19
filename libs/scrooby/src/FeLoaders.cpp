@@ -22,6 +22,9 @@
 #include "FeApp.h"
 #include "FeGroup.h"
 #include "FeLanguage.h"
+#ifdef SRR2_OLD_3DS
+#include "3dscontrols.h"
+#endif
 #include "FeLayer.h"
 #include "FeLoadTags.h"
 #include "FePage.h"
@@ -1328,6 +1331,37 @@ tEntity* FeTextBibleLoader::LoadLanguage( tChunkFile* file, tEntityStore* store 
     file->GetData((void*)rValue->m_hashes, rValue->m_numStrings, tFile::DWORD );
     file->GetData((void*)rValue->m_offsets, rValue->m_numStrings, tFile::DWORD );
     file->GetData((void*)rValue->m_buffer, rValue->m_bufferSize/2, tFile::WORD );
+#ifdef SRR2_OLD_3DS
+    // Rebuild owned strings once, preserving writable buffers used by GUI code.
+    // English is the asset set supplied for this port; other languages retain
+    // their source text rather than silently receiving English translations.
+    if(languageID == 'E')
+    {
+        unsigned words = 0;
+        for(unsigned i = 0; i < rValue->m_numStrings; ++i)
+        {
+            const unsigned short* text = rValue->m_buffer + rValue->m_offsets[i] / 2;
+            const char* replacement = Scrooby3DSControls::Replacement(rValue->m_hashes[i], rValue->m_modulo, text);
+            if(replacement) words += strlen(replacement) + 1;
+            else { while(*text++) ++words; ++words; }
+        }
+        unsigned short* native = new unsigned short[words];
+        unsigned cursor = 0;
+        for(unsigned i = 0; i < rValue->m_numStrings; ++i)
+        {
+            const unsigned short* text = rValue->m_buffer + rValue->m_offsets[i] / 2;
+            const char* replacement = Scrooby3DSControls::Replacement(rValue->m_hashes[i], rValue->m_modulo, text);
+            rValue->m_offsets[i] = cursor * 2;
+            if(replacement) { while(*replacement) native[cursor++] = (unsigned char)*replacement++; }
+            else { while(*text) native[cursor++] = *text++; }
+            native[cursor++] = 0;
+        }
+        delete[] rValue->m_buffer;
+        rValue->m_buffer = native;
+        rValue->m_bufferSize = words * 2;
+    }
+#endif
+
 
     return rValue;
 }

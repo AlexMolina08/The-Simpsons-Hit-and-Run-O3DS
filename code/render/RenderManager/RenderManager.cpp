@@ -1,3 +1,7 @@
+#ifdef SRR2_OLD_3DS
+extern "C" void picaWorldBegin(void);
+extern "C" void picaWorldEnd(void);
+#endif
 //=============================================================================
 // Copyright (C) 2002 Radical Entertainment Ltd.  All rights reserved.
 //
@@ -537,11 +541,17 @@ void RenderManager::ContextUpdate( unsigned int iElapsedTime )
 
 #ifdef RAD_3DS
     CHudMap::BeforeRenderLayers3DS();
+#ifdef SRR2_OLD_3DS
+    if(!GetPresentationManager()->GetFMVPlayer()->IsPlaying()) picaWorldBegin();
+#endif
 #endif
 
     // Render Stuff; call your Render shots, Tex.
     for( int i=RenderEnums::numLayers-1; i>-1; i-- )
     {
+#ifdef SRR2_OLD_3DS
+        if(i == RenderEnums::GUI) picaWorldEnd();
+#endif
 #ifdef DEBUGINFO_ENABLED
         // We need to render the debug info just before we render the GUI layer
         //since rendering that layer changes the world matrix.

@@ -1,3 +1,4 @@
+#include <main/old3dshot.h>
 #include "simcommon/symmatrix.hpp"
 #include "simcommon/simmath.hpp"
 
@@ -145,6 +146,7 @@ SymMatrix p;
             }
 */
 
+OLD3DS_HOT_PATH
 void SymMatrix::TransformSelf(const Matrix& m)
 {
     float a, b, c, e1, e2, e3;
@@ -185,6 +187,7 @@ void SymMatrix::TransformSelf(const Matrix& m)
     *this = p;
 }
 
+OLD3DS_HOT_PATH
 void SymMatrix::TransformSelf(const Vector& v)
 {
     float a, b, c;
@@ -208,6 +211,7 @@ void SymMatrix::TransformSelf(const Vector& v)
     *this = p;
 }
 
+OLD3DS_HOT_PATH
 void SymMatrix::TransformVector(const Vector& v, Vector& r) const
 {
     r.x = xx*v.x + xy*v.y + xz*v.z;
@@ -215,6 +219,7 @@ void SymMatrix::TransformVector(const Vector& v, Vector& r) const
     r.z = xz*v.x + yz*v.y + zz*v.z;  
 }
 
+OLD3DS_REFERENCE_PATH
 void SymMatrix::Invert(const SymMatrix& a)
 {
 /*

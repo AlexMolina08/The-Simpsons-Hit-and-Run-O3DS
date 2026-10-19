@@ -23,6 +23,9 @@
 class StaticPhysDSG : public CollisionEntityDSG
 {
 public:
+#ifdef SRR2_OLD_3DS
+    virtual unsigned Old3dsCategory() const { return O3_STATICPHYS; }
+#endif
     StaticPhysDSG();
     ~StaticPhysDSG();
 

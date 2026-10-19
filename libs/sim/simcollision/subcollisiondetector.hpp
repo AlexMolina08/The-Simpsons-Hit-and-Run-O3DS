@@ -161,6 +161,12 @@ protected:
     TArray<Collision>* GetCollisionList();
     void SetCollisionList( TArray<Collision>& inlist );
     
+#ifdef SRR2_OLD3DS_PARALLEL_COLLISION
+    // A prepared worker must never grow a shared allocator-backed TArray.
+    // Overflow invalidates this area's speculative result for serial replay.
+    int mPreparedContactLimit = -1;
+    bool mPreparedOverflow = false;
+#endif
     float mCollisionDistance;
     float mMinCollisionDistance;
     rmt::Vector mT;

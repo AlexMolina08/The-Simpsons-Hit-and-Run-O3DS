@@ -56,6 +56,9 @@ class tEffectController;
 class ParticleSystemDSG : public InstStatEntityDSG
 {
     public:
+#ifdef SRR2_OLD_3DS
+    virtual unsigned Old3dsCategory() const { return O3_PARTICLE; }
+#endif
         ParticleSystemDSG();
         ~ParticleSystemDSG();
 

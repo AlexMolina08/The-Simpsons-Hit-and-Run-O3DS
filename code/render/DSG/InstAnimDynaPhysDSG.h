@@ -64,6 +64,9 @@ namespace poser
 class InstAnimDynaPhysDSG : public InstDynaPhysDSG
 {
     public:
+#ifdef SRR2_OLD_3DS
+    virtual unsigned Old3dsCategory() const { return O3_ANIMDYNA; }
+#endif
         InstAnimDynaPhysDSG();
         virtual ~InstAnimDynaPhysDSG();
 

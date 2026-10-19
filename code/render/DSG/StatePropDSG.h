@@ -61,6 +61,9 @@ class StatePropDSGProcAnimator;
 class StatePropDSG : public DynaPhysDSG, public CStatePropListener 
 {
     public:
+#ifdef SRR2_OLD_3DS
+    virtual unsigned Old3dsCategory() const { return O3_STATEPROP; }
+#endif
 
         enum Event
         {   

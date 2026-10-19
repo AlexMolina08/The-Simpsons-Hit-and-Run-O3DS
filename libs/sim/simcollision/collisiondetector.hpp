@@ -19,7 +19,19 @@ class CollisionDetector
 public:
     CollisionDetector();
     virtual ~CollisionDetector();
+#ifdef SRR2_OLD3DS_COLL_PREP
+    unsigned BeginPreparationBatch();
+    void EndPreparationBatch(unsigned previous) { mPreparationBatchStamp = previous; }
+#endif
     
+#ifdef SRR2_OLD3DS_PARALLEL_COLLISION
+    void PrepareReadOnlyVolumes(TArray<CollisionObjectPair>* pairs);
+    void CopyPreparedConfiguration(const CollisionDetector& source);
+    bool DetectPreparedArea(TArray<CollisionObjectPair>* pairs,TArray<Collision>* contacts,float dt);
+    void SetPreparedDestination(TArray<Collision>* contacts) { SetCollisionList(*contacts); }
+    unsigned PreparedTailCount() const { return mNewColl; }
+    void RestorePreparedTail(float dt,bool hasPairs,unsigned contacts,bool updatedPair);
+#endif
     // collide two volumes
     void DetectCollision(CollisionVolume* volA, CollisionVolume* volB, TArray<Collision>* inCList);
 
@@ -50,6 +62,7 @@ public:
 
 protected:
     void DetectCollision(CollisionVolume* volA, CollisionVolume* volB);
+    void DetectCollisionOverlapping(CollisionVolume* volA, CollisionVolume* volB);
     void DetectOnSubVolume(CollisionVolume* volA, CollisionVolume* volB);
     void DetectColl(CollisionVolume*  volA, CollisionVolume* volB);
     
@@ -65,6 +78,9 @@ protected:
     bool CollTestInit(CollisionVolume* volA, CollisionVolume* volB);
     static float sSafeTimeBeforeCollision;
     float mDt;
+#ifdef SRR2_OLD3DS_COLL_PREP
+    unsigned mPreparationBatchStamp;
+#endif
 };
 
 } // sim

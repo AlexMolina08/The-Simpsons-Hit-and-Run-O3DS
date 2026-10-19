@@ -62,6 +62,9 @@ class AnimCollisionEntityDSG
 public CollisionEntityDSG
 {
 public:
+#ifdef SRR2_OLD_3DS
+    virtual unsigned Old3dsCategory() const { return O3_ANIMCOLL; }
+#endif
     AnimCollisionEntityDSG( void );
     ~AnimCollisionEntityDSG( void );
 
