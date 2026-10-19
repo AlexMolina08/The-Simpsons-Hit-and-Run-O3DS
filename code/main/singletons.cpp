@@ -171,8 +171,13 @@ void CreateSingletons()
         for( unsigned i = 0; i < sizeof( required ) / sizeof( required[0] ); i++ )
         {
             char path[ 96 ];
-            snprintf( path, sizeof( path ), "sdmc:/3ds/simpsons/%s", required[ i ] );
+            snprintf( path, sizeof( path ), "romfs:/%s", required[ i ] );
             FILE* probe = fopen( path, "rb" );
+            if( probe == NULL )
+            {
+                snprintf( path, sizeof( path ), "sdmc:/3ds/simpsons/%s", required[ i ] );
+                probe = fopen( path, "rb" );
+            }
             if( probe == NULL )
             {
                 soundFilesPresent = false;

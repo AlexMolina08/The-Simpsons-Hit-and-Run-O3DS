@@ -96,6 +96,7 @@ unsigned int sceLibcHeapSize = 16 * 1024 * 1024;
 #include <unistd.h>
 #include <3ds.h>
 #include <citro3d.h>
+#include <sys/stat.h>
 
 extern "C" void radSoundHal3dsShutdownForExit( void );
 
@@ -174,6 +175,9 @@ extern "C" int main( int argc, char *argv[] )
 #endif
     gfxInitDefault();
     romfsInit();
+    // Installed titles keep bundled assets in RomFS and writable saves on SD.
+    mkdir( "sdmc:/3ds", 0777 );
+    mkdir( SRR2_3DS_DATA_PATH, 0777 );
     chdir( SRR2_3DS_DATA_PATH );
 #ifdef SRR2_OLD_3DS
     freopen("old3ds.log", "w", stdout);

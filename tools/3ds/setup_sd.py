@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
-"""Build the New 3DS SD card folder from the PC release of the game.
+"""Build the Nintendo 3DS SD card folder from the PC release of the game.
 
     python tools/3ds/setup_sd.py "<PC game folder>"
 
 Writes sdcard/3ds/simpsons/ (data copied as is, movies converted for the
-hardware H.264 decoder) and refreshes romfs/ for the build. Incremental.
+hardware H.264 decoder, or MPEG-1 software decoding with --old3ds) and refreshes romfs/ for the build. Incremental.
 Needs ffmpeg with libx264: `pip install imageio-ffmpeg`, PATH, or --ffmpeg.
 """
 
@@ -219,15 +219,13 @@ def main():
     ap.add_argument("--no-romfs", action="store_true", help="leave romfs/ alone")
     ap.add_argument("--3dsx", dest="dsx", type=pathlib.Path, help="a built SimpsonsNTSC.3dsx to copy in")
     ap.add_argument("--no-movies", action="store_true", help="skip the movies (for a build without them)")
-    ap.add_argument("--old3ds", action="store_true", help="prepare the experimental Old 3DS build without movies")
+    ap.add_argument("--old3ds", action="store_true", help="prepare Old 3DS data and software-decoded movies")
     ap.add_argument("--force-movies", action="store_true", help="convert every movie again")
     ap.add_argument("--jobs", type=int, default=min(4, os.cpu_count() or 1),
                     help="movies converted at once (default: up to 4)")
     ap.add_argument("--ffmpeg", help="path to ffmpeg (default: imageio-ffmpeg, then PATH)")
     ap.add_argument("--allow-leak", action="store_true", help=argparse.SUPPRESS)
     args = ap.parse_args()
-    if args.old3ds:
-        args.no_movies = True
 
     game = args.game.resolve()
     check_game(game, args.allow_leak)
@@ -252,21 +250,31 @@ def main():
         movies_out = sd / "movies"
         movies_out.mkdir(exist_ok=True)
         todo = [(m, movies_out / (m.stem + ".3dm")) for m in movies_in]
-        todo = [(s, d) for s, d in todo if args.force_movies or not movie_up_to_date(s, d)]
+        if args.old3ds:
+            from convert_old3ds_movies import convert as convert_old_movie
+            # Version 2 uses MPEG-1 software decoding; version 1 is New 3DS H.264.
+            # The converter owns its format-specific incremental stamp.
+        else:
+            todo = [(s, d) for s, d in todo if args.force_movies or not movie_up_to_date(s, d)]
         log(f"movies: {len(movies_in)} found, {len(todo)} to convert")
         failed = 0
         with concurrent.futures.ThreadPoolExecutor(max_workers=max(1, args.jobs)) as pool:
-            jobs = {pool.submit(convert_movie, ffmpeg, s, d): s for s, d in todo}
+            jobs = {(pool.submit(convert_old_movie, ffmpeg, s, d, args.force_movies)
+                     if args.old3ds else pool.submit(convert_movie, ffmpeg, s, d)): s for s, d in todo}
             for job in concurrent.futures.as_completed(jobs):
                 src = jobs[job]
                 try:
-                    frames, fps, size = job.result()
-                    log(f"  {src.name}: {frames} frames at {fps:.2f} fps, {size / 1e6:.1f} MB")
+                    result = job.result()
+                    if args.old3ds:
+                        log(f"  {src.name}: {result['status']}, {result['bytes'] / 1e6:.1f} MB")
+                    else:
+                        frames, fps, size = result
+                        log(f"  {src.name}: {frames} frames at {fps:.2f} fps, {size / 1e6:.1f} MB")
                 except Exception as e:
                     failed += 1
                     log(f"  {src.name}: FAILED - {e}")
         if failed:
-            log(f"movies: {failed} failed; those will be skipped in the game")
+            sys.exit(f"movies: {failed} conversion(s) failed; setup is incomplete")
 
     if args.dsx:
         shutil.copy2(args.dsx, sd / "SimpsonsNTSC.3dsx")
@@ -286,7 +294,8 @@ R: handbrake. L + R: horn. Start: pause.
 A: jump/accelerate. B: run/brake. X: action/enter/exit vehicle.
 Y: attack/handbrake. D-pad: move/steer while using the camera.
 
-Movies and stereoscopic rendering are disabled. The image remains 400x240.
+Movies use the Old 3DS software decoder. Stereoscopic rendering is disabled.
+The gameplay image remains 400x240.
 Physical Old 3DS performance has not yet been verified. See docs/OLD3DS.md
 in the source checkout for the exact test scope and remaining checks.
 """

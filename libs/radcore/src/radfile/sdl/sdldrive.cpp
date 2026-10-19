@@ -368,6 +368,25 @@ radDrive::CompletionStatus radSdlDrive::OpenFile
     }
 
 #if SDL_MAJOR_VERSION < 3
+#ifdef RAD_3DS
+    *pHandle = NULL;
+    // The default drive expands relative names to absolute SD paths. Resolve
+    // read-only game assets in the installed title before the SD fallback.
+    static const char dataRoot[] = "sdmc:/3ds/simpsons/";
+    if( flags == OpenExisting && !writeAccess &&
+        strncasecmp( fullName, dataRoot, sizeof( dataRoot ) - 1 ) == 0 )
+    {
+        char bundled[ radFileFilenameMax + 1 ];
+        const int count = snprintf( bundled, sizeof( bundled ), "romfs:/%s",
+                                    fullName + sizeof( dataRoot ) - 1 );
+        if( count > 0 && (unsigned)count < sizeof( bundled ) )
+        {
+            *pHandle = SDL_RWFromFile( bundled, createFlags );
+            if( *pHandle ) strcpy( fullName, bundled );
+        }
+    }
+    if( !*pHandle )
+#endif
     *pHandle = SDL_RWFromFile(fullName, createFlags);
 #else
     *pHandle = SDL_IOFromFile( fullName, createFlags );

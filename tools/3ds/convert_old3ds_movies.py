@@ -15,9 +15,9 @@ from setup_sd import MOVIE_HEADER, MOVIE_MAGIC, find_ffmpeg, probe
 STAMP = "mpeg1 320x240 30000/1001 q3 bf0 g15 / pcm16 stereo 32k v2 audio-tail-pad"
 
 
-def convert(ffmpeg, source, destination):
+def convert(ffmpeg, source, destination, force=False):
     stamp = destination.with_suffix(".3dm.txt")
-    if destination.exists() and stamp.exists() and stamp.read_text() == STAMP and destination.stat().st_mtime >= source.stat().st_mtime:
+    if not force and destination.exists() and stamp.exists() and stamp.read_text() == STAMP and destination.stat().st_mtime >= source.stat().st_mtime:
         return {"file": source.name, "status": "unchanged", "bytes": destination.stat().st_size}
     _, has_audio = probe(ffmpeg, source)
     with tempfile.TemporaryDirectory(prefix="srr2-old3ds-movie-") as folder:

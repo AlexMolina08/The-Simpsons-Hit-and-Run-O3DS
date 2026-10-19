@@ -1,3 +1,4 @@
+#include <cerrno>
 #include <radoptions.hpp>
 
 #ifdef RAD_MOVIEPLAYER_CTR
@@ -171,7 +172,7 @@ class radCtrMoviePlayer
     ref< IRadMovieRenderStrategy > m_refRenderStrategy;
 
     State       m_State;
-    char        m_Path[ 128 ];
+    char        m_Path[ 160 ];
     MovieHeader m_Header;
 
     FILE *      m_Video;
@@ -317,9 +318,24 @@ void radCtrMoviePlayer::Load( const char * pFileName, unsigned int audioTrackInd
     m_PresentationMs = 0;
     m_PausedMs       = 0;
 
-    m_Video = fopen( m_Path, "rb" );
+    // Resolve once so audio and resume reopen the same bundled movie.
+    char bundledPath[ sizeof( m_Path ) ];
+    const int bundledLength = snprintf( bundledPath, sizeof( bundledPath ), "romfs:/%s", m_Path );
+    if( bundledLength > 0 && (size_t)bundledLength < sizeof( bundledPath ) )
+    {
+        m_Video = fopen( bundledPath, "rb" );
+        if( m_Video != NULL )
+        {
+            strcpy( m_Path, bundledPath );
+        }
+    }
     if( m_Video == NULL )
     {
+        m_Video = fopen( m_Path, "rb" );
+    }
+    if( m_Video == NULL )
+    {
+        printf("MOVIE_OPEN_FAILED path=%s errno=%d\n",m_Path,errno);
         Fail( );
         return;
     }
