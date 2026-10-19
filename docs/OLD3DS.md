@@ -1,309 +1,57 @@
-# Original Nintendo 3DS
+# Original Nintendo 3DS and 2DS
 
-This experimental build targets the original 3DS and 2DS. It has been exercised
-in Azahar 2126.2 with New 3DS mode disabled and CPU clock at 100%. The first physical Old 3DS log confirms a 64 MiB application region and
-successful gameplay, but busy scenes miss the performance target. Across 146
-samples ending in gameplay, median submission rate was 18.22 fps. The 25–30 fps
-hardware target remains an acceptance requirement, not a verified result.
-
-## Build and install
+## Build
 
 Install devkitPro's ARM toolchain, libctru, Citro3D, CMake, Ninja, Git and Python 3.
-The build script compiles pinned SDL2, zlib, libpng and a minimal FFmpeg decoder locally; it does
-not require administrator access or modify the installed toolchain.
+Prepare assets from your own PC installation, then build:
 
 ```sh
+python3 tools/3ds/setup_sd.py "/path/to/PC game" --old3ds
 bash tools/3ds/build_old3ds.sh
-python3 tools/3ds/setup_sd.py "/path/to/PC game" --old3ds \
-    --3dsx out/old3ds/SimpsonsNTSC.3dsx
+cp out/old3ds/SimpsonsNTSC.3dsx sdcard/3ds/simpsons/
 ```
 
-Copy `sdcard/3ds` to the SD card root. The executable and game data belong in
-`sd:/3ds/simpsons/`. Audio requires the console's own DSP firmware at
-`sd:/3ds/dspfirm.cdc`, dumped using DSP1. No DSP firmware is bundled.
+The setup step prepares the SD data and boot-menu assets embedded in the executable.
+The build script stops if those boot assets are missing. It builds the required SDL2,
+zlib, libpng and software movie decoder locally, using `cmake/old3ds-release.cmake`.
+Automated routes, diagnostic rendering modes and experimental workers are disabled.
+The executable is `out/old3ds/SimpsonsNTSC.3dsx`.
 
-The executable uses a 30 MiB ordinary heap and a 28 MiB linear heap. Executable,
-static data and runtime overhead also consume application memory. Azahar's
-homebrew loader reports a 96 MiB region even in Old 3DS mode; the explicit heap
-limits prevent allocation of that entire region. This does not establish that
-every physical Homebrew Launcher entry method supplies sufficient memory.
+Copy `sdcard/3ds` to the SD card root. The game belongs in `sd:/3ds/simpsons/`.
+Sound requires `sd:/3ds/dspfirm.cdc` from your console, dumped with DSP1.
 
 ## Controls
 
 | Input | Action |
 | --- | --- |
-| Circle Pad | Move or steer |
-| Hold L + Circle Pad | Camera; movement from Circle Pad is neutral while held |
-| D-pad | Move or steer, including while L is held |
-| L + Select | Cycle camera modes |
+| Circle Pad / D-pad | Move or steer |
+| Hold L + Circle Pad | Move camera |
+| L + Select | Cycle camera |
 | Select | Reset vehicle |
-| A | Jump; accelerate in a car |
-| B | Run; brake/reverse in a car |
-| X | Interact; enter or exit a vehicle |
-| Y | Attack; handbrake in a car |
+| A | Jump / accelerate |
+| B | Run / brake and reverse |
+| X | Interact / enter or exit vehicle |
+| Y | Attack / handbrake |
 | R | Handbrake |
 | L + R | Horn |
 | Start | Pause |
 
-The camera-cycle chord latches L when Select is pressed. Releasing L before
-Select cannot turn the chord into a vehicle reset. An optional right stick
-remains usable when L is not held. The English tutorial text and HUD interaction hint use the actual 3DS controls.
+The D-pad remains available for movement while L controls the camera.
+Camera and map settings are available from the game menus.
 
-## Changes
+## Screens
 
-- Correct the native thread stack unit error: the loader requested 64 MiB
-  instead of 64 KiB. Native worker stacks now have a 128 KiB minimum and thread
-  creation failure stops with an error instead of leaving an endless load.
-- Use ARMv6 CP15 barrier specs and verify ARMv6K/VFPv2 ELF attributes. The local
-  toolchain's default specs pulled ARMv7 attributes from an unused barrier
-  helper; correcting the specs did not change the generated 3DSX bytes.
-- Disable New 3DS CPU acceleration, hardware movie decoding and the second-eye
-  render target. Preserve the native 400×240 image and existing world assets.
-- Pace the loop to 30 Hz using the ARM11 system tick. Work exceeding the frame
-  budget is not hidden; the frame finishes without an additional sleep.
-- Log completed render submissions, memory usage and renderer timings every
-  five seconds to `old3ds.log` beside the game data. A log sample's context is the
-  context at the end of its interval; samples spanning transitions are mixed.
+Gameplay uses the native 400×240 top screen. The lower screen has a purple TV
+surround, with a live map during gameplay and animated static in menus and loading
+screens. The map refreshes with each rendered frame. Its refresh rate follows the
+game's frame rate.
 
-## Evidence and remaining checks
+Original-model builds disable stereoscopic rendering and New 3DS CPU acceleration.
+The loop targets 30 FPS, but busy scenes and streaming can run slower. An emulator's
+frame rate does not predict performance on the original console.
 
-The local validation directory contains logs, screenshots, a binary checksum
-and emulator performance samples. Verified paths include normal copyright and
-frontend startup, Level 1 loading, walking, car entry, acceleration, traffic and
-camera rotation on foot and in a car. The final binary was also booted with the
-existing `skipfe notutorial` QA options in a separate emulator SD directory.
-Those options are not present in the SD installation folder.
+## Development
 
-All seven level starts reached gameplay with the expected player and scene.
-Screenshots and separate logs are stored as `out/validation/level2.png` through
-`level7.png` and `level1.log` through `level7.log`. The summary in
-`out/validation/seven-level-smoke.json` records the samples and memory headroom.
-Levels 4 and 7 start inside the Simpsons' house; their startup checks do not
-exercise the outdoor world. None of these checks establish complete missions
-or sustained traversal through every streaming zone.
-
-Settled emulator scenes reached approximately 29–30 fps with the 30 Hz limit.
-The first 19 settled five-second Level 1 samples in
-`out/validation/final-driving-summary.json` range from 28.88 to 29.99 fps,
-with a mean of 29.82 fps. Minimum sampled linear headroom is 2,449,536 bytes;
-maximum sampled ordinary heap usage is 13,841,112 bytes.
-This is a functional and frame-pacing check, not a physical CPU/GPU benchmark.
-Azahar's GPU timing figures must not be interpreted as PICA200 measurements.
-Loading intervals run below 25 fps. No textures or world geometry were reduced
-beyond the upstream renderer's existing conversions.
-
-Host camera tests sweep all signed 16-bit axis values and cover modifier release
-and the camera/reset chord. Run them with:
-
-```sh
-clang++ -std=c++11 -Wall -Wextra -Werror -I . \
-    tools/3ds/tests/camera_input.cpp -o out/validation/camera_input
-out/validation/camera_input
-```
-
-Still required: validation of the updated build on physical Old 3DS; sustained
-on-foot and driving routes through busy streaming boundaries in every level;
-complete missions, save/reload, suspend/resume, and audible sound with DSP firmware.
-Software movie playback is available as described below. Audible output has not been verified in the local setup.
-
-For hardware acceptance, collect `old3ds.log` while traversing representative
-routes with traffic, pedestrians and collisions. Require 25–30 fps during
-settled gameplay and inspect streaming stalls and memory headroom separately.
-Record the console model, launcher method and executable SHA-256 with results.
-
-## Local Mac launcher
-
-`Play Old 3DS.command` opens the isolated installation under
-`~/Applications/hitrun-old3ds/`. Its SD directory is separate from `sdcard/` and
-contains the QA options described above. Keyboard controls are arrows for the
-Circle Pad, Shift for L, Command for A, Option for B, Z for X, X for Y, M for
-Start and N for Select. The emulator profile uses original 3DS mode and 100%
-CPU clock. Hardware controls remain those in the table above.
-
-## October 16 update
-
-The pause Settings screen used console-only camera inversion and vibration
-indices against PC menu assets. Missing rows compacted the menu, so entering
-Settings accessed an absent item. The 3DS now uses the PC row layout. The crash
-was reproduced in Azahar before the fix; the updated screen opens and accepts
-changes.
-
-An optional `old3ds-world-scale.txt` beside the executable selects `100`, `80`,
-or `75` (a single integer). Missing or invalid settings select native 400×240.
-The lower modes render the world at 320×192 or 300×180, then bilinearly upscale
-it before rendering the GUI at native resolution. Frontend screens stay native.
-Render targets are allocated once in VRAM, with native fallback on allocation
-failure. These fixed modes are for hardware comparison; automatic resolution
-scaling is not enabled. The architecture follows the intermediate texture and
-presentation approach in Mario Kart 64 3DS commit
-`3a5de70ddab1a4970f0b54a6240a898a13a639ba`, adapted to this backend's rotated
-coordinates and GUI layer boundary.
-
-Font texture chunks bypass the frontend atlas size reduction. Grayscale font
-pages use LA8, preserving eight-bit coverage alpha at the same two bytes per
-texel as RGBA4. The nine palette pages in the supplied default font resources
-were checked for grayscale content. Small text (source font size up to 32) is
-25% larger, with matching wrap and right-alignment calculations and thinner
-outlines. Headings keep their existing size. Shared menu hints display `A Select`
-and `B Back` instead of tiny PC keycap sprites.
-
-The Old 3DS renderer now flushes command lists with `GX_CMDLIST_FLUSH`, avoiding
-a second flush of the entire 28 MiB linear heap. Texture upload, persistent
-vertex/index updates, expanded geometry and immediate vertex/index rings flush
-their modified ranges explicitly. The scaled-world split also flushes immediate
-ranges before submitting world commands. The native New 3DS path is unchanged.
-
-`OLD3DS_PROFILE` logs interval averages for game update, render, services and
-loading, plus GPU queue waits and frame submission. Wait and submission times
-are subsets of render time, not additional costs. `cpu_ms` remains Citro3D's
-renderer processing sample, not whole-frame CPU time. `OLD3DS_SIM` separates
-physics (including character simulation), pedestrians, traffic and effects;
-these are subsets of update time. `work_ms` and `peak_ms` measure mean and
-maximum whole-loop wall time before deliberate frame pacing. `over_budget`
-counts loops exceeding 33.33 ms; I/O, queue waits and suspension can contribute.
-Emulator timing does not
-predict physical ARM11/PICA200 throughput.
-
-For the renderer/settings update alone, replace only `SimpsonsNTSC.3dsx`; optionally add
-the tiny scale file. Movie playback additionally requires the converted movie
-files below. Keep installed world assets and saves; they need no retransmission.
-
-Summarize a console log with:
-
-```sh
-python3 tools/3ds/summarize_log.py --source hardware /path/to/old3ds.log
-```
-
-Use `--source emulator` for emulator logs. Missing telemetry is reported as
-unavailable rather than zero. Interval means are weighted by frame counts.
-
-Update validation logs are in `out/validation/update-20261016/`. The native,
-80% and 75% checks reached gameplay with correct orientation and native GUI.
-The recorded gameplay-interval median submission rates were 29.97, 29.965 and
-29.89 fps respectively in Azahar; these were different routes and iterations,
-not a controlled performance comparison. The 75% check used Level 2; native and
-80% checks used Level 1. Minimum sampled linear headroom was 2,875,776 bytes in
-Level 1 and 3,293,184 bytes in Level 2. The Settings crash was reproduced before
-its fix, then the screen opened, changed a value and returned successfully.
-Camera host regression tests and ARMv6K/VFPv2 executable checks passed.
-
-The physical acceptance target remains open. Start the new executable at native
-resolution to measure the cache-flush change without lowering image quality.
-Compare 80% only if GPU work still limits the same busy route. Do not infer a
-hardware improvement from the emulator medians above.
-
-
-## Old 3DS movie playback
-
-The Old 3DS build now uses a single-threaded ARMv6K MPEG-1 decoder from FFmpeg
-7.1.1 instead of the New 3DS MVD service. It renders 320×240 video at 30000/1001
-frames per second. Conversion combines BT.601 colour conversion and PICA200
-RGB565 tiling in one pass, avoiding a full RGBA frame and a second conversion.
-Movies bypass optional world resolution scaling. In-engine story scenes keep
-using the normal game renderer.
-
-The existing New 3DS H.264/version-1 movie format remains separate. Old 3DS
-requires version-2 containers; do not reuse New 3DS `.3dm` files. Convert only
-movies from a personally supplied PC installation:
-
-```sh
-python3 tools/3ds/convert_old3ds_movies.py "/path/to/PC game" \
-    --out out/old3ds-movies
-```
-
-The converter reads originals without changing them. It preserves stereo sound
-as 32 kHz PCM and pads a short video's final image when its audio lasts longer.
-Repeated conversion skips unchanged outputs. `--only intro fmv1A` can prepare
-a smaller initial subset. The supplied PC folder contains five 0.1-second logo
-placeholders; conversion cannot restore original footage absent from that copy.
-
-For an existing SD installation, transfer:
-
-- `out/old3ds/SimpsonsNTSC.3dsx` to `sd:/3ds/simpsons/SimpsonsNTSC.3dsx`.
-- All `out/old3ds-movies/*.3dm` to `sd:/3ds/simpsons/movies/`.
-- Optionally, a world-scale text file as described above.
-
-The 17 converted movies total 156,525,485 bytes. Do not transfer `.3dm.txt` cache
-stamps. Existing `art`, `scripts`, `sound`, RCF archives and saves are unchanged.
-Sound requires the console's own DSP firmware. The local emulator has no DSP
-firmware and reports `audio started=0`; audible playback and audio/video sync
-on hardware remain unverified.
-
-`OLD3DS_MOVIE` reports decoder time, combined conversion/upload time, decoded
-and presented frame counts, and elapsed playback time. Decoded frames alone do
-not prove the presentation rate. All 17 converted clips pass host full-decode
-and file-reopen checks through the same decoder adapter. A separate sanitizer
-check compares the upload against scalar BT.601 colours, Morton tiling, padded
-plane strides and untouched texture padding. These are functional checks, not
-physical Old 3DS performance measurements.
-
-The FFmpeg source revision, build flags, newlib patch and LGPL license are
-recorded in `libs/radmovie/src/ctr/third_party/`. The build verifies final
-ARMv6K/VFPv2 attributes and keeps FFmpeg's 32-bit enum ABI inside its adapter.
-
-
-## Repeated transform uploads
-
-The Old 3DS renderer now reuses an uploaded model-view matrix when all its bits
-match the next draw. Material, lighting and projection updates remain independent.
-Frame boundaries, bottom-screen passes, world upscaling and context restoration
-invalidate the cache. This removes redundant matrix transposition and uniform
-updates without changing geometry, textures, traffic or simulation frequency.
-`OLD3DS_RENDER` reports actual uploads and exact reuses per diagnostic interval.
-Counter savings are not themselves a measured physical frame-rate improvement.
-
-
-## Native button prompts
-
-English control instructions are replaced once when the text bible loads. The
-walking, driving, jumping, running, kicking, vehicle, phone-booth and interior
-prompts use Circle Pad and A/B/X/Y/R. Camera instructions describe L + Circle
-Pad. Interaction is X; attacks are Y, including the box tutorial whose PC mouse
-instruction differed from entering a car. Exact catalog keys and exact keycap
-captions are replaced; mission narrative is preserved. Other languages retain
-their source translations and still require a separate localization pass.
-
-The HUD's baked PC action-key sprite is replaced by outlined `X Interact` text.
-The original visibility and pulse logic remains, with the extra console half-
-scale removed for this native label. The tutorial's disable hint says
-`X: Hide tutorials`. The controller reference uses a fixed native guide with
-button names and camera/reset/horn chords. It replaces the inherited controller page, including
-the Xbox picture and unsupported vibration/configuration options. START remains
-a valid physical 3DS button.
-These changes require only an executable update, not edited asset files.
-
-The host prompt check reads the actual supplied PC text bibles under address
-and undefined-behavior sanitizers. It checks replacement coverage, the attack/
-interaction distinction, and preservation of unrelated narrative text.
-
-The guide uses plain text against its solid background to keep vertex usage
-within the fixed immediate buffer. Texture-font allocation failure now balances
-the matrix stack before returning, preventing subsequent GUI draws from moving
-off screen when that buffer fills.
-
-Tutorial panels use the native font atlas with wrapped text, replacing the
-small PC letter sprites. The disable hint hides every inherited keycap child,
-including the separate F1 caption in the compiled PC page.
-
-A Continue dismisses a tutorial and stops its speech through the existing skip
-event. It does not wait for an audio completion callback, which can remain
-pending when sound is muted or DSP playback is unavailable. Other platforms
-retain their original tutorial confirmation behavior.
-
-## Static mission review
-
-`tools/3ds/audit_missions.py GAME --out REPORT.json` inventories the seven levels,
-mission scripts, objective types, direct P3D/car loads and movie references.
-This is dependency review, not mission playthrough validation. The supplied PC
-data has 90 declarations and 17 used objective types. Checked direct asset loads
-resolve; eight mission/gag movies have converted files. The unused `ismovie`
-declaration has no scripts; the cinema uses `InteriorManager` special gag logic.
-
-The Lenny conversation is in Level 1's `m3sdi.mfk`. It leads into the locked
-Plow King vehicle stage. Save-capacity checks belong to `MemoryCardManager`,
-independent of this mission. The SDL drive currently reports placeholder free
-space, so an inherited memory-card warning does not establish actual SD capacity.
-
-Mission briefing and conversation prompts now name A/B explicitly. Native
-button restoration also avoids scaling an arbitrary second child, which can
-be a text label rather than the original PC keycap sprite.
+The build script checks ARMv6K/VFPv2 executable attributes and the fixed 64 MiB startup
+budget. Runtime memory use also depends on loaded assets. Source checks live under
+`tools/3ds/tests/`; generated builds and local logs are excluded from Git.
