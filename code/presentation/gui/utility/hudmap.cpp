@@ -59,6 +59,8 @@
 #include <p3d/view.hpp>
 extern "C" bool picaBottomScreenBegin( float u0, float v0, float u1, float v1 );
 extern "C" void picaBottomScreenEnd( void );
+extern "C" void picaBottomScreenFrame( void );
+extern "C" void picaBottomScreenIdle( void );
 #endif
 
 //===========================================================================
@@ -1295,8 +1297,6 @@ namespace
     bool            s_mapWasVisible        = false;
     bool            s_backgroundWasVisible = false;
 
-    bool            s_bottomInUse      = false;
-    unsigned        s_bottomFrame      = 0;
 
     CHudMap* CurrentMap()
     {
@@ -1308,13 +1308,6 @@ namespace
         return GetCurrentHud()->GetHudMap( 0 );
     }
 
-    void BlankBottomScreen()
-    {
-        if( picaBottomScreenBegin( 0.0f, 0.0f, 1.0f, 1.0f ) )
-        {
-            picaBottomScreenEnd();
-        }
-    }
 }
 
 void CHudMap::BeforeRenderLayers3DS()
@@ -1361,17 +1354,14 @@ void CHudMap::AfterRenderLayers3DS( tView* guiView )
 
     if( map == NULL )
     {
-        if( s_bottomInUse )
-        {
-            BlankBottomScreen();
-            s_bottomInUse = false;
-        }
+        picaBottomScreenIdle();
         return;
     }
 
     CGuiManagerInGame* inGame = GetGuiSystem()->GetInGameManager();
     if( guiView == NULL || inGame == NULL || inGame->GetCurrentScreen() != CGuiWindow::GUI_SCREEN_ID_HUD )
     {
+        picaBottomScreenIdle();
         return;
     }
 
@@ -1379,27 +1369,17 @@ void CHudMap::AfterRenderLayers3DS( tView* guiView )
                        ( map->m_hudLayer == NULL || map->m_hudLayer->IsVisible() );
     if( !shown )
     {
-        if( s_bottomInUse )
-        {
-            BlankBottomScreen();
-            s_bottomInUse = false;
-        }
+        picaBottomScreenIdle();
         return;
     }
-
-    if( s_bottomInUse && ( ++s_bottomFrame % 3 ) != 0 )
-    {
-        return;
-    }
-    s_bottomFrame = 0;
 
     float rect[ 4 ];
     map->GetBottomScreenSource( rect );
     if( picaBottomScreenBegin( rect[ 0 ], rect[ 1 ], rect[ 2 ], rect[ 3 ] ) )
     {
         map->DisplayOnBottomScreen( guiView, s_backgroundWasVisible ? s_bottomBackground : NULL );
+        picaBottomScreenFrame();
         picaBottomScreenEnd();
-        s_bottomInUse = true;
     }
 }
 

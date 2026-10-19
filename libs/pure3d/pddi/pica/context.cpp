@@ -32,6 +32,7 @@ static unsigned skinClipBytes=0,skinClipTested=0,skinClipRejected=0;
 #endif
 #include <pddi/pica/pica.hpp>
 #include <pddi/pica/context.hpp>
+#include <pddi/pica/bottomframe.hpp>
 #ifdef SRR2_OLD3DS_GPU_LISTS
 #include <pddi/pica/nativegpulist.h>
 #endif
@@ -559,6 +560,7 @@ picaContext::~picaContext()
 #ifdef SRR2_OLD3DS_QUEUE_METRICS
     picaQueueDump();
 #endif
+    if(bottomStaticShader)bottomStaticShader->Release();
     if(defaultShader)
         defaultShader->Release();
     if(clearShader)
@@ -4349,15 +4351,15 @@ bool picaContext::BeginBottomScreen(float u0, float v0, float u1, float v1)
 
     const float srcW = (u1 - u0) * 640.0f;
     const float srcH = (v1 - v0) * 480.0f;
-    float k = (float)PICA_BOTTOM_WIDTH / srcW;
-    if((float)PICA_BOTTOM_HEIGHT / srcH < k)
-        k = (float)PICA_BOTTOM_HEIGHT / srcH;
-    const float dw = srcW * k / (float)PICA_BOTTOM_WIDTH;
-    const float dh = srcH * k / (float)PICA_BOTTOM_HEIGHT;
-    bottomDst[0] = 0.5f - 0.5f * dw;
-    bottomDst[1] = 0.5f - 0.5f * dh;
-    bottomDst[2] = 0.5f + 0.5f * dw;
-    bottomDst[3] = 0.5f + 0.5f * dh;
+    const float availableWidth=picaBottomFrame::Right-picaBottomFrame::Left;
+    const float availableHeight=picaBottomFrame::Bottom-picaBottomFrame::Top;
+    float k=availableWidth/srcW;
+    if(availableHeight/srcH<k)k=availableHeight/srcH;
+    const float dw=srcW*k/PICA_BOTTOM_WIDTH,dh=srcH*k/PICA_BOTTOM_HEIGHT;
+    const float cx=(picaBottomFrame::Left+picaBottomFrame::Right)/(2*PICA_BOTTOM_WIDTH);
+    const float cy=(picaBottomFrame::Top+picaBottomFrame::Bottom)/(2*PICA_BOTTOM_HEIGHT);
+    bottomDst[0]=cx-0.5f*dw;bottomDst[1]=cy-0.5f*dh;
+    bottomDst[2]=cx+0.5f*dw;bottomDst[3]=cy+0.5f*dh;
 
     bottomPass = true;
 
@@ -4371,6 +4373,97 @@ bool picaContext::BeginBottomScreen(float u0, float v0, float u1, float v1)
     hwViewport[0] = hwViewport[1] = hwViewport[2] = hwViewport[3] = -1;
     SetupHardwareProjection();
     return true;
+}
+
+void picaContext::DrawBottomFrame(bool staticPicture)
+{
+    if(!bottomPass)return;
+    // The surround is one untextured draw. Its geometry is shared between frames.
+    const auto& mesh=picaBottomFrame::Bezel();
+    if(staticPicture && !bottomStaticAttempted){
+        bottomStaticAttempted=true;
+        picaTexture* texture=new picaTexture(this);texture->AddRef();
+        if(texture->Create(64,64,32,0,1)){
+            pddiLockInfo* lock=texture->Lock(0);
+            if(lock){
+                unsigned seed=0x6d2b79f5;
+                for(unsigned y=0;y<64;++y){
+                    auto* row=reinterpret_cast<unsigned*>(static_cast<unsigned char*>(lock->bits)+y*lock->pitch);
+                    for(unsigned x=0;x<64;++x){
+                        seed^=seed<<13;seed^=seed>>17;seed^=seed<<5;
+                        unsigned grey=32+(seed>>26)*3;if(y&1)grey=grey*3/4;
+                        row[x]=0xff000000u|(grey<<16)|(grey<<8)|grey;
+                    }
+                }
+                texture->Unlock(0);
+                bottomStaticShader=new picaMat(this);bottomStaticShader->AddRef();
+                bottomStaticShader->SetTexture(PDDI_SP_BASETEX,texture);
+                bottomStaticShader->SetInt(PDDI_SP_FILTER,PDDI_FILTER_NONE);
+                bottomStaticShader->SetInt(PDDI_SP_UVMODE,PDDI_UV_TILE);
+            }
+        }
+        texture->Release();
+    }
+
+    float source[4],destination[4];memcpy(source,bottomSrc,sizeof(source));memcpy(destination,bottomDst,sizeof(destination));
+    bottomSrc[0]=bottomSrc[1]=bottomDst[0]=bottomDst[1]=0;
+    bottomSrc[2]=bottomSrc[3]=bottomDst[2]=bottomDst[3]=1;
+    const auto mask=(pddiStateMask)(PDDI_STATE_RENDER|PDDI_STATE_VIEW|PDDI_STATE_FOG|PDDI_STATE_STENCIL);
+    PushState(mask);
+    SetCamera(0,1,1,1);SetProjectionMode(PDDI_PROJECTION_DEVICE);
+    EnableZBuffer(false);SetZWrite(false);SetCullMode(PDDI_CULL_NONE);
+    EnableStencilBuffer(false);EnableFog(false);SetColourWrite(true,true,true,true);
+    PushIdentityMatrix(PDDI_MATRIX_MODELVIEW);
+    const unsigned phase=unsigned(svcGetSystemTick()*24/SYSCLOCK_ARM11);
+    if(staticPicture && bottomStaticShader){
+        pddiPrimStream* noise=BeginPrims(bottomStaticShader,PDDI_PRIM_TRISTRIP,PDDI_V_CT,4);
+        if(noise){
+            const float u=float((phase*17)&63)/64,v=float((phase*29)&63)/64;
+            for(unsigned i=0;i<4;++i){
+                pddiVector point;point.Set((i&1)?float(display->GetWidth()):0,(i&2)?float(display->GetHeight()):0,0);
+                pddiVector2 uv;uv.u=u+((i&1)?5:0);uv.v=v+((i&2)?4:0);
+                noise->Vertex(&point,pddiColour(0xffffffff),&uv);
+            }
+            EndPrims(noise);
+        }
+    }
+    pddiPrimStream* stream=BeginPrims(defaultShader,PDDI_PRIM_TRIANGLES,PDDI_V_C,mesh.used+(staticPicture?12:0));
+    if(stream){
+        if(staticPicture){
+            const float bar=float(phase%80)*3-8;
+            for(unsigned strip=0;strip<2;++strip){
+                const unsigned corners[6]={0,1,2,2,1,3};
+                for(unsigned i=0;i<6;++i){
+                    const unsigned c=corners[i];pddiVector point;
+                    const float y=bar+strip*8+((c&2)?(strip?1:4):0);
+                    point.Set((c&1)?float(display->GetWidth()):0,y*display->GetHeight()/PICA_BOTTOM_HEIGHT,0);
+                    stream->Vertex(&point,pddiColour(strip?0xff7b7c83:0xff292731));
+                }
+            }
+        }
+        for(unsigned i=0;i<mesh.used;++i){
+            const auto& vertex=mesh.vertices[i];pddiVector point;
+            point.Set(vertex.position.x*display->GetWidth()/PICA_BOTTOM_WIDTH,
+                vertex.position.y*display->GetHeight()/PICA_BOTTOM_HEIGHT,0);
+            stream->Vertex(&point,pddiColour(vertex.colour));
+        }
+        EndPrims(stream);
+    }
+    PopMatrix(PDDI_MATRIX_MODELVIEW);
+    memcpy(bottomSrc,source,sizeof(source));memcpy(bottomDst,destination,sizeof(destination));
+    PopState(mask);
+}
+
+extern "C" void picaBottomScreenIdle(void)
+{
+    if(s_picaContext && s_picaContext->BeginBottomScreen(0,0,1,1)){
+        s_picaContext->DrawBottomFrame(true);s_picaContext->EndBottomScreen();
+    }
+}
+
+extern "C" void picaBottomScreenFrame(void)
+{
+    if(s_picaContext)s_picaContext->DrawBottomFrame();
 }
 
 void picaContext::EndBottomScreen(void)

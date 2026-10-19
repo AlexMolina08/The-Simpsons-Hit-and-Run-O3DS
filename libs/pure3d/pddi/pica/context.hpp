@@ -277,6 +277,8 @@ protected:
 
     pddiShader* defaultShader;
     pddiShader* clearShader;
+    pddiShader* bottomStaticShader=nullptr;
+    bool bottomStaticAttempted=false;
 
     int         matWriteMask;
 
@@ -300,6 +302,7 @@ public:
 #endif
 #endif
     bool BeginBottomScreen(float u0, float v0, float u1, float v1);
+    void DrawBottomFrame(bool staticPicture=false);
     void EndBottomScreen(void);
 
 private:
