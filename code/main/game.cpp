@@ -118,6 +118,7 @@ extern "C" int      srr2SuspendFiles( void );
 extern "C" int      srr2ResumeFiles( void );
 extern "C" int      g_picaMipmapsAllowed;
 extern "C" unsigned g_p3dYieldTimeUs;
+extern "C" bool old3dsNewspaperAnimating(void);
 
 static void srr2AptHook( APT_HookType hook, void* )
 {
@@ -783,7 +784,10 @@ void Game::Run()
             ( ctx == CONTEXT_LOADING_GAMEPLAY || ctx == CONTEXT_GAMEPLAY || ctx == CONTEXT_PAUSE ||
               ctx == CONTEXT_LOADING_SUPERSPRINT || ctx == CONTEXT_SUPERSPRINT ||
               ctx == CONTEXT_LOADING_DEMO || ctx == CONTEXT_DEMO ) ? 1 : 0;
-        g_p3dYieldTimeUs = ( ctx == CONTEXT_GAMEPLAY || ctx == CONTEXT_PAUSE ) ? 8000u : 52000u;
+        // A 52 ms slice exceeds the 33 ms animation budget. Yield more often
+        // during the newspaper entrance, then restore normal loading throughput.
+        g_p3dYieldTimeUs = ( ctx == CONTEXT_GAMEPLAY || ctx == CONTEXT_PAUSE ||
+                            (ctx == CONTEXT_LOADING_GAMEPLAY && old3dsNewspaperAnimating()) ) ? 8000u : 52000u;
 #endif
         DEMOPROFILE( g_DemoProfiler.Start(PROFILE_CHANNEL_ALL); )
 

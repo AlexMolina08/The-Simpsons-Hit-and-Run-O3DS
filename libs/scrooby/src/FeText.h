@@ -114,7 +114,7 @@ class FeText
         void SetOutlineColour( tColour c ) { mOutlineColour = c; }
         tColour GetOutlineColour() const { return mOutlineColour; }
 
-        virtual tFont* GetFont() const { return mFont; }
+        virtual tFont* GetFont() const;
 
     protected:
         virtual ~FeText();

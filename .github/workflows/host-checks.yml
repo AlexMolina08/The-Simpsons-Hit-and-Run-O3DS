@@ -30,3 +30,7 @@ jobs:
         run: python3 tools/3ds/tests/bundled_assets.py
       - name: Title navigation and camera settings
         run: python3 tools/3ds/tests/gui_input.py
+      - name: Newspaper entrance and asynchronous font readiness
+        run: python3 tools/3ds/tests/loading_animation.py
+      - name: Handheld tutorial text layout
+        run: python3 tools/3ds/tests/handheld_text.py

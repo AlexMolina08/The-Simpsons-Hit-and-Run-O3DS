@@ -143,6 +143,22 @@ void FeText::AddTextBibleString( const char* textBibleName, const char* stringID
 }
 
 
+tFont* FeText::GetFont() const
+{
+    // A second-screen label may be queried before its first Display(), after
+    // the asynchronously loaded font has become available in the resource table.
+    if( !mFont && mTextStyle )
+    {
+        tFont* font=dynamic_cast<tFont*>(FeApp::GetInstance()->GetFeResourceManager().GetResource(mTextStyle));
+        if( font )
+        {
+            font->AddRef();
+            const_cast<FeText*>(this)->mFont=font;
+        }
+    }
+    return mFont;
+}
+
 void FeText::Display() //Override
 {
     if( mFont )

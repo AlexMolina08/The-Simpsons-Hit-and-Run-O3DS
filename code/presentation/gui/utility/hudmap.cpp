@@ -53,6 +53,7 @@
 #include <presentation/fmvplayer/fmvplayer.h>
 #include <p3d/font.hpp>
 #include <pddi/pica/bottomframe.hpp>
+#include <presentation/gui/utility/handheldtext.h>
 #include <presentation/gui/ingame/guimanageringame.h>
 #include <presentation/gui/ingame/guiscreenhud.h>
 #include <cheats/portsettings.h>
@@ -1373,8 +1374,31 @@ void CHudMap::BeforeRenderLayers3DS()
         HideBottomAction(item->m_itemValueArrowL);HideBottomAction(item->m_itemValueArrowR);
         HideBottomAction(item->m_slider.m_pPolygon);HideBottomAction(item->m_slider.m_pImage);
     }
-    if( screen && (screen->GetWindowID()==CGuiWindow::GUI_SCREEN_ID_TUTORIAL ||
-                   screen->GetWindowID()==CGuiWindow::GUI_SCREEN_ID_LOADING) )
+    if( screen && screen->GetWindowID()==CGuiWindow::GUI_SCREEN_ID_LOADING )
+    {
+        Scrooby::Page* page=screen->GetScroobyScreen()->GetPage("Loading");
+        if( page )
+        {
+            HideBottomAction(page->GetGroup("LoadingBar"));
+            HideBottomAction(page->GetText("Loading"));
+        }
+    }
+    if( screen && (screen->GetWindowID()==CGuiWindow::GUI_SCREEN_ID_PAUSE_SUNDAY ||
+                   screen->GetWindowID()==CGuiWindow::GUI_SCREEN_ID_PAUSE_MISSION) )
+    {
+        // Only the root pause menu has moved all its board content downstairs.
+        // Detail screens keep their own boards, artwork and mission information.
+        HideBottomAction(screen->GetScroobyScreen()->GetPage("XSmallBoard"));
+    }
+    if( screen && screen->GetWindowID()==CGuiWindow::GUI_SCREEN_ID_LEVEL_STATS )
+    {
+        Scrooby::Screen* resource=screen->GetScroobyScreen();
+        HideBottomAction(resource->GetPage("LevelStats"));
+        HideBottomAction(resource->GetPage("XSmallBoard"));
+        HideBottomAction(resource->GetPage("Continue"));
+        HideBottomAction(resource->GetPage("Back"));
+    }
+    if( screen && screen->GetWindowID()==CGuiWindow::GUI_SCREEN_ID_TUTORIAL )
     {
         // Tutorials and the newspaper use the lower display without duplication.
         Scrooby::Screen* resource=screen->GetScroobyScreen();
@@ -1454,11 +1478,12 @@ namespace
         const bool loading=startupLoading || id==CGuiWindow::GUI_SCREEN_ID_LOADING ||
             id==CGuiWindow::GUI_SCREEN_ID_MISSION_LOAD;
         const bool tutorial=id==CGuiWindow::GUI_SCREEN_ID_TUTORIAL;
+        const bool stats=id==CGuiWindow::GUI_SCREEN_ID_LEVEL_STATS;
         const bool splash=id==CGuiWindow::GUI_SCREEN_ID_SPLASH;
         const bool movie=GetPresentationManager() && GetPresentationManager()->GetFMVPlayer() &&
             GetPresentationManager()->GetFMVPlayer()->IsPlaying();
         // Cinematics and boot artwork belong to the upper display only.
-        if( view == NULL || screen == NULL || movie || (!loading && !tutorial && !screen->HasMenu()) )
+        if( view == NULL || screen == NULL || movie || (!loading && !tutorial && !stats && !screen->HasMenu()) )
         {
             if( picaBottomScreenInterfaceBegin() )
             {
@@ -1559,10 +1584,133 @@ namespace
             p3d::AsciiToUnicode(screen->IsButtonVisible(BUTTON_ICON_BACK) ? "A SELECT   /   B BACK" : "A SELECT",hint,32);
             BottomLabel(hintFont,hint,43,215,9,tColour(192,183,211));
         }
-        else if( tutorial || id==CGuiWindow::GUI_SCREEN_ID_LOADING )
+        else if( stats )
+        {
+            Scrooby::Page* page=screen->GetScroobyScreen()->GetPage("LevelStats");
+            Scrooby::Group* group=page ? page->GetGroup("Stats") : NULL;
+            Scrooby::Text* heading=page ? page->GetText("LevelProgress") : NULL;
+            const char* names[9][2]={
+                {"StoryMissions","StoryMissions_Unlocked"},
+                {"BonusMissions","BonusMissions_Unlocked"},
+                {"StreetRaces","StreetRaces_Unlocked"},
+                {"Cards","Cards_Unlocked"},
+                {"Clothing","Clothing_Unlocked"},
+                {"Vehicles","Vehicles_Unlocked"},
+                {"Wasps","Wasps_Unlocked"},
+                {"Gags","Gags_Unlocked"},
+                {"LevelComplete","LevelComplete_Value"}
+            };
+            Scrooby::Text* firstLabel=group ? group->GetText(names[0][0]) : NULL;
+            tFont* font=firstLabel ? firstLabel->GetFont() : NULL;
+            if( font && font->GetFontHeight()>0 )
+            {
+                if( heading )
+                {
+                    const P3D_UNICODE* title=heading->GetStringBuffer();
+                    float width=font->GetTextWidth(title)*16/font->GetFontHeight();
+                    if( width>260 ) width=260;
+                    BottomLabel(font,title,(320-width)*0.5f,23,16,tColour(255,235,0),260);
+                }
+                for( unsigned row=0;row<9;++row )
+                {
+                    Scrooby::Text* label=group->GetText(names[row][0]);
+                    Scrooby::Text* value=group->GetText(names[row][1]);
+                    if( !label || !value ) continue;
+                    const float y=46+row*18;
+                    const tColour colour=row==8 ? tColour(255,235,0) : tColour(225,219,234);
+                    BottomLabel(font,label->GetStringBuffer(),30,y,15,colour,184);
+                    const P3D_UNICODE* number=value->GetStringBuffer();
+                    float width=font->GetTextWidth(number)*15/font->GetFontHeight();
+                    if( width>64 ) width=64;
+                    BottomLabel(font,number,290-width,y,15,colour,64);
+                }
+                P3D_UNICODE hint[32];
+                p3d::AsciiToUnicode("A CONTINUE   /   B BACK",hint,32);
+                BottomLabel(font,hint,30,220,12,tColour(225,219,234),260);
+            }
+        }
+        else if( id==CGuiWindow::GUI_SCREEN_ID_LOADING )
+        {
+            Scrooby::Page* page=screen->GetScroobyScreen()->GetPage("Loading");
+            Scrooby::Text* label=page ? page->GetText("Loading") : NULL;
+            if( label && label->GetFont() )
+            {
+                tFont* font=label->GetFont();
+                P3D_UNICODE title[32],hint[32];
+                p3d::AsciiToUnicode("SPRINGFIELD SHOPPER",title,32);
+                p3d::AsciiToUnicode("PLEASE STAND BY",hint,32);
+                const float titleWidth=font->GetTextWidth(title)*18/font->GetFontHeight();
+                const float hintWidth=font->GetTextWidth(hint)*12/font->GetFontHeight();
+                BottomLabel(font,title,(320-titleWidth)*0.5f,76,18,tColour(255,235,0),280);
+                BottomLabel(font,hint,(320-hintWidth)*0.5f,108,12,tColour(225,219,234),280);
+                const P3D_UNICODE* text=label->GetStringBuffer();
+                const float width=font->GetTextWidth(text)*16/font->GetFontHeight();
+                BottomLabel(font,text,(320-width)*0.5f,175,16,tColour(255,255,255),280);
+            }
+            // Retain the original dynamite wick, flame and progress animation.
+            if( page ) DisplayBottomDrawable(page->GetGroup("LoadingBar"));
+        }
+        else if( tutorial )
         {
             Scrooby::Screen* resource=screen->GetScroobyScreen();
-            if( resource ) for( int i=0; i<resource->GetNumberOfPages(); ++i )
+            Scrooby::Page* page=resource ? resource->GetPage("Tutorial") : NULL;
+            Scrooby::Text* message=page ? page->GetText("TutorialMessage3DS") : NULL;
+            tFont* font=message ? message->GetFont() : NULL;
+            if( resource && font && font->GetFontHeight()>0 )
+            {
+                // Keep the original gold frame and pulsing Bart artwork. Text
+                // has its own measured content area and a separate footer row.
+                Scrooby::Group* disable=page->GetGroup("DisableTutorial");
+                Scrooby::Page* accept=resource->GetPage("Continue");
+                const bool messageShown=message->IsVisible();
+                const bool disableShown=disable && disable->IsVisible();
+                const bool acceptShown=accept && accept->IsVisible();
+                message->SetVisible(false);
+                if( disable ) disable->SetVisible(false);
+                if( accept ) accept->SetVisible(false);
+                for( int i=0;i<resource->GetNumberOfPages();++i )
+                    DisplayBottomDrawable(resource->GetPageByIndex(i));
+                message->SetVisible(messageShown);
+                if( disable ) disable->SetVisible(disableShown);
+                if( accept ) accept->SetVisible(acceptShown);
+
+                // Cache layout until the message or font changes. Avoid doing
+                // repeated font measurements on the original ARM11 each frame.
+                static P3D_UNICODE cachedText[256]={0},lines[16][256];
+                static tFont* cachedFont=NULL;
+                static unsigned lineCount=0;
+                static float height=16;
+                const P3D_UNICODE* text=message->GetStringBuffer();
+                unsigned length=0;
+                while( text && text[length] && length<255 ) ++length;
+                if( text && (cachedFont!=font || memcmp(cachedText,text,(length+1)*sizeof(*text))!=0) )
+                {
+                    memcpy(cachedText,text,length*sizeof(*text));cachedText[length]=0;
+                    cachedFont=font;
+                    for( int candidate=16;candidate>=10;--candidate )
+                    {
+                        height=float(candidate);
+                        lineCount=HandheldText::Wrap(cachedText,lines,[&](const P3D_UNICODE* line){
+                            return font->GetTextWidth(line)*height/font->GetFontHeight()<=216;
+                        });
+                        if( lineCount<=16 && height+(lineCount ? lineCount-1 : 0)*(height+5)<=113 ) break;
+                    }
+                }
+                if( lineCount && lineCount<=16 )
+                {
+                    const float blockHeight=height+(lineCount-1)*(height+5);
+                    const float firstLine=74+(113-blockHeight)*0.5f+height*0.2f;
+                    for( unsigned row=0;row<lineCount;++row )
+                        BottomLabel(font,lines[row],52,firstLine+row*(height+5),height,tColour(255,255,255),216);
+                }
+                P3D_UNICODE hide[32],next[32];
+                p3d::AsciiToUnicode("X HIDE TUTORIALS",hide,32);
+                p3d::AsciiToUnicode("A CONTINUE",next,32);
+                if( disableShown ) BottomLabel(font,hide,30,220,13,tColour(225,219,234),160);
+                const float nextWidth=font->GetTextWidth(next)*13/font->GetFontHeight();
+                BottomLabel(font,next,290-nextWidth,220,13,tColour(225,219,234),100);
+            }
+            else if( resource ) for( int i=0;i<resource->GetNumberOfPages();++i )
                 DisplayBottomDrawable(resource->GetPageByIndex(i));
         }
         p3d::stack->Pop();

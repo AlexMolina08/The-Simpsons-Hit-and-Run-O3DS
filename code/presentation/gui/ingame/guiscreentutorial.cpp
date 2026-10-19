@@ -141,7 +141,11 @@ CGuiScreenTutorial::CGuiScreenTutorial
 #ifdef SRR2_OLD_3DS
         // The lower display needs room for larger, reflowed tutorial text.
         Scrooby::Group* bottomFrame=pPageSmallBoard->GetGroup("Frame");
-        if( bottomFrame ) bottomFrame->ScaleAboutCenter(1.25f,1.3f,1.0f);
+        if( bottomFrame )
+        {
+            bottomFrame->ScaleAboutCenter(1.25f,1.5f,1.0f);
+            bottomFrame->Translate(0,-24);
+        }
 #endif
 
 #ifdef PAL
@@ -216,6 +220,9 @@ void CGuiScreenTutorial::HandleMessage(	eGuiMessage message,
                 rAssert( m_bartsHead != NULL );
                 m_bartsHead->ResetTransformation();
                 m_bartsHead->ScaleAboutCenter( currentScale );
+#ifdef SRR2_OLD_3DS
+                m_bartsHead->Translate(0, 64);
+#endif
 
 #ifdef WAIT_UNTIL_DIALOG_DONE
 /*
@@ -381,6 +388,9 @@ void CGuiScreenTutorial::InitIntro()
     rAssert( m_bartsHead != NULL );
     m_bartsHead->ResetTransformation();
     m_bartsHead->ScaleAboutCenter( BART_ICON_CORRECTION_SCALE );
+#ifdef SRR2_OLD_3DS
+    m_bartsHead->Translate(0, 64);
+#endif
 
     m_elapsedDialogTime = 0;
 #endif

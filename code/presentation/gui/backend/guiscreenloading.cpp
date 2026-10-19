@@ -53,6 +53,14 @@
     const char* DYNA_LOAD_INVENTORY_SECTION = "LoadingScreenImages";
 #endif
 
+#ifdef SRR2_OLD_3DS
+namespace { bool s_newspaperEntranceActive=false; }
+extern "C" bool old3dsNewspaperAnimating(void)
+{
+    return s_newspaperEntranceActive;
+}
+#endif
+
 // this is to correct the original reduced scale in the source image
 //
 #ifdef RAD_WIN32
@@ -240,7 +248,13 @@ void CGuiScreenLoading::HandleMessage
                 // update loading image
                 //
                 static float SPIRAL_DURATION_TIME = 1800.0f; // in msec
+#ifdef SRR2_OLD_3DS
+                // Preserve the original spiral/zoom with three complete turns.
+                // The PC's 60 ms period aliases at the handheld's 30 Hz cadence.
+                static float SPIRAL_ROTATION_TIME = 300.0f; // in msec
+#else
                 static float SPIRAL_ROTATION_TIME = 60.0f; // in msec
+#endif
 
                 m_elapsedSpiralTime += param1;
                 m_isSpirallingDone = GuiSFX::Spiral( m_loadingImage,
@@ -250,6 +264,10 @@ void CGuiScreenLoading::HandleMessage
                                                      0.25f, // LOADING_IMAGE_CORRECTION_SCALE * 2.0f,
                                                      LOADING_IMAGE_CORRECTION_SCALE );
             }
+
+#ifdef SRR2_OLD_3DS
+            s_newspaperEntranceActive=!m_isSpirallingDone && m_loadingImage->IsVisible();
+#endif
 
             static float ROTATION_PERIOD = 20000; // in msec
             float currentAngle = ((float)m_elapsedTime / ROTATION_PERIOD) * 360.0f;
@@ -481,6 +499,12 @@ CGuiScreenLoading::OnProcessRequestsComplete( void* pUserData )
     m_loadingImage->SetRawSprite( m_loadingImageSprite, true );
     m_loadingImage->SetVisible( true );
     m_loadingImage->ScaleAboutCenter( 0.0f );
+#ifdef SRR2_OLD_3DS
+    // Start the entrance when the asynchronous image is ready, not while the
+    // request is still waiting behind other loading work.
+    m_elapsedSpiralTime = 0;
+    s_newspaperEntranceActive=true;
+#endif
 
     m_isSpirallingDone = false;
 #endif
@@ -606,6 +630,9 @@ void CGuiScreenLoading::InitOutro()
     m_loadingBar.SetValue( 0.0f );
 
     m_isSpirallingDone = true;
+#ifdef SRR2_OLD_3DS
+    s_newspaperEntranceActive=false;
+#endif
 
     // reset elapsed time for any loading animations
     //

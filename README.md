@@ -32,7 +32,8 @@ The guide covers toolchain installation, PC game data, movie conversion and
 building an executable for the original hardware.
 
 The original models use a single 400×240 gameplay view. The lower screen shows a
-TV menu with touch selection, a frame-synced gameplay map, and the original newspaper loading art.
+TV menu with touch selection and a frame-synced gameplay map. Loading uses the
+original newspaper art above, with status and dynamite progress below.
 Performance varies by scene; demanding areas do not maintain 30 FPS.
 
 ```sh
@@ -96,14 +97,14 @@ Built with devkitPro, libctru and Citro3D.
 ## Install with a QR code
 
 Open **FBI → Remote Install → Scan QR Code** on your Nintendo 3DS.
-This QR code links directly to the v0.1.1-rc.1 CIA preview for testing.
+This QR code links directly to the v0.1.2-rc.2 CIA preview for testing.
 This is a test build, not a stable release. We recommend obtaining a legal copy
 of the original game before testing this port.
 
 <img src="images/cia-install-qr.png" width="392" alt="Direct CIA installation QR code">
 
-[Download the CIA](https://github.com/AlexMolina08/The-Simpsons-Hit-and-Run-O3DS/releases/download/v0.1.1-rc.1/Simpsons-Hit-and-Run-3DS-v0.1.1-rc.1.cia)
+[Download the CIA](https://github.com/AlexMolina08/The-Simpsons-Hit-and-Run-O3DS/releases/download/v0.1.2-rc.2/Simpsons-Hit-and-Run-3DS-v0.1.2-rc.2.cia)
 
 The download is approximately 1.90 GB. See the
-[release notes](https://github.com/AlexMolina08/The-Simpsons-Hit-and-Run-O3DS/releases/tag/v0.1.1-rc.1)
+[release notes](https://github.com/AlexMolina08/The-Simpsons-Hit-and-Run-O3DS/releases/tag/v0.1.2-rc.2)
 for requirements and the current test-build status.
