@@ -41,10 +41,14 @@ Camera and map settings are available from the game menus.
 
 ## Screens
 
-Gameplay uses the native 400×240 top screen. The lower screen has a purple TV
-surround, with a live map during gameplay and animated static in menus and loading
-screens. The map refreshes with each rendered frame. Its refresh rate follows the
-game's frame rate.
+Gameplay uses the native 400×240 top screen. The lower screen shows a live map,
+with tutorials moved below to keep the world visible. The map refreshes with each
+rendered frame; its refresh rate follows the game's frame rate.
+
+The main menu uses a purple TV surround and animated static behind the menu choices.
+Use the controller as usual, or tap a choice to highlight it and tap again to select.
+Loading screens use the original newspaper art, without static. Small interface
+text is enlarged for the native display and uses smooth alpha coverage.
 
 Original-model builds disable stereoscopic rendering and New 3DS CPU acceleration.
 The loop targets 30 FPS, but busy scenes and streaming can run slower. An emulator's

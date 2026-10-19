@@ -42,7 +42,7 @@
 // Keep headings unchanged and use the same factor for drawing and wrapping.
 static float Old3DSTextScale(const tFont* font)
 {
-    return font && font->GetFontSize() <= 32.0f ? 1.25f : 1.0f;
+    return font && font->GetFontSize() <= 32.0f ? 1.5f : 1.0f;
 }
 #endif
 

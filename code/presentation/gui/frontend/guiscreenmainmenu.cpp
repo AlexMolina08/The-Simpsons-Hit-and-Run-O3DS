@@ -53,6 +53,10 @@
 #include <Text.h>
 
 #include <string.h>
+#ifdef RAD_3DS
+#include <3ds.h>
+#include <pddi/pica/bottomframe.hpp>
+#endif
 
 //===========================================================================
 // Global Data, Local Data, Local Classes
@@ -486,6 +490,23 @@ void CGuiScreenMainMenu::HandleMessage
             case GUI_MSG_UPDATE:
             {
                 this->UpdateRunning( param1 );
+#ifdef RAD_3DS
+                if( (hidKeysDown() & KEY_TOUCH) && !m_pMenu->HasSelectionBeenMade() )
+                {
+                    touchPosition touch;hidTouchRead(&touch);
+                    const int count=m_pMenu->GetMenuItem(MENU_ITEM_MAIN_MENU)->m_itemValueCount;
+                    const int row=picaBottomFrame::MenuHit(touch.px,touch.py,count);
+                    if( row>=0 && count<=6 )
+                    {
+                        const bool activate=m_pMenu->GetSelection()==MENU_ITEM_MAIN_MENU &&
+                            m_pMenu->GetSelectionValue(MENU_ITEM_MAIN_MENU)==row;
+                        m_pMenu->Reset(MENU_ITEM_MAIN_MENU);
+                        m_pMenu->SetSelectionValue(MENU_ITEM_MAIN_MENU,row);
+                        if( activate ) this->HandleMessage(GUI_MSG_CONTROLLER_SELECT,
+                            GetGuiSystem()->GetPrimaryController());
+                    }
+                }
+#endif
 
                 break;
             }

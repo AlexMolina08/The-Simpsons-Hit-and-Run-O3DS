@@ -138,6 +138,11 @@ CGuiScreenTutorial::CGuiScreenTutorial
     if( pPageSmallBoard != NULL )
     {
         this->AutoScaleFrame( pPageSmallBoard );
+#ifdef SRR2_OLD_3DS
+        // The lower display needs room for larger, reflowed tutorial text.
+        Scrooby::Group* bottomFrame=pPageSmallBoard->GetGroup("Frame");
+        if( bottomFrame ) bottomFrame->ScaleAboutCenter(1.25f,1.3f,1.0f);
+#endif
 
 #ifdef PAL
         Scrooby::Group* frame = pPageSmallBoard->GetGroup( "Frame" );

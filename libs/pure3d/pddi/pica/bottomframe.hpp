@@ -4,6 +4,14 @@
 namespace picaBottomFrame {
 constexpr float Width=320, Height=240;
 constexpr float Left=21, Top=18, Right=299, Bottom=221;
+constexpr int MenuRowHeight=24;
+inline int MenuTop(int count){return 120-count*MenuRowHeight/2;}
+inline int MenuHit(int x,int y,int count)
+{
+    const int top=MenuTop(count);
+    return x>=34 && x<286 && y>=top && y<top+count*MenuRowHeight
+        ? (y-top)/MenuRowHeight : -1;
+}
 struct Point { float x,y; };
 struct Vertex { Point position; unsigned colour; };
 struct Mesh {

@@ -420,6 +420,13 @@ tTextureFontLoader::LoadObject(tChunkFile* f, tEntityStore* store)
         shader->SetInt(PDDI_SP_FILTER,PDDI_FILTER_BILINEAR);
         shader->SetInt(PDDI_SP_ALPHATEST, 0);
     }
+#ifdef SRR2_OLD_3DS
+    // Loaded font shaders also need smooth coverage at native 240p. The PC
+    // alpha-test threshold can remove the thin edges of downscaled glyphs.
+    shader->SetInt(PDDI_SP_FILTER,PDDI_FILTER_BILINEAR);
+    shader->SetInt(PDDI_SP_BLENDMODE,PDDI_BLEND_ALPHA);
+    shader->SetInt(PDDI_SP_ALPHATEST,0);
+#endif
     font->SetShader(shader);
 
     font->fontSize = f->GetFloat();

@@ -48,6 +48,9 @@
 #include <Polygon.h>
 #ifdef RAD_3DS
 #include <presentation/gui/guisystem.h>
+#include <presentation/gui/guimanager.h>
+#include <p3d/font.hpp>
+#include <pddi/pica/bottomframe.hpp>
 #include <presentation/gui/ingame/guimanageringame.h>
 #include <presentation/gui/ingame/guiscreenhud.h>
 #include <cheats/portsettings.h>
@@ -60,7 +63,9 @@
 extern "C" bool picaBottomScreenBegin( float u0, float v0, float u1, float v1 );
 extern "C" void picaBottomScreenEnd( void );
 extern "C" void picaBottomScreenFrame( void );
-extern "C" void picaBottomScreenIdle( void );
+extern "C" void picaBottomScreenStatic( void );
+extern "C" void picaBottomScreenPanel( int selection, int count );
+extern "C" bool picaBottomScreenInterfaceBegin( void );
 #endif
 
 //===========================================================================
@@ -1296,6 +1301,15 @@ namespace
     Scrooby::Group* s_bottomBackground = NULL;
     bool            s_mapWasVisible        = false;
     bool            s_backgroundWasVisible = false;
+    Scrooby::Page* s_bottomDialogPages[8];
+    bool s_bottomDialogVisible[8];
+    unsigned s_bottomDialogCount=0;
+
+    CGuiScreen* CurrentBottomScreen()
+    {
+        CGuiManager* manager=GetGuiSystem()->GetCurrentManager();
+        return manager ? dynamic_cast<CGuiScreen*>(manager->GetCurrentWindow()) : NULL;
+    }
 
 
     CHudMap* CurrentMap()
@@ -1316,6 +1330,19 @@ void CHudMap::BeforeRenderLayers3DS()
     s_bottomBackground = NULL;
     s_mapWasVisible = false;
     s_backgroundWasVisible = false;
+    s_bottomDialogCount=0;
+    CGuiScreen* screen=CurrentBottomScreen();
+    if( screen && screen->GetWindowID()==CGuiWindow::GUI_SCREEN_ID_TUTORIAL )
+    {
+        // Keep the world unobstructed; the existing tutorial UI lives below.
+        Scrooby::Screen* resource=screen->GetScroobyScreen();
+        for( int i=0; resource && i<resource->GetNumberOfPages() && i<8; ++i )
+        {
+            Scrooby::Page* page=resource->GetPageByIndex(i);
+            s_bottomDialogPages[i]=page;s_bottomDialogVisible[i]=page->IsVisible();
+            page->SetVisible(false);++s_bottomDialogCount;
+        }
+    }
 
     if( PortSettings::MapOnTop() )
     {
@@ -1340,8 +1367,104 @@ void CHudMap::BeforeRenderLayers3DS()
     }
 }
 
+namespace
+{
+    // Draw existing pages without Screen::Display(), which also advances animation.
+    void DisplayBottomDrawable( Scrooby::Drawable* drawable )
+    {
+        if( drawable == NULL || !drawable->IsVisible() ) return;
+        float x=0, y=0;
+        p3d::stack->Push();
+        p3d::stack->Multiply( *drawable->GetTransform() );
+        drawable->GetNormalizedPosition( x, y );
+        p3d::stack->Translate( x, y, 0 );
+        drawable->Display();
+        p3d::stack->Pop();
+    }
+
+    void BottomLabel( tFont* font, const P3D_UNICODE* text, float x, float y,
+                      float height, tColour colour )
+    {
+        if( text == NULL || font->GetFontHeight() <= 0 ) return;
+        float scale=height/(320.0f*font->GetFontHeight());
+        const float width=font->GetTextWidth(text);
+        if( width*scale > 230.0f/320 ) scale=230.0f/(320*width);
+        const tColour original=font->GetColour();
+        p3d::stack->Push();
+        p3d::stack->Translate( (x+1)/320, (240-y-1)/320, 0 );
+        p3d::stack->Scale( scale, scale, 1 );
+        font->SetColour( tColour(8,6,14) );font->DisplayText( text );
+        p3d::stack->Pop();
+        p3d::stack->Push();
+        p3d::stack->Translate( x/320, (240-y)/320, 0 );
+        p3d::stack->Scale( scale, scale, 1 );
+        font->SetColour( colour );font->DisplayText( text );
+        p3d::stack->Pop();
+        font->SetColour( original );
+    }
+
+    void DisplayBottomInterface( tView* view )
+    {
+        CGuiScreen* screen=CurrentBottomScreen();
+        if( view == NULL || screen == NULL )
+        {
+            if( picaBottomScreenInterfaceBegin() )
+            {
+                picaBottomScreenPanel(-1,0);picaBottomScreenEnd();
+            }
+            return;
+        }
+        const bool mainMenu=screen->GetWindowID()==CGuiWindow::GUI_SCREEN_ID_MAIN_MENU;
+        CGuiMenu* menu=mainMenu ? screen->HasMenu() : NULL;
+        Scrooby::Text* choices=menu && menu->GetNumItems()>0
+            ? dynamic_cast<Scrooby::Text*>(menu->GetMenuItem(0)->GetItem()) : NULL;
+        const int count=choices ? menu->GetMenuItem(0)->m_itemValueCount : 0;
+        const int selection=choices ? menu->GetSelectionValue(0) : -1;
+        const bool list=choices && choices->GetFont() && count>0 && count<=6;
+        if( !picaBottomScreenInterfaceBegin() ) return;
+        view->BeginRender();
+        if( mainMenu ) picaBottomScreenStatic();
+        picaBottomScreenPanel(selection,count);
+        p3d::pddi->PushState( PDDI_STATE_RENDER );
+        p3d::pddi->PushState( PDDI_STATE_VIEW );
+        p3d::pddi->EnableZBuffer(false);
+        p3d::pddi->SetCamera(0.1f,10.0f,1.5708f,4.0f/3);
+        p3d::pddi->SetProjectionMode(PDDI_PROJECTION_PERSPECTIVE);
+        p3d::pddi->SetCullMode(PDDI_CULL_NONE);
+        p3d::stack->Push();p3d::stack->LoadIdentity();
+        p3d::stack->Translate(-0.5f,-0.375f,0.5f);
+        if( list )
+        {
+            tFont* font=choices->GetFont();
+            P3D_UNICODE title[32],hint[48];
+            p3d::AsciiToUnicode("SPRINGFIELD",title,32);
+            p3d::AsciiToUnicode("A: SELECT   /   TAP TWICE",hint,48);
+            BottomLabel(font,title,43,38,12,tColour(255,214,66));
+            BottomLabel(font,hint,43,215,9,tColour(192,183,211));
+            for( int i=0; i<count && i<choices->GetNumOfStrings(); ++i )
+                BottomLabel(font,choices->GetStringBuffer(i),49,
+                    picaBottomFrame::MenuTop(count)+i*picaBottomFrame::MenuRowHeight+17,
+                    13,i==selection ? choices->GetColour() : tColour(225,219,234));
+        }
+        else
+        {
+            Scrooby::Screen* resource=screen->GetScroobyScreen();
+            if( resource ) for( int i=0; i<resource->GetNumberOfPages(); ++i )
+                DisplayBottomDrawable(resource->GetPageByIndex(i));
+        }
+        p3d::stack->Pop();
+        p3d::pddi->PopState(PDDI_STATE_VIEW);
+        p3d::pddi->PopState(PDDI_STATE_RENDER);
+        view->EndRender();
+        if( mainMenu ) picaBottomScreenFrame();
+        picaBottomScreenEnd();
+    }
+}
+
 void CHudMap::AfterRenderLayers3DS( tView* guiView )
 {
+    for( unsigned i=0;i<s_bottomDialogCount;++i )
+        s_bottomDialogPages[i]->SetVisible(s_bottomDialogVisible[i]);
     CHudMap* map = s_bottomMap;
     if( map != NULL )
     {
@@ -1352,16 +1475,25 @@ void CHudMap::AfterRenderLayers3DS( tView* guiView )
         }
     }
 
+    const ContextEnum context=GetGameFlow()->GetCurrentContext();
+    if( context != CONTEXT_GAMEPLAY && context != CONTEXT_PAUSE )
+    {
+        DisplayBottomInterface(guiView);
+        return;
+    }
     if( map == NULL )
     {
-        picaBottomScreenIdle();
+        if( picaBottomScreenBegin(0,0,1,1) )
+        {
+            picaBottomScreenPanel(-1,0);picaBottomScreenEnd();
+        }
         return;
     }
 
     CGuiManagerInGame* inGame = GetGuiSystem()->GetInGameManager();
     if( guiView == NULL || inGame == NULL || inGame->GetCurrentScreen() != CGuiWindow::GUI_SCREEN_ID_HUD )
     {
-        picaBottomScreenIdle();
+        DisplayBottomInterface(guiView);
         return;
     }
 
@@ -1369,7 +1501,10 @@ void CHudMap::AfterRenderLayers3DS( tView* guiView )
                        ( map->m_hudLayer == NULL || map->m_hudLayer->IsVisible() );
     if( !shown )
     {
-        picaBottomScreenIdle();
+        if( picaBottomScreenBegin(0,0,1,1) )
+        {
+            picaBottomScreenPanel(-1,0);picaBottomScreenEnd();
+        }
         return;
     }
 
@@ -1378,7 +1513,6 @@ void CHudMap::AfterRenderLayers3DS( tView* guiView )
     if( picaBottomScreenBegin( rect[ 0 ], rect[ 1 ], rect[ 2 ], rect[ 3 ] ) )
     {
         map->DisplayOnBottomScreen( guiView, s_backgroundWasVisible ? s_bottomBackground : NULL );
-        picaBottomScreenFrame();
         picaBottomScreenEnd();
     }
 }

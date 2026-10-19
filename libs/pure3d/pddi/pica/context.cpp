@@ -4333,7 +4333,7 @@ void picaContext::BottomMapPoint(float u, float v, float* bu, float* bv) const
     *bv = bottomDst[1] + (v - bottomSrc[1]) * (bottomDst[3] - bottomDst[1]) / (bottomSrc[3] - bottomSrc[1]);
 }
 
-bool picaContext::BeginBottomScreen(float u0, float v0, float u1, float v1)
+bool picaContext::BeginBottomScreen(float u0, float v0, float u1, float v1, bool fitFrame)
 {
 #ifdef SRR2_OLD3DS_PREPARED_BACKEND
 #ifdef SRR2_OLD3DS_FRAME_PIPELINE
@@ -4351,8 +4351,8 @@ bool picaContext::BeginBottomScreen(float u0, float v0, float u1, float v1)
 
     const float srcW = (u1 - u0) * 640.0f;
     const float srcH = (v1 - v0) * 480.0f;
-    const float availableWidth=picaBottomFrame::Right-picaBottomFrame::Left;
-    const float availableHeight=picaBottomFrame::Bottom-picaBottomFrame::Top;
+    const float availableWidth=fitFrame ? picaBottomFrame::Right-picaBottomFrame::Left : PICA_BOTTOM_WIDTH;
+    const float availableHeight=fitFrame ? picaBottomFrame::Bottom-picaBottomFrame::Top : PICA_BOTTOM_HEIGHT;
     float k=availableWidth/srcW;
     if(availableHeight/srcH<k)k=availableHeight/srcH;
     const float dw=srcW*k/PICA_BOTTOM_WIDTH,dh=srcH*k/PICA_BOTTOM_HEIGHT;
@@ -4452,6 +4452,70 @@ void picaContext::DrawBottomFrame(bool staticPicture)
     PopMatrix(PDDI_MATRIX_MODELVIEW);
     memcpy(bottomSrc,source,sizeof(source));memcpy(bottomDst,destination,sizeof(destination));
     PopState(mask);
+}
+
+void picaContext::DrawBottomPanel(int selection,int count)
+{
+    if(!bottomPass)return;
+    float source[4],destination[4];
+    memcpy(source,bottomSrc,sizeof(source));memcpy(destination,bottomDst,sizeof(destination));
+    bottomSrc[0]=bottomSrc[1]=bottomDst[0]=bottomDst[1]=0;
+    bottomSrc[2]=bottomSrc[3]=bottomDst[2]=bottomDst[3]=1;
+    const auto mask=(pddiStateMask)(PDDI_STATE_RENDER|PDDI_STATE_VIEW|PDDI_STATE_FOG|PDDI_STATE_STENCIL);
+    PushState(mask);PushIdentityMatrix(PDDI_MATRIX_MODELVIEW);
+    SetCamera(0,1,1,1);SetProjectionMode(PDDI_PROJECTION_DEVICE);
+    EnableZBuffer(false);SetZWrite(false);SetCullMode(PDDI_CULL_NONE);
+    EnableStencilBuffer(false);EnableFog(false);SetColourWrite(true,true,true,true);
+    const bool menu=count>0 && count<=6;
+    const bool selected=menu && selection>=0 && selection<count;
+    const int rectangles=menu ? count+4+(selected?2:0) : 1;
+    pddiPrimStream* stream=BeginPrims(defaultShader,PDDI_PRIM_TRIANGLES,PDDI_V_C,6*rectangles);
+    if(stream){
+        const auto rectangle=[&](float left,float top,float right,float bottom,unsigned colour){
+            const unsigned corners[6]={0,1,2,2,1,3};
+            for(unsigned c:corners){
+                pddiVector point;
+                point.Set(((c&1)?right:left)*display->GetWidth()/PICA_BOTTOM_WIDTH,
+                    ((c&2)?bottom:top)*display->GetHeight()/PICA_BOTTOM_HEIGHT,0);
+                stream->Vertex(&point,pddiColour(colour));
+            }
+        };
+        if(menu){
+            rectangle(34,24,286,44,0xff201c32);
+            rectangle(34,201,286,220,0xff201c32);
+            rectangle(34,44,286,45,0xff6f658b);
+            rectangle(34,199,286,200,0xff6f658b);
+            for(int row=0;row<count;++row){
+                const float y=float(picaBottomFrame::MenuTop(count)+row*picaBottomFrame::MenuRowHeight);
+                rectangle(35,y,285,y+picaBottomFrame::MenuRowHeight-2,0xff201c32);
+            }
+        }
+        else rectangle(0,0,320,240,0xff201c32);
+        if(selected){
+            const float y=float(picaBottomFrame::MenuTop(count)+selection*picaBottomFrame::MenuRowHeight);
+            rectangle(35,y,285,y+picaBottomFrame::MenuRowHeight-1,0xff554466);
+            rectangle(35,y,39,y+picaBottomFrame::MenuRowHeight-1,0xffffd642);
+        }
+        EndPrims(stream);
+    }
+    PopMatrix(PDDI_MATRIX_MODELVIEW);
+    memcpy(bottomSrc,source,sizeof(source));memcpy(bottomDst,destination,sizeof(destination));
+    PopState(mask);
+}
+
+extern "C" bool picaBottomScreenInterfaceBegin(void)
+{
+    return s_picaContext && s_picaContext->BeginBottomScreen(0,0,1,1,false);
+}
+
+extern "C" void picaBottomScreenPanel(int selection,int count)
+{
+    if(s_picaContext)s_picaContext->DrawBottomPanel(selection,count);
+}
+
+extern "C" void picaBottomScreenStatic(void)
+{
+    if(s_picaContext)s_picaContext->DrawBottomFrame(true);
 }
 
 extern "C" void picaBottomScreenIdle(void)

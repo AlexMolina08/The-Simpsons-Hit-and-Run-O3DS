@@ -10,7 +10,7 @@ You need your own copy of the PC game. Game assets and DSP firmware are not incl
 See [building and controls](docs/OLD3DS.md).
 
 The original models use a single 400×240 gameplay view. The lower screen shows a
-TV-framed map during gameplay and animated TV static in menus and loading screens.
+TV menu with touch selection, a frame-synced gameplay map, and the original newspaper loading art.
 Performance varies by scene; demanding areas do not maintain 30 FPS.
 
 ```sh
