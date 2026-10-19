@@ -1314,6 +1314,34 @@ namespace
     }
 
 
+    Scrooby::Text* MenuLabel(GuiMenuItem* item)
+    {
+        return dynamic_cast<Scrooby::Text*>(item->GetItem());
+    }
+
+    int MenuRows(CGuiMenu* menu,int (&rows)[64])
+    {
+        int count=0;
+        if( menu && menu->GetNumItems()<=64 ) for( int i=0;i<menu->GetNumItems();++i )
+        {
+            Scrooby::Text* label=MenuLabel(menu->GetMenuItem(i));
+            if( label && label->GetFont() && label->IsVisible() ) rows[count++]=i;
+        }
+        return count;
+    }
+
+    Scrooby::Drawable* s_bottomActions[128];
+    bool s_bottomActionVisible[128];
+    unsigned s_bottomActionCount=0;
+    void HideBottomAction(Scrooby::Drawable* item)
+    {
+        if( !item || s_bottomActionCount>=128 ) return;
+        for( unsigned i=0;i<s_bottomActionCount;++i ) if(s_bottomActions[i]==item)return;
+        s_bottomActions[s_bottomActionCount]=item;
+        s_bottomActionVisible[s_bottomActionCount++]=item->IsVisible();
+        item->SetVisible(false);
+    }
+
     CHudMap* CurrentMap()
     {
         const ContextEnum ctx = GetGameFlow()->GetCurrentContext();
@@ -1334,9 +1362,21 @@ void CHudMap::BeforeRenderLayers3DS()
     s_backgroundWasVisible = false;
     s_bottomDialogCount=0;
     CGuiScreen* screen=CurrentBottomScreen();
-    if( screen && screen->GetWindowID()==CGuiWindow::GUI_SCREEN_ID_TUTORIAL )
+    s_bottomActionCount=0;
+    CGuiMenu* menu=screen ? screen->HasMenu() : NULL;
+    int rows[64];const int rowCount=MenuRows(menu,rows);
+    for( int row=0;row<rowCount;++row )
     {
-        // Keep the world unobstructed; the existing tutorial UI lives below.
+        if( screen->GetWindowID()==CGuiWindow::GUI_SCREEN_ID_MAIN_MENU && rows[row]!=0 ) continue;
+        GuiMenuItem* item=menu->GetMenuItem(rows[row]);
+        HideBottomAction(item->GetItem());HideBottomAction(item->GetItemValue());
+        HideBottomAction(item->m_itemValueArrowL);HideBottomAction(item->m_itemValueArrowR);
+        HideBottomAction(item->m_slider.m_pPolygon);HideBottomAction(item->m_slider.m_pImage);
+    }
+    if( screen && (screen->GetWindowID()==CGuiWindow::GUI_SCREEN_ID_TUTORIAL ||
+                   screen->GetWindowID()==CGuiWindow::GUI_SCREEN_ID_LOADING) )
+    {
+        // Tutorials and the newspaper use the lower display without duplication.
         Scrooby::Screen* resource=screen->GetScroobyScreen();
         for( int i=0; resource && i<resource->GetNumberOfPages() && i<8; ++i )
         {
@@ -1385,12 +1425,12 @@ namespace
     }
 
     void BottomLabel( tFont* font, const P3D_UNICODE* text, float x, float y,
-                      float height, tColour colour )
+                      float height, tColour colour, float maxWidth=230 )
     {
         if( text == NULL || font->GetFontHeight() <= 0 ) return;
         float scale=height/(320.0f*font->GetFontHeight());
         const float width=font->GetTextWidth(text);
-        if( width*scale > 230.0f/320 ) scale=230.0f/(320*width);
+        if( width*scale > maxWidth/320 ) scale=maxWidth/(320*width);
         const tColour original=font->GetColour();
         p3d::stack->Push();
         p3d::stack->Translate( (x+1)/320, (240-y-1)/320, 0 );
@@ -1409,8 +1449,10 @@ namespace
     {
         CGuiScreen* screen=CurrentBottomScreen();
         const CGuiWindow::eGuiWindowID id=screen ? screen->GetWindowID() : CGuiWindow::GUI_WINDOW_ID_UNDEFINED;
-        const bool loading=id==CGuiWindow::GUI_SCREEN_ID_LOADING ||
-            id==CGuiWindow::GUI_SCREEN_ID_LOADING_FE || id==CGuiWindow::GUI_SCREEN_ID_MISSION_LOAD;
+        const bool startupLoading=id==CGuiWindow::GUI_SCREEN_ID_LOADING_FE ||
+            id==CGuiWindow::GUI_SCREEN_ID_BOOTUP_LOAD;
+        const bool loading=startupLoading || id==CGuiWindow::GUI_SCREEN_ID_LOADING ||
+            id==CGuiWindow::GUI_SCREEN_ID_MISSION_LOAD;
         const bool tutorial=id==CGuiWindow::GUI_SCREEN_ID_TUTORIAL;
         const bool movie=GetPresentationManager() && GetPresentationManager()->GetFMVPlayer() &&
             GetPresentationManager()->GetFMVPlayer()->IsPlaying();
@@ -1424,16 +1466,22 @@ namespace
             return;
         }
         const bool mainMenu=screen->GetWindowID()==CGuiWindow::GUI_SCREEN_ID_MAIN_MENU;
-        CGuiMenu* menu=mainMenu ? screen->HasMenu() : NULL;
-        Scrooby::Text* choices=menu && menu->GetNumItems()>0
+        CGuiMenu* menu=screen->HasMenu();
+        Scrooby::Text* choices=mainMenu && menu && menu->GetNumItems()>0
             ? dynamic_cast<Scrooby::Text*>(menu->GetMenuItem(0)->GetItem()) : NULL;
         const int count=choices ? menu->GetMenuItem(0)->m_itemValueCount : 0;
         const int selection=choices ? menu->GetSelectionValue(0) : -1;
         const bool list=choices && choices->GetFont() && count>0 && count<=6;
+        int rows[64];const int rowCount=mainMenu ? 0 : MenuRows(menu,rows);
+        int selectedRow=-1;
+        for( int i=0;i<rowCount;++i ) if(rows[i]==menu->GetSelection())selectedRow=i;
+        const int first=selectedRow>=0 ? (selectedRow/5)*5 : 0;
+        const int visibleRows=rowCount-first<5 ? rowCount-first : 5;
         if( !picaBottomScreenInterfaceBegin() ) return;
         view->BeginRender();
         if( mainMenu ) picaBottomScreenStatic();
-        picaBottomScreenPanel(selection,count);
+        if( !startupLoading ) picaBottomScreenPanel(list ? selection : selectedRow-first,
+            list ? count : visibleRows);
         p3d::pddi->PushState( PDDI_STATE_RENDER );
         p3d::pddi->PushState( PDDI_STATE_VIEW );
         p3d::pddi->EnableZBuffer(false);
@@ -1442,7 +1490,22 @@ namespace
         p3d::pddi->SetCullMode(PDDI_CULL_NONE);
         p3d::stack->Push();p3d::stack->LoadIdentity();
         p3d::stack->Translate(-0.5f,-0.375f,0.5f);
-        if( list )
+        if( startupLoading )
+        {
+            Scrooby::Screen* resource=screen->GetScroobyScreen();
+            Scrooby::Text* label=NULL;
+            for( int i=0; resource && !label && i<resource->GetNumberOfPages(); ++i )
+                label=resource->GetPageByIndex(i)->GetText("Loading");
+            if( label && label->GetFont() )
+            {
+                tFont* font=label->GetFont();
+                P3D_UNICODE text[16];p3d::AsciiToUnicode("LOADING",text,16);
+                const float width=font->GetFontHeight()>0
+                    ? font->GetTextWidth(text)*16/font->GetFontHeight() : 0;
+                BottomLabel(font,text,(320-width)*0.5f,128,16,tColour(255,255,255));
+            }
+        }
+        else if( list )
         {
             tFont* font=choices->GetFont();
             P3D_UNICODE hint[48];
@@ -1453,7 +1516,36 @@ namespace
                     picaBottomFrame::MenuTop(count)+i*picaBottomFrame::MenuRowHeight+17,
                     13,i==selection ? choices->GetColour() : tColour(225,219,234));
         }
-        else
+        else if( visibleRows>0 )
+        {
+            tFont* hintFont=MenuLabel(menu->GetMenuItem(rows[first]))->GetFont();
+            for( int row=0;row<visibleRows;++row )
+            {
+                const int index=rows[first+row];
+                GuiMenuItem* item=menu->GetMenuItem(index);
+                Scrooby::Text* label=MenuLabel(item);
+                Scrooby::Text* value=dynamic_cast<Scrooby::Text*>(item->GetItemValue());
+                const bool slider=item->m_slider.m_pPolygon || item->m_slider.m_pImage;
+                const bool separate=value && value!=label;
+                const float y=picaBottomFrame::MenuTop(visibleRows)+row*picaBottomFrame::MenuRowHeight+17;
+                const tColour colour=!menu->IsMenuItemEnabled(index) ? tColour(128,128,128) :
+                    first+row==selectedRow ? tColour(255,235,0) : tColour(225,219,234);
+                BottomLabel(label->GetFont(),label->GetStringBuffer(),49,y,13,colour,
+                    separate || slider ? 142 : 230);
+                if( separate && value->GetFont() )
+                    BottomLabel(value->GetFont(),value->GetStringBuffer(),202,y,12,colour,78);
+                else if( slider )
+                {
+                    char percent[16];sprintf(percent,"%d%%",int(item->m_slider.m_value*100+0.5f));
+                    P3D_UNICODE number[16];p3d::AsciiToUnicode(percent,number,16);
+                    BottomLabel(label->GetFont(),number,222,y,12,colour,58);
+                }
+            }
+            P3D_UNICODE hint[32];
+            p3d::AsciiToUnicode(screen->IsButtonVisible(BUTTON_ICON_BACK) ? "A SELECT   /   B BACK" : "A SELECT",hint,32);
+            BottomLabel(hintFont,hint,43,215,9,tColour(192,183,211));
+        }
+        else if( tutorial || id==CGuiWindow::GUI_SCREEN_ID_LOADING )
         {
             Scrooby::Screen* resource=screen->GetScroobyScreen();
             if( resource ) for( int i=0; i<resource->GetNumberOfPages(); ++i )
@@ -1472,6 +1564,8 @@ void CHudMap::AfterRenderLayers3DS( tView* guiView )
 {
     for( unsigned i=0;i<s_bottomDialogCount;++i )
         s_bottomDialogPages[i]->SetVisible(s_bottomDialogVisible[i]);
+    for( unsigned i=0;i<s_bottomActionCount;++i )
+        s_bottomActions[i]->SetVisible(s_bottomActionVisible[i]);
     CHudMap* map = s_bottomMap;
     if( map != NULL )
     {

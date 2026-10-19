@@ -47,8 +47,11 @@ rendered frame; its refresh rate follows the game's frame rate.
 
 The main menu uses a purple TV surround and animated static behind the menu choices.
 Use the controller as usual, or tap a choice to highlight it and tap again to select.
-Loading screens use the original newspaper art, without static. Small interface
-text is enlarged for the native display and uses smooth alpha coverage.
+Menu artwork and messages remain above; menu actions use a separate lower-screen
+layout. Startup loading shows the logo above and a loading label below. Level
+loading uses the original newspaper art below, without static. Cinematics play on
+the top screen only. Small interface text is enlarged for the native display and
+uses smooth alpha coverage.
 
 Original-model builds disable stereoscopic rendering and New 3DS CPU acceleration.
 The loop targets 30 FPS, but busy scenes and streaming can run slower. An emulator's
