@@ -4468,7 +4468,7 @@ void picaContext::DrawBottomPanel(int selection,int count)
     EnableStencilBuffer(false);EnableFog(false);SetColourWrite(true,true,true,true);
     const bool menu=count>0 && count<=6;
     const bool selected=menu && selection>=0 && selection<count;
-    const int rectangles=menu ? count+4+(selected?2:0) : 1;
+    const int rectangles=menu ? count+2+(selected?2:0) : 1;
     pddiPrimStream* stream=BeginPrims(defaultShader,PDDI_PRIM_TRIANGLES,PDDI_V_C,6*rectangles);
     if(stream){
         const auto rectangle=[&](float left,float top,float right,float bottom,unsigned colour){
@@ -4481,9 +4481,7 @@ void picaContext::DrawBottomPanel(int selection,int count)
             }
         };
         if(menu){
-            rectangle(34,24,286,44,0xff201c32);
             rectangle(34,201,286,220,0xff201c32);
-            rectangle(34,44,286,45,0xff6f658b);
             rectangle(34,199,286,200,0xff6f658b);
             for(int row=0;row<count;++row){
                 const float y=float(picaBottomFrame::MenuTop(count)+row*picaBottomFrame::MenuRowHeight);

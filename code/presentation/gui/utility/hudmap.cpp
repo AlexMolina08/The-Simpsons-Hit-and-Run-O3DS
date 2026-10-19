@@ -49,6 +49,8 @@
 #ifdef RAD_3DS
 #include <presentation/gui/guisystem.h>
 #include <presentation/gui/guimanager.h>
+#include <presentation/presentation.h>
+#include <presentation/fmvplayer/fmvplayer.h>
 #include <p3d/font.hpp>
 #include <pddi/pica/bottomframe.hpp>
 #include <presentation/gui/ingame/guimanageringame.h>
@@ -1406,11 +1408,18 @@ namespace
     void DisplayBottomInterface( tView* view )
     {
         CGuiScreen* screen=CurrentBottomScreen();
-        if( view == NULL || screen == NULL )
+        const CGuiWindow::eGuiWindowID id=screen ? screen->GetWindowID() : CGuiWindow::GUI_WINDOW_ID_UNDEFINED;
+        const bool loading=id==CGuiWindow::GUI_SCREEN_ID_LOADING ||
+            id==CGuiWindow::GUI_SCREEN_ID_LOADING_FE || id==CGuiWindow::GUI_SCREEN_ID_MISSION_LOAD;
+        const bool tutorial=id==CGuiWindow::GUI_SCREEN_ID_TUTORIAL;
+        const bool movie=GetPresentationManager() && GetPresentationManager()->GetFMVPlayer() &&
+            GetPresentationManager()->GetFMVPlayer()->IsPlaying();
+        // Cinematics and boot artwork belong to the upper display only.
+        if( view == NULL || screen == NULL || movie || (!loading && !tutorial && !screen->HasMenu()) )
         {
             if( picaBottomScreenInterfaceBegin() )
             {
-                picaBottomScreenPanel(-1,0);picaBottomScreenEnd();
+                picaBottomScreenEnd();
             }
             return;
         }
@@ -1436,10 +1445,8 @@ namespace
         if( list )
         {
             tFont* font=choices->GetFont();
-            P3D_UNICODE title[32],hint[48];
-            p3d::AsciiToUnicode("SPRINGFIELD",title,32);
+            P3D_UNICODE hint[48];
             p3d::AsciiToUnicode("A: SELECT   /   TAP TWICE",hint,48);
-            BottomLabel(font,title,43,38,12,tColour(255,214,66));
             BottomLabel(font,hint,43,215,9,tColour(192,183,211));
             for( int i=0; i<count && i<choices->GetNumOfStrings(); ++i )
                 BottomLabel(font,choices->GetStringBuffer(i),49,
