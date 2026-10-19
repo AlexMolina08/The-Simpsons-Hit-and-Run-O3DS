@@ -6,6 +6,9 @@
 #include <pddi/pica/nativecontext.h>
 #include <pddi/pica/preparedstate.hpp>
 #include <pddi/pica/preparedskin.hpp>
+#ifdef SRR2_OLD3DS_DEFERRED_SKIN
+#include <pddi/pica/deferredskin.hpp>
+#endif
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
@@ -21,6 +24,34 @@ public:
     bool valid=false,draining=false;
     unsigned operations=0,geometry=0,flushes=0,submitted=0,paletteCount=0;
     unsigned stateChanges=0,textureRequests=0,textureChanges=0;
+    using DriverCall=void(*)(const void*);
+    unsigned driverUsed=0;
+    bool DriverRoom(unsigned size)const{return !Full() && size<=sizeof(driverBytes) && ((driverUsed+15u)&~15u)<=sizeof(driverBytes)-size;}
+    // Only leaf driver operations with explicitly owned, trivial inputs belong
+    // here. Never defer game callbacks or retain pointers to transient inputs.
+    void AddDriver(DriverCall call,const void* data,unsigned size)
+    {
+        Require(valid && call && DriverRoom(size),"driver_record_capacity");
+        driverUsed=(driverUsed+15u)&~15u;
+        Operation& operation=items[operations++];operation.kind=Driver;
+        operation.driver=call;operation.first=driverUsed;
+#ifdef SRR2_OLD3DS_DEFERRED_SKIN
+        operation.deferredSkin=nullptr;operation.driverTry=nullptr;
+#endif
+        memcpy(driverBytes+driverUsed,data,size);driverUsed+=size;
+    }
+#ifdef SRR2_OLD3DS_DEFERRED_SKIN
+    void AddDeferredSkin(const picaDeferredSkin::Recipe& input)
+    {
+        AddDriver(nullptrDriver,&input,sizeof(input));
+        auto& operation=items[operations-1];operation.driverTry=picaDeferredSkin::Execute;
+        operation.deferredSkin=input.snapshot;input.snapshot->Retain();ownedOperations=operations;
+    }
+    void ResetDeferredSkinCaches()
+    {
+        for(unsigned i=0;i<ownedOperations;++i)if(items[i].kind==Driver && items[i].deferredSkin)items[i].deferredSkin->ResetConsumer();
+    }
+#endif
     void Begin()
     {
         Require(!valid && !operations,"begin_while_owned");
@@ -55,9 +86,36 @@ public:
         Operation& operation=items[operations++];operation.kind=Material;
         operation.pool=&pool;
         operation.material.hasMaterial=input.hasMaterial;operation.material.hasUniforms=input.hasUniforms;
-        if(input.hasMaterial){memcpy(&operation.material.material,&input.material,sizeof(input.material));operation.material.raster=input.raster;}
+#ifdef SRR2_OLD3DS_RETAINED_MATERIAL
+        operation.material.retained=input.retained;
+        if(input.retained){input.retained->Retain();ownedOperations=operations;}
+#endif
+        if(input.hasMaterial){
+#ifdef SRR2_OLD3DS_RETAINED_MATERIAL
+            if(!input.retained)
+#endif
+            memcpy(&operation.material.material,&input.material,sizeof(input.material));
+            operation.material.raster=input.raster;
+        }
         if(input.hasUniforms)operation.material.uniforms=input.uniforms;
     }
+#if defined(SRR2_OLD3DS_RETAINED_MATERIAL) || defined(SRR2_OLD3DS_DEFERRED_SKIN)
+    // Call only on main after the consumer has completed, including error paths.
+    void ReleaseOwnedInputs()
+    {
+        for(unsigned i=0;i<ownedOperations;++i){
+            auto& operation=items[i];
+#ifdef SRR2_OLD3DS_RETAINED_MATERIAL
+            if(operation.kind==Material && operation.material.retained){operation.material.retained->Release();operation.material.retained=nullptr;}
+#endif
+#ifdef SRR2_OLD3DS_DEFERRED_SKIN
+            if(operation.kind==Driver && operation.deferredSkin){operation.deferredSkin->Release();operation.deferredSkin=nullptr;}
+#endif
+        }
+        ownedOperations=0;
+    }
+#endif
+
     void AddGeometry(const picaPreparedGeometry& input)
     {
         Require(valid && !Full(),"geometry_capacity");
@@ -87,25 +145,40 @@ public:
         Require(valid && !Full(),"state_capacity");
         Operation& operation=items[operations++];operation.kind=State;operation.state=input;
     }
-    OLD3DS_HOT_PATH void Flush()
+    const char* failureReason=nullptr;
+    OLD3DS_HOT_PATH bool TryFlush()
     {
-        if(!operations)return;
-        Require(valid && !draining,"recursive_execution");draining=true;++flushes;
+        failureReason=nullptr;
+        if(!operations)return true;
+        if(!valid || draining){failureReason="recursive_execution";return false;}
+        draining=true;++flushes;
         for(unsigned i=0;i<operations;++i)
         {
             Operation& operation=items[i];
             if(operation.kind==Material)
             {
                 picaPreparedDrawInputs& input=operation.material;
+#ifdef SRR2_OLD3DS_RETAINED_MATERIAL
+                const auto* retained=input.retained;
+#endif
                 if(input.hasMaterial)
                 {
                     picaPreparedMaterialCounters counters;
-                    picaApplyPreparedMaterialPass(input.material,state,counters,nullptr,&texture);
-                    if(input.material.textureIdentity)originalTexture=const_cast<C3D_Tex*>(input.material.textureIdentity);
+                    const picaPreparedMaterialPass& pass=
+#ifdef SRR2_OLD3DS_RETAINED_MATERIAL
+                        retained?retained->pass:
+#endif
+                        input.material;
+                    picaApplyPreparedMaterialPass(pass,state,counters,nullptr,&texture);
+                    if(pass.textureIdentity)originalTexture=const_cast<C3D_Tex*>(pass.textureIdentity);
                     stateChanges+=counters.stateChanges+picaApplyPreparedMaterialRaster(input.raster,state);
                     textureRequests+=counters.textureRequests;textureChanges+=counters.textureChanges;
                 }
-                if(input.hasUniforms)picaApplyPreparedUniforms(operation.pool->View(input.uniforms),uniforms);
+                if(input.hasUniforms)picaApplyPreparedUniforms(operation.pool->View(input.uniforms
+#ifdef SRR2_OLD3DS_RETAINED_MATERIAL
+                    ,retained?&retained->uniforms:nullptr
+#endif
+                    ),uniforms);
             }
             else if(operation.kind==Program)
             {
@@ -119,18 +192,26 @@ public:
                 if(operation.normal)C3D_FixedAttribSet(1,0.0f,0.0f,1.0f,0.0f);
                 state.bufInfoSet=false;
             }
-            else if(operation.kind==Palette)Require(picaUploadPreparedSkinPalette(palettes[operation.palette],operation.first),"palette_register_bounds");
+            else if(operation.kind==Palette){if(!picaUploadPreparedSkinPalette(palettes[operation.palette],operation.first)){failureReason="palette_register_bounds";draining=false;return false;}}
             else if(operation.kind==State)stateChanges+=picaApplyPreparedState(operation.state,state);
+            else if(operation.kind==Driver){
+#ifdef SRR2_OLD3DS_DEFERRED_SKIN
+                if(operation.driverTry){if(!operation.driverTry(driverBytes+operation.first)){failureReason="deferred_skin_input";draining=false;return false;}}
+                else
+#endif
+                operation.driver(driverBytes+operation.first);
+            }
             else
             {
                 u32* buffer;u32 size,offset;GPUCMD_GetBuffer(&buffer,&size,&offset);
-                Require(buffer && offset<=size && DrawWordBound<=size-offset,"geometry_command_room");
+                if(!buffer || offset>size || DrawWordBound>size-offset){failureReason="geometry_command_room";draining=false;return false;}
                 picaBindPreparedGeometry(operation.geometry,state.bufInfoSet);
                 picaSubmitPreparedGeometry(operation.geometry);++submitted;
             }
         }
-        operations=geometry=paletteCount=0;draining=false;
+        operations=geometry=paletteCount=driverUsed=0;draining=false;return true;
     }
+    OLD3DS_HOT_PATH void Flush(){const bool ok=TryFlush();Require(ok,failureReason?failureReason:"prepared_execution_failed");}
     void End()
     {
         if(!valid)return;Flush();
@@ -146,7 +227,13 @@ public:
         fprintf(stdout,"PREPARED_EXECUTOR_INVARIANT reason=%s\n",reason);fflush(stdout);std::exit(1);
     }
 private:
-    enum Kind {Material,Geometry,State,Program,Layout,Palette};
+#if defined(SRR2_OLD3DS_RETAINED_MATERIAL) || defined(SRR2_OLD3DS_DEFERRED_SKIN)
+    unsigned ownedOperations=0;
+#endif
+#ifdef SRR2_OLD3DS_DEFERRED_SKIN
+    static void nullptrDriver(const void*){}
+#endif
+    enum Kind {Material,Geometry,State,Program,Layout,Palette,Driver};
     struct Operation {
         Kind kind;const picaPreparedInputPool* pool;
         picaPreparedDrawInputs material;
@@ -154,10 +241,16 @@ private:
         picaPreparedState state;
         shaderProgram_s* program;C3D_AttrInfo* attributes;
         unsigned palette,first;float convergence;bool normal;
+        DriverCall driver;
+#ifdef SRR2_OLD3DS_DEFERRED_SKIN
+        picaDeferredSkin::Snapshot* deferredSkin;
+        bool (*driverTry)(const void*);
+#endif
     };
     static constexpr unsigned PaletteCapacity=8;
     Operation items[Capacity];
     picaPreparedSkinPalette palettes[PaletteCapacity];
+    alignas(16) unsigned char driverBytes[2048];
     C3D_Tex texture;
     C3D_Tex* originalTexture=nullptr;
 };

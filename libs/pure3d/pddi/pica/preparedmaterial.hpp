@@ -23,16 +23,18 @@ struct picaPreparedMaterialCounters {
 // SDK state and counters belong to the consumer. Caller applies the captured
 // culling/write mask to its raster-state shadow, in the original pass order.
 // Keep the record alive until the next bind/fence: Citro3D retains its address.
-inline void picaApplyPreparedMaterialPass(picaPreparedMaterialPass& input,
+inline void picaApplyPreparedMaterialPass(const picaPreparedMaterialPass& input,
     picaStateCache& cache,picaPreparedMaterialCounters& counters,C3D_Tex* liveSynchronousTexture=nullptr,C3D_Tex* ownedStorage=nullptr)
 {
     const bool textured=input.textureIdentity!=nullptr;
     if(textured)
     {
-        C3D_Tex& texture=input.texture;
+        // Retained versions are immutable. Normalize the consumer's descriptor,
+        // preserving the original mutable-record path for synchronous callers.
+        if(ownedStorage)memcpy(ownedStorage,&input.texture,sizeof(input.texture));
+        C3D_Tex& texture=ownedStorage?*ownedStorage:const_cast<C3D_Tex&>(input.texture);
         C3D_TexSetFilter(&texture,input.filter,input.filter);
         C3D_TexSetWrap(&texture,input.wrap,input.wrap);
-        if(ownedStorage)memcpy(ownedStorage,&texture,sizeof(texture));
         ++counters.textureRequests;
         if(!cache.texValid || cache.texPtr!=input.textureIdentity || cache.texData!=texture.data ||
            cache.texParam!=texture.param || cache.texWidth!=texture.width ||

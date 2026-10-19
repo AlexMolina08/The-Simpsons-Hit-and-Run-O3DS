@@ -1,3 +1,4 @@
+#include <main/old3dsmainprofile.h>
 #include <worldsim/character/charactermanager.h>
 #include <worldsim/character/character.h>
 #include <worldsim/character/characterrenderable.h>
@@ -1382,6 +1383,7 @@ Return:         void
 */
 void CharacterManager::Update( float timeins )
 {
+    O3_MAIN_SCOPE(CharactersUpdate);
 	int i;
 
 	for( i = 0; i < MAX_CHARACTERS; i++ )

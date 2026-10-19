@@ -46,8 +46,7 @@ extern picaStateCache g_picaState;
 static inline void picaStateInvalidate(void)
 {
 #ifdef SRR2_OLD3DS_PREPARED_BACKEND
-    if(picaPreparedCaptureState(PICA_PREPARED_INVALIDATE))return;
-    picaPreparedBackendFence();
+    if(picaPreparedCaptureOrFence(PICA_PREPARED_INVALIDATE))return;
 #endif
     g_picaState.alphaTestValid = false;
     g_picaState.blendValid     = false;
@@ -62,8 +61,7 @@ static inline void picaStateInvalidate(void)
 static inline void picaAlphaTest(bool enable, GPU_TESTFUNC func, int ref)
 {
 #ifdef SRR2_OLD3DS_PREPARED_BACKEND
-    if(picaPreparedCaptureState(PICA_PREPARED_ALPHA_TEST,enable,func,ref))return;
-    picaPreparedBackendFence();
+    if(picaPreparedCaptureOrFence(PICA_PREPARED_ALPHA_TEST,enable,func,ref))return;
 #endif
     picaStateCache& s = g_picaState;
     if(s.alphaTestValid && s.alphaTestEnable == enable &&
@@ -85,8 +83,7 @@ static inline void picaAlphaBlend(GPU_BLENDEQUATION colorEq, GPU_BLENDEQUATION a
                                   GPU_BLENDFACTOR srcAlpha, GPU_BLENDFACTOR dstAlpha)
 {
 #ifdef SRR2_OLD3DS_PREPARED_BACKEND
-    if(picaPreparedCaptureState(PICA_PREPARED_BLEND,colorEq,alphaEq,srcClr,dstClr,srcAlpha,dstAlpha))return;
-    picaPreparedBackendFence();
+    if(picaPreparedCaptureOrFence(PICA_PREPARED_BLEND,colorEq,alphaEq,srcClr,dstClr,srcAlpha,dstAlpha))return;
 #endif
     picaStateCache& s = g_picaState;
     if(s.blendValid && s.blendColorEq == colorEq && s.blendAlphaEq == alphaEq &&
@@ -107,8 +104,7 @@ static inline void picaAlphaBlend(GPU_BLENDEQUATION colorEq, GPU_BLENDEQUATION a
 static inline void picaCullFace(GPU_CULLMODE mode)
 {
 #ifdef SRR2_OLD3DS_PREPARED_BACKEND
-    if(picaPreparedCaptureState(PICA_PREPARED_CULL,mode))return;
-    picaPreparedBackendFence();
+    if(picaPreparedCaptureOrFence(PICA_PREPARED_CULL,mode))return;
 #endif
     picaStateCache& s = g_picaState;
     if(s.cullValid && s.cull == mode)
@@ -125,8 +121,7 @@ static inline void picaCullFace(GPU_CULLMODE mode)
 static inline void picaDepthTest(bool enable, GPU_TESTFUNC func, GPU_WRITEMASK mask)
 {
 #ifdef SRR2_OLD3DS_PREPARED_BACKEND
-    if(picaPreparedCaptureState(PICA_PREPARED_DEPTH,enable,func,mask))return;
-    picaPreparedBackendFence();
+    if(picaPreparedCaptureOrFence(PICA_PREPARED_DEPTH,enable,func,mask))return;
 #endif
     picaStateCache& s = g_picaState;
     if(s.depthValid && s.depthEnable == enable && s.depthFunc == func && s.depthMask == mask)
@@ -145,7 +140,7 @@ static inline void picaDepthTest(bool enable, GPU_TESTFUNC func, GPU_WRITEMASK m
 static inline void picaTexBind0(C3D_Tex* tex)
 {
 #ifdef SRR2_OLD3DS_PREPARED_BACKEND
-    picaPreparedBackendFence();
+    picaPreparedFenceIfOwned();
 #endif
 #ifdef SRR2_OLD3DS_CAUSAL_DIAG
     O3ExperimentMip(tex->maxLevel>0);

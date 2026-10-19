@@ -1,3 +1,16 @@
+#include <main/old3dsmainprofile.h>
+#ifdef SRR2_OLD3DS_FRAME_PIPELINE
+#include <citro3d.h>
+#include <pddi/pica/preparedbackend.h>
+#define C3D_GetProcessingTime picaFrameProcessingTime
+#define C3D_GetDrawingTime picaFrameDrawingTime
+#endif
+#ifdef SRR2_OLD3DS_GPU_LISTS
+#include <pddi/pica/nativegpulist.h>
+#endif
+#ifdef SRR2_OLD3DS_VEHICLE_PROFILE
+#include <worldsim/redbrick/old3dsvehicleprofile.h>
+#endif
 #ifdef SRR2_OLD3DS_PREPARED_BACKEND
 #include <pddi/pica/preparedbackend.h>
 #endif
@@ -43,14 +56,33 @@
 #ifdef SRR2_OLD3DS_SUBMIT_PROFILE
 extern "C" void nativeBenchDumpSubmissionProfile(FILE*);
 #endif
+#ifdef SRR2_OLD3DS_FRAME_PIPELINE
+extern void picaFramePipelineDump(FILE*);
+#endif
 namespace NativeBench {
 bool detail=false,collecting=false,validation=false;
 static unsigned behaviorHash=2166136261u;
+#ifdef SRR2_OLD3DS_DEFERRED_SKIN
+static unsigned deferredSkinMode=0;
+static picaDeferredSkinStats deferredSkinStart;
+#endif
+#ifdef SRR2_OLD3DS_RETAINED_MATERIAL
+static unsigned retainedMaterialMode=0;
+#endif
 void Hash(unsigned v){if(collecting && validation)behaviorHash=(behaviorHash^v)*16777619u;}
 void HashFloat(float f){unsigned v;memcpy(&v,&f,4);Hash(v);}
 unsigned counters[CountC];
 static const unsigned Capacity=2048, Bins=2048;
 struct Record {
+#ifdef SRR2_OLD3DS_DEFERRED_SKIN
+ unsigned deferredSkin,deferredSkinCaptures,deferredSkinRecipes;
+#endif
+#ifdef SRR2_OLD3DS_RETAINED_MATERIAL
+ unsigned retainedMaterial;
+#endif
+#ifdef SRR2_OLD3DS_GPU_LISTS
+ unsigned gpuListMode,gpuListHits,gpuListMisses,gpuListCalls,gpuListFallbacks,gpuListComparisons,gpuListMismatches;
+#endif
 #ifdef SRR2_OLD3DS_PREPARED_BACKEND
  unsigned preparedWorkerDraws,preparedMainDraws,preparedJobs,preparedWaitTicks,preparedCommitTicks,preparedComparisons,preparedMismatches;
  unsigned preparedMode,preparedMaterials,preparedUniforms,preparedGeometry,preparedSkin,preparedViews,preparedLights,preparedMaterialUniforms,preparedFlushes,preparedBatchedDraws,preparedBatchTicks;
@@ -85,8 +117,19 @@ static unsigned reloadPhase=0,reloadMs=0;
 static bool enabled=true,replay=false,placed=false,done=false,aborted=false;
 static u64 benchmarkStart;
 static unsigned nativeContextMode;
+#ifdef SRR2_OLD3DS_GPU_LISTS
+static unsigned gpuListMode=0;
+static picaGpuListStats gpuListStart;
+#endif
 #ifdef SRR2_OLD3DS_PREPARED_BACKEND
 static unsigned preparedMode=0;
+static unsigned preparedAssignmentXor=0;
+static unsigned preparedExecution(unsigned mode){
+#ifdef SRR2_OLD3DS_FRAME_PIPELINE
+ if(mode==7 || mode==8)return 7;if(mode==9 || mode==11)return 9;if(mode==10)return 10;
+#endif
+ return mode==6?6:(mode>=4?4:(mode==3?3:1));
+}
 static picaPreparedBackendStats preparedStart;
 #endif
 #ifdef SRR2_OLD3DS_RENDER_WORKER
@@ -112,6 +155,9 @@ void Scope::EndScope(){if(!start)return;u64 end=svcGetSystemTick(),dt=end-start;
 bool ResidentShaders(){return residentShaders;}
 bool NativeUniforms(){return nativeUniforms;}
 void Init(int argc,char** argv){
+#ifdef SRR2_OLD3DS_VEHICLE_PROFILE
+ Old3dsVehicleProfile::CaptureEnabled()=false;
+#endif
  FILE* f=fopen("native-automation.txt","r");
  // This development-only build defaults to the real-time route without SD setup.
  if(f){
@@ -130,8 +176,28 @@ void Init(int argc,char** argv){
  // Netloader arguments override the optional file without modifying the SD.
  // One exact executable can run matched reference/candidate investigations.
  for(int i=1;i<argc;++i){
+#ifdef SRR2_OLD3DS_MAIN_PROFILE
+  static const char mainProfileArgument[]="bench_main_profile=";
+  if(!strncmp(argv[i],mainProfileArgument,sizeof(mainProfileArgument)-1)){Old3dsMainProfile::Configure(strtoul(argv[i]+sizeof(mainProfileArgument)-1,nullptr,10)!=0);continue;}
+#endif
+#ifdef SRR2_OLD3DS_DEFERRED_SKIN
+  static const char deferredSkinArgument[]="bench_deferred_skin=";
+  if(!strncmp(argv[i],deferredSkinArgument,sizeof(deferredSkinArgument)-1)){deferredSkinMode=strtoul(argv[i]+sizeof(deferredSkinArgument)-1,nullptr,10)%3;g_picaDeferredSkinEnabled=deferredSkinMode!=0;continue;}
+#endif
+#ifdef SRR2_OLD3DS_RETAINED_MATERIAL
+  static const char retainedArgument[]="bench_retained_material=";
+  if(!strncmp(argv[i],retainedArgument,sizeof(retainedArgument)-1)){retainedMaterialMode=strtoul(argv[i]+sizeof(retainedArgument)-1,nullptr,10)%3;g_picaRetainedMaterialEnabled=retainedMaterialMode!=0;continue;}
+#endif
+#ifdef SRR2_OLD3DS_FRAME_PIPELINE
+  if(!strncmp(argv[i],"bench_resource_prep=",20)){g_picaUnexposedResourcePrep=strtoul(argv[i]+20,nullptr,10)!=0;continue;}
+  if(!strncmp(argv[i],"bench_frame_prefix=",19)){g_picaFramePrefixEnabled=strtoul(argv[i]+19,nullptr,10)!=0;continue;}
+#endif
+#ifdef SRR2_OLD3DS_GPU_LISTS
+  if(!strncmp(argv[i],"bench_gpu_lists=",16)){gpuListMode=strtoul(argv[i]+16,nullptr,10)%4;g_picaGpuListsEnabled=gpuListMode!=0;g_picaGpuListsValidate=gpuListMode==3;continue;}
+#endif
 #ifdef SRR2_OLD3DS_PREPARED_BACKEND
-  if(!strncmp(argv[i],"bench_prepared=",15)){preparedMode=strtoul(argv[i]+15,nullptr,10)%7;g_picaPreparedExecution=preparedMode==6?6:(preparedMode>=4?4:(preparedMode==3?3:1));g_picaPreparedBackendEnabled=preparedMode==1||preparedMode==3||preparedMode==4||preparedMode==5||preparedMode==6;continue;}
+  if(!strncmp(argv[i],"bench_prepared_xor=",19)){preparedAssignmentXor=strtoul(argv[i]+19,nullptr,10)&1u;continue;}
+  if(!strncmp(argv[i],"bench_prepared=",15)){preparedMode=strtoul(argv[i]+15,nullptr,10)%12;g_picaPreparedExecution=preparedExecution(preparedMode);g_picaPreparedBackendEnabled=preparedMode==1||preparedMode>=3;continue;}
 #endif
 #ifdef SRR2_OLD3DS_RENDER_WORKER
   if(!strncmp(argv[i],"bench_worker=",13)){renderWorkerMode=strtoul(argv[i]+13,nullptr,10)%5;continue;}
@@ -151,6 +217,7 @@ void Init(int argc,char** argv){
   else if(!strncmp(argv[i],"bench_matrix=",13))g_nativeMatrixMode=strtoul(argv[i]+13,nullptr,10)%3;
 #endif
   else if(!strncmp(argv[i],"bench_uniforms=",15))nativeUniforms=atoi(argv[i]+15)!=0;
+  else if(!strncmp(argv[i],"bench_detail=",13))detail=atoi(argv[i]+13)!=0;
   else if(!strncmp(argv[i],"bench_diagnostic=",17))diagnostic=strtoul(argv[i]+17,nullptr,10);
   else if(!strncmp(argv[i],"bench_step=",11))step=strtoul(argv[i]+11,nullptr,10);
  }
@@ -177,6 +244,9 @@ unsigned Begin(unsigned elapsed,int context){
  if(previousCaptured){unsigned ticks=(unsigned)(now-lastBeginTick);records[(recordCount-1)%Capacity].period=ticks;periodSum+=ticks;++periodSamples;previousCaptured=false;}
  lastBeginTick=now;
  collecting=false;
+#ifdef SRR2_OLD3DS_VEHICLE_PROFILE
+ Old3dsVehicleProfile::CaptureEnabled()=false;
+#endif
 #ifdef SRR2_OLD3DS_NATIVE_MATRIX
  g_nativeMatrixCollecting=false;
 #endif
@@ -226,26 +296,53 @@ unsigned Begin(unsigned elapsed,int context){
  }
 #ifdef SRR2_OLD3DS_PREPARED_BACKEND
  if(warmMs<warmup*1000){
-  g_picaPreparedExecution=preparedMode==6?6:(preparedMode>=4?4:(preparedMode==3?3:1));
+  g_picaPreparedExecution=preparedExecution(preparedMode);
   g_picaPreparedBackendEnabled=preparedMode==1||preparedMode>=3;
   warmMs+=dt;return dt;
  }
 #else
  if(warmMs<warmup*1000){warmMs+=dt;return dt;}
 #endif
+#ifdef SRR2_OLD3DS_VEHICLE_PROFILE
+ // Only measured route work contributes to the phase estimates. Loading and
+ // warmup have different vehicle populations and must not bias the cost pool.
+ if(!frame){Old3dsVehicleProfile::counters={};Old3dsVehicleProfile::externalCounters={};}
+ Old3dsVehicleProfile::CaptureEnabled()=true;
+#endif
  memset(&current,0,sizeof(current));memset(counters,0,sizeof(counters));
  current.route=routeMs;current.frame=++frame;current.elapsed=dt;current.realElapsed=elapsed;current.context=context;
+#ifdef SRR2_OLD3DS_GPU_LISTS
+ unsigned listChoice=(frame/24)*0x9e3779b9u;listChoice^=listChoice>>16;listChoice*=0x85ebca6bu;listChoice^=listChoice>>13;
+ g_picaGpuListsEnabled=gpuListMode==2?(listChoice&1)!=0:gpuListMode!=0;
+ current.gpuListMode=g_picaGpuListsEnabled?(g_picaGpuListsValidate?3:1):0;picaGpuListsGetStats(&gpuListStart);
+#endif
 #ifdef SRR2_OLD3DS_PREPARED_BACKEND
- // Randomize blocks rather than individual draws. All fences finish this frame.
+ // Randomize blocks rather than individual draws. Frame-pipeline jobs may
+ // finish during the next update; period analysis must exclude block boundaries.
  unsigned preparedChoice=(frame/24)*0x9e3779b9u;preparedChoice^=preparedChoice>>16;preparedChoice*=0x85ebca6bu;preparedChoice^=preparedChoice>>13;
- g_picaPreparedExecution=preparedMode==6?6:(preparedMode>=4?4:(preparedMode==3?3:1));
- g_picaPreparedBackendEnabled=(preparedMode==2||preparedMode==5)?(preparedChoice&1)!=0:(preparedMode==1||preparedMode==3||preparedMode==4||preparedMode==6);
+ if(preparedMode==8 || preparedMode==11)preparedChoice^=preparedAssignmentXor;
+ g_picaPreparedExecution=preparedExecution(preparedMode);
+ g_picaPreparedBackendEnabled=(preparedMode==2||preparedMode==5||preparedMode==8||preparedMode==11)?(preparedChoice&1)!=0:(preparedMode==1||preparedMode>=3);
  current.preparedMode=g_picaPreparedBackendEnabled?g_picaPreparedExecution:0;picaPreparedBackendGetStats(&preparedStart);
+#ifdef SRR2_OLD3DS_DEFERRED_SKIN
+ g_picaDeferredSkinEnabled=deferredSkinMode==2?((preparedChoice^((preparedMode==8 || preparedMode==11)?0:preparedAssignmentXor))&1)!=0:deferredSkinMode==1;
+ current.deferredSkin=g_picaDeferredSkinEnabled;picaDeferredSkinGetStats(&deferredSkinStart);
+#endif
+#ifdef SRR2_OLD3DS_RETAINED_MATERIAL
+ g_picaRetainedMaterialEnabled=retainedMaterialMode==2?((preparedChoice^((preparedMode==8 || preparedMode==11)?0:preparedAssignmentXor))&1)!=0:retainedMaterialMode==1;
+ current.retainedMaterial=g_picaRetainedMaterialEnabled;
+#endif
 #endif
 #ifdef SRR2_OLD3DS_NATIVE_CONTEXT
  // Deterministic per-frame randomization avoids separate-run traffic confounding.
  unsigned choice=frame*0x9e3779b9u;choice^=choice>>16;choice*=0x85ebca6bu;choice^=choice>>13;
- g_picaNativeContextEnabled=nativeContextMode==1 || (nativeContextMode==2 && (choice&1));
+ const bool contextEnabled=nativeContextMode==1 || (nativeContextMode==2 && (choice&1));
+ if(g_picaNativeContextEnabled!=contextEnabled){
+#ifdef SRR2_OLD3DS_FRAME_PIPELINE
+  picaPreparedBackendFence();
+#endif
+  g_picaNativeContextEnabled=contextEnabled;
+ }
  current.nativeContext=g_picaNativeContextEnabled;
 #ifdef SRR2_OLD3DS_OCCLUSION
  g_picaVisibilityMode=visibilityMode==3 ? ((choice&1)?1:0) : visibilityMode;
@@ -269,11 +366,25 @@ unsigned Begin(unsigned elapsed,int context){
 #endif
  pairStart=g_old3dsCollisionPairs;areaStart=g_old3dsPhysicsAreas;entityStart=entityCalls();
  drawStart=g_old3dsDrawCalls;vertStart=g_old3dsDrawVerts;subStart=g_old3dsPhysicsSubsteps;
+#ifdef SRR2_OLD3DS_MAIN_PROFILE
+ Old3dsMainProfile::BeginFrame(frame,collecting);
+#endif
  return dt;
 }
 static unsigned hashFloat(unsigned h,float f){unsigned v;memcpy(&v,&f,4);return (h^v)*16777619u;}
 bool End(u64 work,int context){
+#ifdef SRR2_OLD3DS_MAIN_PROFILE
+ Old3dsMainProfile::EndFrame(work);
+#endif
+#ifdef SRR2_OLD3DS_DEFERRED_SKIN
+ picaDeferredSkinStats deferredSkinEnd;picaDeferredSkinGetStats(&deferredSkinEnd);
+ current.deferredSkinCaptures=deferredSkinEnd.captures-deferredSkinStart.captures;
+ current.deferredSkinRecipes=deferredSkinEnd.recipes-deferredSkinStart.recipes;
+#endif
  if(!collecting)return aborted || (done && reload && reloadPhase==3 && !hold);u64 overhead=svcGetSystemTick();collecting=false;
+#ifdef SRR2_OLD3DS_VEHICLE_PROFILE
+ Old3dsVehicleProfile::CaptureEnabled()=false;
+#endif
 #ifdef SRR2_OLD3DS_NATIVE_MATRIX
  g_nativeMatrixCollecting=false;
 #endif
@@ -317,6 +428,12 @@ bool End(u64 work,int context){
  current.workerFences=workerEnd.fences-workerStart.fences;
  current.workerWait=(unsigned)(workerEnd.waitTicks-workerStart.waitTicks);
 #endif
+#ifdef SRR2_OLD3DS_GPU_LISTS
+ picaGpuListStats listEnd;picaGpuListsGetStats(&listEnd);
+ current.gpuListHits=listEnd.hits-gpuListStart.hits;current.gpuListMisses=listEnd.misses-gpuListStart.misses;
+ current.gpuListCalls=listEnd.calls-gpuListStart.calls;current.gpuListFallbacks=listEnd.fallbacks-gpuListStart.fallbacks;
+ current.gpuListComparisons=listEnd.comparisons-gpuListStart.comparisons;current.gpuListMismatches=listEnd.mismatches-gpuListStart.mismatches;
+#endif
  current.linear=linearSpaceFree();current.loading=GetLoadingManager()->GetNumCurrentRequests()+pendingAtBegin;current.substeps=g_old3dsPhysicsSubsteps-subStart;
  memcpy(current.count,counters,sizeof(counters));Avatar* a=GetAvatarManager()->GetAvatarForPlayer(0);
  if(a){rmt::Vector p;a->GetPosition(p);current.position[0]=p.x;current.position[1]=p.y;current.position[2]=p.z;current.speed=a->GetSpeedMps();current.incar=a->IsInCar();
@@ -327,7 +444,33 @@ bool End(u64 work,int context){
  traceTicks+=svcGetSystemTick()-overhead;
  done=elapsedMs>=seconds*1000;return done && !hold && !reload;
 }
-void Dump(){if(!enabled)return;FILE*f=fopen("native-" SRR2_OLD3DS_BUILD_ID ".log","w");if(!f)return;
+void Dump(){if(!enabled)return;
+#ifdef SRR2_OLD3DS_FRAME_PIPELINE
+ picaPreparedBackendFence();
+#endif
+ FILE*f=fopen("native-" SRR2_OLD3DS_BUILD_ID ".log","w");if(!f)return;
+#ifdef SRR2_OLD3DS_MAIN_PROFILE
+ Old3dsMainProfile::Dump(f,(double)scopeCalibration*1e9/SYSCLOCK_ARM11/4096);
+#endif
+#ifdef SRR2_OLD3DS_DEFERRED_SKIN
+ fprintf(f,"NATIVE_DEFERRED_SKIN selection=%u enabled=%u live_pose_on_main=1 immutable_pose_input=1\n",deferredSkinMode,g_picaDeferredSkinEnabled);
+#endif
+#ifdef SRR2_OLD3DS_RETAINED_MATERIAL
+ fprintf(f,"NATIVE_RETAINED_MATERIAL selection=%u enabled=%u builds=%u reuses=%u allocation_fallbacks=%u immutable_inputs=1 main_retirement=1\n",retainedMaterialMode,g_picaRetainedMaterialEnabled,g_picaRetainedMaterialBuilds,g_picaRetainedMaterialReuses,g_picaRetainedMaterialFallbacks);
+#endif
+#ifdef SRR2_OLD3DS_FRAME_PIPELINE
+ picaFramePipelineDump(f);
+ fprintf(f,"NATIVE_RESOURCE_PREP enabled=%u exposed_resources_keep_fences=1 gpu_operations_keep_fences=1\n",g_picaUnexposedResourcePrep);
+ fprintf(f,"NATIVE_FRAME_PREFIX enabled=%u protocol=wait_completed_prefix_before_frameend gpu_last_excludes_prefix=1\n",g_picaFramePrefixEnabled);
+#endif
+#ifdef SRR2_OLD3DS_GPU_LISTS
+ picaGpuListStats lists;picaGpuListsGetStats(&lists);
+ fprintf(f,"NATIVE_GPU_LISTS selection=%u hits=%u misses=%u calls=%u fallbacks=%u comparisons=%u mismatches=%u retained_words=%u\n",gpuListMode,lists.hits,lists.misses,lists.calls,lists.fallbacks,lists.comparisons,lists.mismatches,lists.retainedWords);
+#endif
+#ifdef SRR2_OLD3DS_VEHICLE_PROFILE
+ fprintf(f,"NATIVE_VEHICLE_PROFILE measured_route_only=1 sample_ratio=32 phases_nested_in_update=1\n");
+ Old3dsVehicleProfile::Dump(f);
+#endif
 #ifdef SRR2_OLD3DS_SUBMIT_PROFILE
  nativeBenchDumpSubmissionProfile(f);
 #endif
@@ -346,7 +489,13 @@ void Dump(){if(!enabled)return;FILE*f=fopen("native-" SRR2_OLD3DS_BUILD_ID ".log
  0u,
 #endif
 (unsigned)(Capacity*sizeof(Record)),Capacity,overwritten,(double)scopeCalibration*1e9/SYSCLOCK_ARM11/4096);
- fprintf(f,"NATIVE_AUTOMATION diagnostic=%u resident=%u uniforms=%u context_mode=%u source=automation_only clock_complete=%u validation_instrumented=0 gpu_last_is_unassociated=1\n",diagnostic,residentShaders,nativeUniforms,nativeContextMode,done && !aborted);
+ fprintf(f,"NATIVE_AUTOMATION diagnostic=%u resident=%u uniforms=%u context_mode=%u source=automation_only clock_complete=%u validation_instrumented=%u gpu_last_is_unassociated=1\n",diagnostic,residentShaders,nativeUniforms,nativeContextMode,done && !aborted,
+#ifdef SRR2_OLD3DS_FRAME_PIPELINE
+ preparedMode==10
+#else
+ 0u
+#endif
+ );
 #ifdef SRR2_OLD3DS_OCCLUSION
  picaVisibilityStats v;picaVisibilityGetStats(&v);
  fprintf(f,"NATIVE_VISIBILITY selection=%u tested=%u hidden=%u skipped=%u skipped_vertices=%u raster_calls=%u triangles=%u cell_visits=%u resets=%u geometry_bytes=%u geometry_count=%u foreign_barriers=%u query_ms=%.6f raster_ms=%.6f hidden_draw_ms=%.6f observe_keeps_all_draws=1\n",visibilityMode,v.tested,v.hidden,v.skipped,v.skippedVertices,v.rasterCalls,v.triangles,v.cells,v.resets,v.geometryBytes,v.geometryCount,v.foreignBarriers,v.queryTicks*1000.0/SYSCLOCK_ARM11,v.rasterTicks*1000.0/SYSCLOCK_ARM11,v.hiddenDrawTicks*1000.0/SYSCLOCK_ARM11);
@@ -361,7 +510,7 @@ void Dump(){if(!enabled)return;FILE*f=fopen("native-" SRR2_OLD3DS_BUILD_ID ".log
  fprintf(f,"NATIVE_RENDER_WORKER_SELECTION selection=%u\n",renderWorkerMode);picaRenderWorkerDump(f);
 #endif
 #ifdef SRR2_OLD3DS_PREPARED_BACKEND
- fprintf(f,"NATIVE_PREPARED_BACKEND selection=%u synchronous=1 batched_mode=3 worker_mode=4 randomized_worker=5 compare_worker=6 geometry_counts_are_captures=1\n",preparedMode);
+ fprintf(f,"NATIVE_PREPARED_BACKEND selection=%u assignment_xor=%u synchronous=1 batched_mode=3 worker_mode=4 randomized_worker=5 compare_worker=6 geometry_counts_are_captures=1\n",preparedMode,preparedAssignmentXor);
  picaPreparedBackendStats preparedSummary;picaPreparedBackendGetStats(&preparedSummary);
  fprintf(f,"NATIVE_PREPARED_WORKER available=%u core=%u initial_allowance=%u actual_allowance=%u main_fp=%u worker_fp=%u worker_draws=%u main_draws=%u jobs=%u comparisons=%u mismatches=%u\n",preparedSummary.workerAvailable,preparedSummary.workerCore,preparedSummary.initialAllowance,preparedSummary.actualAllowance,preparedSummary.mainFp,preparedSummary.workerFp,preparedSummary.workerDraws,preparedSummary.mainDraws,preparedSummary.workerJobs,preparedSummary.comparisons,preparedSummary.mismatches);
 #endif
@@ -379,7 +528,16 @@ void Dump(){if(!enabled)return;FILE*f=fopen("native-" SRR2_OLD3DS_BUILD_ID ".log
 #ifdef SRR2_OLD3DS_PARALLEL_COLLISION
  fprintf(f," parallel_mode=%u parallel_worker_areas=%u parallel_main_areas=%u parallel_calls=%u parallel_ms=%.6f",r.parallelMode,r.parallelWorker,r.parallelMain,r.parallelCalls,r.parallelTicks*1000.0/SYSCLOCK_ARM11);
 #endif
+#ifdef SRR2_OLD3DS_GPU_LISTS
+ fprintf(f," gpu_list_mode=%u gpu_list_hits=%u gpu_list_misses=%u gpu_list_calls=%u gpu_list_fallbacks=%u gpu_list_comparisons=%u gpu_list_mismatches=%u",r.gpuListMode,r.gpuListHits,r.gpuListMisses,r.gpuListCalls,r.gpuListFallbacks,r.gpuListComparisons,r.gpuListMismatches);
+#endif
 #ifdef SRR2_OLD3DS_PREPARED_BACKEND
+#ifdef SRR2_OLD3DS_RETAINED_MATERIAL
+ fprintf(f," retained_material=%u",r.retainedMaterial);
+#endif
+#ifdef SRR2_OLD3DS_DEFERRED_SKIN
+ fprintf(f," deferred_skin=%u deferred_skin_captures=%u deferred_skin_recipes=%u",r.deferredSkin,r.deferredSkinCaptures,r.deferredSkinRecipes);
+#endif
  fprintf(f," prepared_mode=%u prepared_materials=%u prepared_uniforms=%u prepared_geometry_captures=%u prepared_skin_captures=%u prepared_views=%u prepared_lights=%u prepared_material_uniforms=%u prepared_batch_flushes=%u prepared_batched_draws=%u prepared_batch_execute_us=%.3f",r.preparedMode,r.preparedMaterials,r.preparedUniforms,r.preparedGeometry,r.preparedSkin,r.preparedViews,r.preparedLights,r.preparedMaterialUniforms,r.preparedFlushes,r.preparedBatchedDraws,r.preparedBatchTicks*1000000.0/SYSCLOCK_ARM11);
  fprintf(f," prepared_worker_draws=%u prepared_main_draws=%u prepared_jobs=%u prepared_wait_us=%.3f prepared_commit_us=%.3f prepared_comparisons=%u prepared_mismatches=%u",r.preparedWorkerDraws,r.preparedMainDraws,r.preparedJobs,r.preparedWaitTicks*1000000.0/SYSCLOCK_ARM11,r.preparedCommitTicks*1000000.0/SYSCLOCK_ARM11,r.preparedComparisons,r.preparedMismatches);
 #endif

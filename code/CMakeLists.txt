@@ -1,3 +1,6 @@
+if(SRR2_OLD3DS_GPU_LISTS)
+    add_link_options(-Wl,--wrap=GPUCMD_Split)
+endif()
 if(SRR2_OLD3DS_RENDER_WORKER)
     add_link_options(-Wl,--wrap=GPUCMD_Add -Wl,--wrap=GPUCMD_AddRawCommands -Wl,--wrap=GPUCMD_Split -Wl,--wrap=C3D_FrameSplit -Wl,--wrap=C3D_FrameEnd)
 endif()
@@ -153,6 +156,7 @@ set(SRR2_SOURCES
 	"main/game.cpp"
     "main/old3dsexperiment.cpp"
     "main/nativebench.cpp"
+    "main/old3dsmainprofile.cpp"
     "main/nativesubmitprofile.cpp"
 	"main/pchsrr2.cpp"
 	"main/singletons.cpp"

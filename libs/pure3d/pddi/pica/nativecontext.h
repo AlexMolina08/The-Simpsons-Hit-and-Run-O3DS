@@ -10,6 +10,9 @@ bool picaNativeNormalProgramBound(void);
 C3D_Tex* picaNativeTexture0(void);
 void picaNativeTexture0Alias(C3D_Tex*);
 void picaNativeUpdateContext(void);
+#ifdef SRR2_OLD3DS_GPU_LISTS
+bool picaNativeRetainedDraw(GPU_Primitive_t primitive,int count,bool indexed,u32 offset,int type,int first);
+#endif
 #ifdef SRR2_OLD3DS_PREPARED_THREAD
 void* picaNativeAllocateCheckpoint(void);
 void picaNativeFreeCheckpoint(void*);

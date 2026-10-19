@@ -15,6 +15,11 @@
 #include "citro3d_171/internal.h"
 #include <string.h>
 #include <stddef.h>
+#ifdef SRR2_OLD3DS_GPU_LISTS
+#include "nativegpulist.h"
+#include "drawpacket.h"
+#include <stdlib.h>
+#endif
 
 extern void __real_C3Di_UpdateContext(void);
 #ifdef SRR2_OLD3DS_SUBMIT_PROFILE
@@ -192,6 +197,75 @@ bool picaNativeCanCaptureContext(void)
         !ctx->program->geometryShader && (ctx->texEnvBuf&7)!=GPU_GAS &&
         (!(ctx->flags&C3DiF_FogLut) || (ctx->texEnvBuf&7)==GPU_NO_FOG);
 }
+#ifdef SRR2_OLD3DS_GPU_LISTS
+static void keyAppend(Packet* key,const void* bytes,unsigned size)
+{
+    if((size&3) || key->count+size/4>PICA_GPU_LIST_KEY_WORDS)abort();
+    memcpy(key->data+key->count,bytes,size);key->count+=size/4;
+}
+bool picaNativeRetainedDraw(GPU_Primitive_t primitive,int count,bool indexed,u32 offset,int type,int first)
+{
+    if(!g_picaGpuListsEnabled || !picaGpuListRoom() || !picaNativeCanCaptureContext())return false;
+    C3D_Context* ctx=C3Di_GetContext();
+    const u32 flags=ctx->flags;
+    u32 keyData[PICA_GPU_LIST_KEY_WORDS];Packet key={keyData,0};
+    const u32 drawKey[]={flags&~(C3DiF_Active|C3DiF_DrawUsed),primitive,(u32)count,indexed,offset,(u32)type,(u32)first};
+    keyAppend(&key,drawKey,sizeof(drawKey));
+    if(flags&C3DiF_Viewport)keyAppend(&key,ctx->viewport,sizeof(ctx->viewport));
+    if(flags&C3DiF_Scissor)keyAppend(&key,ctx->scissor,sizeof(ctx->scissor));
+    if(flags&C3DiF_AttrInfo)keyAppend(&key,&ctx->attrInfo,sizeof(ctx->attrInfo));
+    if(flags&C3DiF_BufInfo)keyAppend(&key,&ctx->bufInfo,sizeof(ctx->bufInfo));
+    if(flags&C3DiF_Effect)keyAppend(&key,&ctx->effect,sizeof(ctx->effect));
+    u32 units=0;
+    if(flags&C3DiF_TexAll) {
+        for(unsigned i=0;i<3;++i)if(ctx->tex[i]) {
+            units|=BIT(i);
+            if(!(flags&C3DiF_Tex(i)))continue;
+            C3D_Tex* t=ctx->tex[i];
+            const u32 textureKey[]={t->border,t->dim,t->param,t->lodParam,t->fmt};
+            keyAppend(&key,textureKey,sizeof(textureKey));
+            u32 addresses[6];unsigned n=C3Di_TexIs2D(t)?1:6;
+            for(unsigned j=0;j<n;++j)addresses[j]=osConvertVirtToPhys(n==1?t->data:t->cube->data[j]);
+            keyAppend(&key,addresses,n*4);
+        }
+        keyAppend(&key,&units,4);
+    }
+    if(flags&(C3DiF_TexAll|C3DiF_TexStatus)) {
+        keyAppend(&key,&ctx->texConfig,4);keyAppend(&key,&ctx->texShadow,4);
+    }
+    if(flags&C3DiF_TexEnvBuf) {
+        keyAppend(&key,&ctx->texEnvBuf,4);keyAppend(&key,&ctx->texEnvBufClr,4);keyAppend(&key,&ctx->fogClr,4);
+    }
+    if(flags&C3DiF_TexEnvAll)for(unsigned i=0;i<6;++i)
+        if(flags&C3DiF_TexEnv(i))keyAppend(&key,&ctx->texEnv[i],sizeof(ctx->texEnv[i]));
+    bool hit;u32* list=picaGpuListFind(key.data,key.count,&hit);
+    if(!list)return false;
+    if(!hit) {
+        Packet output={list,0};compileState(&output,ctx);
+        output.count+=picaEncodeDrawPacket(output.data+output.count,primitive,count,indexed,offset,type,first);
+        picaGpuListCommit(list,output.count);
+    } else {
+        if(g_picaGpuListsValidate) {
+            C3D_Context copy=*ctx;u32 expected[PICA_GPU_LIST_WORDS];Packet reference={expected,0};
+            compileState(&reference,&copy);
+            reference.count+=picaEncodeDrawPacket(reference.data+reference.count,primitive,count,indexed,offset,type,first);
+            if(!picaGpuListCompare(list,expected,reference.count))return false;
+        }
+        // Match compileState's SDK bookkeeping without regenerating its GPU words.
+        if(flags&C3DiF_TexAll)ctx->texConfig=(ctx->texConfig&~7u)|units|BIT(16);
+        if(flags&(C3DiF_TexAll|C3DiF_TexStatus))ctx->texConfig&=~BIT(16);
+        ctx->flags&=~(C3DiF_Viewport|C3DiF_Scissor|C3DiF_AttrInfo|C3DiF_BufInfo|C3DiF_Effect|
+            C3DiF_TexAll|C3DiF_TexStatus|C3DiF_TexEnvBuf|C3DiF_TexEnvAll|C3DiF_LightEnv);
+    }
+    // These uniform-register writes commute with retained common state. Neither
+    // path emits a draw until both have completed. Program changes fall back.
+    Packet uniforms={gpuCmdBuf+gpuCmdBufOffset,0};g_picaNativeCommandBlock=&uniforms;g_picaNativeTrackedFlush=true;
+    nativeUpdateUniforms(GPU_VERTEX_SHADER);nativeUpdateUniforms(GPU_GEOMETRY_SHADER);
+    g_picaNativeTrackedFlush=false;g_picaNativeCommandBlock=NULL;gpuCmdBufOffset+=uniforms.count;
+    picaGpuListCall(list);ctx->flags|=C3DiF_DrawUsed;
+    ++fastCalls;compiledWords+=uniforms.count;return true;
+}
+#endif
 void picaNativeCaptureContext(picaNativeContextSnapshot* s)
 {
     C3D_Context* ctx=C3Di_GetContext();C3D_Context* out=&s->context;
@@ -276,5 +350,25 @@ bool picaNativeCompareCheckpoint(const void* left,const void* right)
     C3D_Context ac=a->context,bc=b->context;ac.tex[0]=bc.tex[0]=NULL;
     return a->hasTexture==b->hasTexture && (!a->hasTexture || !memcmp(&a->texture,&b->texture,sizeof(a->texture))) &&
         !memcmp(&ac,&bc,sizeof(ac)) && !memcmp(&a->uniforms,&b->uniforms,sizeof(a->uniforms));
+}
+#endif
+
+#ifdef SRR2_OLD3DS_FRAME_PIPELINE
+extern void C3Di_RenderQueueWaitDone(void);
+void picaNativeFramePrefix(bool run)
+{
+    C3D_FrameSplit(GX_CMDLIST_FLUSH);
+    if(run)gxCmdQueueRun(&C3Di_GetContext()->gxQueue);
+}
+void picaNativeFrameRetirePrefix(void)
+{
+    // The remaining CPU commands are not queued yet. SDK WaitDone waits for
+    // the prefix, then stops and clears an idle queue before FrameEnd adds it.
+    C3Di_RenderQueueWaitDone();
+}
+void picaNativeFrameAbort(void)
+{
+    gxCmdQueueRun(&C3Di_GetContext()->gxQueue);
+    C3Di_RenderQueueWaitDone();
 }
 #endif

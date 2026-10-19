@@ -39,9 +39,20 @@ public:
     void SetPriority(int priority);
     int GetPriority();
 
-    C3D_Tex* GetC3DTexture(void) { return valid ? &tex : NULL; }
+    C3D_Tex* GetC3DTexture(void) {
+#ifdef SRR2_OLD3DS_FRAME_PIPELINE
+        if(valid)renderExposed=true;
+#endif
+        return valid ? &tex : NULL;
+    }
+#ifdef SRR2_OLD3DS_RETAINED_MATERIAL
+    unsigned NativeRevision() const {return nativeRevision;}
+#endif
 
 protected:
+#ifdef SRR2_OLD3DS_RETAINED_MATERIAL
+    unsigned nativeRevision=1;
+#endif
     void FreeStaging(void);
     void UploadLevel(int mipLevel);
     void ConvertAndTile(const unsigned int* rgba, int w, int h, void* dst);
@@ -61,6 +72,11 @@ protected:
     int alphaDepth;
     int priority;
 
+#ifdef SRR2_OLD3DS_FRAME_PIPELINE
+    // Monotonic: any descriptor handed to rendering keeps all future mutation
+    // fences. Newly decoded textures have never been read by an earlier frame.
+    bool renderExposed=false;
+#endif
     C3D_Tex  tex;
     bool    created;
     bool    valid;

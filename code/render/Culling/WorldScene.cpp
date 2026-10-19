@@ -1,3 +1,4 @@
+#include <main/old3dsmainprofile.h>
 #include <render/Culling/WorldScene.h>
 #include <render/Culling/SpatialTreeFactory.h>
 #include <render/Culling/SpatialTree.h>
@@ -1734,6 +1735,7 @@ DSG_SET_PROFILE('C')
 
 void WorldScene::RenderOpaque( void )
 {
+    O3_MAIN_SCOPE(Opaque);
 #ifdef SRR2_OLD3DS_CAUSAL_DIAG
     O3ExperimentWorld worldScope;
 #endif
@@ -1798,6 +1800,7 @@ END_PROFILE("qsort display")
 
 void WorldScene::RenderTranslucent( void )
 {
+    O3_MAIN_SCOPE(Translucent);
 #ifdef SRR2_OLD3DS_CAUSAL_DIAG
     O3ExperimentWorld worldScope;
 #endif
@@ -1869,6 +1872,7 @@ END_PROFILE("qsort2 display")
 //========================================================================
 void WorldScene::Render(  unsigned int viewIndex )
 {
+    O3_MAIN_SCOPE(WorldScene);
     //mStaticTreeWalker.MarkTree( msVisible );
     mStaticTreeWalker.AndTree( msClear );
     //mStaticTreeWalker.OrTree( msVisible );

@@ -7,6 +7,9 @@
 #ifdef SRR2_OLD3DS_PREPARED_BACKEND
 struct picaPreparedMaterialPass;
 #endif
+#ifdef SRR2_OLD3DS_RETAINED_MATERIAL
+struct picaRetainedMaterial;
+#endif
 
 const int picaMaxPasses = 1;
 
@@ -90,6 +93,9 @@ public:
     bool CapturePreparedPass(picaPreparedMaterialPass&);
     static bool PreparedPreviousShader();
 #endif
+#ifdef SRR2_OLD3DS_RETAINED_MATERIAL
+    picaRetainedMaterial* PrepareRetainedMaterial();
+#endif
 #ifdef SRR2_OLD3DS_WHEEL_LOD
     bool WheelLodOpaque() const { return texEnv[0].alphaBlendMode==PDDI_BLEND_NONE && texEnv[0].diffuse.Alpha()==255; }
 #endif
@@ -103,8 +109,12 @@ public:
     bool StaticBatchOpaque() const { return texEnv[0].alphaBlendMode==PDDI_BLEND_NONE && texEnv[0].writeMask==PDDI_WRITE_ALL; }
 #endif
 private:
+#ifdef SRR2_OLD3DS_RETAINED_MATERIAL
+    picaRetainedMaterial* retainedMaterial=nullptr;
+#endif
 #ifdef SRR2_OLD3DS_DRAW_PREP
     void PrepareNative();
+    void PrepareColours();
     bool nativeDirty;
     GPU_TEXTURE_FILTER_PARAM nativeFilter;
     GPU_TEXTURE_WRAP_PARAM nativeWrap;

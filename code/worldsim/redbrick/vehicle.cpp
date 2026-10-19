@@ -1,3 +1,4 @@
+#include <main/old3dsmainprofile.h>
 #include <main/old3dshot.h>
 //=============================================================================
 // Copyright (C) 2001 Radical Entertainment Ltd.  All rights reserved.
@@ -2209,6 +2210,7 @@ void Vehicle::TurboOnHorn()
 OLD3DS_HOT_PATH
 void Vehicle::Update(float dt)
 {
+    O3_MAIN_SCOPE(VehicleUpdate);
 #ifdef SRR2_OLD3DS_VEHICLE_PROFILE
     Old3dsVehicleProfile::Sample vehicleProfile(mLoco==VL_PHYSICS);
 #endif

@@ -37,6 +37,10 @@ int main(){
  assert(externalCounters.calls==1024 && externalCounters.samples==32);
  assert(externalCounters.ticks[DynamicObjects]==352 && externalCounters.ticks[AnimCollisions]==416);
  assert(reads==32*3 && sizeof(ExternalCounters)<=32);
+ CaptureEnabled()=false;const unsigned beforeCalls=counters.calls[0],beforeExternal=externalCounters.calls,beforeReads=reads;
+ {Sample sample(false);sample.End(StateStore);ExternalSample external;external.End(DynamicObjects);}
+ assert(counters.calls[0]==beforeCalls && externalCounters.calls==beforeExternal && reads==beforeReads);
+ CaptureEnabled()=true;
  puts("PASS: rotating traffic/physics sampling at 1/32 across all 32 repeated vehicle slots, exact external/update phase ticks, bounded counters");
 }
 '''

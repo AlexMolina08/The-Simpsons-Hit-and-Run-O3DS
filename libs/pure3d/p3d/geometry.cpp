@@ -1,3 +1,8 @@
+#ifdef SRR2_OLD3DS_MAIN_PROFILE
+#include <main/old3dsmainprofile.h>
+#else
+#define O3_MAIN_SCOPE(stage) ((void)0)
+#endif
 //=============================================================================
 // Copyright (c) 2002 Radical Games Ltd.  All rights reserved.
 //=============================================================================
@@ -104,6 +109,7 @@ void tGeometry::SetPrimGroup(int i, tPrimGroup* group)
 //------------------------------------------------------------------------
 void tGeometry::Display()
 {
+    O3_MAIN_SCOPE(Geometry);
 #if defined(SRR2_OLD3DS_MATERIAL_QUEUE) || defined(SRR2_OLD3DS_QUEUE_METRICS)
     // Scope is deliberately inside Display: no entity, transform, light, pose,
     // texture mutation, or transient stream outlives its original call site.

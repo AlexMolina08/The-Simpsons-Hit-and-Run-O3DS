@@ -19,6 +19,7 @@ source=r'''
 #include <thread>
 using u32=uint32_t;
 #define BIT(n) (1u<<(n))
+#define O3_MAIN_SCOPE(stage) ((void)0)
 #define SRR2_OLD_3DS
 #define SRR2_OLD3DS_PREPARED_BACKEND
 #define SRR2_OLD3DS_GPU_SKIN
@@ -31,7 +32,11 @@ using u32=uint32_t;
 #define SRR2_OLD3DS_LIGHT_LOOP
 constexpr int PDDI_MAX_LIGHTS=4;constexpr unsigned PDDI_MATRIX_MODELVIEW=0,GPU_VERTEX_SHADER=0;
 struct V4{float x,y,z,w;const float& operator[](unsigned i)const{return (&x)[i];}};
-struct pddiMatrix{V4 rows[4];const V4& Row4(unsigned i)const{return rows[i];}};
+struct pddiMatrix{V4 rows[4];const V4& Row4(unsigned i)const{return rows[i];}
+#ifdef SRR2_OLD3DS_DEFERRED_SKIN
+ void Identity();void Mult(const pddiMatrix&,const pddiMatrix&);
+#endif
+};
 struct C3D_FVec{float w,z,y,x;};struct C3D_Mtx{C3D_FVec r[4];};
 struct pddiColour{u32 c=0;unsigned Red()const{return c&255;}unsigned Green()const{return (c>>8)&255;}unsigned Blue()const{return (c>>16)&255;}unsigned Alpha()const{return c>>24;}};
 struct GPU{C3D_FVec vectors[96]={};u32 integers[4]={},booleans=0;std::vector<std::array<u32,6>> trace;};
@@ -43,6 +48,14 @@ void C3D_FVUnifMtx4x4(unsigned type,unsigned id,const C3D_Mtx* m){for(unsigned i
 void C3D_BoolUnifSet(unsigned,unsigned id,bool value){assert(id>=0x68 && id<0x78);unsigned mask=1u<<(id-0x68);if(value)active->booleans|=mask;else active->booleans&=~mask;active->trace.push_back({2,id,unsigned(value),0,0,0});}
 void C3D_IVUnifSet(unsigned,unsigned id,unsigned x,unsigned y,unsigned z,unsigned w){assert(id>=0x60 && id<0x64);active->integers[id-0x60]=x|(y<<8)|(z<<16)|(w<<24);active->trace.push_back({3,id,x,y,z,w});}
 '''
+matrix_source=(root/'libs/radmath/radmath/matrix.cpp').read_text()
+for signature in ['void Matrix::Identity(', 'void Matrix::Mult(']:
+ method=extract(matrix_source,signature).replace('Matrix::','pddiMatrix::').replace('const Matrix&','const pddiMatrix&')
+ method=method.replace('.m[','.rows[')
+ import re
+ method=re.sub(r'(?<![.a-zA-Z0-9_])m\[','rows[',method)
+ source+='#ifdef SRR2_OLD3DS_DEFERRED_SKIN\n'+method+'#endif\n'
+source=source.replace('struct V4{float x,y,z,w;', 'struct V4{float x,y,z,w;float& operator[](unsigned i){return (&x)[i];}')
 for name in ['pddi_shbin.h','skin_shbin.h']:
  source+='\n'.join(line for line in (Path('/tmp/srr2-whole-frame-ipo-build/libs/pure3d')/name).read_text().splitlines() if line.startswith('#define VSH_'))+'\n'
 source+=clean((root/'libs/pure3d/pddi/pica/unlitprojection.hpp').read_text())+clean((root/'libs/pure3d/pddi/pica/directionallight.hpp').read_text())

@@ -72,7 +72,7 @@ class picaContext;void picaPreparedBackendFence();
 pos=source.index('struct Light{')
 source=source[:pos]+addition+clean((root/'libs/pure3d/pddi/pica/preparedbackend.h').read_text())+clean(cache)+'picaStateCache g_picaState={};\n'+clean(prepared)+clean(raster)+tables+rasterTables+r'''
 class picaMat;
-'''+clean((root/'libs/pure3d/pddi/pica/preparedbackend.h').read_text())+clean((root/'libs/pure3d/pddi/pica/preparedbatch.hpp').read_text())+clean((root/'libs/pure3d/pddi/pica/prepareddraw.hpp').read_text())+clean((root/'libs/pure3d/pddi/pica/preparedgeometry.hpp').read_text())+clean((root/'libs/pure3d/pddi/pica/preparedstate.hpp').read_text())+'\n#include <pddi/pica/skincore.hpp>\n'+clean((root/'libs/pure3d/pddi/pica/preparedskin.hpp').read_text())+clean((root/'libs/pure3d/pddi/pica/preparedexecutor.hpp').read_text())+r'''
+'''+clean((root/'libs/pure3d/pddi/pica/preparedbackend.h').read_text())+clean((root/'libs/pure3d/pddi/pica/preparedbatch.hpp').read_text())+clean((root/'libs/pure3d/pddi/pica/retainedmaterial.hpp').read_text())+clean((root/'libs/pure3d/pddi/pica/prepareddraw.hpp').read_text())+clean((root/'libs/pure3d/pddi/pica/preparedgeometry.hpp').read_text())+clean((root/'libs/pure3d/pddi/pica/preparedstate.hpp').read_text())+'\n#include <pddi/pica/skincore.hpp>\n'+clean((root/'libs/pure3d/pddi/pica/preparedskin.hpp').read_text())+'#ifdef SRR2_OLD3DS_DEFERRED_SKIN\n'+clean((root/'libs/pure3d/pddi/pica/deferredskin.hpp').read_text())+'#endif\n'+clean((root/'libs/pure3d/pddi/pica/preparedexecutor.hpp').read_text())+r'''
 picaPreparedBackendStats preparedBackendStats={};
 unsigned g_picaPreparedExecution=1;
 bool g_picaPreparedBackendEnabled=false,g_old3dsDrawBlended=false,g_old3dsDrawAlphaTested=false;
@@ -94,13 +94,17 @@ source=source.replace(' Stack stack;Lighting lighting;Display screen;',''' picaP
  bool PreparedBatching()const;void BeginPreparedExecution();bool PreparedGeometryRoom();void QueuePreparedGeometry(const picaPreparedGeometry&);bool QueuePreparedState(const picaPreparedState&);
  bool QueuePreparedPalette(const picaPreparedSkinPalette&,unsigned);bool QueuePreparedProgram(shaderProgram_s*,C3D_AttrInfo*,bool,unsigned,float);bool QueuePreparedLayout(C3D_AttrInfo*,bool);void SubmitPreparedScissor(GPU_SCISSORMODE,u32,u32,u32,u32);
  int matWriteMask=15;
+
+#ifdef SRR2_OLD3DS_RETAINED_MATERIAL
+ bool CanRetainMaterial()const;
+#endif
  void ApplyDrawMaterial(pddiBaseShader*);void ExecutePreparedUniforms(const picaPreparedUniformView&);
- bool CapturePreparedUniformRecord(picaPreparedUniformRecord&,const void*,unsigned,bool,pddiColour,pddiColour,pddiColour,const float (*)[4]);
+ bool CapturePreparedUniformRecord(picaPreparedUniformRecord&,const void*,unsigned,bool,pddiColour,pddiColour,pddiColour,const float (*)[4],const picaPreparedMaterialUniforms* = nullptr);
  void EnableCulling(bool);void SetMaterialWriteMask(int);void EnableZBuffer(bool);
  void CapturePreparedMaterialRaster(const picaPreparedMaterialPass&,picaPreparedMaterialRaster&);
  Stack stack;Lighting lighting;Display screen;''')
 source+=r'''
-struct Texture{C3D_Tex tex;bool valid=true;C3D_Tex* GetC3DTexture(){return valid?&tex:nullptr;}};
+struct Texture{C3D_Tex tex;unsigned revision=1;unsigned NativeRevision()const{return revision;}bool valid=true;C3D_Tex* GetC3DTexture(){return valid?&tex:nullptr;}};
 struct picaTextureEnv{
  Texture* texture=nullptr;int filterMode=0,uvMode=0,alphaCompareMode=0,alphaBlendMode=0,writeMask=15;
  bool alphaTest=false,twoSided=false,lit=false;float alphaRef=0.5f;
@@ -111,11 +115,17 @@ public:
  picaTextureEnv texEnv[1];picaContext* context=nullptr;bool dirty=true,nativeDirty=true,coloursValid=false;
  int nativeFilter,nativeWrap,nativeCompare,nativeEquation,nativeSource,nativeDestination,nativeAlphaRef;
  float nativeColours[3][4];
- void PrepareNative();void SetDevPass(unsigned);bool CapturePreparedPass(picaPreparedMaterialPass&);static bool PreparedPreviousShader();
+#ifdef SRR2_OLD3DS_RETAINED_MATERIAL
+ picaRetainedMaterial* retainedMaterial=nullptr;
+ picaRetainedMaterial* PrepareRetainedMaterial();
+ ~picaMat(){if(retainedMaterial)retainedMaterial->Release();}
+#endif
+ void PrepareColours();void PrepareNative();void SetDevPass(unsigned);bool CapturePreparedPass(picaPreparedMaterialPass&);static bool PreparedPreviousShader();
  void PreRender() override;void SetPass(int p) override {SetDevPass(p);}
 };
 '''
-for sig in ['bool picaMat::PreparedPreviousShader(', 'void picaMat::PrepareNative(', 'void picaMat::SetDevPass(', 'bool picaMat::CapturePreparedPass(', 'void picaMat::PreRender(']:source+=extract(material,sig)
+for sig in ['bool picaPreparedShaderNeedsFence(', 'bool picaMat::PreparedPreviousShader(', 'void picaMat::PrepareNative(', 'void picaMat::PrepareColours(', 'void picaMat::SetDevPass(', 'bool picaMat::CapturePreparedPass(', 'void picaMat::PreRender(']:source+=extract(material,sig)
+source+='#ifdef SRR2_OLD3DS_RETAINED_MATERIAL\nbool g_picaRetainedMaterialEnabled=false;unsigned g_picaRetainedMaterialBuilds=0,g_picaRetainedMaterialReuses=0,g_picaRetainedMaterialFallbacks=0;\n'+extract(material,'picaRetainedMaterial* picaMat::PrepareRetainedMaterial(')+extract(context,'bool picaContext::CanRetainMaterial(')+'#endif\n'
 context=(root/'libs/pure3d/pddi/pica/context.cpp').read_text()
 for sig in ['bool picaContext::PreparedBatching(', 'void picaContext::BeginPreparedExecution(', 'void picaContext::FlushPreparedExecution(', 'bool picaContext::PreparedGeometryRoom(', 'void picaContext::QueuePreparedGeometry(', 'bool picaContext::QueuePreparedState(', 'bool picaContext::QueuePreparedPalette(', 'bool picaContext::QueuePreparedProgram(', 'bool picaContext::QueuePreparedLayout(', 'void picaContext::SubmitPreparedScissor(', 'void picaContext::ApplyDrawMaterial(', 'void picaContext::ExecutePreparedUniforms(', 'void picaContext::CapturePreparedMaterialRaster(', 'bool picaContext::CapturePreparedUniformRecord(', 'void picaContext::EnableCulling(', 'void picaContext::SetMaterialWriteMask(', 'void picaContext::EnableZBuffer(']:source+=extract(context,sig)
 source+=r'''

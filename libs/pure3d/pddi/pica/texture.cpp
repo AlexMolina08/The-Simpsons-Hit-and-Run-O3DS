@@ -63,6 +63,9 @@ public:
 void picaTexture::TryPromoteVram()
 {
 #ifdef SRR2_OLD3DS_PREPARED_BACKEND
+#ifdef SRR2_OLD3DS_FRAME_PIPELINE
+    if(!g_picaUnexposedResourcePrep)
+#endif
     picaPreparedBackendFence();
 #endif
     if(vramUploaded)return;
@@ -83,8 +86,18 @@ void picaTexture::TryPromoteVram()
     node->bytes=bytes;node->next=NULL;
     // UploadLevel already flushed every mip. This is a raw byte copy, with no
     // display-transfer format conversion, resampling or color quantization.
+#ifdef SRR2_OLD3DS_PREPARED_BACKEND
+    // Promotion touches the shared SDK queue and retires backing data. This
+    // fence remains mandatory even for a texture that has never been drawn.
+#ifdef SRR2_OLD3DS_FRAME_PIPELINE
+    if(g_picaUnexposedResourcePrep)picaPreparedBackendFence();
+#endif
+#endif
     C3D_SyncTextureCopy((u32*)tex.data,0,(u32*)node->data,0,bytes,8);
     linearFree(tex.data);tex.data=node->data;vramAllocation=node;
+#ifdef SRR2_OLD3DS_RETAINED_MATERIAL
+    ++nativeRevision;
+#endif
     vramTextureBytes+=bytes;++vramTextureCopies;
     if(vramTextureBytes>vramTexturePeak)vramTexturePeak=vramTextureBytes;
 }
@@ -221,7 +234,13 @@ void picaTexture::FreeStaging(void)
 bool picaTexture::Create(int x, int y, int bpp, int alpha, int nMip,
                          pddiTextureType textureType, pddiTextureUsageHint usageHint)
 {
+#ifdef SRR2_OLD3DS_RETAINED_MATERIAL
+    ++nativeRevision;
+#endif
 #ifdef SRR2_OLD3DS_PREPARED_BACKEND
+#ifdef SRR2_OLD3DS_FRAME_PIPELINE
+    if(!g_picaUnexposedResourcePrep || renderExposed)
+#endif
     picaPreparedBackendFence();
 #endif
 #ifdef SRR2_OLD3DS_VRAM_TEXTURES
@@ -395,6 +414,9 @@ pddiLockInfo* picaTexture::Lock(int mipMap, pddiRect* rect)
 void picaTexture::Unlock(int mipLevel)
 {
 #ifdef SRR2_OLD3DS_PREPARED_BACKEND
+#ifdef SRR2_OLD3DS_FRAME_PIPELINE
+    if(!g_picaUnexposedResourcePrep || renderExposed)
+#endif
     picaPreparedBackendFence();
 #endif
     if((staging == NULL) || !created)
@@ -412,7 +434,13 @@ extern "C" int g_picaFontTexture = 0;
 
 void picaTexture::UploadLevel(int mipLevel)
 {
+#ifdef SRR2_OLD3DS_RETAINED_MATERIAL
+    ++nativeRevision;
+#endif
 #ifdef SRR2_OLD3DS_PREPARED_BACKEND
+#ifdef SRR2_OLD3DS_FRAME_PIPELINE
+    if(!g_picaUnexposedResourcePrep || renderExposed)
+#endif
     picaPreparedBackendFence();
 #endif
 #ifdef SRR2_OLD3DS_CAUSAL_DIAG
@@ -694,6 +722,9 @@ int  picaTexture::GetPalette(pddiColour* palette)              { return 0; }
 bool picaTexture::UploadMovieYUV(const unsigned char* y, const unsigned char* cr, const unsigned char* cb,
                                int width, int height, int yPitch, int chromaPitch)
 {
+#ifdef SRR2_OLD3DS_RETAINED_MATERIAL
+    ++nativeRevision;
+#endif
 #ifdef SRR2_OLD3DS_PREPARED_BACKEND
     picaPreparedBackendFence();
 #endif

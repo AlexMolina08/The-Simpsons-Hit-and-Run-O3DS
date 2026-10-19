@@ -27,6 +27,10 @@ const int PICA_IMM_DEFAULT_VERTICES = 256;
 
 class picaExtGamma;
 class picaPrimBuffer;
+#ifdef SRR2_OLD3DS_DEFERRED_SKIN
+#include <cstdio>
+namespace picaDeferredSkin {struct Rest;struct Pool;struct Snapshot;}
+#endif
 
 #ifdef SRR2_OLD3DS_STATIC_BATCH
 #include <pddi/pica/staticbatch.hpp>
@@ -36,6 +40,7 @@ struct picaPreparedUniformInput;
 struct picaPreparedDrawInputs;
 struct picaPreparedGeometry;
 struct picaPreparedMaterialPass;
+struct picaPreparedMaterialUniforms;
 struct picaPreparedMaterialRaster;
 struct picaPreparedState;
 struct picaPreparedSkinPalette;
@@ -44,6 +49,7 @@ struct picaPreparedUniformRecord;
 class picaPreparedInputPool;
 class picaPreparedExecutor;
 class picaPreparedWorker;
+class picaFramePipeline;
 class picaContext : public pddiBaseContext
 {
 public:
@@ -166,11 +172,29 @@ public:
     bool ExtBGRA(void)            { return false; }
 
 #ifdef SRR2_OLD3DS_PREPARED_BACKEND
+#ifdef SRR2_OLD3DS_DEFERRED_SKIN
+    picaDeferredSkin::Pool* deferredSkinPool=nullptr;
+    picaDeferredSkin::Snapshot* deferredSkin=nullptr;
+    pddiMatrix* deferredSkinScratch=nullptr;
+    bool BeginDeferredSkin(picaDeferredSkin::Rest*,pddiMatrix*,const pddiMatrix* const*,const bool*);
+    void EndDeferredSkin();
+    void MaterializeDeferredSkin();
+    bool QueueDeferredSkinPalette(const pddiMatrix* const*,unsigned);
+    void DumpDeferredSkin(FILE*);
+#endif
     picaPreparedDrawInputs* preparedDrawCapture=nullptr;
     void ApplyDrawMaterial(pddiBaseShader*);
     picaPreparedInputPool* preparedInputPool=nullptr;
     picaPreparedExecutor* preparedExecutor=nullptr;
 #ifdef SRR2_OLD3DS_PREPARED_THREAD
+#ifdef SRR2_OLD3DS_FRAME_PIPELINE
+    picaFramePipeline* preparedFrame=nullptr;
+    bool preparedFrameAttempted=false,preparedGpuPending=false;
+    void RefreshPreparedOwnership();
+    bool PreparedFrameInFlight() const;
+    bool SubmitPreparedFrame();
+    bool QueuePreparedDriver(void(*)(const void*),const void*,unsigned);
+#endif
     picaPreparedWorker* preparedWorker=nullptr;
     bool preparedWorkerAttempted=false;
     void PreparedCommandBuffer(u32**,u32*,u32*);
@@ -187,7 +211,10 @@ public:
     bool QueuePreparedLayout(C3D_AttrInfo*,bool);
     void SubmitPreparedScissor(GPU_SCISSORMODE,u32,u32,u32,u32);
     void ExecutePreparedUniforms(const picaPreparedUniformView&);
-    bool CapturePreparedUniformRecord(picaPreparedUniformRecord&,const void*,unsigned,bool,pddiColour,pddiColour,pddiColour,const float (*)[4]);
+    bool CapturePreparedUniformRecord(picaPreparedUniformRecord&,const void*,unsigned,bool,pddiColour,pddiColour,pddiColour,const float (*)[4],const picaPreparedMaterialUniforms* = nullptr);
+#ifdef SRR2_OLD3DS_RETAINED_MATERIAL
+    bool CanRetainMaterial() const;
+#endif
     void CapturePreparedMaterialRaster(const picaPreparedMaterialPass&,picaPreparedMaterialRaster&);
     bool CapturePreparedUniforms(picaPreparedUniformInput&,bool,pddiColour,pddiColour,pddiColour,const float (*)[4]);
 #endif
@@ -447,6 +474,12 @@ public:
 #ifdef SRR2_OLD3DS_GPU_SKIN_SUPPORT
     void PrepareGpuSkin(const void* source, unsigned count, unsigned bones, bool selected, bool pedestrian = false, bool named = false);
     bool TryGpuSkin(pddiShader* material, const pddiMatrix* const* matrices, unsigned count);
+#ifdef SRR2_OLD3DS_GPU_SKIN
+    bool SubmitGpuSkin(pddiShader*);
+#endif
+#ifdef SRR2_OLD3DS_DEFERRED_SKIN
+    bool CanDeferGpuSkin(pddiShader*,const pddiMatrix* const*,unsigned,const pddiMatrix*,unsigned) const;
+#endif
     void MutateGpuSkin();
     picaSkinAllocation* skinAllocation;
     picaSkin::Reason skinReason;
@@ -506,6 +539,11 @@ public:
 #endif
 
 protected:
+#ifdef SRR2_OLD3DS_FRAME_PIPELINE
+    // Never clear this after the first draw. Old allocations and all later
+    // writes retain conservative CPU/GPU fences for the rest of their lifetime.
+    bool renderExposed=false;
+#endif
     friend class picaPrimBufferStream;
     picaPrimBufferStream* stream;
     picaContext* context;

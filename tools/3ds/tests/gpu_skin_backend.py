@@ -15,7 +15,7 @@ def extract(signature):
         depth+=(source[e]=='{')-(source[e]=='}');e+=1
     return source[a:e]
 methods='\n'.join(extract(s) for s in ['bool picaContext::BindSkinProgram(bool enabled)',
- 'void picaPrimBuffer::PrepareGpuSkin(', 'void picaPrimBuffer::MutateGpuSkin()', 'bool picaPrimBuffer::TryGpuSkin('])
+ 'void picaPrimBuffer::PrepareGpuSkin(', 'void picaPrimBuffer::MutateGpuSkin()', 'bool picaPrimBuffer::TryGpuSkin(', 'bool picaPrimBuffer::SubmitGpuSkin('])
 methods += '\n#ifdef SRR2_OLD3DS_GPU_SKIN_BATCH\n'+'\n'.join(extract(s) for s in ['void picaContext::BeginSkinBatch()', 'void picaContext::EndSkinBatch()', 'void picaContext::SkinBatchBarrier()'])+'\n#endif\n'
 methods += '\n#ifdef SRR2_OLD3DS_GPU_SKIN_RIGID_PACK\n'+extract('void picaContext::SetSkinLayout(')+'\n#endif\n'
 if prepared:methods+='\n'+extract('bool picaContext::DrawWheelSkin(')+'\n'
@@ -93,7 +93,7 @@ struct picaPrimBuffer {
  picaSkinAllocation* skinAllocation=NULL;picaSkin::Reason skinReason=picaSkin::NotSelected;
  unsigned skinBoneCount=0;bool skinDrawing=false;bool skinRigid=false;
  void PrepareGpuSkin(const void*,unsigned,unsigned,bool,bool pedestrian=false,bool named=false);void MutateGpuSkin();
- bool TryGpuSkin(pddiShader*,const pddiMatrix* const*,unsigned);
+ bool TryGpuSkin(pddiShader*,const pddiMatrix* const*,unsigned);bool SubmitGpuSkin(pddiShader*);
 };
 void picaContext::DrawPrimBuffer(pddiShader*,picaPrimBuffer* p){assert(programSkin && p->skinDrawing);
 #ifdef SRR2_OLD3DS_PREPARED_BACKEND

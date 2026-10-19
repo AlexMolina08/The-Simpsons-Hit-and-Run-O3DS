@@ -1,3 +1,4 @@
+#include <main/old3dsmainprofile.h>
 #include <main/old3dshot.h>
 //=============================================================================
 // Copyright (C) 2002 Radical Entertainment Ltd.  All rights reserved.
@@ -1172,6 +1173,7 @@ void WorldPhysicsManager::SetSimUnits()
 OLD3DS_HOT_PATH
 void WorldPhysicsManager::Update(unsigned int timeDeltaMilliSeconds)
 {
+    O3_MAIN_SCOPE(PhysicsUpdate);
 #ifdef SRR2_OLD3DS_CAUSAL_DIAG
     O3ExperimentTimer causalPhysics(O3E_PHYSICS);
 #endif
@@ -1518,6 +1520,7 @@ void WorldPhysicsManager::DebugInfoDisplay()
 //=============================================================================
 void WorldPhysicsManager::WorldSimSubstepGuts(float dt, bool firstSubstep)
 {
+    O3_MAIN_SCOPE(PhysicsSubstep);
     BEGIN_PROFILE("WorldSimSubstepGuts")
 
     mTotalTime += dt;

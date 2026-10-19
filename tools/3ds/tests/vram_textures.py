@@ -8,7 +8,7 @@ def extract(signature):
  a=source.index(signature);b=source.index('{',a);depth=1;i=b+1
  while depth:depth+=(source[i]=='{')-(source[i]=='}');i+=1
  return source[a:i]
-a=source.index('// Ownership nodes');b=source.index('\n#endif',a)
+a=source.index('// Ownership nodes');b=source.index('\n#endif\n\nstatic const int PICA_STAGING_BPP',a)
 prelude=r'''
 #include <cassert>
 #include <cstdio>

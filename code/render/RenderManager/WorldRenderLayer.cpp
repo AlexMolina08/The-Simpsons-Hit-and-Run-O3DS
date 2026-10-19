@@ -1,3 +1,4 @@
+#include <main/old3dsmainprofile.h>
 //========================================================================
 // Copyright (C) 2002 Radical Entertainment Ltd.  All rights reserved.
 //
@@ -193,6 +194,7 @@ static bool simpleShadows = true;
 //========================================================================
 void WorldRenderLayer::Render()
 {
+    O3_MAIN_SCOPE(WorldLayer);
     BEGIN_PROFILE( "WRL Render" );
 #ifdef DEBUGWATCH
     mDebugRenderTime = radTimeGetMicroseconds();

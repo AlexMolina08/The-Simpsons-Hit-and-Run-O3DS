@@ -1,3 +1,8 @@
+#ifdef SRR2_OLD3DS_MAIN_PROFILE
+#include <main/old3dsmainprofile.h>
+#else
+#define O3_MAIN_SCOPE(stage) ((void)0)
+#endif
 #ifdef SRR2_OLD3DS_NATIVE_MATRIX
 #include <radmath/nativematrix.hpp>
 #endif
@@ -477,6 +482,7 @@ void Matrix::RotateVector(const Vector& src, Vector* dest) const
 #ifndef RAD_GAMECUBE
 void Matrix::Mult(const Matrix& a, const Matrix& b)
 {
+    O3_MAIN_SCOPE(MatrixMultiply);
 
     assert(a.m[0][3] == 0.0f);
     assert(a.m[1][3] == 0.0f);

@@ -1,3 +1,8 @@
+#ifdef SRR2_OLD3DS_MAIN_PROFILE
+#include <main/old3dsmainprofile.h>
+#else
+#define O3_MAIN_SCOPE(stage) ((void)0)
+#endif
 /*
  * poser/pose.cpp
  */
@@ -176,6 +181,7 @@ void Pose::Assign(Pose* pose)
 
 void Pose::Assign(tPose* p3dPose)
 {
+    O3_MAIN_SCOPE(PoserAssign);
     tSkeleton *skel = p3dPose->GetSkeleton();
     
     if (skel != m_Skeleton)
@@ -326,6 +332,7 @@ void Pose::SetRestPose()
 
 void Pose::FillP3DPose(tPose* p3dPose, bool fillObjectMatrices) const
 {
+    O3_MAIN_SCOPE(PoserFill);
     // make sure these are compatible poses
     // Not no more we dont (nbrooke 29/1/03)
 //    P3DASSERT(p3dPose->GetSkeleton() == m_Skeleton);

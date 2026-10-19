@@ -1,3 +1,8 @@
+#ifdef SRR2_OLD3DS_MAIN_PROFILE
+#include <main/old3dsmainprofile.h>
+#else
+#define O3_MAIN_SCOPE(stage) ((void)0)
+#endif
 /*===========================================================================
     compositedrawable.hpp
     30-Oct-00 Created by Liberty 
@@ -317,6 +322,7 @@ bool tCompositeDrawable::DrawWheelLOD(tPose* p)
 
 void tCompositeDrawable::Display(tPose* p)
 {
+    O3_MAIN_SCOPE(Composite);
     if (billboard)
     {
         rmt::Matrix worldMatrix = *(p3d::context->GetWorldMatrix());

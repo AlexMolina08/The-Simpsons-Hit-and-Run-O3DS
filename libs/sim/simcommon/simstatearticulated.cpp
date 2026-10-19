@@ -1,3 +1,8 @@
+#ifdef SRR2_OLD3DS_MAIN_PROFILE
+#include <main/old3dsmainprofile.h>
+#else
+#define O3_MAIN_SCOPE(stage) ((void)0)
+#endif
 #include <main/old3dshot.h>
 
 #include "simcommon/simstatearticulated.hpp"
@@ -615,6 +620,7 @@ SimState* SimStateArticulated::CreateJointSimState(int inJoint, const char* inNa
 OLD3DS_HOT_PATH
 void SimStateArticulated::StoreJointState(float inDt)
 {
+    O3_MAIN_SCOPE(StoreJoints);
     for (int i=0; i<mPose->GetJointCount(); i++)
     {
         mJointState[i].StoreJointState(inDt);

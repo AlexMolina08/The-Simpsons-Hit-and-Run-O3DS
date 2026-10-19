@@ -1,3 +1,8 @@
+#ifdef SRR2_OLD3DS_MAIN_PROFILE
+#include <main/old3dsmainprofile.h>
+#else
+#define O3_MAIN_SCOPE(stage) ((void)0)
+#endif
 #include <pddi/pica/pica.hpp>
 #include <pddi/pica/material.hpp>
 #include <pddi/pica/texture.hpp>
@@ -7,6 +12,7 @@
 #ifdef SRR2_OLD3DS_PREPARED_BACKEND
 #include <pddi/pica/prepareddraw.hpp>
 #include <typeinfo>
+#include <new>
 #endif
 
 #include <pddi/base/debug.hpp>
@@ -14,6 +20,39 @@
 #include <string.h>
 #include <pddi/pica/queuemetrics.hpp>
 #include <main/old3dsdiag.h>
+
+#ifdef SRR2_OLD3DS_RETAINED_MATERIAL
+bool g_picaRetainedMaterialEnabled=false;
+unsigned g_picaRetainedMaterialBuilds=0,g_picaRetainedMaterialReuses=0,g_picaRetainedMaterialFallbacks=0;
+
+picaRetainedMaterial* picaMat::PrepareRetainedMaterial()
+{
+    const auto& e=texEnv[0];
+    const unsigned revision=e.texture?e.texture->NativeRevision():0;
+    const bool current=retainedMaterial && retainedMaterial->valid && !dirty && !nativeDirty &&
+        retainedMaterial->uid==uid && retainedMaterial->textureOwner==e.texture &&
+        retainedMaterial->textureRevision==revision && retainedMaterial->uniforms.lit==e.lit &&
+        retainedMaterial->uniforms.ambient.c==e.ambient.c &&
+        retainedMaterial->uniforms.diffuse.c==e.diffuse.c && retainedMaterial->uniforms.emissive.c==e.emissive.c;
+    if(current){++g_picaRetainedMaterialReuses;return retainedMaterial;}
+    if(!retainedMaterial || retainedMaterial->references!=1){
+        auto* next=new(std::nothrow)picaRetainedMaterial;
+        if(!next){++g_picaRetainedMaterialFallbacks;return nullptr;}
+        if(retainedMaterial)retainedMaterial->Release();
+        retainedMaterial=next;
+    }
+    auto& output=*retainedMaterial;
+    output.valid=CapturePreparedPass(output.pass);
+    if(!output.valid)return nullptr;
+    PrepareColours();
+    output.uniforms.ambient=e.ambient;output.uniforms.diffuse=e.diffuse;output.uniforms.emissive=e.emissive;
+    output.uniforms.lit=e.lit;output.uniforms.hasPreparedColours=true;
+    if(e.lit)memcpy(output.uniforms.colours,nativeColours,sizeof(nativeColours));
+    else memset(output.uniforms.colours,0,sizeof(output.uniforms.colours));
+    output.textureOwner=e.texture;output.textureRevision=revision;output.uid=uid;
+    ++g_picaRetainedMaterialBuilds;return &output;
+}
+#endif
 
 pddiShadeColourTable picaMat::colourTable[] =
 {
@@ -201,6 +240,9 @@ picaMat::picaMat(picaContext* c)
 
 picaMat::~picaMat()
 {
+#ifdef SRR2_OLD3DS_RETAINED_MATERIAL
+    if(retainedMaterial)retainedMaterial->Release();
+#endif
     for(int i = 0; i < picaMaxPasses; i++)
         if(texEnv[i].texture)
             texEnv[i].texture->Release();
@@ -372,6 +414,12 @@ int picaMat::CountDevPasses(void)
 void picaMat::PrepareNative()
 {
     if(!nativeDirty) return;
+#ifdef SRR2_OLD3DS_RETAINED_MATERIAL
+    // An ordinary pass can consume a direct setter without changing shader UID.
+    // Invalidate main's reuse metadata before clearing nativeDirty. Queued pass
+    // and uniform bytes remain immutable until their consumer completes.
+    if(retainedMaterial)retainedMaterial->valid=false;
+#endif
     const picaTextureEnv& e = texEnv[0];
     nativeFilter = filterTable[e.filterMode];
     nativeWrap = uvTable[e.uvMode];
@@ -388,14 +436,42 @@ void picaMat::PrepareNative()
     nativeDestination = blendFactor[e.alphaBlendMode][1];
     nativeDirty = false;
 }
+void picaMat::PrepareColours()
+{
+    const int i=0;
+    // Every colour writer invalidates this data on an actual change, including
+    // shared-material fades and swatches between draws in the same frame.
+    if(texEnv[i].lit && !coloursValid)
+    {
+        const pddiColour colours[3] = {texEnv[i].ambient, texEnv[i].diffuse, texEnv[i].emissive};
+        for(unsigned c = 0; c < 3; ++c)
+        {
+            nativeColours[c][0] = (float)colours[c].Red() / 255.0f;
+            nativeColours[c][1] = (float)colours[c].Green() / 255.0f;
+            nativeColours[c][2] = (float)colours[c].Blue() / 255.0f;
+        }
+        nativeColours[0][3] = 1.0f;
+        nativeColours[1][3] = (float)texEnv[i].diffuse.Alpha() / 255.0f;
+        nativeColours[2][3] = 0.0f;
+        coloursValid = true;
+    }
+}
+
 #endif
 
 #ifdef SRR2_OLD3DS_PREPARED_BACKEND
+bool picaPreparedShaderNeedsFence(const pddiBaseShader* shader)
+{
+    // Only the exact PICA material inherits the empty base PostRender. Derived
+    // and foreign shader callbacks retain the exclusive SDK ownership fence.
+    return shader && typeid(*shader)!=typeid(picaMat);
+}
 bool picaMat::PreparedPreviousShader()
 {return !lastShader || typeid(*lastShader)==typeid(picaMat);}
 
 bool picaMat::CapturePreparedPass(picaPreparedMaterialPass& output)
 {
+    O3_MAIN_SCOPE(MaterialCapture);
     if(!g_picaInFrame) return false;
     const picaTextureEnv& e=texEnv[0];
 #ifdef SRR2_OLD3DS_DRAW_PREP
@@ -422,6 +498,7 @@ bool picaMat::CapturePreparedPass(picaPreparedMaterialPass& output)
 
 void picaMat::SetDevPass(unsigned)
 {
+    O3_MAIN_SCOPE(MaterialPass);
 #ifdef SRR2_OLD_3DS
     Old3dsCount(O3_MATERIAL_PASS);
 #ifdef SRR2_OLD3DS_QUEUE_METRICS
@@ -434,6 +511,13 @@ void picaMat::SetDevPass(unsigned)
 #ifdef SRR2_OLD3DS_PREPARED_BACKEND
     if(context->preparedDrawCapture && context->preparedDrawCapture->materialOwner==this)
     {
+#ifdef SRR2_OLD3DS_RETAINED_MATERIAL
+        if(context->preparedDrawCapture->retained){
+            context->preparedDrawCapture->hasMaterial=true;dirty=false;
+            context->CapturePreparedMaterialRaster(context->preparedDrawCapture->retained->pass,context->preparedDrawCapture->raster);
+            return;
+        }
+#endif
         context->preparedDrawCapture->hasMaterial=CapturePreparedPass(context->preparedDrawCapture->material);
         dirty=!context->preparedDrawCapture->hasMaterial;
         if(!dirty)context->CapturePreparedMaterialRaster(context->preparedDrawCapture->material,context->preparedDrawCapture->raster);
@@ -532,6 +616,7 @@ void picaMat::SetDevPass(unsigned)
 
 void picaMat::PreRender(void)
 {
+    O3_MAIN_SCOPE(MaterialPreRender);
     const int i = 0;
 #ifdef SRR2_OLD_3DS
     g_old3dsDrawBlended = texEnv[i].alphaBlendMode != PDDI_BLEND_NONE;
@@ -544,28 +629,17 @@ void picaMat::PreRender(void)
     }
 
 #ifdef SRR2_OLD3DS_DRAW_PREP
-    // Every colour writer invalidates this data on an actual change, including
-    // shared-material fades and swatches between draws in the same frame.
-    if(texEnv[i].lit && !coloursValid)
-    {
-        const pddiColour colours[3] = {texEnv[i].ambient, texEnv[i].diffuse, texEnv[i].emissive};
-        for(unsigned c = 0; c < 3; ++c)
-        {
-            nativeColours[c][0] = (float)colours[c].Red() / 255.0f;
-            nativeColours[c][1] = (float)colours[c].Green() / 255.0f;
-            nativeColours[c][2] = (float)colours[c].Blue() / 255.0f;
-        }
-        nativeColours[0][3] = 1.0f;
-        nativeColours[1][3] = (float)texEnv[i].diffuse.Alpha() / 255.0f;
-        nativeColours[2][3] = 0.0f;
-        coloursValid = true;
-    }
+    PrepareColours();
 #ifdef SRR2_OLD3DS_PREPARED_BACKEND
     if(context->preparedDrawCapture && context->preparedDrawCapture->materialOwner==this)
     {
         context->preparedDrawCapture->hasUniforms=context->CapturePreparedUniformRecord(
             context->preparedDrawCapture->uniforms,this,uid,texEnv[i].lit,texEnv[i].ambient,
-            texEnv[i].diffuse,texEnv[i].emissive,nativeColours);
+            texEnv[i].diffuse,texEnv[i].emissive,nativeColours
+#ifdef SRR2_OLD3DS_RETAINED_MATERIAL
+            ,context->preparedDrawCapture->retained?&context->preparedDrawCapture->retained->uniforms:nullptr
+#endif
+            );
         return;
     }
 #endif
