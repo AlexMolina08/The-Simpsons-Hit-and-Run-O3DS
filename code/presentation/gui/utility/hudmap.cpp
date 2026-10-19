@@ -1454,6 +1454,7 @@ namespace
         const bool loading=startupLoading || id==CGuiWindow::GUI_SCREEN_ID_LOADING ||
             id==CGuiWindow::GUI_SCREEN_ID_MISSION_LOAD;
         const bool tutorial=id==CGuiWindow::GUI_SCREEN_ID_TUTORIAL;
+        const bool splash=id==CGuiWindow::GUI_SCREEN_ID_SPLASH;
         const bool movie=GetPresentationManager() && GetPresentationManager()->GetFMVPlayer() &&
             GetPresentationManager()->GetFMVPlayer()->IsPlaying();
         // Cinematics and boot artwork belong to the upper display only.
@@ -1481,7 +1482,7 @@ namespace
         view->BeginRender();
         if( mainMenu ) picaBottomScreenStatic();
         else picaBottomScreenPanel(-1,0);
-        if( !startupLoading && (list || visibleRows>0) ) picaBottomScreenPanel(list ? selection : selectedRow-first,
+        if( !startupLoading && !splash && (list || visibleRows>0) ) picaBottomScreenPanel(list ? selection : selectedRow-first,
             list ? count : visibleRows);
         p3d::pddi->PushState( PDDI_STATE_RENDER );
         p3d::pddi->PushState( PDDI_STATE_VIEW );
@@ -1491,16 +1492,18 @@ namespace
         p3d::pddi->SetCullMode(PDDI_CULL_NONE);
         p3d::stack->Push();p3d::stack->LoadIdentity();
         p3d::stack->Translate(-0.5f,-0.375f,0.5f);
-        if( startupLoading )
+        if( startupLoading || splash )
         {
             Scrooby::Screen* resource=screen->GetScroobyScreen();
-            Scrooby::Text* label=NULL;
+            Scrooby::Text* label=splash && menu && menu->GetNumItems()>0
+                ? MenuLabel(menu->GetMenuItem(0)) : NULL;
             for( int i=0; resource && !label && i<resource->GetNumberOfPages(); ++i )
                 label=resource->GetPageByIndex(i)->GetText("Loading");
             if( label && label->GetFont() )
             {
                 tFont* font=label->GetFont();
-                P3D_UNICODE text[16];p3d::AsciiToUnicode("LOADING",text,16);
+                P3D_UNICODE loadingText[16];p3d::AsciiToUnicode("LOADING",loadingText,16);
+                const P3D_UNICODE* text=splash ? label->GetStringBuffer() : loadingText;
                 const float width=font->GetFontHeight()>0
                     ? font->GetTextWidth(text)*16/font->GetFontHeight() : 0;
                 BottomLabel(font,text,(320-width)*0.5f,128,16,tColour(255,255,255));
