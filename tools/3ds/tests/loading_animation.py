@@ -16,6 +16,9 @@ def method(source, signature):
     return source[start:end]
 
 source = (root / 'code/presentation/gui/backend/guiscreenloading.cpp').read_text()
+hook_start = source.index('#ifdef RAD_3DS\nnamespace { bool s_newspaperEntranceActive=false; }')
+hook_end = source.index('#endif', hook_start) + len('#endif')
+hook = source[hook_start:hook_end]
 start = source.index('                static float SPIRAL_DURATION_TIME')
 animation = source[start:source.index('\n            }', start)]
 start = source.index('    m_loadingImage->SetRawSprite(')
@@ -130,3 +133,10 @@ with tempfile.TemporaryDirectory(prefix='srr-loading-animation-') as temporary:
                     '-fsanitize=address,undefined', '-fno-sanitize-recover=all',
                     str(path / 'test.cpp'), '-o', str(path / 'test')], check=True)
     subprocess.run([str(path / 'test')], check=True)
+    # The ordinary 3DS build also calls this hook, with the entrance flag off.
+    (path / 'standard.cpp').write_text('#define RAD_3DS\n' + hook +
+                                     '\nint main() { return old3dsNewspaperAnimating() ? 1 : 0; }\n')
+    subprocess.run(['clang++', '-std=c++17', '-Wall', '-Wextra', '-Werror',
+                    str(path / 'standard.cpp'), '-o', str(path / 'standard')], check=True)
+    subprocess.run([str(path / 'standard')], check=True)
+    print('PASS: loading hook links in the standard 3DS configuration.')

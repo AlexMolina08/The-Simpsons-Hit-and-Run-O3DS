@@ -53,7 +53,7 @@
     const char* DYNA_LOAD_INVENTORY_SECTION = "LoadingScreenImages";
 #endif
 
-#ifdef SRR2_OLD_3DS
+#ifdef RAD_3DS
 namespace { bool s_newspaperEntranceActive=false; }
 extern "C" bool old3dsNewspaperAnimating(void)
 {
