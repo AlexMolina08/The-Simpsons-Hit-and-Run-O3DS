@@ -1699,7 +1699,8 @@ namespace
                 if( lineCount && lineCount<=16 )
                 {
                     const float blockHeight=height+(lineCount-1)*(height+5);
-                    const float firstLine=74+(113-blockHeight)*0.5f+height*0.2f;
+                    const float firstLine=74+(113-blockHeight)*0.5f+
+                        height*font->GetFontBaseLine()/font->GetFontHeight();
                     for( unsigned row=0;row<lineCount;++row )
                         BottomLabel(font,lines[row],52,firstLine+row*(height+5),height,tColour(255,255,255),216);
                 }

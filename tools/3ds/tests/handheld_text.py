@@ -61,6 +61,11 @@ if font.is_file() and bible.is_file():
             fixtures.append(text[:255])
             retail += 1
 
+layout_source = (root / 'code/presentation/gui/utility/hudmap.cpp').read_text()
+layout_start = layout_source.index('                    const float blockHeight=height+(lineCount-1)*(height+5);')
+layout_end = layout_source.index(';', layout_source.index('const float firstLine=', layout_start)) + 1
+baseline_layout = layout_source[layout_start:layout_end]
+
 literal = lambda value: 'u' + json.dumps(value, ensure_ascii=True)
 widths = ','.join(f'{{{code},{advance}f}}' for code, advance in advances.items())
 program = r'''
@@ -101,6 +106,20 @@ int main() {
         if(text!=std::u16string(255,u'W')) {
             assert(fits);
             if(unsigned(height)<minimum) minimum=height;
+            if(count) for(float baseline : {18.5f,30.0f,44.4f}) {
+                struct Metrics {
+                    float baseline;
+                    float GetFontBaseLine() { return baseline; }
+                    float GetFontHeight() { return 37.0f; }
+                } metrics{baseline};
+                auto* font=&metrics;
+                const unsigned lineCount=count;
+''' + baseline_layout + r'''
+                const float top=firstLine-height*font->GetFontBaseLine()/font->GetFontHeight();
+                const float bottom=top+blockHeight;
+                assert(top>=73.999f && bottom<=187.001f);
+                assert(std::abs((top+bottom)*.5f-130.5f)<.001f);
+            }
         }
         std::u16string combined;
         for(unsigned row=0;row<count && row<16;++row) {
