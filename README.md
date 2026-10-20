@@ -10,7 +10,7 @@ and software movie playback work.
 Building from source requires your own legal copy of the PC game. Game assets and DSP
 firmware are not included in this source repository.
 
-<img src="images/game.jpg" width="320" alt="The Simpsons: Hit & Run on Nintendo 3DS">
+
 
 ## Install the CIA
 
