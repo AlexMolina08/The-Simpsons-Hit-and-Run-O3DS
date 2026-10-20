@@ -220,12 +220,16 @@ def main():
     ap.add_argument("--3dsx", dest="dsx", type=pathlib.Path, help="a built SimpsonsNTSC.3dsx to copy in")
     ap.add_argument("--no-movies", action="store_true", help="skip the movies (for a build without them)")
     ap.add_argument("--old3ds", action="store_true", help="prepare Old 3DS data and software-decoded movies")
+    ap.add_argument("--native-textures", action="store_true",
+                    help="prepare optional Old 3DS native static texture payloads; requires --old3ds")
     ap.add_argument("--force-movies", action="store_true", help="convert every movie again")
     ap.add_argument("--jobs", type=int, default=min(4, os.cpu_count() or 1),
                     help="movies converted at once (default: up to 4)")
     ap.add_argument("--ffmpeg", help="path to ffmpeg (default: imageio-ffmpeg, then PATH)")
     ap.add_argument("--allow-leak", action="store_true", help=argparse.SUPPRESS)
     args = ap.parse_args()
+    if args.native_textures and not args.old3ds:
+        ap.error("--native-textures requires --old3ds")
 
     game = args.game.resolve()
     check_game(game, args.allow_leak)
@@ -239,6 +243,11 @@ def main():
     rcfs = sorted(p.name for p in game.glob("*.rcf"))
     copied += copy_files(game, sd, rcfs)
     log(f"data: {copied} files copied, {removed} removed ({len(rcfs)} archives)")
+
+    if args.native_textures:
+        from prepare_native_textures import prepare
+        manifest = prepare(sorted((sd / "art").rglob("*.p3d")), sd / "native-textures" / "v1")
+        log(f"native textures: {manifest['textures']} source images, {len(manifest['payloads'])} payloads")
 
     if not args.no_romfs:
         c, r = mirror(game, args.romfs.resolve(), [str(ROMFS_DIR)], "romfs")

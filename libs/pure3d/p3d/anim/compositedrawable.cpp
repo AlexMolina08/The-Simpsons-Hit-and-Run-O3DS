@@ -1,3 +1,4 @@
+#include <main/old3dspools.h>
 #ifdef SRR2_OLD3DS_MAIN_PROFILE
 #include <main/old3dsmainprofile.h>
 #else
@@ -50,6 +51,22 @@ extern "C" void old3dsDumpVehicleBindings()
 #include <float.h>
 #include <string.h>
 
+#ifdef SRR2_OLD3DS_COARSE_POOLS
+#include <p3d/geometry.hpp>
+#include <p3d/primgroup.hpp>
+#include <typeinfo>
+static bool RecipeProp(tDrawable* drawable)
+{
+    if(!drawable || typeid(*drawable)!=typeid(tGeometry)) return false;
+    tGeometry* geometry=static_cast<tGeometry*>(drawable);
+    for(int i=0;i<geometry->GetNumPrimGroup();++i)
+    {
+        tPrimGroup* group=geometry->GetPrimGroup(i);
+        if(group && typeid(*group)!=typeid(tPrimGroupOptimised))return false;
+    }
+    return true;
+}
+#endif
 const int resizeElementSize = 2;
 const int defaultInitialElementSize = 5;
 
@@ -322,6 +339,7 @@ bool tCompositeDrawable::DrawWheelLOD(tPose* p)
 
 void tCompositeDrawable::Display(tPose* p)
 {
+    O3_POOL(Recipe,Upstream);
     O3_MAIN_SCOPE(Composite);
     if (billboard)
     {
@@ -342,7 +360,7 @@ void tCompositeDrawable::Display(tPose* p)
     //
     // Transform the pose joints into world space
     //
-    p->Evaluate();
+    { O3_POOL(Recipe,Pose); p->Evaluate(); }
     
     //
     // Display elements
@@ -377,7 +395,7 @@ void tCompositeDrawable::Display(tPose* p)
     }
 
     //if( !BillboardQuadManager::sEnabled )
-        translucentObjects.Display();
+        { O3_POOL(Recipe,Fallback); translucentObjects.Display(); }
 
     if (billboard)
     {
@@ -570,6 +588,10 @@ void tCompositeDrawable::DrawablePropElement::SetDrawable(tDrawable* drawable)
 
 void tCompositeDrawable::DrawablePropElement::Draw(tPose* pose)
 {
+#ifdef SRR2_OLD3DS_COARSE_POOLS
+    Old3dsPools::Scope eligibility(Old3dsPools::Recipe,
+        Old3dsPools::InspectRecipe() && RecipeProp(prop)?Old3dsPools::Upstream:Old3dsPools::Fallback);
+#endif
     P3DASSERTMSG(prop, "No prop attached", "tCompositeDrawable::DrawPropElement()");
 
     p3d::stack->PushMultiply( (pose->GetJoint(poseIndex))->worldMatrix );
@@ -621,6 +643,7 @@ void tCompositeDrawable::DrawableEffectElement::SetDrawable(tDrawable* drawable)
 
 void tCompositeDrawable::DrawableEffectElement::Draw(tPose* pose)
 {
+    O3_POOL(Recipe,Fallback);
     P3DASSERTMSG(effect, "No effect attached", "tCompositeDrawable::DrawEffectElement()");
 
     p3d::stack->PushMultiply( (pose->GetJoint(poseIndex))->worldMatrix );

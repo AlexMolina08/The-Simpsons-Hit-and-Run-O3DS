@@ -1,3 +1,4 @@
+#include <main/old3dscadence.h>
 #ifdef SRR2_OLD3DS_PREPARED_BACKEND
 #include <pddi/pica/preparedbackend.h>
 #endif
@@ -404,6 +405,7 @@ void picaDisplay::EndFrame(void)
         #ifdef SRR2_OLD3DS_CAUSAL_DIAG
         O3ExperimentSubmit();
 #endif
+        Old3dsCadence::Submit(g_picaPresentedFrames+1);
         C3D_FrameEnd(GX_CMDLIST_FLUSH);
 #else
         C3D_FrameEnd(0);

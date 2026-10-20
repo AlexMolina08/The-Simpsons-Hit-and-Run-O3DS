@@ -1,3 +1,10 @@
+#ifdef SRR2_OLD3DS_NATIVE_TEXTURES
+#include <pddi/pica/texture.hpp>
+#ifdef SRR2_OLD3DS_NATIVE_ETC1
+#include <pddi/pica/nativetexture.hpp>
+#endif
+#include <cstdlib>
+#endif
 //=============================================================================
 // Copyright (c) 2002 Radical Games Ltd.  All rights reserved.
 //=============================================================================
@@ -806,6 +813,61 @@ tTexture* tImageFactory::ParseAsTexture( tFile* file, char* inventoryName, const
     builder.SetTextureType(typeHint);
     builder.SetUsage(usageHint);
     builder.SetExpectedFileSize( size );
+#ifdef SRR2_OLD3DS_NATIVE_TEXTURES
+    unsigned char* encoded=NULL;
+    // Keep the fallback stream rewind-free, including compressed P3D files.
+    // Temporary encoded input is bounded and owns no GPU-visible storage.
+    if(format==tImageHandler::IMG_PNG && size>=33 && size<=512*1024 &&
+       usageHint==PDDI_USAGE_STATIC && desiredDepth!=16 &&
+       (typeHint==PDDI_TEXTYPE_RGB || typeHint==PDDI_TEXTYPE_PALETTIZED) &&
+       !g_picaFontTexture && !g_picaKeepFullSize && picaNativeTexturesAvailable()
+#ifdef SRR2_OLD3DS_NATIVE_ETC1
+       && (!g_picaNativeEtcEnabled || picaNativeTexture::WorldSource(file->GetFullFilename()))
+#endif
+       )
+        encoded=static_cast<unsigned char*>(malloc(size));
+    if(encoded)
+    {
+        if(!file->GetData(encoded,size,tFile::BYTE)){free(encoded);return NULL;}
+        bool prepared=false;
+        static const unsigned char magic[]={137,80,78,71,13,10,26,10};
+        const bool supported=!memcmp(encoded,magic,8) && encoded[28]==0 &&
+            ((encoded[25]==3 && (encoded[24]==4 || encoded[24]==8)) ||
+             ((encoded[25]==2 || encoded[25]==6) && encoded[24]==8));
+        if(supported)
+        {
+            const unsigned width=(unsigned(encoded[16])<<24)|(unsigned(encoded[17])<<16)|
+                (unsigned(encoded[18])<<8)|encoded[19];
+            const unsigned height=(unsigned(encoded[20])<<24)|(unsigned(encoded[21])<<16)|
+                (unsigned(encoded[22])<<8)|encoded[23];
+            if(width && width<=1024 && height && height<=1024)
+            {
+                tTexture* candidate=new tTexture;
+                if(candidate)
+                {
+                    if(candidate->Create(width,height,32,alphaDepthHint,nMipHint,PDDI_TEXTYPE_RGB,usageHint))
+                    {
+                        builder.SetTexture(candidate);
+                        prepared=static_cast<picaTexture*>(candidate->GetTexture())->UploadPreparedPNG(encoded,size
+#ifdef SRR2_OLD3DS_NATIVE_ETC1
+                            ,picaNativeTexture::WorldSource(file->GetFullFilename())
+#endif
+                            );
+                    }
+                    else candidate->Release();
+                }
+            }
+        }
+        if(!prepared)
+        {
+            tFileMem memory(encoded,size,false);
+            memory.SetFilename(file->GetFullFilename());
+            handler->CreateImage(&memory,&builder);
+        }
+        free(encoded);
+    }
+    else
+#endif
     handler->CreateImage(file, &builder);
     tTexture* texture = builder.GetTexture();
 

@@ -4,18 +4,20 @@
 #include <3ds.h>
 namespace NativeBench {
 // Only the automation's existing whole-update/render/stream clocks are retained.
-enum Stage { Update, Render, Stream, Count };
-enum Counter { ScopeCalls, CountC };
-extern bool detail, collecting,validation;
+enum Stage { Update, Render, Stream, Service, FileService, DebugService, SoundService, FileLock, FileCallback, FileError, FileUserCallback, SoundBufferComplete, SoundEncode, SoundEncodeKernel, Count };
+enum Counter { ScopeCalls, AdpcmClips, AdpcmSamples, CountC };
+extern bool detail, collecting,validation,serviceProfile;
+bool OnCaptureThread();
 void Hash(unsigned);
 void HashFloat(float);
 extern unsigned counters[CountC];
 struct Scope {
-    explicit Scope(Stage s):start(0){if(collecting && (detail || s<=Render))BeginScope(s);}
+    explicit Scope(Stage s):start(0){if(s<=Service ? collecting : (OnCaptureThread() && collecting && (detail || serviceProfile)))BeginScope(s);}
     ~Scope(){if(start)EndScope();}
     void BeginScope(Stage);void EndScope();
     Stage stage;u64 start,child;Scope* parent;
 };
+void SaveFilename(char*,unsigned,unsigned);
 void Init(int argc=0,char** argv=nullptr); unsigned Seed(unsigned); unsigned Begin(unsigned elapsed,int context);
 bool ResidentShaders();
 bool NativeUniforms();

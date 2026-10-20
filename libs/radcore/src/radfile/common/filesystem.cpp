@@ -21,6 +21,7 @@
 //=============================================================================
 
 #include "pch.hpp"
+#include <main/nativebench.h>
 #include <ctype.h>
 #include <raddebug.hpp>
 #include <string.h>
@@ -222,7 +223,7 @@ void radFileSystem::Service( void )
     //
     // Run the Service( ) on every drive.
     //
-    Lock( );
+    { NB_SCOPE(FileLock); Lock( ); }
     for ( unsigned int i = 0; i < s_TotalDriveCount; i++ )
     {
         if ( s_DriveMap[ i ].m_pDrive != NULL )
@@ -236,7 +237,7 @@ void radFileSystem::Service( void )
 
             pDrive->Service( );
             pDrive->Release( );
-            Lock( );
+            { NB_SCOPE(FileLock); Lock( ); }
         }
     }
     Unlock( );

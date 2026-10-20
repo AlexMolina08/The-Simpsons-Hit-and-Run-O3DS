@@ -1,3 +1,4 @@
+#include <main/old3dsrecurring.h>
 #include <main/old3dsmainprofile.h>
 #include <render/Culling/WorldScene.h>
 #include <render/Culling/SpatialTreeFactory.h>
@@ -917,6 +918,7 @@ void WorldScene::RemoveQuietFail( IEntityDSG* ipEDSG )
 //========================================================================
 void WorldScene::RenderScene( unsigned int iFilter, tPointCamera* ipCam  )
 {
+    O3_RECUR(List);
 #ifdef SRR2_OLD3DS_QUEUE_METRICS
     picaQueueTimer queuePhaseTimer(g_picaQueueMetrics.traversalTicks, true);
 #endif
@@ -1643,6 +1645,7 @@ END_PROFILE("list construction")
 //========================================================================
 void WorldScene::RenderShadows()
 {
+    O3_RECUR(Shadow);
     for( int i=mShadowCastersPass1.mUseSize-1; i>-1; i-- )
     {
         mShadowCastersPass1[i]->DisplayShadow();
@@ -1663,6 +1666,7 @@ shadow generator setup since the tris won't shade properly.
 ========================================================================*/
 void WorldScene::RenderSimpleShadows( void )
 {
+    O3_RECUR(Shadow);
 #ifdef SRR2_OLD3DS_CAUSAL_DIAG
     O3ExperimentWorld worldScope;
 #endif
@@ -1713,6 +1717,7 @@ void WorldScene::RenderSimpleShadows( void )
 //========================================================================
 void WorldScene::RenderShadowCasters()
 {
+    O3_RECUR(Shadow);
 DSG_SET_PROFILE('C')
     for( int i=mShadowCastersPass1.mUseSize-1; i>-1; i-- )
     {
@@ -1735,6 +1740,7 @@ DSG_SET_PROFILE('C')
 
 void WorldScene::RenderOpaque( void )
 {
+    O3_RECUR(Opaque);
     O3_MAIN_SCOPE(Opaque);
 #ifdef SRR2_OLD3DS_CAUSAL_DIAG
     O3ExperimentWorld worldScope;
@@ -1783,7 +1789,7 @@ BEGIN_PROFILE("qsort display")
         const bool queueSafe = picaQueue::Enabled() && (queueContext->staticQueueActive || CanQueueStaticEntity(mpZSorts[i].entityPtr));
         if(queueSafe && !queueContext->staticQueueActive) queueContext->BeginStaticQueue();
 #endif
-		mpZSorts[i].entityPtr->Display();
+		{ O3_RECUR_ENTITY(mpZSorts[i].entityPtr,0); mpZSorts[i].entityPtr->Display(); }
 #ifdef SRR2_OLD3DS_MATERIAL_QUEUE
         if(queueSafe)
         {
@@ -1800,6 +1806,7 @@ END_PROFILE("qsort display")
 
 void WorldScene::RenderTranslucent( void )
 {
+    O3_RECUR(Translucent);
     O3_MAIN_SCOPE(Translucent);
 #ifdef SRR2_OLD3DS_CAUSAL_DIAG
     O3ExperimentWorld worldScope;
@@ -1839,7 +1846,7 @@ BEGIN_PROFILE("qsort2 display")
         const bool queueSafe = picaQueue::Enabled() && (queueContext->staticQueueActive || CanQueueStaticEntity(mpZSortsPass2[i]));
         if(queueSafe && !queueContext->staticQueueActive) queueContext->BeginStaticQueue();
 #endif
-		mpZSortsPass2[i]->Display();
+		{ O3_RECUR_ENTITY(mpZSortsPass2[i],1); mpZSortsPass2[i]->Display(); }
 #ifdef SRR2_OLD3DS_MATERIAL_QUEUE
         if(queueSafe)
         {
@@ -1872,6 +1879,7 @@ END_PROFILE("qsort2 display")
 //========================================================================
 void WorldScene::Render(  unsigned int viewIndex )
 {
+    O3_RECUR(Visibility);
     O3_MAIN_SCOPE(WorldScene);
     //mStaticTreeWalker.MarkTree( msVisible );
     mStaticTreeWalker.AndTree( msClear );

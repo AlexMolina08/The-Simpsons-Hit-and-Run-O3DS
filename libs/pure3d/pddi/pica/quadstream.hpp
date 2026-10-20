@@ -13,6 +13,7 @@ inline bool Indices(unsigned short* output,unsigned quad,unsigned topology)
 }
 }
 #ifdef SRR2_OLD3DS_QUAD_STREAM
+extern "C" bool picaParticleMotionShaderSafe(pddiShader* shader);
 extern "C" pddiPrimStream* picaBeginQuadStream(pddiShader* shader,unsigned count);
 extern "C" bool picaEmitQuad(pddiPrimStream* stream,const pddiVector* positions,
     const pddiVector2* coordinates,pddiColour colour,picaQuad::Topology topology);

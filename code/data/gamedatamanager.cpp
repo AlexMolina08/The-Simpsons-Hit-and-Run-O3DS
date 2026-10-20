@@ -1,3 +1,6 @@
+#ifdef SRR2_OLD3DS_NATIVE_BENCH
+#include <main/nativebench.h>
+#endif
 //===========================================================================
 // Copyright (C) 2000 Radical Entertainment Ltd.  All rights reserved.
 //
@@ -881,7 +884,9 @@ GameDataManager::FormatSavedGameFilename( char* filename,
     rAssert( filename != NULL );
     rAssert( filenameLength >= 32 );
 
-#ifdef RAD_XBOX
+#ifdef SRR2_OLD3DS_NATIVE_BENCH
+    NativeBench::SaveFilename(filename,filenameLength,slot);
+#elif defined(RAD_XBOX)
     sprintf( filename, "Saved Game (Slot %d)", slot + 1 );
 #else
     sprintf( filename, "%sSave%d", PS2_FILENAME_PREFIX, slot + 1 );

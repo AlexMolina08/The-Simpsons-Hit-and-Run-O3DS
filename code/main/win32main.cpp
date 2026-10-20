@@ -190,6 +190,19 @@ extern "C" int main( int argc, char *argv[] )
     // carried no build identifier, so it could not be matched to a binary.
     printf("OLD3DS_BUILD id=%s date=%s time=%s\n",
         SRR2_OLD3DS_BUILD_ID, __DATE__, __TIME__);
+#ifdef SRR2_OLD3DS_NATIVE_BENCH
+    // The small netloader artifact contains frontend assets, while gameplay
+    // requires a full bundle or loose retail data. Fail before entering the
+    // engine's modal file-error loop so an invalid benchmark returns normally.
+    FILE* benchmarkAssets=fopen("romfs:/scripts.rcf","rb");
+    if(!benchmarkAssets)benchmarkAssets=fopen("scripts.rcf","rb");
+    if(!benchmarkAssets)
+    {
+        printf("OLD3DS_BENCH_ASSETS missing=scripts.rcf gameplay_frames=0 returning_to_launcher=1\n");
+        romfsExit();gfxExit();return 1;
+    }
+    fclose(benchmarkAssets);
+#endif
 #endif
 #endif
 

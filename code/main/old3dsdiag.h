@@ -60,10 +60,15 @@ class Old3dsRenderScope
 {
 public:
     explicit Old3dsRenderScope(unsigned slot) : slot(slot), draws(g_old3dsDrawCalls), tick(
+#ifndef SRR2_OLD3DS_OPTIONAL_DIAG
+        0
+#else
 #ifdef SRR2_OLD3DS_CAUSAL_DIAG
         g_o3Detail ? svcGetSystemTick() : 0
 #else
         svcGetSystemTick()
+#endif
+
 #endif
     ) {}
     ~Old3dsRenderScope()
@@ -102,13 +107,16 @@ extern "C" int g_old3dsActiveEntity;
 extern "C" bool g_old3dsDrawBlended, g_old3dsDrawAlphaTested;
 inline void Old3dsCount(unsigned counter, unsigned units = 1)
 {
+#ifdef SRR2_OLD3DS_OPTIONAL_DIAG
     g_old3dsBackend[counter] += units;
+#endif
 }
 // One entity in four, one backend operation in 32. Counts/units are unsampled.
 // Nested operation times overlap and must never be added to the parent totals.
 class Old3dsOperationScope
 {
 public:
+#ifdef SRR2_OLD3DS_OPTIONAL_DIAG
     Old3dsOperationScope(unsigned operation, unsigned units = 1, bool outsideEntity = false) : stats(0), tick(0)
     {
         #ifdef SRR2_OLD3DS_CAUSAL_DIAG
@@ -121,6 +129,10 @@ public:
     }
     void Finish() { if(tick) { stats->ticks += svcGetSystemTick() - tick; tick = 0; } }
     ~Old3dsOperationScope() { Finish(); }
+#else
+    Old3dsOperationScope(unsigned, unsigned = 1, bool = false) {}
+    void Finish() {}
+#endif
 private:
     Old3dsOperationStats* stats;
     u64 tick;
@@ -136,12 +148,14 @@ public:
         g_old3dsActiveEntity = category < O3_CATEGORY_COUNT ? category : O3_OTHER;
         stats = &g_old3dsEntities[g_old3dsActiveEntity];
         const unsigned ordinal=stats->calls++;
+#ifdef SRR2_OLD3DS_OPTIONAL_DIAG
 #ifdef SRR2_OLD3DS_CAUSAL_DIAG
         if(g_o3Detail && Old3dsRotatingSample(ordinal,2))
 #else
         if(Old3dsRotatingSample(ordinal,2))
 #endif
         { ++stats->samples; tick = svcGetSystemTick(); }
+#endif
     }
     ~Old3dsEntityScope()
     {
@@ -176,6 +190,7 @@ extern "C" unsigned g_old3dsWeights[5]; // cumulative loaded vertices, rigid, ze
 class Old3dsAnimScope
 {
 public:
+#ifdef SRR2_OLD3DS_OPTIONAL_DIAG
     Old3dsAnimScope(unsigned long long uid, const char* name, bool particle, bool translated)
         : stats(0), draws(g_old3dsDrawCalls), translated(translated), tick(0)
     {
@@ -218,6 +233,9 @@ public:
             }
         }
     }
+#else
+    Old3dsAnimScope(unsigned long long, const char*, bool, bool) {}
+#endif
 private:
     Old3dsAnimStats* stats;
     unsigned draws;
@@ -279,7 +297,13 @@ public:
         : mFound(found),
           mReachedTris(reachedTris),
           mCandidatesStart(g_old3dsTriCandidates),
-          mTimed((++g_old3dsTriQueries & 31u) == 1u),
+          mTimed(
+#ifdef SRR2_OLD3DS_OPTIONAL_DIAG
+            (++g_old3dsTriQueries & 31u) == 1u
+#else
+            (++g_old3dsTriQueries, false)
+#endif
+          ),
           mStartTick(mTimed ? svcGetSystemTick() : 0)
     {
     }

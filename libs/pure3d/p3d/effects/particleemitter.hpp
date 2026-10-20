@@ -9,6 +9,9 @@
 #define _PARTICLE_EMITTER_HPP
 
 #include <radmath/radmath.hpp>
+#ifdef SRR2_OLD_3DS
+#include <p3d/effects/particlebounds.hpp>
+#endif
 #include <p3d/p3dtypes.hpp>
 #include <p3d/entity.hpp>
 #include <p3d/shader.hpp>
@@ -321,6 +324,10 @@ protected:
     float   currSpin;
     float   currSpinVar;
     bool    local;  //nv
+#ifdef SRR2_OLD_3DS
+    unsigned old3dsBoundsPhase=0;
+    bool old3dsBoundsRejected=false;
+#endif
 
     SpriteLookUp*   spriteLookUp; 
     float*          texFrameCoords;

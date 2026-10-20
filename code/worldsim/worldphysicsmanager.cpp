@@ -1,3 +1,5 @@
+#include <main/old3dsrecurring.h>
+#include <main/old3dspools.h>
 #include <main/old3dsmainprofile.h>
 #include <main/old3dshot.h>
 //=============================================================================
@@ -1185,6 +1187,7 @@ void WorldPhysicsManager::Update(unsigned int timeDeltaMilliSeconds)
     {
 #ifdef SRR2_OLD_3DS
     Old3dsOperationScope timing(O3_PHYS_AREAS, 1, true);
+    O3_POOL(Physics,Areas); O3_RECUR(PhysicsAreas);
 #endif
     BEGIN_PROFILE("Vehicle Submits")
     GetVehicleCentral()->SubmitStatics();
@@ -1208,6 +1211,7 @@ void WorldPhysicsManager::Update(unsigned int timeDeltaMilliSeconds)
     {
 #ifdef SRR2_OLD_3DS
     Old3dsOperationScope timing(O3_PHYS_GROUND, 1, true);
+    O3_POOL(Physics,Ground); O3_RECUR(PhysicsGround);
 #endif
     BEGIN_PROFILE("Update Ground")
     UpdateSimluatingDynamicObjectGroundPlanes();
@@ -1263,6 +1267,7 @@ void WorldPhysicsManager::Update(unsigned int timeDeltaMilliSeconds)
     {
 #ifdef SRR2_OLD_3DS
     Old3dsOperationScope timing(O3_PHYS_PRE, 1, true);
+    O3_POOL(Physics,PreSim); O3_RECUR(PhysicsPreSim);
 #endif
     BEGIN_PROFILE("WorldPhysicsManager::PreSubstepUpdate")
 
@@ -1532,6 +1537,7 @@ void WorldPhysicsManager::WorldSimSubstepGuts(float dt, bool firstSubstep)
         {
 #ifdef SRR2_OLD_3DS
         Old3dsOperationScope timing(O3_PHYS_VEHICLEPREP, 1, true);
+    O3_POOL(Physics,VehiclePrep); O3_RECUR(PhysicsVehiclePrep);
 #endif
         GetVehicleCentral()->PreCollisionPrep(dt, firstSubstep);
     }
@@ -1542,13 +1548,14 @@ void WorldPhysicsManager::WorldSimSubstepGuts(float dt, bool firstSubstep)
     {
 #ifdef SRR2_OLD_3DS
         Old3dsOperationScope timing(O3_PHYS_CHARPREP, 1, true);
+    O3_POOL(Physics,CharacterPrep); O3_RECUR(PhysicsCharacterPrep);
 #endif
         GetCharacterManager()->PreSubstepUpdate( dt );
     }
     END_PROFILE("CharMgr::PreSimUpdate")
 
     BEGIN_PROFILE("ABMgr::Update")
-    GetActionButtonManager( )->Update( dt );
+    { O3_POOL(Physics,Actions); O3_RECUR(PhysicsActions); GetActionButtonManager( )->Update( dt ); }
     END_PROFILE("ABMgr::Update")
 
 //    BEGIN_PROFILE("SuperCamMgr::PreCollPrep")
@@ -1573,12 +1580,14 @@ BEGIN_PROFILE("DetectCollisions")
     {
 #ifdef SRR2_OLD_3DS
         Old3dsOperationScope timing(O3_PHYS_DETECT, 1, true);
+    O3_POOL(Physics,Detect); O3_RECUR(PhysicsDetect);
 #endif
         mCollisionManager->DetectCollision(dt, mTotalTime, printOut );
     }
     {
 #ifdef SRR2_OLD_3DS
         Old3dsOperationScope timing(O3_PHYS_SOLVE, 1, true);
+    O3_POOL(Physics,Solve); O3_RECUR(PhysicsSolve);
 #endif
         mCollisionManager->SolveCollision(dt, mTotalTime);
     }
@@ -1590,6 +1599,7 @@ END_PROFILE("DetectCollisions")
     {
 #ifdef SRR2_OLD_3DS
         Old3dsOperationScope timing(O3_PHYS_VEHICLEUPDATE, 1, true);
+    O3_POOL(Physics,Vehicles); O3_RECUR(PhysicsVehicles);
 #endif
         GetVehicleCentral()->Update(dt);
     }
@@ -1598,6 +1608,7 @@ END_PROFILE("DetectCollisions")
     {
 #ifdef SRR2_OLD_3DS
     Old3dsOperationScope timing(O3_PHYS_CHARUPDATE, 1, true);
+    O3_POOL(Physics,Characters); O3_RECUR(PhysicsCharacters);
 #endif
     GetCharacterManager()->Update( dt );
     END_PROFILE("GetCharacterManager()->Update")
@@ -1609,6 +1620,7 @@ END_PROFILE("DetectCollisions")
     {
 #ifdef SRR2_OLD_3DS
     Old3dsOperationScope timing(O3_PHYS_CAMERA, 1, true);
+    O3_POOL(Physics,Camera); O3_RECUR(PhysicsCamera);
 #endif
     //Update the position of the super camers
     BEGIN_PROFILE("GetSuperCamManager()->Update")
@@ -2659,6 +2671,7 @@ void WorldPhysicsManager::DisableGroundPlaneCollision(int index)
 //=============================================================================
 void WorldPhysicsManager::UpdateDynamicObjects(float dt, int collisionAreaIndex)
 {
+    O3_POOL(Physics,Dynamics); O3_RECUR(PhysicsDynamics);
     rAssert( collisionAreaIndex > WorldPhysicsManager::INVALID_COLLISION_AREA );
     rAssert( mCollisionAreaAllocated[collisionAreaIndex] );
 

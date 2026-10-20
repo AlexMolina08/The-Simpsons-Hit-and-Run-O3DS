@@ -22,6 +22,7 @@
 //=============================================================================
 
 #include "pch.hpp"
+#include <main/nativebench.h>
 #include <string.h>
 #include "filesystem.hpp"
 #include "drive.hpp"
@@ -161,7 +162,7 @@ void radDrive::Service( void )
     //
     IRadThread* pThread = ::radThreadGetActiveThread( );
 
-    Lock( );
+    { NB_SCOPE(FileLock); Lock( ); }
     
     CompletionCallbackRequest** ppCallback = &m_CallbackHead;
     CompletionCallbackRequest*  pEnd = NULL;
@@ -180,8 +181,8 @@ void radDrive::Service( void )
             // Unlock for the actual callback, so we don't deadlock
             //
             Unlock( );
-            pCallback->callback( );
-            Lock( );
+            { NB_SCOPE(FileCallback); pCallback->callback( ); }
+            { NB_SCOPE(FileLock); Lock( ); }
 
             delete pCallback;
         }
@@ -198,6 +199,7 @@ void radDrive::Service( void )
     //
     // Global Error handler
     //
+    { NB_SCOPE(FileError);
     if ( m_InError == true && m_pErrorCallback != NULL )
     {
         //
@@ -231,6 +233,7 @@ void radDrive::Service( void )
     else
     {
         Unlock( );
+    }
     }
 }
 

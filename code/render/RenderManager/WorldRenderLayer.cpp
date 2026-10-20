@@ -1,3 +1,5 @@
+#include <main/old3dsrecurring.h>
+#include <main/old3dspools.h>
 #include <main/old3dsmainprofile.h>
 //========================================================================
 // Copyright (C) 2002 Radical Entertainment Ltd.  All rights reserved.
@@ -194,7 +196,8 @@ static bool simpleShadows = true;
 //========================================================================
 void WorldRenderLayer::Render()
 {
-    O3_MAIN_SCOPE(WorldLayer);
+    O3_POOL(Presentation,World);
+    O3_MAIN_SCOPE(WorldLayer); O3_RECUR(World);
     BEGIN_PROFILE( "WRL Render" );
 #ifdef DEBUGWATCH
     mDebugRenderTime = radTimeGetMicroseconds();

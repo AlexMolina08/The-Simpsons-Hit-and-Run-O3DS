@@ -1,3 +1,6 @@
+if(SRR2_OLD3DS_MEMORY_DIAG)
+    add_link_options(-Wl,--wrap=__malloc_unlock -Wl,--wrap=_malloc_r -Wl,--wrap=_calloc_r -Wl,--wrap=_realloc_r -Wl,--wrap=_memalign_r -Wl,--wrap=_free_r)
+endif()
 if(SRR2_OLD3DS_GPU_LISTS)
     add_link_options(-Wl,--wrap=GPUCMD_Split)
 endif()
@@ -10,7 +13,7 @@ endif()
 if(SRR2_OLD3DS_NATIVE_BENCH AND SRR2_OLD3DS_SUBMIT_PROFILE)
     add_link_options(-Wl,--wrap=C3Di_UpdateContext -Wl,--wrap=C3D_UpdateUniforms -Wl,--wrap=shaderProgramConfigure)
 endif()
-if(SRR2_OLD3DS_CAUSAL_DIAG)
+if(SRR2_OLD3DS_CAUSAL_DIAG OR SRR2_OLD3DS_NATIVE_BENCH)
     add_link_options(-Wl,--wrap=gfxScreenSwapBuffers -Wl,--wrap=gspSetEventCallback)
 endif()
 set(SRR2_SOURCES
@@ -156,6 +159,10 @@ set(SRR2_SOURCES
 	"main/game.cpp"
     "main/old3dsexperiment.cpp"
     "main/nativebench.cpp"
+    "main/old3dsrecurring.cpp"
+    "main/old3dsbottommap.cpp"
+    "main/old3dscadence.cpp"
+    "main/old3dsmemory.cpp"
     "main/old3dsmainprofile.cpp"
     "main/nativesubmitprofile.cpp"
 	"main/pchsrr2.cpp"

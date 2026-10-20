@@ -1,3 +1,15 @@
+#ifdef SRR2_OLD_3DS
+#include <p3d/effects/particlemotion.hpp>
+#include <p3d/pointcamera.hpp>
+#include <typeinfo>
+extern "C" {
+bool g_old3dsLazyParticleMotion=false,g_old3dsPreparedParticleMotion=false;
+unsigned g_old3dsParticleMotionPrepared=0;
+bool g_old3dsEmitterClip=false;
+unsigned g_old3dsEmitterClipTests=0,g_old3dsEmitterClipRejected=0,g_old3dsEmitterClipParticles=0,g_old3dsEmitterBoundsParticles=0;
+unsigned g_old3dsParticleMotionAligned=0,g_old3dsParticleMotionAvoided=0,g_old3dsParticleMotionFallback=0;
+}
+#endif
 #ifdef SRR2_OLD3DS_PARTICLE_CLIP
 #include <pddi/pica/particleclip.hpp>
 #include <cstdio>
@@ -767,19 +779,125 @@ void tSpriteEmitter::Display()
         int numLiveParticles = particles->GetNumLiveParticles();
         tBaseParticle** liveParticles = particles->GetLiveParticles();
 
-        if (((tSpriteEmitterFactory*)factory)->GetAngleMode() == p3dParticleSystemConstants::ParticleAngleMode::MOTION_ALIGNED)
+        const bool motionAligned=((tSpriteEmitterFactory*)factory)->GetAngleMode() == p3dParticleSystemConstants::ParticleAngleMode::MOTION_ALIGNED;
+#if defined(SRR2_OLD_3DS) && defined(SRR2_OLD3DS_PARTICLE_CLIP) && defined(SRR2_OLD3DS_QUAD_STREAM)
+        if(g_old3dsEmitterClip && !renderModule && numLiveParticles>=8 &&
+           typeid(*this)==typeid(tSpriteEmitter) && picaParticleMotionShaderSafe(shader->GetShader()) &&
+           (old3dsBoundsRejected || ((old3dsBoundsPhase++ & 3u)==0)))
         {
-            //update rotations during display cuz we need view matrix
-            for (int i = 0; i < numLiveParticles; i++)
+            // A cheap bounds scan replaces all per-particle transform, clipping,
+            // motion-angle and stream work when the complete emitter is outside.
+            // Visible groups retry one frame in four to limit added scan cost.
+            old3dsBoundsRejected=false;
+            p3dParticleBounds::Bounds old3dsLiveBounds;old3dsLiveBounds.Begin();
+            for(int i=0;i<numLiveParticles;++i)
             {
-                tSpriteParticle* current = (tSpriteParticle*)liveParticles[i];
-                rmt::Vector currPos, oldPos, angleVector;
+                const tSpriteParticle* sprite=static_cast<const tSpriteParticle*>(liveParticles[i]);
+                old3dsLiveBounds.Add(&sprite->currPos.x,&sprite->prevPos.x,sprite->size,sprite->spin);
+            }
+            g_old3dsEmitterBoundsParticles+=numLiveParticles;
+            tView* renderView=p3d::context->GetView();
+            tCamera* renderCamera=renderView?renderView->GetCamera():nullptr;
+            bool eligible=old3dsLiveBounds.valid && old3dsLiveBounds.count==unsigned(numLiveParticles) &&
+                old3dsLiveBounds.spin<=65536.f && renderCamera && typeid(*renderCamera)==typeid(tPointCamera);
+            if(motionAligned)
+            {
+                tView* activeView=p3d::platform->GetActiveContext()->GetView();
+                tCamera* camera=activeView?activeView->GetCamera():nullptr;
+                p3dParticleMotion::View proof;
+                eligible=eligible && camera && typeid(*camera)==typeid(tPointCamera) &&
+                    std::fabs(((tSpriteEmitterFactory*)factory)->GetAngle())<=32.f &&
+                    proof.Prepare(camera->GetWorldToCameraMatrix().m,camera->GetFieldOfView(),camera->GetAspectRatio()) &&
+                    p3dParticleBounds::FiniteDepth(camera->GetWorldToCameraMatrix().m,old3dsLiveBounds);
+            }
+            float low[3],high[3];
+            if(eligible)
+            {
+                const rmt::Matrix& renderTransform=local?*p3d::stack->GetMatrix():renderCamera->GetWorldToCameraMatrix();
+                if(p3dParticleBounds::Transform(renderTransform.m,old3dsLiveBounds.low,old3dsLiveBounds.high,low,high))
+                {
+                    const float extent=2.f*old3dsLiveBounds.size+0.001f;
+                    for(unsigned axis=0;axis<2;++axis){low[axis]-=extent;high[axis]+=extent;}
+                    picaClipBounds::Transform clip={};
+                    p3d::stack->PushIdentity();const bool prepared=picaPrepareParticleClip(&clip);p3d::stack->Pop();
+                    ++g_old3dsEmitterClipTests;
+                    if(prepared && picaClipBounds::Reject(clip,low,high))
+                    {
+                        ++g_old3dsEmitterClipRejected;g_old3dsEmitterClipParticles+=numLiveParticles;old3dsBoundsRejected=true;
+                        return;
+                    }
+                }
+            }
+        }
+#endif
+
+#ifdef SRR2_OLD_3DS
+        tCamera* preparedMotionCamera=nullptr;
+        rmt::Matrix preparedMotionTransform;
+        unsigned preparedMotion=0;
+#endif
+        const auto alignMotion=[&](tSpriteParticle* current,const rmt::Vector* cameraPosition=nullptr)
+        {
+            rmt::Vector currPos, oldPos, angleVector;
+#ifdef SRR2_OLD_3DS
+            if(preparedMotionCamera && cameraPosition)
+            {
+                rmt::Vector previousCamera;
+                preparedMotionTransform.Transform(current->prevPos,&previousCamera);
+                // Exact point-camera class and finite nonzero depths were proved
+                // before clipping. Reuse the current render transform and call
+                // the original projection arithmetic without repeated dispatch.
+                preparedMotionCamera->tCamera::CameraToView(*cameraPosition,&currPos);
+                preparedMotionCamera->tCamera::CameraToView(previousCamera,&oldPos);
+                ++preparedMotion;
+            }
+            else
+#endif
+            {
                 p3d::platform->GetActiveContext()->WorldToView(current->currPos, &currPos);
                 p3d::platform->GetActiveContext()->WorldToView(current->prevPos, &oldPos);
-                angleVector.Sub(currPos,oldPos);
-                angleVector.NormalizeSafe();
-                current->spin = rmt::ATanCoords(angleVector.x,angleVector.y) + ((tSpriteEmitterFactory*)factory)->GetAngle();
             }
+            angleVector.Sub(currPos,oldPos);
+            angleVector.NormalizeSafe();
+            current->spin = rmt::ATanCoords(angleVector.x,angleVector.y) + ((tSpriteEmitterFactory*)factory)->GetAngle();
+        };
+#ifdef SRR2_OLD_3DS
+        p3dParticleMotion::View motionView;
+        bool lazyMotion=false;
+#if defined(SRR2_OLD3DS_PARTICLE_CLIP) && defined(SRR2_OLD3DS_QUAD_STREAM)
+        if(g_old3dsLazyParticleMotion && motionAligned && !renderModule &&
+           picaParticleMotionShaderSafe(shader->GetShader()) &&
+           std::fabs(((tSpriteEmitterFactory*)factory)->GetAngle())<=32.f)
+        {
+            tView* view=p3d::platform->GetActiveContext()->GetView();
+            tCamera* camera=view?view->GetCamera():nullptr;
+            if(camera && typeid(*camera)==typeid(tPointCamera))
+            {
+                lazyMotion=motionView.Prepare(camera->GetWorldToCameraMatrix().m,camera->GetFieldOfView(),camera->GetAspectRatio());
+                if(lazyMotion && g_old3dsPreparedParticleMotion && !local &&
+                   p3d::context->GetView() && p3d::context->GetView()->GetCamera()==camera)
+                {
+                    preparedMotionCamera=camera;
+                    preparedMotionTransform=camera->GetWorldToCameraMatrix();
+                }
+            }
+        }
+#endif
+        unsigned alignedMotion=0,avoidedMotion=0,fallbackMotion=0;
+#else
+        const bool lazyMotion=false;
+#endif
+        // A clipped sprite needs no render-only motion angle. Its life, position,
+        // velocity, emission and RNG still advance through the original update.
+        // Surviving sprites execute the identical alignment before vertex output.
+        // Modules and foreign camera/shader callbacks keep the original prepass.
+        if(motionAligned && !lazyMotion)
+        {
+            //update rotations during display cuz we need view matrix
+            for(int i=0;i<numLiveParticles;++i)alignMotion((tSpriteParticle*)liveParticles[i]);
+#ifdef SRR2_OLD_3DS
+            alignedMotion+=numLiveParticles;
+#endif
         }
 
         rmt::Matrix transform;
@@ -845,11 +963,37 @@ void tSpriteEmitter::Display()
                 preparePosition();
                 ++particleClipTested;
                 const float center[3]={currPos.x,currPos.y,currPos.z};
-                if(picaParticleClip::Reject(particleClip,center,current->size,current->spin))
-                {++particleClipRejected;continue;}
+                bool finiteMotion=false;
+#ifdef SRR2_OLD_3DS
+                if(lazyMotion)
+                {
+                    finiteMotion=motionView.FiniteAngle(&current->currPos.x,&current->prevPos.x);
+                    // Unsupported projection inputs retain the original alignment
+                    // before testing the original spin's clip eligibility.
+                    if(!finiteMotion){alignMotion(current);++alignedMotion;++fallbackMotion;}
+                }
+#endif
+                if(picaParticleClip::Reject(particleClip,center,current->size,finiteMotion?0.f:current->spin))
+                {
+                    ++particleClipRejected;
+#ifdef SRR2_OLD_3DS
+                    if(lazyMotion && finiteMotion)++avoidedMotion;
+#endif
+                    continue;
+                }
+#ifdef SRR2_OLD_3DS
+                if(lazyMotion && finiteMotion){alignMotion(current,&currPos);++alignedMotion;}
+#endif
             }
 #endif
 
+#ifdef SRR2_OLD_3DS
+#ifdef SRR2_OLD3DS_PARTICLE_CLIP
+            if(lazyMotion && !canClip){alignMotion(current);++alignedMotion;++fallbackMotion;}
+#else
+            if(lazyMotion){alignMotion(current);++alignedMotion;++fallbackMotion;}
+#endif
+#endif
             float x, y;
 #ifdef SRR2_OLD3DS_PARTICLE_TRIG_REUSE
             ++particleTrigCalls;
@@ -904,6 +1048,15 @@ void tSpriteEmitter::Display()
             stream->UV(texFrameCoords[current->texFrame], 0.0f);
             stream->Coord(currPos.x-x, currPos.y-y, currPos.z);
         }
+#ifdef SRR2_OLD_3DS
+        if(g_old3dsLazyParticleMotion)
+        {
+            __atomic_fetch_add(&g_old3dsParticleMotionPrepared,preparedMotion,__ATOMIC_RELAXED);
+            __atomic_fetch_add(&g_old3dsParticleMotionAligned,alignedMotion,__ATOMIC_RELAXED);
+            __atomic_fetch_add(&g_old3dsParticleMotionAvoided,avoidedMotion,__ATOMIC_RELAXED);
+            __atomic_fetch_add(&g_old3dsParticleMotionFallback,fallbackMotion,__ATOMIC_RELAXED);
+        }
+#endif
         p3d::pddi->EndPrims(stream);
 
         p3d::stack->Pop();    

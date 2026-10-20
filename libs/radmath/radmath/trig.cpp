@@ -8,6 +8,31 @@
 #include <math.h>
 
 namespace RadicalMathLibrary {
+#ifdef SRR2_OLD_3DS
+// The SDK's combined kernel shares range reduction and polynomial powers.
+// Keep uncommon FP controls and large/nonfinite inputs on the original path.
+extern "C" void sincosf(float, float*, float*);
+bool old3dsFusedTrig=true;
+unsigned old3dsFusedTrigCalls=0,old3dsFusedTrigFallbacks=0;
+void Old3dsSinCos(float angle,float* sine,float* cosine)
+{
+    unsigned control;
+    __asm__ __volatile__("vmrs %0, fpscr":"=r"(control)::"memory");
+    unsigned bits;
+    __builtin_memcpy(&bits,&angle,sizeof(bits));
+    if((control & 0x03f79f00u)==0x03000000u && (bits & 0x7fffffffu)<=0x46000000u)
+    {
+        float s,c;
+        sincosf(angle,&s,&c);
+        *sine=s;*cosine=c;
+        __atomic_fetch_add(&old3dsFusedTrigCalls,1u,__ATOMIC_RELAXED);
+        return;
+    }
+    *sine=sinf(angle);
+    *cosine=cosf(angle);
+    __atomic_fetch_add(&old3dsFusedTrigFallbacks,1u,__ATOMIC_RELAXED);
+}
+#endif
 //
 // If you are planning on using ATanCoords you might want 
 // to use ATan2 instead they are similar but ATan2 is 

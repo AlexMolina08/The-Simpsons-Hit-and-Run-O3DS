@@ -15,7 +15,7 @@
 //========================================
 // System Includes
 //========================================
-#ifdef SRR2_OLD3DS_VEHICLE_PROFILE
+#if defined(SRR2_OLD3DS_VEHICLE_PROFILE) || defined(SRR2_OLD3DS_NATIVE_BENCH)
 #include <worldsim/redbrick/old3dsvehicleprofile.h>
 Old3dsVehicleProfile::Counters Old3dsVehicleProfile::counters={};
 Old3dsVehicleProfile::ExternalCounters Old3dsVehicleProfile::externalCounters={};
@@ -2211,7 +2211,7 @@ OLD3DS_HOT_PATH
 void Vehicle::Update(float dt)
 {
     O3_MAIN_SCOPE(VehicleUpdate);
-#ifdef SRR2_OLD3DS_VEHICLE_PROFILE
+#if defined(SRR2_OLD3DS_VEHICLE_PROFILE) || defined(SRR2_OLD3DS_NATIVE_BENCH)
     Old3dsVehicleProfile::Sample vehicleProfile(mLoco==VL_PHYSICS);
 #endif
     // Update gas, if the change in gas is significant
@@ -2252,12 +2252,12 @@ void Vehicle::Update(float dt)
     // I suppose
     
     mSimStateArticulated->StoreJointState(dt);
-#ifdef SRR2_OLD3DS_VEHICLE_PROFILE
+#if defined(SRR2_OLD3DS_VEHICLE_PROFILE) || defined(SRR2_OLD3DS_NATIVE_BENCH)
     vehicleProfile.End(Old3dsVehicleProfile::StateStore);
 #endif
 
     mVehicleLocomotion->PreUpdate();
-#ifdef SRR2_OLD3DS_VEHICLE_PROFILE
+#if defined(SRR2_OLD3DS_VEHICLE_PROFILE) || defined(SRR2_OLD3DS_NATIVE_BENCH)
     vehicleProfile.End(Old3dsVehicleProfile::LocomotionPre);
 #endif
 
@@ -2278,7 +2278,7 @@ void Vehicle::Update(float dt)
     }
 
     mVehicleLocomotion->Update(dt);
-#ifdef SRR2_OLD3DS_VEHICLE_PROFILE
+#if defined(SRR2_OLD3DS_VEHICLE_PROFILE) || defined(SRR2_OLD3DS_NATIVE_BENCH)
     vehicleProfile.End(Old3dsVehicleProfile::LocomotionUpdate);
 #endif
     // basically - the only thing that is different after this is the mTransform,
@@ -2289,7 +2289,7 @@ void Vehicle::Update(float dt)
     
 
     mVehicleLocomotion->PostUpdate();
-#ifdef SRR2_OLD3DS_VEHICLE_PROFILE
+#if defined(SRR2_OLD3DS_VEHICLE_PROFILE) || defined(SRR2_OLD3DS_NATIVE_BENCH)
     vehicleProfile.End(Old3dsVehicleProfile::LocomotionPost);
 #endif
     
@@ -2311,7 +2311,7 @@ void Vehicle::Update(float dt)
     // just have to make sure that mSuspensionPointVelocities are correct
     // and it will use mSteeringWheelAngle if set.
     UpdateWheelRenderingInfo(dt);
-#ifdef SRR2_OLD3DS_VEHICLE_PROFILE
+#if defined(SRR2_OLD3DS_VEHICLE_PROFILE) || defined(SRR2_OLD3DS_NATIVE_BENCH)
     vehicleProfile.End(Old3dsVehicleProfile::BasisWheels);
 #endif
    
@@ -2337,7 +2337,7 @@ void Vehicle::Update(float dt)
 
 
     mSpeedKmh = mSpeed * 3.6f;  // for watcher...
-#ifdef SRR2_OLD3DS_VEHICLE_PROFILE
+#if defined(SRR2_OLD3DS_VEHICLE_PROFILE) || defined(SRR2_OLD3DS_NATIVE_BENCH)
     vehicleProfile.End(Old3dsVehicleProfile::Events);
 #endif
         
@@ -2348,7 +2348,7 @@ void Vehicle::Update(float dt)
         mPoseEngine->Advance(i, dt);
         mPoseEngine->Update(i);
     }
-#ifdef SRR2_OLD3DS_VEHICLE_PROFILE
+#if defined(SRR2_OLD3DS_VEHICLE_PROFILE) || defined(SRR2_OLD3DS_NATIVE_BENCH)
     vehicleProfile.End(Old3dsVehicleProfile::Pose);
 #endif
 
@@ -2376,7 +2376,7 @@ void Vehicle::Update(float dt)
     {      
         mSimStateArticulated->UpdateJointState(dt);
     }
-#ifdef SRR2_OLD3DS_VEHICLE_PROFILE
+#if defined(SRR2_OLD3DS_VEHICLE_PROFILE) || defined(SRR2_OLD3DS_NATIVE_BENCH)
     vehicleProfile.End(Old3dsVehicleProfile::DoorsJoint);
 #endif
  
@@ -2386,12 +2386,12 @@ void Vehicle::Update(float dt)
     // TODO - want to call this here! every frame!!
     CollisionObject* collObj = mSimStateArticulated->GetCollisionObject();
     collObj->Update();
-#ifdef SRR2_OLD3DS_VEHICLE_PROFILE
+#if defined(SRR2_OLD3DS_VEHICLE_PROFILE) || defined(SRR2_OLD3DS_NATIVE_BENCH)
     vehicleProfile.End(Old3dsVehicleProfile::Collision);
 #endif
 
     DSGUpdateAndMove();
-#ifdef SRR2_OLD3DS_VEHICLE_PROFILE
+#if defined(SRR2_OLD3DS_VEHICLE_PROFILE) || defined(SRR2_OLD3DS_NATIVE_BENCH)
     vehicleProfile.End(Old3dsVehicleProfile::SceneMove);
 #endif
 

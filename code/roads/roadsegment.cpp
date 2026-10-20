@@ -447,6 +447,18 @@ void RoadSegment::GetPosition( float t, float w, rmt::Vector* pos )
 }
 
 
+// Facing-only consumers do not need lane position or corner traversal.
+// Keep GetLaneLocation arithmetic inline to avoid an extra call for its consumers.
+void RoadSegment::GetLaneFacing( float t, rmt::Vector& facing )
+{
+    rmt::Vector facingNormals[ 2 ];
+    GetEdgeNormal( 0, facingNormals[ 0 ] );
+    GetEdgeNormal( 2, facingNormals[ 1 ] );
+    facing.x = LERP( t, facingNormals[ 0 ].x, facingNormals[ 1 ].x );
+    facing.y = LERP( t, facingNormals[ 0 ].y, facingNormals[ 1 ].y );
+    facing.z = LERP( t, facingNormals[ 0 ].z, facingNormals[ 1 ].z );
+}
+
 void RoadSegment::GetLaneLocation( float t, int index, rmt::Vector& position, rmt::Vector& facing )
 {
     //

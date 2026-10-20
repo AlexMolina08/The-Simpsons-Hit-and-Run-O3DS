@@ -308,6 +308,9 @@ public:
 
 private:
     bool  bottomPass;
+#ifdef SRR2_OLD3DS_COARSE_POOLS
+    int bottomPoolPrevious=-1;
+#endif
 #ifdef SRR2_OLD3DS_OCCLUSION
     bool visibilityWorld = false;
 #endif

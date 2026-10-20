@@ -1,3 +1,4 @@
+#include <main/old3dspools.h>
 //========================================================================
 // Copyright (C) 2002 Radical Entertainment Ltd.  All rights reserved.
 //
@@ -120,6 +121,7 @@ void FrontEndRenderLayer::DrawCoinObject()
 //========================================================================
 void FrontEndRenderLayer::Render()
 {
+    O3_POOL(Presentation,Hud);
     BEGIN_PROFILE( "FE Render" );
 
 #ifdef DEBUGWATCH

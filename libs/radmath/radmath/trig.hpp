@@ -50,8 +50,15 @@ inline float DegToRadian(const float a)
 #ifndef RAD_PS2
     inline float Sin(const float angle)  {  return sinf(angle); }
     inline float Cos(const float angle)  {  return cosf(angle); }
+#ifdef SRR2_OLD_3DS
+    extern bool old3dsFusedTrig;
+    void Old3dsSinCos(float angle, float* sine, float* cosine);
+#endif
     inline void  SinCos(const float angle, float* s, float* c)
     {
+#ifdef SRR2_OLD_3DS
+        if(old3dsFusedTrig) {Old3dsSinCos(angle,s,c);return;}
+#endif
         *s = sinf(angle);
         *c = cosf(angle);
     }

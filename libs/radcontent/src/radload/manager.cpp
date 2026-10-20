@@ -1,3 +1,4 @@
+#include <main/old3dspools.h>
 //=============================================================================
 // Copyright (c) 2002 Radical Games Ltd.  All rights reserved.
 //=============================================================================
@@ -109,7 +110,8 @@ void radLoadManager::AddCallback( radLoadCallback* callback )
         callback->AddRef();
         if( !IsLoadPending() )
         {
-            callback->Done();
+            O3_POOL(Streaming,Callbacks);
+        callback->Done();
             callback->Release();
         }
         else
@@ -405,6 +407,7 @@ void radLoadManager::SetSyncLoading( bool sync )
 
 void radLoadManager::SwitchTasks()
 {
+    O3_POOL(Streaming,LoadHandoff);
     m_pMutex->Unlock();
     radThreadSleep(0);
     m_pMutex->Lock();

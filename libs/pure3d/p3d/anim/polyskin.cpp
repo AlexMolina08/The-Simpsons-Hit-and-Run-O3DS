@@ -1,3 +1,4 @@
+#include <main/old3dspools.h>
 #ifdef SRR2_OLD3DS_MAIN_PROFILE
 #include <main/old3dsmainprofile.h>
 #else
@@ -88,6 +89,7 @@ tPolySkin::~tPolySkin()
 
 void tPolySkin::Display(tPose* p)
 {
+    O3_POOL(Recipe,Pose);
     O3_MAIN_SCOPE(PolySkin);
     if (p == NULL)
     {

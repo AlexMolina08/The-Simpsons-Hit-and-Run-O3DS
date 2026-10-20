@@ -1,5 +1,6 @@
 #ifdef RAD_3DS
 #include <3ds.h>
+#include <main/old3dsmemory.h>
 
 extern "C"
 {
@@ -33,6 +34,15 @@ namespace
         ~Guard( ) { RecursiveLock_Unlock( &s_Lock ); }
     };
 
+    void RecordLinear(bool failed)
+    {
+#ifdef SRR2_OLD3DS_MEMORY_DIAG
+        Old3dsMemoryLinear(__real_linearSpaceFree(),failed);
+#else
+        (void)failed;
+#endif
+    }
+
     bool WouldEmptyPool( size_t size, size_t alignment )
     {
         return s_PoolLive && (u64) size + alignment + LINEAR_KEEP > __real_linearSpaceFree( );
@@ -44,9 +54,11 @@ extern "C" void* __wrap_linearAlloc( size_t size )
     Guard g;
     if( WouldEmptyPool( size, 0x80 ) )
     {
+        RecordLinear(true);
         return NULL;
     }
     void* p = __real_linearAlloc( size );
+    RecordLinear(!p && size!=0);
     s_PoolLive = s_PoolLive || p != NULL;
     return p;
 }
@@ -56,9 +68,11 @@ extern "C" void* __wrap_linearMemAlign( size_t size, size_t alignment )
     Guard g;
     if( WouldEmptyPool( size, alignment ) )
     {
+        RecordLinear(true);
         return NULL;
     }
     void* p = __real_linearMemAlign( size, alignment );
+    RecordLinear(!p && size!=0);
     s_PoolLive = s_PoolLive || p != NULL;
     return p;
 }
@@ -66,7 +80,9 @@ extern "C" void* __wrap_linearMemAlign( size_t size, size_t alignment )
 extern "C" void* __wrap_linearRealloc( void* mem, size_t size )
 {
     Guard g;
-    return __real_linearRealloc( mem, size );
+    void* p=__real_linearRealloc( mem, size );
+    RecordLinear(!p && size!=0);
+    return p;
 }
 
 extern "C" size_t __wrap_linearGetSize( void* mem )

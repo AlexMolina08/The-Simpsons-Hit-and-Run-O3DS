@@ -1153,6 +1153,10 @@ bool TrafficLocomotion::EnterIntersection()
     return true;
 }
 
+#ifdef SRR2_OLD_3DS
+bool g_old3dsTrafficFacingOnly=false;
+#endif
+
 void TrafficLocomotion::PivotFrontWheels( rmt::Vector facing )
 {
     float cosAlpha = 0.0f;
@@ -1160,6 +1164,10 @@ void TrafficLocomotion::PivotFrontWheels( rmt::Vector facing )
     if( mIsInIntersection )
     {
         // when we're in the intersection, the lane is the OUTLANE, so get the t=0.0f
+#ifdef SRR2_OLD_3DS
+        if(g_old3dsTrafficFacingOnly) mMyAI->GetSegment()->GetLaneFacing(0.0f,outFacing);
+        else
+#endif
         mMyAI->GetSegment()->GetLaneLocation( 0.0f, (int)mMyAI->GetLaneIndex(), outPos, outFacing );
         outFacing.y = 0.0f;
         outFacing.Normalize(); // *** SQUARE ROOT! ***
@@ -1186,6 +1194,10 @@ void TrafficLocomotion::PivotFrontWheels( rmt::Vector facing )
         {
             // when we're not in the intersection, the lane is the 
             // current lane, so get t=1.0f
+#ifdef SRR2_OLD_3DS
+            if(g_old3dsTrafficFacingOnly) mMyAI->GetSegment()->GetLaneFacing(1.0f,outFacing);
+            else
+#endif
             mMyAI->GetSegment()->GetLaneLocation( 1.0f, 
                 (int)mMyAI->GetLaneIndex(), outPos, outFacing );
             outFacing.y = 0.0f;

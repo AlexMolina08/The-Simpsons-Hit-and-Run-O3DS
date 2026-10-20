@@ -11,6 +11,11 @@
 #include <constants/chunkids.hpp>
 #include <p3d/chunkfile.hpp>
 #include <p3d/file.hpp>
+#ifdef SRR2_OLD3DS_GEOMETRY_INPUT
+#include <p3d/geometryinput.hpp>
+extern "C" void p3dYieldIfDue(void);
+namespace p3dGeometryInput { bool enabled=true; unsigned records=0,reads=0,bytes=0; }
+#endif
 #include <pddi/pddiext.hpp>
 #include <main/old3dsdiag.h>
 #include <p3d/anim/vertexanimkey.hpp>
@@ -1937,6 +1942,15 @@ tPrimGroup*  tPrimGroupLoader::Load(tChunkFile *f, tEntityStore *store, rmt::Mat
                 P3DASSERT(primBufferInitialized);
                 int count = f->GetLong();
                 P3DASSERT(count == mVertexCount);
+#ifdef SRR2_OLD3DS_GEOMETRY_INPUT
+                if(p3dGeometryInput::enabled && !bones)
+                    p3dGeometryInput::Read<pddiVector,3>(f,count,tFile::DWORD,[&](const pddiVector& v,unsigned a){
+                        stream->Coord(v.x,v.y,v.z);
+                        if(tmpPositions)tmpPositions[a]=*(const rmt::Vector*)&v;
+                    },p3dYieldIfDue);
+                else
+#endif
+                {
                 pddiVector v;
                 for (int a = 0; a < count; a++)
                 {
@@ -1948,6 +1962,7 @@ tPrimGroup*  tPrimGroupLoader::Load(tChunkFile *f, tEntityStore *store, rmt::Mat
                     }
 
                 }
+                }
             }
             break;
 
@@ -1957,12 +1972,21 @@ tPrimGroup*  tPrimGroupLoader::Load(tChunkFile *f, tEntityStore *store, rmt::Mat
                 if (!(mVertexFormat & PDDI_V_NORMAL)) break;
                 int count = f->GetLong();
                 P3DASSERT(count == mVertexCount);
+#ifdef SRR2_OLD3DS_GEOMETRY_INPUT
+                if(p3dGeometryInput::enabled && !bones)
+                    p3dGeometryInput::Read<pddiVector,3>(f,count,tFile::DWORD,[&](const pddiVector& v,unsigned){
+                        stream->Normal(v.x,v.y,v.z);stream->Next();
+                    },p3dYieldIfDue);
+                else
+#endif
+                {
                 pddiVector v;
                 for (int a = 0; a < count; a++) 
                 {
                     f->GetData(&v, 3, tFile::DWORD);
                     stream->Normal(v.x, v.y, v.z);
                     stream->Next();
+                }
                 }
             }
             break;
@@ -2007,12 +2031,21 @@ tPrimGroup*  tPrimGroupLoader::Load(tChunkFile *f, tEntityStore *store, rmt::Mat
                 if (!(mVertexFormat & PDDI_V_COLOUR)) break;
                 int count = f->GetLong();
                 P3DASSERT(count == mVertexCount);
+#ifdef SRR2_OLD3DS_GEOMETRY_INPUT
+                if(p3dGeometryInput::enabled && !bones)
+                    p3dGeometryInput::Read<pddiColour,1>(f,count,tFile::DWORD,[&](const pddiColour& c,unsigned){
+                        stream->Colour(c);stream->Next();
+                    },p3dYieldIfDue);
+                else
+#endif
+                {
                 pddiColour c;
                 for (int a = 0; a < count; a++) 
                 {
                     f->GetData(&c, 1, tFile::DWORD);
                     stream->Colour(c);
                     stream->Next();
+                }
                 }
             }
             break;
@@ -2042,12 +2075,21 @@ tPrimGroup*  tPrimGroupLoader::Load(tChunkFile *f, tEntityStore *store, rmt::Mat
                 int channel = f->GetLong();
                 if(channel >= nUVChannel) break;
                 P3DASSERT(count == mVertexCount);
+#ifdef SRR2_OLD3DS_GEOMETRY_INPUT
+                if(p3dGeometryInput::enabled && !bones)
+                    p3dGeometryInput::Read<pddiVector2,2>(f,count,tFile::DWORD,[&](const pddiVector2& uv,unsigned){
+                        stream->UV(uv.u,uv.v,channel);stream->Next();
+                    },p3dYieldIfDue);
+                else
+#endif
+                {
                 pddiVector2 uv;
                 for (int a = 0; a < count; a++) 
                 {
                     f->GetData(&uv, 2, tFile::DWORD);
                     stream->UV(uv.u, uv.v, channel);
                     stream->Next();
+                }
                 }
             }
             break;

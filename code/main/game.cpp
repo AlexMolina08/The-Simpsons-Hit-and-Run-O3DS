@@ -1,3 +1,5 @@
+#include <main/old3dsrecurring.h>
+#include <main/old3dspools.h>
 #ifdef SRR2_OLD3DS_FRAME_PIPELINE
 #include <citro3d.h>
 #include <pddi/pica/preparedbackend.h>
@@ -861,7 +863,7 @@ void Game::Run()
 #endif
             DEMOPROFILE( g_DemoProfiler.Start(PROFILE_CHANNEL_AI); )
             mpTimerList->Service(); //nv
-            { NB_SCOPE(Update); mpGameFlow->OnTimerDone(elapsed, NULL); }
+            { NB_SCOPE(Update); O3_RECUR(Update); mpGameFlow->OnTimerDone(elapsed, NULL); }
 #ifdef SRR2_OLD_3DS
             const u64 updateTicks=svcGetSystemTick()-phaseTick;
 #ifdef SRR2_OLD3DS_CAUSAL_DIAG
@@ -885,7 +887,7 @@ void Game::Run()
 #ifdef SRR2_OLD3DS_CAUSAL_DIAG
                     O3ExperimentTimer causalRender(O3E_RENDER);
 #endif
-                    NB_SCOPE(Render);
+                    NB_SCOPE(Render); O3_RECUR(Render);
                     mpRenderFlow->OnTimerDone(elapsed, NULL);
                 }
                 DEMOPROFILE( g_DemoProfiler.Stop(PROFILE_CHANNEL_RENDER); )
@@ -919,10 +921,14 @@ void Game::Run()
 #endif
         phaseTick = svcGetSystemTick();
 #endif
+        { NB_SCOPE(Service);
+        { NB_SCOPE(FileService);
         ::radFileService();
+        }
 #ifdef SRR2_OLD_3DS
         if(mFrameCount == 0) printf("OLD3DS_RUN files\n");
 #endif
+        { NB_SCOPE(DebugService);
         ::radDbgComService();
         ::radDebugConsoleService();
         
@@ -934,6 +940,8 @@ void Game::Run()
         //
         // Service the sound renderer.
         //
+        }
+        { NB_SCOPE(SoundService);
         SoundManager::GetInstance()->Update();
 #ifdef SRR2_OLD_3DS
         if(mFrameCount == 0) printf("OLD3DS_RUN sound\n");
@@ -952,6 +960,8 @@ void Game::Run()
         //
         // Spin Pure3D async loading.
         //
+        }
+        }
         DEMOPROFILE( g_DemoProfiler.Start(PROFILE_CHANNEL_LOAD); )
 #ifdef SRR2_OLD_3DS
         const u64 serviceTicks=svcGetSystemTick()-phaseTick;

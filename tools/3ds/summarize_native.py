@@ -23,14 +23,21 @@ def read(path):
  loop_period_fps=1e6*len(period)/sum(period) if period else None,
  verification=fields(next((l for l in lines if l.startswith('NATIVE_VERIFY ')),'NATIVE_VERIFY calls=0 failures=0')))
  # Completion and route coverage are separate: button scripts can get stuck.
- driving_ms=sum(int(r['elapsed']) for r in rows if int(r['route_ms'])<28000 and r['incar']=='1' and float(r['speed'])>1)
+ driving_window_end=int(header['seconds'])*1000 if header.get('scenario')=='L2-road-v2' else 28000
+ driving_ms=sum(int(r['elapsed']) for r in rows if int(r['route_ms'])<driving_window_end and r['incar']=='1' and float(r['speed'])>1)
  walking_ms=sum(int(y['elapsed']) for x,y in zip(rows,rows[1:]) if 31000<=int(y['route_ms'])<38000 and y['incar']=='0' and x['incar']=='0' and sum((float(y[k])-float(x[k]))**2 for k in ['x','z'])**.5 > .5*int(y['elapsed'])/1000)
  exited=any(r['incar']=='0' and int(r['route_ms'])>=28000 for r in rows)
  reentered=exited and any(r['incar']=='1' and int(r['route_ms'])>=42000 for r in rows)
- driving_only=header.get('scenario')=='L2-drive-v1'
+ driving_only=header.get('scenario') in ('L2-drive-v1','L2-road-v2')
  intact=summary['complete']=='1' and not int(header.get('aborted',0)) and not int(header['overwritten']) and len(rows)==int(summary['frames'])
  minimum_driving_ms=max(4000,int(header['seconds'])*500) if driving_only else 4000
  coverage=intact and driving_ms>=minimum_driving_ms and (all(r['incar']=='1' for r in rows) if driving_only else walking_ms>=2000 and reentered)
+ route=fields(next((l for l in lines if l.startswith('NATIVE_ROUTE ')),'NATIVE_ROUTE'))
+ road_route=header.get('scenario')=='L2-road-v2'
+ if road_route:
+  coverage=coverage and driving_ms>=int(header['seconds'])*750 and float(route.get('distance',0))>=int(header['seconds'])*7.5 and int(route.get('recoveries',99))<=1 and int(route.get('point',0))>=3
+ result['route_execution']=route
+ result['streaming_window_observed']=any(int(r['loading'])>0 for r in rows)
  result['route_health']=dict(scenario=header.get('scenario'),driving_only=driving_only,driving_moving_ms=driving_ms,walking_moving_ms=walking_ms,observed_exit=exited,observed_late_in_car=reentered,clock_complete=summary['complete']=='1',coverage_pass=coverage)
  result['workload']={k:dict(total=sum(int(r[k]) for r in rows),minimum=min(int(r[k]) for r in rows),maximum=max(int(r[k]) for r in rows)) for k in ['draws','vertices','pairs','areas','entities','loading','substeps']} if rows else {}
  result['timing_note']='Loop periods include pacing; use associated O3 presentation records for presentation intervals. gpu_last_ms is unassociated, never a per-frame GPU measurement. Replay does not establish physical FPS.'

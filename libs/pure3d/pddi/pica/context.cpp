@@ -1,3 +1,5 @@
+#include <main/old3dsrecurring.h>
+#include <main/old3dspools.h>
 #ifdef SRR2_OLD3DS_MAIN_PROFILE
 #include <main/old3dsmainprofile.h>
 #else
@@ -1142,7 +1144,7 @@ pddiPrimStream* picaContext::BeginPrims(pddiShader* mat, pddiPrimType primType, 
     ADD_STAT(PDDI_STAT_MATERIAL_OPS, !material->IsCurrent());
     {
 #ifdef SRR2_OLD_3DS
-        Old3dsOperationScope timing(O3_MATERIAL);
+        Old3dsOperationScope timing(O3_MATERIAL); O3_RECUR(Material);
 #endif
 #ifdef SRR2_OLD3DS_PREPARED_BACKEND
         ApplyDrawMaterial(material);
@@ -1156,6 +1158,7 @@ pddiPrimStream* picaContext::BeginPrims(pddiShader* mat, pddiPrimType primType, 
 
 #ifdef SRR2_OLD3DS_QUAD_STREAM
 #include <pddi/pica/quadstream.hpp>
+#include <typeinfo>
 pddiPrimStream* picaContext::BeginQuadStream(pddiShader* shader,unsigned count)
 {
     // Preflight both existing, GPU-fenced rings before changing immediate state.
@@ -1197,6 +1200,8 @@ extern "C" bool picaEmitColourQuad(pddiPrimStream* stream,const pddiVector* posi
 {
     return s_picaContext && s_picaContext->EmitColourQuad(stream,positions,coordinates,colours,unsigned(topology));
 }
+extern "C" bool picaParticleMotionShaderSafe(pddiShader* shader)
+{return shader && typeid(*shader)==typeid(picaMat);}
 extern "C" pddiPrimStream* picaBeginQuadStream(pddiShader* shader,unsigned count)
 {
     return s_picaContext ? s_picaContext->BeginQuadStream(shader,count) : nullptr;
@@ -1398,7 +1403,8 @@ bool picaPrimBuffer::CullNative()
 OLD3DS_HOT_PATH
 void picaContext::DrawPrimBuffer(pddiShader* mat, pddiPrimBuffer* buffer)
 {
-    O3_MAIN_SCOPE(DrawPrim);
+    O3_POOL(Recipe,Backend);
+    O3_MAIN_SCOPE(DrawPrim); O3_RECUR(Backend);
 #ifdef SRR2_OLD3DS_CAUSAL_DIAG
     O3ExperimentTimer causalTimer(O3E_BACKEND);
 #endif
@@ -1433,7 +1439,7 @@ void picaContext::DrawPrimBuffer(pddiShader* mat, pddiPrimBuffer* buffer)
     ADD_STAT(PDDI_STAT_MATERIAL_OPS, !material->IsCurrent());
     {
 #ifdef SRR2_OLD_3DS
-        Old3dsOperationScope timing(O3_MATERIAL);
+        Old3dsOperationScope timing(O3_MATERIAL); O3_RECUR(Material);
 #endif
 #ifdef SRR2_OLD3DS_PREPARED_BACKEND
         ApplyDrawMaterial(material);
@@ -2347,7 +2353,7 @@ void picaContext::SetVertexUniforms(bool lit, pddiColour ambient, pddiColour dif
     O3ExperimentTimer causalUniform(O3E_UNIFORM);
 #endif
 #ifdef SRR2_OLD_3DS
-    Old3dsOperationScope timing(O3_UNIFORMS, 1);
+    Old3dsOperationScope timing(O3_UNIFORMS, 1); O3_RECUR(Uniforms);
 #endif
     if(!g_picaInFrame)
     {
@@ -3998,7 +4004,7 @@ bool picaPrimBuffer::CapturePreparedGeometry(picaPreparedGeometry& output)
 
 void picaPrimBuffer::Display(void)
 {
-    O3_MAIN_SCOPE(PrimDisplay);
+    O3_MAIN_SCOPE(PrimDisplay); O3_RECUR(Submit);
 #ifdef SRR2_OLD3DS_OCCLUSION
     context->VisibilityBarrier();
 #endif
@@ -4362,6 +4368,9 @@ bool picaContext::BeginBottomScreen(float u0, float v0, float u1, float v1, bool
     bottomDst[2]=cx+0.5f*dw;bottomDst[3]=cy+0.5f*dh;
 
     bottomPass = true;
+#ifdef SRR2_OLD3DS_COARSE_POOLS
+    bottomPoolPrevious = Old3dsPools::Select(Old3dsPools::Presentation,Old3dsPools::Bottom);
+#endif
 
     picaStateInvalidate();
     InvalidateUniformCache();
@@ -4544,6 +4553,9 @@ void picaContext::EndBottomScreen(void)
 
     bottomPass = false;
     display->EndBottomTarget();
+#ifdef SRR2_OLD3DS_COARSE_POOLS
+    Old3dsPools::Restore(bottomPoolPrevious); bottomPoolPrevious=-1;
+#endif
 
     picaStateInvalidate();
     InvalidateUniformCache();

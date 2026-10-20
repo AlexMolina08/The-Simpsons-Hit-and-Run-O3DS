@@ -1,8 +1,10 @@
 #include "pch.hpp"
+#include <main/nativebench.h>
 
 #include <3ds.h>
 #include <math.h>
 #include <string.h>
+#include <stdlib.h>
 
 #include <radsound_hal.hpp>
 #include <radsound_win32.hpp>
@@ -120,7 +122,34 @@ static bool AdpcmEncodeFrame( const s16 * in, int p, int shift, int & h1, int & 
     return fits;
 }
 
-static unsigned int AdpcmEncodeInPlace( void * pData, unsigned int numSamples )
+// Fixed-predictor scoring keeps the original residual and energy order. The
+// wrapper validates the mutable SDK coefficient table before using this path.
+template<int Predictor,int C1,int C2>
+static inline __attribute__((always_inline)) void AdpcmScorePredictor(
+    const s16* in,int h1,int h2,int& bestP,int& bestMax,int& bestBits,unsigned int& bestEnergy)
+{
+    // Zero scale bits and zero energy cannot be improved, including ties.
+    if(bestBits==0 && bestEnergy==0) return;
+    int x1=h1,x2=h2,maxRes=0;
+    unsigned int energy=0;
+    for(int i=0;i<ADPCM_FRAME_SAMPLES;++i)
+    {
+        int r=in[i]-((C1*x1+C2*x2+1024)>>11);
+        if(r<0) r=-r;
+        if(r>maxRes) maxRes=r;
+        energy+=(unsigned int)(r>>4)*(unsigned int)(r>>4);
+        x2=x1;x1=in[i];
+    }
+    // Identical to repeatedly shifting maxRes until it is at most seven.
+    const int scaleBits=maxRes>7 ? 29-__builtin_clz((unsigned int)maxRes) : 0;
+    if(scaleBits<bestBits || (scaleBits==bestBits && energy<bestEnergy))
+    {
+        bestP=Predictor;bestMax=maxRes;bestBits=scaleBits;bestEnergy=energy;
+    }
+}
+
+template<unsigned mode>
+static unsigned int AdpcmEncodeInPlaceKernel( void * pData, unsigned int numSamples )
 {
     const s16 * pcm = (const s16 *) pData;
     u8 * out = (u8 *) pData;
@@ -138,6 +167,19 @@ static unsigned int AdpcmEncodeInPlace( void * pData, unsigned int numSamples )
 
         int bestP = 0, bestMax = 0, bestBits = 99;
         unsigned int bestEnergy = 0xffffffffu;
+        if(mode==2)
+        {
+            AdpcmScorePredictor<0,0,0>(in,h1,h2,bestP,bestMax,bestBits,bestEnergy);
+            AdpcmScorePredictor<1,2048,0>(in,h1,h2,bestP,bestMax,bestBits,bestEnergy);
+            AdpcmScorePredictor<2,4096,-2048>(in,h1,h2,bestP,bestMax,bestBits,bestEnergy);
+            AdpcmScorePredictor<3,1536,512>(in,h1,h2,bestP,bestMax,bestBits,bestEnergy);
+            AdpcmScorePredictor<4,1920,0>(in,h1,h2,bestP,bestMax,bestBits,bestEnergy);
+            AdpcmScorePredictor<5,3680,-1664>(in,h1,h2,bestP,bestMax,bestBits,bestEnergy);
+            AdpcmScorePredictor<6,3136,-1856>(in,h1,h2,bestP,bestMax,bestBits,bestEnergy);
+            AdpcmScorePredictor<7,3968,-1984>(in,h1,h2,bestP,bestMax,bestBits,bestEnergy);
+        }
+        else
+        {
         for( int p = 0; p < 8; p++ )
         {
             const int c1 = (s16) s_AdpcmCoefs[ p * 2 ];
@@ -148,12 +190,21 @@ static unsigned int AdpcmEncodeInPlace( void * pData, unsigned int numSamples )
             {
                 int r = in[ i ] - ( ( c1 * x1 + c2 * x2 + 1024 ) >> 11 );
                 if( r < 0 ) r = -r;
+                // scaleBits only increases as samples are visited. A predictor
+                // already worse than the winner cannot win its scale/energy tie.
+                // Keep predictor order, history, quantization and output unchanged.
+                if( mode==1 && bestBits < 24 && (unsigned int) r >= (8u << bestBits) )
+                {
+                    maxRes = -1;
+                    break;
+                }
                 if( r > maxRes ) maxRes = r;
                 energy += (unsigned int) ( r >> 4 ) * (unsigned int) ( r >> 4 );
                 x2 = x1;
                 x1 = in[ i ];
             }
 
+            if( maxRes < 0 ) continue;
             int scaleBits = 0;
             for( int m = maxRes; m > 7; m >>= 1 ) scaleBits++;
             if( scaleBits < bestBits || ( scaleBits == bestBits && energy < bestEnergy ) )
@@ -163,6 +214,7 @@ static unsigned int AdpcmEncodeInPlace( void * pData, unsigned int numSamples )
                 bestBits = scaleBits;
                 bestEnergy = energy;
             }
+        }
         }
 
         int shift = 0;
@@ -186,6 +238,102 @@ static unsigned int AdpcmEncodeInPlace( void * pData, unsigned int numSamples )
     }
 
     return frames * ADPCM_FRAME_BYTES;
+}
+
+// Per-sample pruning regressed on ARM11; retain only for controlled comparisons.
+bool g_old3dsAdpcmPrune = false;
+// Exact-output and physical callback tests validate fixed-predictor scoring.
+#ifdef SRR2_OLD_3DS
+bool g_old3dsAdpcmFast = true;
+#else
+bool g_old3dsAdpcmFast = false;
+#endif
+unsigned g_old3dsAdpcmFastCalls=0,g_old3dsAdpcmFastFallbacks=0;
+bool g_old3dsAdpcmVerify = false;
+unsigned g_old3dsAdpcmVerified = 0, g_old3dsAdpcmMismatches = 0, g_old3dsAdpcmVerifyAllocFailures = 0;
+#ifdef SRR2_OLD3DS_NATIVE_BENCH
+struct AdpcmVerification {unsigned samples,hash,bytes,order;u64 original,optimized;};
+static AdpcmVerification s_AdpcmVerification[256];
+static unsigned s_AdpcmVerificationCount=0;
+void old3dsDumpAdpcmVerification(FILE* file)
+{
+    for(unsigned i=0;i<s_AdpcmVerificationCount;++i)
+    {
+        const AdpcmVerification& r=s_AdpcmVerification[i];
+        fprintf(file,"NATIVE_ADPCM_KERNEL samples=%u hash=%08x bytes=%u reference_first=%u original_us=%.3f optimized_us=%.3f\n",
+            r.samples,r.hash,r.bytes,r.order,r.original*1000000.0/SYSCLOCK_ARM11,r.optimized*1000000.0/SYSCLOCK_ARM11);
+    }
+}
+#endif
+static unsigned int AdpcmEncodeInPlace( void * pData, unsigned int numSamples )
+{
+    NB_SCOPE(SoundEncodeKernel);
+#ifdef SRR2_OLD3DS_NATIVE_BENCH
+    if(NativeBench::OnCaptureThread() && NativeBench::collecting)
+    {
+        NB_COUNT(AdpcmClips,1);
+        NB_COUNT(AdpcmSamples,numSamples);
+    }
+#endif
+    // Diagnostic only: compare actual loaded PCM before callback publication.
+    // Alternate kernel order and keep timing records in memory until dump.
+    void* reference = NULL;
+    unsigned expected=0;
+#ifdef SRR2_OLD3DS_NATIVE_BENCH
+    AdpcmVerification measured={numSamples,2166136261u,0,g_old3dsAdpcmVerified&1,0,0};
+#endif
+    if(g_old3dsAdpcmVerify && (g_old3dsAdpcmPrune || g_old3dsAdpcmFast))
+    {
+        reference = malloc(numSamples * sizeof(s16));
+        if(reference) memcpy(reference,pData,numSamples * sizeof(s16));
+        else ++g_old3dsAdpcmVerifyAllocFailures;
+    }
+#ifdef SRR2_OLD3DS_NATIVE_BENCH
+    if(reference)
+    {
+        for(unsigned i=0;i<numSamples*sizeof(s16);++i) measured.hash=(measured.hash^((u8*)pData)[i])*16777619u;
+        if(measured.order)
+        {
+            const u64 start=svcGetSystemTick();
+            expected=AdpcmEncodeInPlaceKernel<0>(reference,numSamples);
+            measured.original=svcGetSystemTick()-start;
+        }
+    }
+#endif
+    static const u16 expectedCoefs[16]={0,0,2048,0,4096,(u16)-2048,1536,512,
+        1920,0,3680,(u16)-1664,3136,(u16)-1856,3968,(u16)-1984};
+    const bool fast=g_old3dsAdpcmFast && !memcmp(s_AdpcmCoefs,expectedCoefs,sizeof(expectedCoefs));
+    if(g_old3dsAdpcmFast)
+    {
+        if(fast) ++g_old3dsAdpcmFastCalls;
+        else ++g_old3dsAdpcmFastFallbacks;
+    }
+#ifdef SRR2_OLD3DS_NATIVE_BENCH
+    const u64 optimizedStart=reference?svcGetSystemTick():0;
+#endif
+    const unsigned int bytes = fast ? AdpcmEncodeInPlaceKernel<2>(pData,numSamples)
+        : g_old3dsAdpcmPrune ? AdpcmEncodeInPlaceKernel<1>(pData,numSamples)
+                            : AdpcmEncodeInPlaceKernel<0>(pData,numSamples);
+    if(reference)
+    {
+#ifdef SRR2_OLD3DS_NATIVE_BENCH
+        measured.optimized=svcGetSystemTick()-optimizedStart;
+        if(!measured.order)
+        {
+            const u64 start=svcGetSystemTick();
+            expected=AdpcmEncodeInPlaceKernel<0>(reference,numSamples);
+            measured.original=svcGetSystemTick()-start;
+        }
+        measured.bytes=bytes;
+        if(s_AdpcmVerificationCount<256) s_AdpcmVerification[s_AdpcmVerificationCount++]=measured;
+#else
+        expected=AdpcmEncodeInPlaceKernel<0>(reference,numSamples);
+#endif
+        ++g_old3dsAdpcmVerified;
+        if(expected != bytes || memcmp(reference,pData,bytes)) ++g_old3dsAdpcmMismatches;
+        free(reference);
+    }
+    return bytes;
 }
 
 class radSoundHalBufferCtr
@@ -318,6 +466,7 @@ class radSoundHalBufferCtr
 
     void OnBufferLoadComplete( unsigned int dataSourceFrames )
     {
+        NB_SCOPE(SoundBufferComplete);
         if( m_pLoadTarget != NULL && m_LoadBytes != 0 )
         {
             if( ! m_Streaming && m_pLoadTarget == GetData( ) &&
@@ -378,6 +527,7 @@ class radSoundHalBufferCtr
 
     void EncodeAdpcm( void )
     {
+        NB_SCOPE(SoundEncode);
         void * pOld = GetData( );
         const unsigned int bytes = AdpcmEncodeInPlace( pOld, m_SizeInFrames );
 

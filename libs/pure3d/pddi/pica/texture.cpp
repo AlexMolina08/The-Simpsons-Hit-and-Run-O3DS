@@ -13,6 +13,128 @@
 #include <pddi/base/debug.hpp>
 #include <pddi/gl/decompress.h>
 
+#ifdef SRR2_OLD3DS_NATIVE_TEXTURES
+#include <pddi/pica/nativetexture.hpp>
+#include <sys/stat.h>
+extern "C" {
+#include <libavutil/sha.h>
+#include <libavutil/mem.h>
+}
+#ifdef SRR2_OLD3DS_NATIVE_TEXTURE_BUNDLE
+#include <pddi/pica/nativebundle.hpp>
+#include <bundle_index.hpp>
+bool g_picaNativeBundleEnabled=true;
+namespace {
+struct NativeBundleSlot {void* owner=nullptr;FILE* file=nullptr;bool active=false;};
+NativeBundleSlot bundleSlots[2];
+struct NativeBundleFile {
+    FILE* file=nullptr;NativeBundleSlot* slot=nullptr;
+    NativeBundleFile(){
+        void* tls=getThreadLocalStorage();
+        for(auto& candidate:bundleSlots){
+            void* owner=__atomic_load_n(&candidate.owner,__ATOMIC_ACQUIRE);
+            if(!owner){void* empty=nullptr;
+                if(__atomic_compare_exchange_n(&candidate.owner,&empty,tls,false,__ATOMIC_ACQ_REL,__ATOMIC_ACQUIRE))owner=tls;
+            }
+            if(owner!=tls || candidate.active)continue;
+            candidate.active=true;slot=&candidate;
+            if(!candidate.file)candidate.file=fopen(picaNativeBundle::BundlePath,"rb");
+            file=candidate.file;return;
+        }
+        // Reentrancy or additional resource threads use an independent cursor.
+        // Never hold a shared FILE lock across a cooperative loader yield.
+        file=fopen(picaNativeBundle::BundlePath,"rb");
+    }
+    ~NativeBundleFile(){if(slot)slot->active=false;else if(file)fclose(file);}
+};
+}
+#endif
+bool g_picaNativeTexturesEnabled=true;
+#ifdef SRR2_OLD3DS_NATIVE_ETC1
+bool g_picaNativeEtcEnabled=true;
+#endif
+bool g_picaNativeTextureDiagnostics=false;
+static unsigned nativeTextureHits=0,nativeTextureMisses=0,nativeTextureInvalid=0,nativeTextureBytes=0;
+static unsigned nativeTextureCost[3][5]={};
+// Bounded diagnostic evidence: one descriptor per 64 misses, no logging or
+// blocking while the loader owns a texture. Atomic ordinals give unique slots.
+static unsigned char nativeMissSamples[16][76];
+static unsigned nativeMissSampleReady[16]={};
+static void NativeTextureMiss(const unsigned char* header)
+{
+    const unsigned ordinal=__atomic_fetch_add(&nativeTextureMisses,1u,__ATOMIC_RELAXED);
+    if(g_picaNativeTextureDiagnostics && !(ordinal%64) && ordinal/64<16){
+        const unsigned slot=ordinal/64;
+        memcpy(nativeMissSamples[slot],header,76);
+        __atomic_store_n(&nativeMissSampleReady[slot],1u,__ATOMIC_RELEASE);
+    }
+}
+
+struct NativeTextureCost {
+    enum Bucket { Other, HashWork, Open, ReadCheck, BucketCount };
+    bool enabled;
+    unsigned outcome=2,active=Other;
+    u64 last=0,ticks[BucketCount]={};
+    explicit NativeTextureCost(bool selected):enabled(selected){if(enabled)last=svcGetSystemTick();}
+    unsigned Select(unsigned next){
+        const unsigned previous=active;
+        if(enabled){const u64 now=svcGetSystemTick();ticks[active]+=now-last;last=now;active=next;}
+        return previous;
+    }
+    struct Phase {
+        NativeTextureCost& cost;unsigned previous;
+        Phase(NativeTextureCost& selected,unsigned next):cost(selected),previous(cost.Select(next)){}
+        ~Phase(){cost.Select(previous);}
+    };
+    ~NativeTextureCost(){
+        if(!enabled)return;
+        Select(Other);
+        // One active clock bucket per attempt. Payload hashing pauses ReadCheck;
+        // total is derived, never an enclosing timer. Wall phases include yields
+        // and must not be interpreted as exclusive CPU or summed into frames.
+        const u64 total=ticks[Other]+ticks[HashWork]+ticks[Open]+ticks[ReadCheck];
+        const u64 values[]={total,ticks[HashWork],ticks[Open],ticks[ReadCheck]};
+        __atomic_fetch_add(&nativeTextureCost[outcome][0],1u,__ATOMIC_RELAXED);
+        for(unsigned i=0;i<4;++i)__atomic_fetch_add(&nativeTextureCost[outcome][i+1],
+            unsigned(values[i]*1000000/SYSCLOCK_ARM11),__ATOMIC_RELAXED);
+    }
+};
+void picaSnapshotNativeTextures(picaNativeTextureStats& stats)
+{
+    stats.hits=__atomic_load_n(&nativeTextureHits,__ATOMIC_RELAXED);
+    stats.misses=__atomic_load_n(&nativeTextureMisses,__ATOMIC_RELAXED);
+    stats.invalid=__atomic_load_n(&nativeTextureInvalid,__ATOMIC_RELAXED);
+    stats.bytes=__atomic_load_n(&nativeTextureBytes,__ATOMIC_RELAXED);
+    for(unsigned i=0;i<3;++i)for(unsigned j=0;j<5;++j)
+        stats.cost[i][j]=__atomic_load_n(&nativeTextureCost[i][j],__ATOMIC_RELAXED);
+}
+extern "C" void picaDumpNativeTextures(FILE* f)
+{
+    unsigned preparedVersion=picaNativeTexture::Version;
+#ifdef SRR2_OLD3DS_NATIVE_ETC1
+    if(g_picaNativeEtcEnabled)preparedVersion=2;
+    fprintf(f,"NATIVE_ETC1 enabled=%u source_scope=opaque_world_png version=2 original_allocation_budgets=1 mip_policy_unchanged=1\n",g_picaNativeEtcEnabled);
+#endif
+#ifdef SRR2_OLD3DS_NATIVE_TEXTURE_BUNDLE
+    fprintf(f,"NATIVE_TEXTURE_BUNDLE enabled=%u entries=%u index_bytes=%u bundle_bytes=%u sha256=%s source_bound_payload_sha=1 whole_bundle_hash_at_runtime=0\n",g_picaNativeBundleEnabled,picaNativeBundle::EntryCount,unsigned(sizeof(picaNativeBundle::Entries)),picaNativeBundle::BundleBytes,picaNativeBundle::BundleSHA256);
+#endif
+    fprintf(f,"NATIVE_TEXTURES enabled=%u hits=%u misses=%u invalid=%u bytes=%u version=%u\n",
+        g_picaNativeTexturesEnabled,__atomic_load_n(&nativeTextureHits,__ATOMIC_RELAXED),__atomic_load_n(&nativeTextureMisses,__ATOMIC_RELAXED),__atomic_load_n(&nativeTextureInvalid,__ATOMIC_RELAXED),__atomic_load_n(&nativeTextureBytes,__ATOMIC_RELAXED),preparedVersion);
+    if(g_picaNativeTextureDiagnostics)for(unsigned i=0;i<16;++i){
+        if(!__atomic_load_n(&nativeMissSampleReady[i],__ATOMIC_ACQUIRE))continue;
+        fprintf(f,"NATIVE_TEXTURE_MISS_SAMPLE ordinal=%u descriptor_hex=",i*64);
+        for(unsigned j=0;j<76;++j)fprintf(f,"%02x",nativeMissSamples[i][j]);
+        fprintf(f,"\n");
+    }
+    for(unsigned i=0;i<3;++i)fprintf(f,"NATIVE_TEXTURE_COST enabled=%u outcome=%s calls=%u total_us=%u hash_us=%u open_us=%u read_verify_us=%u overlapping_fields=0 total_is_derived_sum=1 phase_fields_disjoint_within_attempt=1 includes_yields=1 cpu_time=0\n",
+        g_picaNativeTextureDiagnostics,i==0?"hit":i==1?"miss":"invalid",
+        __atomic_load_n(&nativeTextureCost[i][0],__ATOMIC_RELAXED),
+        __atomic_load_n(&nativeTextureCost[i][1],__ATOMIC_RELAXED),
+        __atomic_load_n(&nativeTextureCost[i][2],__ATOMIC_RELAXED),
+        __atomic_load_n(&nativeTextureCost[i][3],__ATOMIC_RELAXED),
+        __atomic_load_n(&nativeTextureCost[i][4],__ATOMIC_RELAXED));
+}
+#endif
 #include <math.h>
 #include <string.h>
 #include <stdlib.h>
@@ -75,7 +197,12 @@ void picaTexture::TryPromoteVram()
     // This API waits for copy completion outside a Citro3D frame. In-frame
     // copies are asynchronous, so retain the original allocation in that case.
     if(g_picaInFrame){++vramTextureInFrame;return;}
-    const unsigned bytes=C3D_TexCalcTotalSize(tex.size,tex.maxLevel);
+    const unsigned copyBytes=C3D_TexCalcTotalSize(tex.size,tex.maxLevel);
+#ifdef SRR2_OLD3DS_NATIVE_ETC1
+    const unsigned bytes=nativeAllocationBytes?nativeAllocationBytes:copyBytes;
+#else
+    const unsigned bytes=copyBytes;
+#endif
     const unsigned budget=2*1024*1024,reserve=2*1024*1024;
     if(bytes<8192 || bytes>131072 || bytes>budget-vramTextureBytes ||
        vramSpaceFree()<bytes+reserve)return;
@@ -93,7 +220,7 @@ void picaTexture::TryPromoteVram()
     if(g_picaUnexposedResourcePrep)picaPreparedBackendFence();
 #endif
 #endif
-    C3D_SyncTextureCopy((u32*)tex.data,0,(u32*)node->data,0,bytes,8);
+    C3D_SyncTextureCopy((u32*)tex.data,0,(u32*)node->data,0,copyBytes,8);
     linearFree(tex.data);tex.data=node->data;vramAllocation=node;
 #ifdef SRR2_OLD3DS_RETAINED_MATERIAL
     ++nativeRevision;
@@ -250,6 +377,10 @@ bool picaTexture::Create(int x, int y, int bpp, int alpha, int nMip,
                  !g_picaFontTexture && textureType!=PDDI_TEXTYPE_YUV;
     vramUploaded=false;
 #endif
+#ifdef SRR2_OLD3DS_NATIVE_TEXTURES
+    nativeEligible=usageHint==PDDI_USAGE_STATIC && !g_picaKeepFullSize &&
+        !g_picaFontTexture && (IsCompressed(textureType) || textureType==PDDI_TEXTYPE_RGB || textureType==PDDI_TEXTYPE_PALETTIZED);
+#endif
     xSize      = x;
     ySize      = y;
     nMipMap    = nMip;
@@ -323,6 +454,9 @@ bool picaTexture::Create(int x, int y, int bpp, int alpha, int nMip,
         return false;
     }
     created = true;
+#ifdef SRR2_OLD3DS_NATIVE_ETC1
+    nativeAllocationBytes=C3D_TexCalcTotalSize(tex.size,tex.maxLevel);
+#endif
 
     C3D_TexSetFilter(&tex, GPU_LINEAR, GPU_LINEAR);
     C3D_TexSetWrap(&tex, GPU_REPEAT, GPU_REPEAT);
@@ -398,7 +532,12 @@ pddiLockInfo* picaTexture::Lock(int mipMap, pddiRect* rect)
     // granting the lock; failure leaves the previous texture and ownership intact.
     if(mipMap==0 && vramAllocation && !reuploadLinear)
     {
-        reuploadLinear=linearAlloc(C3D_TexCalcTotalSize(tex.size,tex.maxLevel));
+        unsigned bytes=C3D_TexCalcTotalSize(tex.size,tex.maxLevel);
+#ifdef SRR2_OLD3DS_NATIVE_ETC1
+        // A later CPU upload restores the original uncompressed layout.
+        if(hwFormat==GPU_ETC1)bytes=nativeAllocationBytes;
+#endif
+        reuploadLinear=linearAlloc(bytes);
         if(!reuploadLinear)return NULL;
     }
 #endif
@@ -448,6 +587,16 @@ void picaTexture::UploadLevel(int mipLevel)
 #endif
 #ifdef SRR2_OLD3DS_VRAM_TEXTURES
     picaVramUpload vramUpload(tex,vramAllocation,reuploadLinear,valid);
+#endif
+#ifdef SRR2_OLD3DS_NATIVE_TEXTURES
+    if(mipLevel==0 && !valid && nativeEligible && UploadPrepared())
+    {
+        C3D_TexFlush(&tex);
+#ifdef SRR2_OLD3DS_VRAM_TEXTURES
+        vramUpload.Complete();TryPromoteVram();
+#endif
+        valid=true;return;
+    }
 #endif
     const int srcW = (xSize >> mipLevel) > 0 ? (xSize >> mipLevel) : 1;
     const int srcH = (ySize >> mipLevel) > 0 ? (ySize >> mipLevel) : 1;
@@ -591,6 +740,17 @@ void picaTexture::UploadLevel(int mipLevel)
         }
     }
 
+#ifdef SRR2_OLD3DS_NATIVE_ETC1
+    if(hwFormat==GPU_ETC1)
+    {
+        // All fallible preparation is complete. Preserve the ETC1 descriptor
+        // until this point so allocation failure keeps the previous image.
+        int bytesPerPixel;
+        hwFormat=PickHardwareFormat(alphaDepth,&bytesPerPixel);
+        tex.fmt=hwFormat;tex.size*=4;
+        tex.param&=~GPU_TEXTURE_ETC1_PARAM;
+    }
+#endif
     ConvertAndTile(level, dstW, dstH, tex.data);
 
     int lw = dstW, lh = dstH;
@@ -741,5 +901,128 @@ bool picaTexture::UploadMovieYUV(const unsigned char* y, const unsigned char* cr
     C3D_TexFlush(&tex);
     valid = true;
     return true;
+}
+#endif
+
+#ifdef SRR2_OLD3DS_NATIVE_TEXTURES
+bool picaNativeTexturesAvailable()
+{
+    if(!g_picaNativeTexturesEnabled)return false;
+    static int available=-1;
+    int selected=__atomic_load_n(&available,__ATOMIC_RELAXED);
+    if(selected<0){
+        struct stat st;
+#ifdef SRR2_OLD3DS_NATIVE_TEXTURE_BUNDLE
+        if(g_picaNativeBundleEnabled)selected=stat(picaNativeBundle::BundlePath,&st)==0 && S_ISREG(st.st_mode) && st.st_size==picaNativeBundle::BundleBytes;
+        else
+#endif
+        selected=stat("native-textures/v1",&st)==0 && S_ISDIR(st.st_mode);
+        __atomic_store_n(&available,selected,__ATOMIC_RELAXED);
+    }
+    return selected!=0;
+}
+bool picaTexture::UploadPreparedPNG(const void* encoded,unsigned bytes,bool world)
+{
+    if(!created || valid || !nativeEligible || type!=PDDI_TEXTYPE_RGB ||
+       !ReadPrepared(encoded,bytes,picaNativeTexture::EncodedPNG,world))return false;
+#ifdef SRR2_OLD3DS_RETAINED_MATERIAL
+    ++nativeRevision;
+#endif
+    C3D_TexFlush(&tex);
+#ifdef SRR2_OLD3DS_VRAM_TEXTURES
+    TryPromoteVram();
+#endif
+    valid=true;return true;
+}
+bool picaTexture::UploadPrepared()
+{
+    // Encoded PNGs are handled before decode. This legacy-upload seam covers
+    // DXT assets only, avoiding a second content hash on PNG cache misses.
+    if(!IsCompressed(type))return false;
+    const unsigned blockBytes=type==PDDI_TEXTYPE_DXT1?8:16;
+    const unsigned bytes=((xSize+3)/4)*((ySize+3)/4)*blockBytes;
+    return bytes<=stagingBytes && ReadPrepared(staging,bytes,unsigned(type-PDDI_TEXTYPE_DXT1+1));
+}
+bool picaTexture::ReadPrepared(const void* source,unsigned sourceBytes,unsigned sourceKind,bool world)
+{
+#ifdef SRR2_OLD3DS_NATIVE_ETC1
+    const bool etc=g_picaNativeEtcEnabled;
+    if(etc && (!world || sourceKind!=picaNativeTexture::EncodedPNG))return false;
+#endif
+    if(!picaNativeTexturesAvailable())return false;
+    NativeTextureCost cost(g_picaNativeTextureDiagnostics);
+    struct Hash {
+        NativeTextureCost& cost;
+        AVSHA* context=av_sha_alloc();
+        explicit Hash(NativeTextureCost& selected):cost(selected){}
+        ~Hash(){av_free(context);}
+        bool operator()(const void* bytes,size_t size,unsigned char* result)
+        {
+            if(!context || av_sha_init(context,256))return false;
+            NativeTextureCost::Phase phase(cost,NativeTextureCost::HashWork);
+            const unsigned char* cursor=static_cast<const unsigned char*>(bytes);
+            while(size){const size_t count=size<32768?size:32768;
+                av_sha_update(context,cursor,count);cursor+=count;size-=count;
+                if(g_picaYieldHook)g_picaYieldHook();
+            }
+            av_sha_final(context,result);
+            return true;
+        }
+    } hash(cost);
+    unsigned format=hwFormat==GPU_RGB565?picaNativeTexture::RGB565:
+        hwFormat==GPU_RGBA5551?picaNativeTexture::RGBA5551:
+        hwFormat==GPU_RGBA4?picaNativeTexture::RGBA4:0;
+    if(!format)return false;
+    unsigned size=tex.size;
+#ifdef SRR2_OLD3DS_NATIVE_ETC1
+    if(etc){format=picaNativeTexture::ETC1;size/=4;}
+#endif
+    const unsigned bytes=C3D_TexCalcTotalSize(size,tex.maxLevel);
+    const auto publish=[&](bool ok){
+#ifdef SRR2_OLD3DS_NATIVE_ETC1
+        // Change the unpublished descriptor only after full identity and body
+        // verification. Failure leaves the original allocation/format intact.
+        if(ok && etc){
+            hwFormat=GPU_ETC1;tex.fmt=GPU_ETC1;tex.size=size;
+            // Match C3D_TexInitWithParams: ETC1 also requires the sampler's
+            // dedicated hardware mode bit. Keep the existing wrap/filter bits.
+            tex.param|=GPU_TEXTURE_ETC1_PARAM;
+        }
+#endif
+        return ok;
+    };
+    const picaNativeTexture::Description description={unsigned(xSize),unsigned(ySize),
+        sourceKind,tex.width,tex.height,format,tex.maxLevel,sourceBytes,bytes};
+    unsigned char header[picaNativeTexture::HeaderBytes];char key[65],path[96];
+    if(!picaNativeTexture::Key(description,source,hash,header,key))return false;
+#ifdef SRR2_OLD3DS_NATIVE_TEXTURE_BUNDLE
+    if(g_picaNativeBundleEnabled){
+        const auto* entry=picaNativeBundle::Find(picaNativeBundle::Entries,picaNativeBundle::EntryCount,key,bytes+picaNativeTexture::HeaderBytes);
+        if(!entry){cost.outcome=1;NativeTextureMiss(header);return false;}
+        const unsigned previous=cost.Select(NativeTextureCost::Open);
+        NativeBundleFile input;
+        const bool positioned=input.file && entry->bytes<=picaNativeBundle::BundleBytes && entry->offset<=picaNativeBundle::BundleBytes-entry->bytes && !fseek(input.file,entry->offset,SEEK_SET);
+        cost.Select(previous);
+        bool ok=false;
+        {NativeTextureCost::Phase phase(cost,NativeTextureCost::ReadCheck);
+         ok=positioned && picaNativeTexture::Read(input.file,header,bytes,tex.data,hash,g_picaYieldHook,false);}
+        cost.outcome=ok?0:2;
+        if(ok){__atomic_fetch_add(&nativeTextureHits,1u,__ATOMIC_RELAXED);__atomic_fetch_add(&nativeTextureBytes,bytes,__ATOMIC_RELAXED);}
+        else __atomic_fetch_add(&nativeTextureInvalid,1u,__ATOMIC_RELAXED);
+        return publish(ok);
+    }
+#endif
+    snprintf(path,sizeof(path),"native-textures/v%u/%s.ntx",format==picaNativeTexture::ETC1?2u:1u,key);
+    FILE* f=nullptr;
+    {NativeTextureCost::Phase phase(cost,NativeTextureCost::Open);f=fopen(path,"rb");}
+    if(!f){cost.outcome=1;NativeTextureMiss(header);return false;}
+    bool ok=false;
+    {NativeTextureCost::Phase phase(cost,NativeTextureCost::ReadCheck);
+     ok=picaNativeTexture::Read(f,header,bytes,tex.data,hash,g_picaYieldHook);}
+    fclose(f);
+    cost.outcome=ok?0:2;
+    if(ok){__atomic_fetch_add(&nativeTextureHits,1u,__ATOMIC_RELAXED);__atomic_fetch_add(&nativeTextureBytes,bytes,__ATOMIC_RELAXED);}
+    else __atomic_fetch_add(&nativeTextureInvalid,1u,__ATOMIC_RELAXED);
+    return publish(ok);
 }
 #endif

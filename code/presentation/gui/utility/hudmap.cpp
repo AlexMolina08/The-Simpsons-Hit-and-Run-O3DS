@@ -1,3 +1,4 @@
+#include <main/old3dsbottommap.h>
 //===========================================================================
 // Copyright (C) 2000 Radical Entertainment Ltd.  All rights reserved.
 //
@@ -1740,6 +1741,13 @@ void CHudMap::AfterRenderLayers3DS( tView* guiView )
     }
 
     const ContextEnum context=GetGameFlow()->GetCurrentContext();
+#ifdef SRR2_OLD3DS_BOTTOM_MAP_15HZ
+    CGuiManagerInGame* cadenceManager=GetGuiSystem()->GetInGameManager();
+    const bool cadenceEligible=context==CONTEXT_GAMEPLAY && map && guiView && s_mapWasVisible &&
+        (!map->m_hudLayer || map->m_hudLayer->IsVisible()) && cadenceManager &&
+        cadenceManager->GetCurrentScreen()==CGuiWindow::GUI_SCREEN_ID_HUD;
+    if(!cadenceEligible)Old3dsBottomMap::Reset();
+#endif
     if( context != CONTEXT_GAMEPLAY && context != CONTEXT_PAUSE )
     {
         DisplayBottomInterface(guiView);
@@ -1772,12 +1780,20 @@ void CHudMap::AfterRenderLayers3DS( tView* guiView )
         return;
     }
 
+#ifdef SRR2_OLD3DS_BOTTOM_MAP_15HZ
+    // Visibility restoration and all simulation/UI updates already ran. Retain
+    // the displayed lower image between map draws; menus and transitions reset.
+    if(!Old3dsBottomMap::Due())return;
+#endif
     float rect[ 4 ];
     map->GetBottomScreenSource( rect );
     if( picaBottomScreenBegin( rect[ 0 ], rect[ 1 ], rect[ 2 ], rect[ 3 ] ) )
     {
         map->DisplayOnBottomScreen( guiView, s_backgroundWasVisible ? s_bottomBackground : NULL );
         picaBottomScreenEnd();
+#ifdef SRR2_OLD3DS_BOTTOM_MAP_15HZ
+        Old3dsBottomMap::Rendered();
+#endif
     }
 }
 

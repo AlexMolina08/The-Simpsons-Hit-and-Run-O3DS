@@ -339,3 +339,19 @@ target_link_libraries(p3d
 	radcontent
 	radmath
 )
+
+if(SRR2_OLD3DS_NATIVE_TEXTURES)
+    if(NOT NINTENDO_3DS OR NOT SRR2_OLD_3DS)
+        message(FATAL_ERROR "NATIVE_TEXTURES requires the original 3DS target")
+    endif()
+    set(SRR2_OLD3DS_FFMPEG_ROOT "${CMAKE_SOURCE_DIR}/out/deps/old3ds-prefix" CACHE PATH "Minimal Old 3DS FFmpeg installation")
+    find_path(SRR2_NATIVE_TEXTURE_SHA_INCLUDE libavutil/sha.h PATHS "${SRR2_OLD3DS_FFMPEG_ROOT}/include" NO_DEFAULT_PATH REQUIRED)
+    find_library(SRR2_NATIVE_TEXTURE_AVUTIL avutil PATHS "${SRR2_OLD3DS_FFMPEG_ROOT}/lib" NO_DEFAULT_PATH REQUIRED)
+    target_include_directories(pddi PRIVATE "${SRR2_NATIVE_TEXTURE_SHA_INCLUDE}")
+    target_link_libraries(pddi "${SRR2_NATIVE_TEXTURE_AVUTIL}")
+endif()
+
+if(SRR2_OLD3DS_NATIVE_TEXTURE_BUNDLE)
+    get_filename_component(native_bundle_index_directory "${SRR2_OLD3DS_NATIVE_BUNDLE_INDEX}" DIRECTORY)
+    target_include_directories(pddi PRIVATE "${native_bundle_index_directory}")
+endif()

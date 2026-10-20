@@ -58,6 +58,7 @@ public:
     float CalculateUnitHeightInRoadSegment( float fPointX, float fPointZ );
     //float CalculateYHeight( float fPointX, float fPointZ );
     void GetLaneLocation( float t, int index, rmt::Vector& position, rmt::Vector& facing );
+    void GetLaneFacing( float t, rmt::Vector& facing );
 
 
 

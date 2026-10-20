@@ -1,3 +1,4 @@
+#include <main/old3dsrecurring.h>
 #ifdef SRR2_OLD_3DS
 #include <3ds.h>
 extern double g_old3dsUpdateStages[4];
@@ -486,25 +487,25 @@ void GameplayContext::OnUpdate( unsigned int elapsedTime )
         BEGIN_PROFILE("GameplayManager");
         if ( m_state != S_SUSPENDED )
         {
-            GetGameplayManager()->Update( elapsedTime );
+            { O3_RECUR(Gameplay); GetGameplayManager()->Update( elapsedTime ); }
         }
         END_PROFILE("GameplayManager");
 
 
-        GetAvatarManager()->Update( timeins );
+        { O3_RECUR(Avatar); GetAvatarManager()->Update( timeins ); }
 
-        GetFootprintManager()->Update( elapsedTime );
+        { O3_RECUR(Footprint); GetFootprintManager()->Update( elapsedTime ); }
 
-	    GetCharacterManager()->GarbageCollect( );
+	    { O3_RECUR(Garbage); GetCharacterManager()->GarbageCollect( ); }
 
 	    BEGIN_PROFILE( "Update Particles" );
 
 #ifdef SRR2_OLD_3DS
         const u64 effectsTick = svcGetSystemTick();
 #endif
-	    GetParticleManager()->Update( elapsedTime );
+	    { O3_RECUR(Effects); GetParticleManager()->Update( elapsedTime );
         GetBreakablesManager()->Update( elapsedTime );
-	    GetAnimEntityDSGManager()->Update( elapsedTime );
+	    GetAnimEntityDSGManager()->Update( elapsedTime ); }
 #ifdef SRR2_OLD_3DS
         g_old3dsUpdateStages[3] += (svcGetSystemTick() - effectsTick) * 1000.0 / SYSCLOCK_ARM11;
 #endif
@@ -519,7 +520,7 @@ void GameplayContext::OnUpdate( unsigned int elapsedTime )
         #ifdef SRR2_OLD_3DS
         const u64 stage0Tick = svcGetSystemTick();
 #endif
-        GetWorldPhysicsManager()->Update(elapsedTime);
+        { O3_RECUR(Physics); GetWorldPhysicsManager()->Update(elapsedTime); }
 #ifdef SRR2_OLD_3DS
         g_old3dsUpdateStages[0] += (svcGetSystemTick() - stage0Tick) * 1000.0 / SYSCLOCK_ARM11;
 #endif
@@ -531,7 +532,7 @@ void GameplayContext::OnUpdate( unsigned int elapsedTime )
         #ifdef SRR2_OLD_3DS
         const u64 stage1Tick = svcGetSystemTick();
 #endif
-        PedestrianManager::GetInstance()->Update( elapsedTime );
+        { O3_RECUR(Pedestrian); PedestrianManager::GetInstance()->Update( elapsedTime ); }
 #ifdef SRR2_OLD_3DS
         g_old3dsUpdateStages[1] += (svcGetSystemTick() - stage1Tick) * 1000.0 / SYSCLOCK_ARM11;
 #endif
@@ -542,38 +543,38 @@ void GameplayContext::OnUpdate( unsigned int elapsedTime )
     #endif 
 
     BEGIN_PROFILE("TriggerVolumeTracker");
-        GetTriggerVolumeTracker()->Update( elapsedTime );
+        { O3_RECUR(Trigger); GetTriggerVolumeTracker()->Update( elapsedTime ); }
     END_PROFILE("TriggerVolumeTracker");
 
     BEGIN_PROFILE("TrafficManager");
         #ifdef SRR2_OLD_3DS
         const u64 stage2Tick = svcGetSystemTick();
 #endif
-        TrafficManager::GetInstance()->Update( elapsedTime );
+        { O3_RECUR(Traffic); TrafficManager::GetInstance()->Update( elapsedTime ); }
 #ifdef SRR2_OLD_3DS
         g_old3dsUpdateStages[2] += (svcGetSystemTick() - stage2Tick) * 1000.0 / SYSCLOCK_ARM11;
 #endif
     END_PROFILE("TrafficManager");
 
     BEGIN_PROFILE("ActorManager");
-        ActorManager::GetInstance()->Update( elapsedTime );
+        { O3_RECUR(Actor); ActorManager::GetInstance()->Update( elapsedTime ); }
     END_PROFILE("ActorManager");
 
     BEGIN_PROFILE("InteriorManager");
-        GetInteriorManager()->Update( elapsedTime );
+        { O3_RECUR(Interior); GetInteriorManager()->Update( elapsedTime ); }
     END_PROFILE("InteriorManager");
 
     BEGIN_PROFILE("SkidmarkManager");
-        GetSkidmarkManager()->Update( elapsedTime );
+        { O3_RECUR(Skidmark); GetSkidmarkManager()->Update( elapsedTime ); }
     END_PROFILE("SkidmarkManager");
 
     BEGIN_PROFILE( "CoinManager" );
-        GetCoinManager()->Update( elapsedTime );
-        GetSparkleManager()->Update( elapsedTime );
+        { O3_RECUR(Coin); GetCoinManager()->Update( elapsedTime ); }
+        { O3_RECUR(Coin); GetSparkleManager()->Update( elapsedTime ); }
     END_PROFILE( "CoinManager" );
 
     BEGIN_PROFILE( "HitnRunManager" );
-        GetHitnRunManager()->Update( elapsedTime );
+        { O3_RECUR(HitRun); GetHitnRunManager()->Update( elapsedTime ); }
     END_PROFILE( "HitnRunManager" );
     }
 
@@ -582,12 +583,12 @@ void GameplayContext::OnUpdate( unsigned int elapsedTime )
 #endif
 
     BEGIN_PROFILE("PresentationManager");
-       GetPresentationManager()->Update( elapsedTime );
+       { O3_RECUR(Presentation); GetPresentationManager()->Update( elapsedTime ); }
     END_PROFILE("PresentationManager");
 
     // Common to all playing contexts.
     //
-    PlayingContext::OnUpdate( elapsedTime );
+    { O3_RECUR(Playing); PlayingContext::OnUpdate( elapsedTime ); }
 #ifdef DEBUGWATCH
     mDebugOnUpdateDT = radTimeGetMicroseconds()-mDebugOnUpdateDT;
 #endif

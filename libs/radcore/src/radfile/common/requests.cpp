@@ -21,6 +21,7 @@
 //=============================================================================
 
 #include "pch.hpp"
+#include <main/nativebench.h>
 #include <string.h>
 #include <radthread.hpp>
 #include "requests.hpp"
@@ -299,11 +300,11 @@ void FileCompletionRequest::callback( void )
     //
     // We are executing the callback, so it's not really outstanding.
     //
-    m_pFile->Lock( );
+    { NB_SCOPE(FileLock); m_pFile->Lock( ); }
     m_pFile->m_OutstandingRequests--;
     m_pFile->Unlock( );
 
-    m_Callback->OnFileOperationsComplete( m_UserData );
+    { NB_SCOPE(FileUserCallback); m_Callback->OnFileOperationsComplete( m_UserData ); }
 }
 
 radDrive* FileCompletionRequest::GetOwner( void )
