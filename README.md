@@ -5,6 +5,72 @@ New 3DS and New 2DS XL, enabling their faster CPU and L2 cache automatically.
 You need your own retail PC copy of the game to build from source.
 Game data and DSP firmware are not distributed in this source repository.
 
+[Install](#install) · [Build from your PC copy](#build-a-cia) · [Controls](#interface-and-controls) · [Release notes](https://github.com/AlexMolina08/The-Simpsons-Hit-and-Run-O3DS/releases/tag/v1.0.0)
+
+## Screenshots and menu tour
+
+Original artwork and fonts, a touch-screen HUD, television menus and native button navigation.
+
+<a href="https://github.com/AlexMolina08/The-Simpsons-Hit-and-Run-O3DS/releases/download/v1.0.0/Simpsons-Hit-and-Run-3DS-v1.0.0-menu-tour.mp4"><img src="images/menu-tour.gif" width="400" alt="Main menu navigation, Options and Sound menus in the 3DS port"></a>
+
+[Watch or download the 25-second menu tour](https://github.com/AlexMolina08/The-Simpsons-Hit-and-Run-O3DS/releases/download/v1.0.0/Simpsons-Hit-and-Run-3DS-v1.0.0-menu-tour.mp4).
+Silent footage captured in Azahar at native resolution, with cuts between sections.
+
+<details>
+<summary>View gameplay and menu screenshots</summary>
+
+Captures use the native 400×240 top screen and 320×240 touch screen. Click an image for full size.
+These are emulator captures, not measurements of console performance.
+
+<table>
+<tr><th>Gameplay HUD</th><th>Pause menu</th></tr>
+<tr>
+<td><img src="images/screenshots/gameplay.png" width="400" alt="Gameplay above; radar, wasp count, coins and current objective below"></td>
+<td><img src="images/screenshots/pause.png" width="400" alt="Centered mission objective and touch-screen pause menu"></td>
+</tr>
+<tr><th>Main menu</th><th>Sound</th></tr>
+<tr>
+<td><img src="images/screenshots/main-menu.png" width="400" alt="Original living room artwork above a scrolling television menu"></td>
+<td><img src="images/screenshots/sound.png" width="400" alt="Original Krusty artwork and four sound sliders"></td>
+</tr>
+<tr><th>Mission briefing</th><th>Scrapbook</th></tr>
+<tr>
+<td><img src="images/screenshots/mission-briefing.png" width="400" alt="The Cola Caper mission artwork and actual mission instructions"></td>
+<td><img src="images/screenshots/scrapbook.png" width="400" alt="Level artwork above per-level completion counters"></td>
+</tr>
+</table>
+
+</details>
+
+## Install
+
+The [complete 1.0 CIA](https://github.com/AlexMolina08/The-Simpsons-Hit-and-Run-O3DS/releases/download/v1.0.0/Simpsons-Hit-and-Run-3DS-v1.0.0.cia) includes game data and all 17 cinematics.
+It is **1.92 GB**. A console with custom firmware and FBI is required.
+
+### Install from SD — recommended
+
+1. Download the CIA on your computer, or build it from your PC copy below.
+2. Copy it to `sd:/cias/`. Keep at least **4 GB free before copying**, for the CIA and installed game.
+3. In **FBI → SD → cias**, select the CIA and choose **Install CIA**.
+4. Launch the game from the HOME Menu. After installation, you can remove the CIA file from `cias/`.
+
+Sound needs your console's DSP firmware at `sd:/3ds/dspfirm.cdc`, dumped with DSP1.
+Saves and settings live in `sd:/3ds/simpsons/`; keep that folder when updating.
+
+### Install with a QR code
+
+Open **FBI → Remote Install → Scan QR Code** and scan the image below from another screen.
+The code points directly to the same complete 1.0 CIA.
+
+<a href="images/cia-install-qr.png"><img src="images/cia-install-qr.png" width="424" alt="Scan with FBI to install the complete version 1.0 CIA"></a>
+
+[Open the QR at full size](images/cia-install-qr.png). Keep its white border visible; if it does not scan, open the full-size image and adjust your screen brightness or camera distance.
+
+If FBI reads the code but the download or installation fails, use the SD method above.
+The complete game is a large download over console Wi-Fi. For a bug report, include your FBI version, exact error code and the percentage reached.
+
+See the [1.0 release notes](https://github.com/AlexMolina08/The-Simpsons-Hit-and-Run-O3DS/releases/tag/v1.0.0) for package details.
+
 ### Updating an existing installation
 
 Back up `sd:/3ds/simpsons/` first. Install the new CIA with FBI over the existing
@@ -16,9 +82,6 @@ lower screen. Keep your DSP firmware.
 For a fresh start, back up and rename `sd:/3ds/simpsons/` before launching the new
 version. The game creates a new folder; your backup retains the old saves.
 Uninstalling the existing title is not required.
-
-
-
 
 ## Build a CIA
 
@@ -47,14 +110,15 @@ python3 tools/3ds/make_cia.py "/path/to/PC game"
 ```
 
 Point at the PC folder containing `art/`, `scripts/`, `sound/`, `movies/` and the
-`.rcf` archives. The command prepares retail data, converts and fully validates all 17 movies, rebuilds the accepted native texture bundle, builds
-the original-model executable and packages **`out/releases/v1.0.0/Simpsons-Hit-and-Run-3DS-v1.0.0.cia`**.
-Its checksum, movie validation report and asset manifest appear alongside it. The first build downloads
-source dependencies and can take several minutes. Later builds reuse them.
+`.rcf` archives. The command prepares retail data, converts and fully validates all 17 movies,
+rebuilds the accepted native texture bundle, builds the original-model executable
+and packages **`out/releases/v1.0.0/Simpsons-Hit-and-Run-3DS-v1.0.0.cia`**.
+Its checksum, movie validation report and asset manifest appear alongside it.
+The first build downloads source dependencies and can take several minutes. Later builds reuse them.
 
 On macOS, **Build CIA.command** runs the same local build and asks for the PC
-folder. It does not upload, tag or publish anything. macOS (Apple Silicon and Intel), Linux x86-64 and WSL can
-prepare makerom and bannertool automatically. Other architectures must install them or
+folder. It does not upload, tag or publish anything.
+macOS (Apple Silicon and Intel), Linux x86-64 and WSL can prepare makerom and bannertool automatically. Other architectures must install them or
 pass `--makerom /path/to/makerom --bannertool /path/to/bannertool`.
 
 Use `--clean` for a fresh dependency and game compilation. It moves previous
@@ -93,6 +157,8 @@ Bart, Lisa, Marge or Apu. Ten complete retail lines play in a shuffled order,
 with no consecutive repeats. Greetings follow the **Voice** volume setting;
 setting Voice to zero silences them. Returning from HOME alone does not trigger one.
 
+Performance varies by scene; demanding areas can run below 30 FPS. Emulator results do not establish performance on an original console.
+
 ## Development
 
 `cmake/old3ds-release.cmake` defines the normal-play build profile. It preserves the accepted v104 rendering options and
@@ -100,30 +166,6 @@ original-model memory limits, with benchmark automation and profiling disabled. 
 baseline. Build and package checks do not replace installed-console testing.
 
 See [CONTRIBUTING.md](CONTRIBUTING.md) for regression checks and bug reports.
-
-### Install with a QR code
-
-Open **FBI → Remote Install → Scan QR Code**. This QR code downloads the complete
-1.0 CIA directly. A PC-to-SD transfer is also available above for large downloads.
-
-<img src="images/cia-install-qr.png" width="392" alt="Install version 1.0 with FBI">
-
-See the [1.0 release notes](https://github.com/AlexMolina08/The-Simpsons-Hit-and-Run-O3DS/releases/tag/v1.0.0)
-for package checks and console testing information.
-
-## Install from SD
-
-1. Download the [complete 1.0 CIA](https://github.com/AlexMolina08/The-Simpsons-Hit-and-Run-O3DS/releases/download/v1.0.0/Simpsons-Hit-and-Run-3DS-v1.0.0.cia),
-   or build one below.
-2. Copy the CIA to your console's SD card. Keep enough free space for both the
-   CIA and the installed game.
-3. In **FBI → SD**, select the CIA and choose **Install CIA**. Once installed,
-   launch it from the HOME Menu. The complete CIA includes the game data and movies.
-4. Sound needs your console's DSP firmware at `sd:/3ds/dspfirm.cdc`, dumped with DSP1.
-
-Saves and settings live in `sd:/3ds/simpsons/`. Keep that folder when updating.
-Performance varies by scene; demanding areas can run below 30 FPS. Emulator
-results do not establish performance on an original console.
 
 ## Credits
 
