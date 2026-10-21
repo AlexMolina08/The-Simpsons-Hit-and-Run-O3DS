@@ -24,6 +24,16 @@ jobs:
           python-version: '3.11'
       - name: Release integrity and version handling
         run: python3 tools/3ds/tests/release_workflow.py
+      - name: Retail HOME Menu archive bounds
+        run: python3 tools/3ds/tests/home_menu.py
+      - name: Linux packaging tools
+        run: python3 -c 'from pathlib import Path; import sys; sys.path.insert(0,"tools/3ds"); from release_tools import locate; print(locate(Path.cwd()))'
+      - name: Lid wake events and audio lifecycle
+        run: |
+          mkdir -p out/lid-test
+          c++ -std=c++11 -fsanitize=address,undefined -Ilibs/radsound/src/hal/ctr tools/3ds/tests/lid_audio.cpp -o out/lid-test/check
+          cd out/lid-test
+          ./check
       - name: SD setup routing
         run: python3 tools/3ds/tests/movie_setup.py
       - name: Bundled reads and writable saves

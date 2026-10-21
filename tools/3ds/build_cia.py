@@ -40,6 +40,7 @@ def main():
             parser.error(f'Missing build prerequisite: {path}')
     if len(list(movies.glob('*.3dm'))) < 17:
         parser.error('All 17 converted movies are required for a complete package')
+    movie_audit = json.loads(args.movie_validation.read_text()) if args.movie_validation else None
     subprocess.run([sys.executable, str(REPO / 'tools/3ds/check_old3ds_memory.py'), str(args.elf)], check=True)
     home_menu = args.out.with_suffix('.home-menu')
     cue = prepare(args.data, home_menu, args.ffmpeg)
@@ -76,6 +77,11 @@ def main():
                 with path.open('rb') as asset:
                     digest = hashlib.file_digest(asset, 'sha256').hexdigest()
                 assets.append({'path': path.relative_to(romfs).as_posix(), 'bytes': path.stat().st_size, 'sha256': digest})
+        if movie_audit:
+            packaged = {entry['path']: entry['sha256'] for entry in assets if entry['path'].startswith('movies/')}
+            checked = {'movies/' + entry['file']: entry['sha256'] for entry in movie_audit['movies']}
+            if packaged != checked:
+                raise ValueError('Packaged movies differ from the validated conversion set')
         branding = REPO / 'tools/3ds/cia'
         subprocess.run([str(args.bannertool.resolve()), 'makebanner', '-i', str(branding / 'banner.png'),
                         '-a', str(cue), '-o', str(work / 'banner.bnr')], check=True)
@@ -94,13 +100,6 @@ def main():
     with args.out.open('rb') as cia:
         digest = hashlib.file_digest(cia, 'sha256').hexdigest()
     source_commit = subprocess.run(['git', 'rev-parse', 'HEAD'], cwd=REPO, capture_output=True, text=True).stdout.strip() or None
-    movie_audit = None
-    if args.movie_validation:
-        movie_audit = json.loads(args.movie_validation.read_text())
-        packaged = {entry['path']: entry['sha256'] for entry in assets if entry['path'].startswith('movies/')}
-        checked = {'movies/' + entry['file']: entry['sha256'] for entry in movie_audit['movies']}
-        if packaged != checked:
-            raise ValueError('Packaged movies differ from the validated conversion set')
     home_metadata = json.loads((home_menu / 'audio-source.json').read_text())
     home_metadata['banner_bytes'] = (home_menu / 'banner.bnr').stat().st_size
     home_metadata['banner_sha256'] = hashlib.sha256((home_menu / 'banner.bnr').read_bytes()).hexdigest()
