@@ -167,6 +167,9 @@ baseline. Build and package checks do not replace installed-console testing.
 
 See [CONTRIBUTING.md](CONTRIBUTING.md) for regression checks and bug reports.
 
+AI helped expand the regression tests with hundreds of generated cases and edge conditions.
+See [the testing notes](docs/AI_TESTING.md) for a concrete example and how to run it.
+
 ## Credits
 
 The original game was developed by Radical Entertainment.
