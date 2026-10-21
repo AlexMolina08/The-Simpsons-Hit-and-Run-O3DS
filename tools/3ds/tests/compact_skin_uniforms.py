@@ -15,6 +15,9 @@ harness = r'''
 #define SRR2_OLD3DS_GPU_SKIN_COMPACT
 #define SRR2_OLD3DS_LIGHT_LOOP
 #define SRR2_OLD_3DS
+#define O3_RECUR(stage) ((void)0)
+namespace Old3dsPerformance { bool FlatLighting(){return false;} }
+bool g_picaWorldScaleAllowed=false;
 struct C3D_FVec {float x=0,y=0,z=0,w=0;};
 struct C3D_Mtx {C3D_FVec r[4];};
 struct pddiMatrix {float m[4][4]={{1,0,0,0},{0,1,0,0},{0,0,1,0},{0,0,0,1}};

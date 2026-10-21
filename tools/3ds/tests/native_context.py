@@ -114,7 +114,7 @@ int main(){
    else for(unsigned j=0;j<6;++j)cubes[i].data[j]=reinterpret_cast<void*>(uintptr_t(randomValue()));
    initial.tex[i]=randomValue()%4?&t:nullptr;}
   for(auto& e:initial.texEnv)for(auto& v:e.values)v=randomValue();
-  initial.texConfig=randomValue();initial.texShadow=randomValue();initial.texEnvBuf=trial%47==0?GPU_GAS:trial%7;initial.texEnvBufClr=randomValue();initial.fogClr=randomValue();initial.fogLut=&fog;
+  initial.texConfig=randomValue();initial.texShadow=randomValue();initial.texEnvBuf=(trial%47==0?GPU_GAS:trial%7)|(trial%2?BIT(16):0);initial.texEnvBufClr=randomValue();initial.fogClr=randomValue();initial.fogLut=&fog;
   for(auto& v:initial.viewport)v=randomValue();for(auto& v:initial.scissor)v=randomValue();
   // Rare context state must forward unchanged, including fixed attributes/restore.
   if(trial%5==0)initial.flags|=C3DiF_FrameBuf|C3DiF_Viewport|C3DiF_Scissor|C3DiF_Program|C3DiF_TexEnvBuf|C3DiF_FogLut;

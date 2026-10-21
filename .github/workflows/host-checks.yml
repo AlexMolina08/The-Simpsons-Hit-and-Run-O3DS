@@ -34,3 +34,7 @@ jobs:
         run: python3 tools/3ds/tests/loading_animation.py
       - name: Handheld tutorial text layout
         run: python3 tools/3ds/tests/handheld_text.py
+      - name: Character form preparation and depth haze
+        run: |
+          python3 tools/3ds/tests/character_form.py
+          python3 tools/3ds/tests/distance_haze.py

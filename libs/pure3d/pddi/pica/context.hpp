@@ -148,6 +148,10 @@ public:
 #endif
 
     void ApplyFogState(void);
+#ifdef SRR2_OLD3DS_DISTANCE_HAZE
+    void BeginDistanceHaze(unsigned level, unsigned colour);
+    void EndDistanceHaze();
+#endif
 
     void ApplyViewport(void);
 
@@ -281,6 +285,12 @@ private:
     float      fogLutStart;
     float      fogLutEnd;
     bool       fogLutValid;
+#ifdef SRR2_OLD3DS_DISTANCE_HAZE
+    C3D_FogLut hazeLut;
+    float hazeNear=0, hazeFar=0;
+    unsigned hazeColour=0;
+    bool hazeValid=false, hazeActive=false;
+#endif
 
     unsigned char*  immVertices;
     unsigned char*  immVertexRing[PICA_IMM_BUFFERS];

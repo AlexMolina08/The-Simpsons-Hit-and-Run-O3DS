@@ -17,6 +17,18 @@ extern "C" int g_picaWorldScaleAllowed;
 #include <main/old3dshot.h>
 #include <pddi/pica/pica.hpp>
 #include <pddi/pica/context.hpp>
+#ifdef SRR2_OLD3DS_DISTANCE_HAZE
+#include <pddi/pica/distancehaze.hpp>
+#ifdef SRR2_OLD3DS_NATIVE_BENCH
+namespace picaDistanceHaze { bool enabled=true; unsigned builds=0,passes=0; float nearPlane=0,farPlane=0; }
+#endif
+#endif
+#ifdef SRR2_OLD3DS_CHARACTER_FORM
+#include <pddi/pica/characterform.hpp>
+#ifdef SRR2_OLD3DS_NATIVE_BENCH
+namespace picaCharacterForm { bool enabled=true; unsigned groups=0,vertices=0; }
+#endif
+#endif
 #include <pddi/pica/bottomframe.hpp>
 #include <pddi/pica/statecache.hpp>
 #ifdef SRR2_OLD3DS_DIRECTIONAL_LIGHT
@@ -1723,6 +1735,15 @@ void picaContext::ApplyFogState(void)
         C3D_FogGasMode(GPU_NO_FOG, GPU_PLAIN_DENSITY, false);
         return;
     }
+#ifdef SRR2_OLD3DS_DISTANCE_HAZE
+    if(hazeActive)
+    {
+        const bool world=!bottomPass && state.viewState->projectionMode==PDDI_PROJECTION_PERSPECTIVE;
+        if(world) C3D_FogColor(hazeColour);
+        C3D_FogGasMode(world?GPU_FOG:GPU_NO_FOG,GPU_PLAIN_DENSITY,world);
+        return;
+    }
+#endif
 
     const float start = state.fogState->start;
     const float end   = state.fogState->end;
@@ -1765,6 +1786,52 @@ void picaContext::EnableFog(bool enable)
     pddiBaseContext::EnableFog(enable);
     ApplyFogState();
 }
+
+#ifdef SRR2_OLD3DS_DISTANCE_HAZE
+void picaContext::BeginDistanceHaze(unsigned level, unsigned colour)
+{
+    // Daytime L1/L2 only. The caller excludes sky, interiors and overlays.
+    if(!picaDistanceHaze::Enabled() || level>1 || !Old3dsPerformance::Enabled() ||
+       !g_picaInFrame || bottomPass ||
+       state.viewState->projectionMode!=PDDI_PROJECTION_PERSPECTIVE) return;
+    const float n=state.viewState->camera.nearPlane;
+    const float f=state.viewState->camera.farPlane;
+    if(!hazeValid || n!=hazeNear || f!=hazeFar)
+    {
+        float data[256];
+        if(!picaDistanceHaze::Build(data,n,f)) return;
+        FogLut_FromArray(&hazeLut,data);
+        C3D_FogLutBind(&hazeLut);
+        hazeNear=n;hazeFar=f;hazeValid=true;
+#ifdef SRR2_OLD3DS_NATIVE_BENCH
+        ++picaDistanceHaze::builds;
+        picaDistanceHaze::nearPlane=n;picaDistanceHaze::farPlane=f;
+#endif
+    }
+    hazeColour=colour;
+    // Keep the PDDI fog flag authoritative across object state push/pop.
+    pddiBaseContext::SetFog(pddiColour(colour&255,(colour>>8)&255,(colour>>16)&255),45.0f,140.0f);
+    pddiBaseContext::EnableFog(true);
+    C3D_FogColor(colour);
+    // Pure3D projects near to 0 and far to 1, opposite Citro3D's default.
+    C3D_FogGasMode(GPU_FOG,GPU_PLAIN_DENSITY,true);
+    hazeActive=true;
+#ifdef SRR2_OLD3DS_NATIVE_BENCH
+    ++picaDistanceHaze::passes;
+#endif
+}
+void picaContext::EndDistanceHaze()
+{
+    if(!hazeActive) return;
+    pddiBaseContext::EnableFog(false);
+    C3D_FogGasMode(GPU_NO_FOG,GPU_PLAIN_DENSITY,false);
+    hazeActive=false;
+}
+extern "C" void picaDistanceHazeBegin(unsigned level, unsigned colour)
+{ if(s_picaContext) s_picaContext->BeginDistanceHaze(level,colour); }
+extern "C" void picaDistanceHazeEnd()
+{ if(s_picaContext) s_picaContext->EndDistanceHaze(); }
+#endif
 
 void picaContext::SetFog(pddiColour colour, float start, float end)
 {
@@ -3167,6 +3234,26 @@ void picaPrimBuffer::PrepareGpuSkin(const void *source, unsigned count, unsigned
 {
     if (!selected)
         return;
+#ifdef SRR2_OLD3DS_CHARACTER_FORM
+    // All selected character groups retain the color in both the CPU buffer
+    // and the GPU copy. Bake before palette/allocation fallbacks, once at load.
+    if(picaCharacterForm::Enabled() && Old3dsPerformance::FlatLighting() && !transient && buffer && source &&
+       count == allocated && (vertexType & PDDI_V_NORMAL))
+    {
+        for(unsigned i = 0; i < count; ++i)
+        {
+            picaSkin::Source vertex;
+            memcpy(&vertex, static_cast<const unsigned char*>(source) + i*sizeof(vertex), sizeof(vertex));
+            picaCharacterForm::Bake(vertex.normal, buffer + i*PICA_VERTEX_STRIDE + PICA_VERTEX_OFF_COL);
+        }
+        expandDirty = true;
+        GSPGPU_FlushDataCache(buffer, mem);
+#ifdef SRR2_OLD3DS_NATIVE_BENCH
+        ++picaCharacterForm::groups;
+        picaCharacterForm::vertices += count;
+#endif
+    }
+#endif
     if (!bones || bones > picaSkin::MaxBones)
     {
         skinReason = picaSkin::Palette;

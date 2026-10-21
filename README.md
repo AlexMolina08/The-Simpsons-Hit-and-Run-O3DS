@@ -82,6 +82,10 @@ local-only builds and resuming an interrupted upload.
 
 ## Development
 
+The current Old 3DS working baseline is the owner-accepted v104 release candidate.
+See [its status and validation](docs/OLD3DS_IMPLEMENTATION_STATUS.md) before changing
+gameplay settings or comparing performance.
+
 See [CONTRIBUTING.md](CONTRIBUTING.md) for host checks, patch guidelines and
 hardware test reports. The [build guide](docs/OLD3DS.md) covers the toolchain,
 controls and packaging. Report reproducible problems through

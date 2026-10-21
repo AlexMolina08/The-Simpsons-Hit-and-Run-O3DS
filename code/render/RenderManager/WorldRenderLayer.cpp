@@ -21,6 +21,11 @@
 #include <3ds.h>
 #endif
 #include <p3d/billboardobject.hpp>
+#ifdef SRR2_OLD3DS_DISTANCE_HAZE
+#include <pddi/pica/distancehaze.hpp>
+#include <mission/gameplaymanager.h>
+#include <interiors/interiormanager.h>
+#endif
 
 //========================================
 // Project Includes
@@ -269,6 +274,14 @@ void WorldRenderLayer::Render()
             }
 
 
+#ifdef SRR2_OLD3DS_DISTANCE_HAZE
+            if(!mMirror && !GetInteriorManager()->IsInside())
+            {
+                const tColour colour=mpView[view]->GetClearColour();
+                picaDistanceHazeBegin(GetGameplayManager()->GetCurrentLevelIndex(),
+                    unsigned(colour.Red()) | (unsigned(colour.Green())<<8) | (unsigned(colour.Blue())<<16));
+            }
+#endif
             BEGIN_PROFILE( "Render WorldScene" );
 #ifdef SRR2_OLD_3DS
             // Render sub-phase timing. render_ms covers the whole render flow as
@@ -400,6 +413,9 @@ void WorldRenderLayer::Render()
             END_PROFILE( "Render Vehicle AI Debug" );
     #endif
 
+#ifdef SRR2_OLD3DS_DISTANCE_HAZE
+            picaDistanceHazeEnd();
+#endif
 		    BEGIN_PROFILE( "Lens Flare Render" );
 		    LensFlareDSG::DisplayAllFlares();
 		    END_PROFILE( "Lens Flare Render" );

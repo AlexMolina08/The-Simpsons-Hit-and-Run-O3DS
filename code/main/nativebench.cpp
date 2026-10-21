@@ -34,6 +34,14 @@
 #include <camera/supercammanager.h>
 #include <camera/supercamcentral.h>
 #include <camera/supercam.h>
+#include <camera/staticcam.h>
+#include <worldsim/character/charactertarget.h>
+#ifdef SRR2_OLD3DS_DISTANCE_HAZE
+#include <pddi/pica/distancehaze.hpp>
+#endif
+#ifdef SRR2_OLD3DS_CHARACTER_FORM
+#include <pddi/pica/characterform.hpp>
+#endif
 #include <presentation/gui/guisystem.h>
 #include <presentation/gui/ingame/guimanageringame.h>
 #include <roads/road.h>
@@ -147,6 +155,9 @@ static unsigned periodSamples;
 static u64 totalWork,traceTicks,scopeCalibration;
 static unsigned verifyAll,verifyAllFailures;
 static bool hold=false,reload=false,visualCapture=false;
+// Development-only character inspection. Zero preserves the driving route.
+static unsigned portrait=0;
+static unsigned portraitLevel=2;
 static bool checkpointIO=false;
 static unsigned diagnostic=0;
 static bool residentShaders=false;
@@ -165,6 +176,10 @@ static unsigned nativeContextMode=1;
 static unsigned nativeContextMode=0;
 #endif
 static unsigned stableMs, warmMs, replayDrains, drainTimeouts, pendingAtBegin;
+#ifdef SRR2_OLD3DS_NATIVE_CONTEXT
+static unsigned contextFastBegin=0,contextFallbackBegin=0,contextWordsBegin=0;
+static unsigned contextFastEnd=0,contextFallbackEnd=0,contextWordsEnd=0;
+#endif
 static Scope* top;
 static const char* names[Count]={"update","render","stream","service","file_service","debug_service","sound_service","file_lock","file_callback","file_error","file_user_callback","sound_buffer_complete","sound_encode","sound_encode_kernel"};
 // Sparse development-only SD breadcrumbs survive a forced console restart.
@@ -355,6 +370,14 @@ void Init(int argc,char** argv){
  else if(!strcmp(key,"geometry_input"))p3dGeometryInput::enabled=atoi(value)!=0;
 #endif
  else if(!strcmp(key,"visual_capture"))visualCapture=atoi(value)!=0;
+ else if(!strcmp(key,"portrait"))portrait=strtoul(value,nullptr,10)%4;
+ else if(!strcmp(key,"portrait_level"))portraitLevel=strtoul(value,nullptr,10);
+#ifdef SRR2_OLD3DS_DISTANCE_HAZE
+ else if(!strcmp(key,"distance_haze"))picaDistanceHaze::enabled=atoi(value)!=0;
+#endif
+#ifdef SRR2_OLD3DS_CHARACTER_FORM
+ else if(!strcmp(key,"character_form"))picaCharacterForm::enabled=atoi(value)!=0;
+#endif
  else if(!strcmp(key,"checkpoint_io"))checkpointIO=atoi(value)!=0;
 #ifndef SRR2_OLD3DS_CAUSAL_DIAG
  else if(!strcmp(key,"cadence"))Old3dsCadence::enabled=atoi(value)!=0;
@@ -390,6 +413,18 @@ void Init(int argc,char** argv){
   if(!strncmp(argv[i],checkpointArgument,sizeof(checkpointArgument)-1)){checkpointIO=atoi(argv[i]+sizeof(checkpointArgument)-1)!=0;continue;}
   static const char visualArgument[]="bench_visual_capture=";
   if(!strncmp(argv[i],visualArgument,sizeof(visualArgument)-1)){visualCapture=atoi(argv[i]+sizeof(visualArgument)-1)!=0;continue;}
+  static const char portraitArgument[]="bench_portrait=";
+  if(!strncmp(argv[i],portraitArgument,sizeof(portraitArgument)-1)){portrait=strtoul(argv[i]+sizeof(portraitArgument)-1,nullptr,10)%4;continue;}
+  static const char portraitLevelArgument[]="bench_portrait_level=";
+  if(!strncmp(argv[i],portraitLevelArgument,sizeof(portraitLevelArgument)-1)){portraitLevel=strtoul(argv[i]+sizeof(portraitLevelArgument)-1,nullptr,10);continue;}
+#ifdef SRR2_OLD3DS_DISTANCE_HAZE
+  static const char hazeArgument[]="bench_distance_haze=";
+  if(!strncmp(argv[i],hazeArgument,sizeof(hazeArgument)-1)){picaDistanceHaze::enabled=atoi(argv[i]+sizeof(hazeArgument)-1)!=0;continue;}
+#endif
+#ifdef SRR2_OLD3DS_CHARACTER_FORM
+  static const char formArgument[]="bench_character_form=";
+  if(!strncmp(argv[i],formArgument,sizeof(formArgument)-1)){picaCharacterForm::enabled=atoi(argv[i]+sizeof(formArgument)-1)!=0;continue;}
+#endif
 #ifdef SRR2_OLD3DS_MEMORY_DIAG
   static const char memoryStrideOption[]= "bench_memory_stride=";
   if(!strncmp(argv[i],memoryStrideOption,sizeof(memoryStrideOption)-1)){Old3dsMemorySetStride(strtoul(argv[i]+sizeof(memoryStrideOption)-1,nullptr,10));continue;}
@@ -451,7 +486,9 @@ void Init(int argc,char** argv){
  if(!records){enabled=false;aborted=true;done=true;
   printf("NATIVE_AUTOMATION allocation_failed bytes=%u abort=1\n",unsigned(Capacity*sizeof(Record)));return;}
  bool savedDetail=detail;detail=true;collecting=true;u64 cal=svcGetSystemTick();for(unsigned i=0;i<4096;++i){Scope test(Update);}scopeCalibration=svcGetSystemTick()-cal;collecting=false;detail=savedDetail;
- char a[]="skipfe",b[]="notutorial",c[]="L2";CommandLineOptions::HandleOption(a);CommandLineOptions::HandleOption(b);CommandLineOptions::HandleOption(c);
+ char a[]="skipfe",b[]="notutorial",c[]="L2";
+ if(portrait && portraitLevel>=1 && portraitLevel<=7)c[1]='0'+portraitLevel;
+ CommandLineOptions::HandleOption(a);CommandLineOptions::HandleOption(b);CommandLineOptions::HandleOption(c);
 }
 unsigned Seed(unsigned fallback){return enabled?seed:fallback;}
 unsigned Begin(unsigned elapsed,int context){
@@ -523,20 +560,42 @@ unsigned Begin(unsigned elapsed,int context){
  GetAvatarManager()->PutCharacterInCar(avatar->GetCharacter(),GetGameplayManager()->GetCurrentVehicle());
  avatar->SetCameraTargetToVehicle(true);
  GetSuperCamManager()->GetSCC(0)->SelectSuperCam(SuperCam::FAR_FOLLOW_CAM,SuperCamCentral::CUT|SuperCamCentral::FORCE);
+ if(portrait){
+  GetAvatarManager()->PutCharacterOnGround(avatar->GetCharacter(),GetGameplayManager()->GetCurrentVehicle());
+  avatar->SetCameraTargetToCharacter(true);
+  Character* character=avatar->GetCharacter();
+  rmt::Vector position;character->GetPosition(position);
+  character->RelocateAndReset(position,0.0f);
+  SuperCamCentral* central=GetSuperCamManager()->GetSCC(0);
+  StaticCam* camera=static_cast<StaticCam*>(central->GetSuperCam(SuperCam::STATIC_CAM));
+  if(!camera){camera=new StaticCam();central->RegisterSuperCam(camera);}
+  camera->SetTarget(character->GetTarget());
+  camera->SetTargetOffset(rmt::Vector(0.0f,0.85f,0.0f));
+  camera->SetTargetLag(1.0f);
+  camera->SetTracking(true);
+  const float side=portrait==3?2.8f:0.0f;
+  const float front=portrait==2?-3.3f:3.3f;
+  camera->SetPosition(rmt::Vector(position.x+side,position.y+1.2f,position.z+front));
+  central->SelectSuperCam(camera,SuperCamCentral::CUT|SuperCamCentral::FORCE);
+ }
  placed=true;placementTick=svcGetSystemTick();
- if(roadRoute && !BuildRoadRoute(GetGameplayManager()->GetCurrentVehicle())){aborted=done=true;return dt;}
+ if(roadRoute && !portrait && !BuildRoadRoute(GetGameplayManager()->GetCurrentVehicle())){aborted=done=true;return dt;}
  }
  if(warmMs<warmup*1000){warmMs+=dt;return dt;}
 #if defined(SRR2_OLD3DS_VEHICLE_PROFILE) || defined(SRR2_OLD3DS_NATIVE_BENCH)
  // Only measured route work contributes to the phase estimates. Loading and
  // warmup have different vehicle populations and must not bias the cost pool.
- if(!frame){Old3dsVehicleProfile::counters={};Old3dsVehicleProfile::externalCounters={};}
+ if(!frame){Old3dsVehicleProfile::counters={};Old3dsVehicleProfile::externalCounters={};
+#ifdef SRR2_OLD3DS_NATIVE_CONTEXT
+  picaNativeContextStats(&contextFastBegin,&contextFallbackBegin,&contextWordsBegin);
+#endif
+ }
  Old3dsVehicleProfile::CaptureEnabled()=vehicleProfile;
 #endif
 #ifdef SRR2_OLD3DS_NATIVE_TEXTURES
  if(!frame)picaSnapshotNativeTextures(nativeTextureCaptureBegin);
 #endif
- if(roadRoute){if(elapsedMs<Old3dsRecurring::stationaryMs){roadGas=0;roadBrake=0;roadSteer=0;}else UpdateRoadInput(GetGameplayManager()->GetCurrentVehicle(),dt);}
+ if(roadRoute && !portrait){if(elapsedMs<Old3dsRecurring::stationaryMs){roadGas=0;roadBrake=0;roadSteer=0;}else UpdateRoadInput(GetGameplayManager()->GetCurrentVehicle(),dt);}
  memset(&current,0,sizeof(current));memset(counters,0,sizeof(counters));
 #ifdef SRR2_OLD3DS_BOTTOM_MAP_15HZ
  unsigned bottomChoice=((frame/24)^bottomMapSeed)*0x9e3779b9u;bottomChoice^=bottomChoice>>16;bottomChoice*=0x85ebca6bu;bottomChoice^=bottomChoice>>13;
@@ -603,6 +662,9 @@ bool End(u64 work,int context){
  records[recordCount++%Capacity]=current;previousCaptured=true;if(recordCount>Capacity)++overwritten;
  traceTicks+=svcGetSystemTick()-overhead;
  done=elapsedMs>=seconds*1000;
+#ifdef SRR2_OLD3DS_NATIVE_CONTEXT
+ if(done)picaNativeContextStats(&contextFastEnd,&contextFallbackEnd,&contextWordsEnd);
+#endif
 #ifdef SRR2_OLD3DS_NATIVE_TEXTURES
  if(done)picaSnapshotNativeTextures(nativeTextureCaptureEnd);
 #endif
@@ -680,7 +742,7 @@ void Dump(){if(!enabled)return;
 #ifdef SRR2_OLD3DS_SUBMIT_PROFILE
  nativeBenchDumpSubmissionProfile(f);
 #endif
- fprintf(f,"NATIVE_BUILD id=%s scenario=%s mode=%s seed=%u step_ms=%u seconds=%u gate=%u selected_render=%u selected_physics=%u aborted=%u detail=%u validate=%u hold=%u render=%u physics=%u record_bytes=%u capacity=%u overwritten=%u scope_pair_ns=%.3f\n",SRR2_OLD3DS_BUILD_ID,roadRoute?"L2-road-v2":"L2-drive-v1",replay?"replay":"realtime",seed,step,seconds,0u,0u,0u,aborted,detail,validation,hold,
+ fprintf(f,"NATIVE_BUILD id=%s scenario=%s mode=%s seed=%u step_ms=%u seconds=%u gate=%u selected_render=%u selected_physics=%u aborted=%u detail=%u validate=%u hold=%u render=%u physics=%u record_bytes=%u capacity=%u overwritten=%u scope_pair_ns=%.3f\n",SRR2_OLD3DS_BUILD_ID,portrait?"character-portrait":roadRoute?"L2-road-v2":"L2-drive-v1",replay?"replay":"realtime",seed,step,seconds,0u,0u,0u,aborted,detail,validation,hold,
 #ifdef SRR2_OLD3DS_NATIVE_RENDER
  1u,
 #else
@@ -696,6 +758,16 @@ void Dump(){if(!enabled)return;
  0u
  );
  fprintf(f,"NATIVE_QUALITY mode=%u draw_distance=%.1f ambient_traffic=%u ambient_pedestrians=%u physics_step_ms=%u audio_predictors=%u particle_emission_scale=%.2f distant_pedestrian_actions=%u flat_lighting=%u shadow_distance=%.1f mission_simulation=full\n",Old3dsPerformance::mode,Old3dsPerformance::Enabled()?Old3dsPerformance::DrawDistance():200.0f,Old3dsPerformance::Enabled()?Old3dsPerformance::TrafficLimit():5u,Old3dsPerformance::Enabled()?Old3dsPerformance::PedestrianLimit():7u,Old3dsPerformance::PhysicsStepMilliseconds(),Old3dsPerformance::ReducedAudioSearch()?3u:8u,Old3dsPerformance::ParticleEmissionScale(),Old3dsPerformance::DistantPedestrianActions(),Old3dsPerformance::FlatLighting(),Old3dsPerformance::Enabled()?0.0f:200.0f);
+ fprintf(f,"NATIVE_PORTRAIT angle=%u level=%u performance_capture=0\n",portrait,portraitLevel);
+#ifdef SRR2_OLD3DS_NATIVE_CONTEXT
+ fprintf(f,"NATIVE_CONTEXT_CAPTURE fast=%u fallback=%u words=%u measured_route_only=1\n",contextFastEnd-contextFastBegin,contextFallbackEnd-contextFallbackBegin,contextWordsEnd-contextWordsBegin);
+#endif
+#ifdef SRR2_OLD3DS_DISTANCE_HAZE
+ fprintf(f,"NATIVE_DISTANCE_HAZE enabled=%u builds=%u passes=%u near=%.6f far=%.6f strength=%.3f cached_lut=1 shader_unchanged=1\n",picaDistanceHaze::enabled,picaDistanceHaze::builds,picaDistanceHaze::passes,picaDistanceHaze::nearPlane,picaDistanceHaze::farPlane,picaDistanceHaze::Strength);
+#endif
+#ifdef SRR2_OLD3DS_CHARACTER_FORM
+ fprintf(f,"NATIVE_CHARACTER_FORM enabled=%u groups=%u vertices=%u load_only=1 shader_unchanged=1\n",picaCharacterForm::enabled,picaCharacterForm::groups,picaCharacterForm::vertices);
+#endif
  fprintf(f,"NATIVE_PERIOD samples=%u mean_us=%.3f fps=%.6f\n",periodSamples,periodSamples?(double)periodSum*1e6/SYSCLOCK_ARM11/periodSamples:0,periodSum?(double)periodSamples*SYSCLOCK_ARM11/periodSum:0);
  fprintf(f,"NATIVE_LOAD_WINDOW placement_valid=%u boot_to_placement_us=%.3f includes_initialization_and_loading=1 includes_realtime_stability_ms=%u excludes_netloader_transfer=1\n",
      placementTick!=0,placementTick?(placementTick-initializationTick)*1000000.0/SYSCLOCK_ARM11:0,replay?0u:3000u);
@@ -721,6 +793,7 @@ void Dump(){if(!enabled)return;
 }
 int Input(bool axis,int id,int original){
  if(!enabled||done)return original;if(!placed||warmMs<warmup*1000||done)return 0;
+ if(portrait)return 0;
  // Driving-only route: retain the established first 25 seconds of inputs.
  // No exit, walking, return navigation, reset or forced mount during capture.
  if(roadRoute){
