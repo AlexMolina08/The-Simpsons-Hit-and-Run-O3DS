@@ -167,8 +167,9 @@ baseline. Build and package checks do not replace installed-console testing.
 
 See [CONTRIBUTING.md](CONTRIBUTING.md) for regression checks and bug reports.
 
-AI helped expand the regression tests with hundreds of generated cases and edge conditions.
-See [the testing notes](docs/AI_TESTING.md) for a concrete example and how to run it.
+AI helped with repetitive testing work, such as checking mission icons at different sizes
+and making sure text still fits the handheld interface. The [testing notes](docs/AI_TESTING.md)
+explain what those checks cover, with examples from the game.
 
 ## Credits
 

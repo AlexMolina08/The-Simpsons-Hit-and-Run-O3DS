@@ -1,37 +1,51 @@
 # AI-assisted testing
 
-AI helped with the testing work: suggesting edge cases and helping write small
-host-side regression checks. This made it practical to cover hundreds of input
-combinations, including cases that would be awkward to reproduce by playing.
-The checks live in `tools/3ds/tests/`, so their inputs and assertions can be read
-and rerun.
+One useful role for AI here was helping turn repetitive checks into regression
+tests. Adapting the game to two small screens leaves a lot of details to check:
+wide icons, tall icons, long mission objectives, tutorial text and repeated
+sleep/wake events. Checking one example by hand does not cover the others.
 
-## Example: changing a mesh's indices
+## Mission icons
 
-A cached index check must stop being valid when the indices change. Otherwise,
-a mesh that was valid earlier could keep using an out-of-range vertex index.
-Vertex updates alone should not discard that cached result when the index cache
-is enabled.
+Take the mission icons on the lower screen. There are 150 of them, and their
+visible artwork does not always fill the image. A wide vehicle and a tall
+location marker need to fit the same space without being stretched or clipped.
 
-`index_validation.py` exercises the actual PICA index-buffer methods in a small
-host harness. It starts with six indices for four vertices, then changes an index
-to `4`, which is outside the valid `0`–`3` range. The check must reject it. It also
-tries `65535`, replaces the indices with valid ones, changes the active count,
-and checks upload and prepared-draw invalidation.
+The checks in [`ui_assets.py`](../tools/3ds/tests/ui_assets.py) compare each
+icon's dimensions and visible bounds against the original PNG. They then exercise
+the game's fitting code at both HUD and pause-menu sizes, using both filename
+forms the game expects. That gives 600 fitting combinations from 150 icons,
+two sizes and two name forms, as well as the source-image checks.
 
-The same test runs a 10,000-iteration loop of vertex updates and index validation
-in each of four configurations: reference, cached indices, deferred upload and
-prepared draws. Those are repeated regression checks, not 40,000 different
-scenes or gameplay sessions.
+This is the kind of repetition AI helped write checks for. The actual comparisons
+run in the test harness; a model is not judging each icon or playing the game.
 
-From the repository root, with Python 3 and Clang installed:
+## Text and repeated actions
+
+[`context_text.py`](../tools/3ds/tests/context_text.py) checks contextual strings
+with both original fonts. It checks that wrapping keeps every character, stays
+within the available width and leaves the last line reachable when scrolling.
+[`handheld_text.py`](../tools/3ds/tests/handheld_text.py) also checks tutorial
+layout, including the space needed for the button prompts.
+
+Another example is [`lid_audio.cpp`](../tools/3ds/tests/lid_audio.cpp): it checks
+1,000 shuffle cycles for the lid greetings, then exercises mute, rapid reopening
+and returning from HOME. These are repeated state checks, not 1,000 physical lid
+openings.
+
+## Running the interface checks
+
+With Python 3, Clang and Pillow installed, run from the repository root:
 
 ```sh
-python3 tools/3ds/tests/index_validation.py
+python3 tools/3ds/tests/ui_assets.py
+python3 tools/3ds/tests/context_text.py
+python3 tools/3ds/tests/handheld_text.py
 ```
 
-The script compiles each harness with AddressSanitizer and UndefinedBehaviorSanitizer.
-A successful run prints a pass line for each configuration and exits with code 0.
+The icon and contextual-text checks need your prepared game assets under
+`sdcard/3ds/simpsons/`. The tutorial check can also run synthetic fixtures without
+them; its output says which data it used. Retail assets are not included here.
 
-These checks can catch mistakes in the tested logic. They do not reproduce the
-3DS GPU, prove a frame-rate improvement, or replace playing on a physical console.
+These checks help catch layout and state mistakes. Visual review and testing on
+a physical 3DS are still needed; passing them does not prove console performance.
