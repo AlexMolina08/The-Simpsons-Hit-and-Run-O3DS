@@ -18,7 +18,7 @@ REPO = Path(__file__).resolve().parents[2]
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('--version', default='0.1.3-rc.1', help='CIA and release version, for example 0.1.1-rc.1')
+    parser.add_argument('--version', default='1.0.0', help='CIA and release version, for example 0.1.1-rc.1')
     parser.add_argument('--data', type=Path, default=REPO / 'sdcard/3ds/simpsons')
     parser.add_argument('--movies', type=Path, help='Optional separate converted movie directory')
     parser.add_argument('--elf', type=Path, default=REPO / 'out/old3ds-build/code/SRR2.elf')

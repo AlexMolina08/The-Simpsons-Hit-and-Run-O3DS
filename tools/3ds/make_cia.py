@@ -47,7 +47,7 @@ def retire_builds():
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('game', nargs='?', type=Path, help='Installed retail PC game folder')
-    parser.add_argument('--version', default='0.1.3-rc.1')
+    parser.add_argument('--version', default='1.0.0')
     parser.add_argument('--clean', action='store_true', help='Move previous compilation outputs to the system Trash before building')
     parser.add_argument('--makerom', type=Path)
     parser.add_argument('--bannertool', type=Path)
@@ -94,11 +94,11 @@ def main():
     if args.clean:
         retire_builds()
     run(sys.executable, ROOT / 'tools/3ds/setup_sd.py', game, '--old3ds', '--ffmpeg', ffmpeg)
-    audit = ROOT / 'out/release/movie-validation.json'
+    output = ROOT / f'out/releases/v{version}/Simpsons-Hit-and-Run-3DS-v{version}.cia'
+    audit = output.with_suffix('.movies.json')
     run(sys.executable, ROOT / 'tools/3ds/validate_movies.py', game, '--movies',
         ROOT / 'sdcard/3ds/simpsons/movies', '--ffmpeg', ffmpeg, '--out', audit)
     run('bash', ROOT / 'tools/3ds/build_old3ds.sh')
-    output = ROOT / 'out/release/Simpsons-Hit-and-Run-3DS.cia'
     run(sys.executable, ROOT / 'tools/3ds/build_cia.py', '--version', version,
         '--makerom', makerom, '--bannertool', bannertool, '--ffmpeg', ffmpeg,
         '--movie-validation', audit, '--out', output)

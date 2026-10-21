@@ -1,6 +1,6 @@
 # The Simpsons: Hit & Run for Nintendo 3DS
 
-A homebrew port for original Nintendo 3DS and 2DS. The same build also runs on
+Version **1.0**. A homebrew port for original Nintendo 3DS and 2DS. The same build also runs on
 New 3DS and New 2DS XL, enabling their faster CPU and L2 cache automatically.
 You need your own retail PC copy of the game to build from source.
 Game data and DSP firmware are not distributed in this source repository.
@@ -9,9 +9,8 @@ Game data and DSP firmware are not distributed in this source repository.
 
 ## Install
 
-1. Download a CIA from [Releases](https://github.com/AlexMolina08/The-Simpsons-Hit-and-Run-O3DS/releases),
-   or build one below. Read that version's release notes; published packages may
-   predate the current source.
+1. Download the [complete 1.0 CIA](https://github.com/AlexMolina08/The-Simpsons-Hit-and-Run-O3DS/releases/download/v1.0.0/Simpsons-Hit-and-Run-3DS-v1.0.0.cia),
+   or build one below.
 2. Copy the CIA to your console's SD card. Keep enough free space for both the
    CIA and the installed game.
 3. In **FBI → SD**, select the CIA and choose **Install CIA**. Once installed,
@@ -21,6 +20,28 @@ Game data and DSP firmware are not distributed in this source repository.
 Saves and settings live in `sd:/3ds/simpsons/`. Keep that folder when updating.
 Performance varies by scene; demanding areas can run below 30 FPS. Emulator
 results do not establish performance on an original console.
+
+### Updating an existing installation
+
+Back up `sd:/3ds/simpsons/` first. Install the new CIA with FBI over the existing
+installation; replacing the file on SD alone does not update the installed game.
+The title ID and save format are unchanged, so your progress and settings remain.
+The old map-placement setting is ignored because the map now always uses the
+lower screen. Keep your DSP firmware.
+
+For a fresh start, back up and rename `sd:/3ds/simpsons/` before launching the new
+version. The game creates a new folder; your backup retains the old saves.
+Uninstalling the existing title is not required.
+
+### Install with a QR code
+
+Open **FBI → Remote Install → Scan QR Code**. This QR code downloads the complete
+1.0 CIA directly. A PC-to-SD transfer is also available above for large downloads.
+
+<img src="images/cia-install-qr.png" width="392" alt="Install version 1.0 with FBI">
+
+See the [1.0 release notes](https://github.com/AlexMolina08/The-Simpsons-Hit-and-Run-O3DS/releases/tag/v1.0.0)
+for package checks and console testing information.
 
 ## Build a CIA
 
@@ -50,7 +71,7 @@ python3 tools/3ds/make_cia.py "/path/to/PC game"
 
 Point at the PC folder containing `art/`, `scripts/`, `sound/`, `movies/` and the
 `.rcf` archives. The command prepares retail data, converts and fully validates all 17 movies, rebuilds the accepted native texture bundle, builds
-the original-model executable and packages **`out/release/Simpsons-Hit-and-Run-3DS.cia`**.
+the original-model executable and packages **`out/releases/v1.0.0/Simpsons-Hit-and-Run-3DS-v1.0.0.cia`**.
 Its checksum, movie validation report and asset manifest appear alongside it. The first build downloads
 source dependencies and can take several minutes. Later builds reuse them.
 
@@ -98,8 +119,8 @@ setting Voice to zero silences them. Returning from HOME alone does not trigger 
 ## Development
 
 `cmake/old3ds-release.cmake` defines the normal-play build profile. It preserves the accepted v104 rendering options and
-original-model memory limits, with benchmark automation and profiling disabled. The local `old3ds-ui-baseline` tag marks the
-UI baseline. Build and package checks do not replace installed-console testing.
+original-model memory limits, with benchmark automation and profiling disabled. The `v1.0.0` and `old3ds-ui-baseline` tags mark this
+baseline. Build and package checks do not replace installed-console testing.
 
 See [CONTRIBUTING.md](CONTRIBUTING.md) for regression checks and bug reports.
 

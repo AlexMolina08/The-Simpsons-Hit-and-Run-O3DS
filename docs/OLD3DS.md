@@ -52,7 +52,7 @@ home directory (`cd ~`), rather than under `/mnt/c`, for faster compilation and
 reliable file permissions. Your PC game can remain on Windows: for example,
 `C:\Games\Hit and Run` becomes `/mnt/c/Games/Hit and Run`.
 All remaining commands run in Ubuntu, not PowerShell. To retrieve the result,
-run `explorer.exe out/release` from the repository root.
+run `explorer.exe out/releases/v1.0.0` from the repository root.
 
 ## Clone and prepare Python
 
@@ -79,7 +79,7 @@ python3 tools/3ds/make_cia.py "/path/to/PC game"
 
 The command validates prerequisites, prepares game data, converts the movies,
 fully decodes all 17 conversions, compares frame counts and complete PCM against
-the originals, rebuilds the accepted native texture bundle, compiles dependencies
+the originals, preserves video proportions with letterboxing where needed, rebuilds the accepted native texture bundle, compiles dependencies
 and the game, checks ARMv6K/VFPv2 and the fixed 64 MiB startup
 budget, then packages a complete CIA. Normal play is enabled. The release profile preserves the accepted v104 rendering
 options, including geometry input and prepared ETC1 world textures. It disables
@@ -87,11 +87,11 @@ benchmark routes and profiling.
 
 Outputs:
 
-- `out/release/Simpsons-Hit-and-Run-3DS.cia`
-- `out/release/Simpsons-Hit-and-Run-3DS.sha256`
-- `out/release/Simpsons-Hit-and-Run-3DS.manifest.json`
-- `out/release/movie-validation.json`: full decode, frame count and exact source PCM checks.
-- `out/release/Simpsons-Hit-and-Run-3DS.home-menu/`: generated banner, icon and audio provenance.
+- `out/releases/v1.0.0/Simpsons-Hit-and-Run-3DS-v1.0.0.cia`
+- `out/releases/v1.0.0/Simpsons-Hit-and-Run-3DS-v1.0.0.sha256`
+- `out/releases/v1.0.0/Simpsons-Hit-and-Run-3DS-v1.0.0.manifest.json`
+- `out/releases/v1.0.0/Simpsons-Hit-and-Run-3DS-v1.0.0.movies.json`: full decode, frame count and exact source PCM checks.
+- `out/releases/v1.0.0/Simpsons-Hit-and-Run-3DS-v1.0.0.home-menu/`: generated banner, icon and audio provenance.
 
 The HOME Menu sound is a short excerpt of the retail game's theme, with fades.
 The music excerpt is generated from your files rather than stored in Git.
@@ -126,6 +126,32 @@ Dump your console's DSP firmware with DSP1 and keep it at `sd:/3ds/dspfirm.cdc`.
 Saves and settings remain in `sd:/3ds/simpsons/`; preserve that folder when updating.
 Test movies, save/load, HOME/resume and demanding gameplay on an original console.
 A successful build or emulator run does not prove hardware performance or stability.
+
+### Update or start fresh
+
+[Follow the README update steps](../README.md#updating-an-existing-installation).
+Install the new CIA over the existing title with FBI. Copying a CIA to SD alone
+does not update the installed game. Preserve `sd:/3ds/simpsons/` for saves and
+settings, or back it up and rename it for a fresh start. The title ID and game
+save format are unchanged. Old `maptop` settings are safely ignored.
+
+### Console checks for this build
+
+After installing, verify the following on your console model:
+
+1. Launch from HOME Menu and check the banner sound, icon and boot movies.
+2. Load an existing save, move and drive, collect coins, and open the pause menu.
+3. Navigate menus with D-pad, Circle Pad and touch. Drag each sound slider and
+   tap its label; a label tap should not change the value.
+4. Start a mission, inspect its briefing, play a conversation and watch a movie.
+5. Close the lid during gameplay, pause and movie playback. Reopen it: expect
+   one short greeting, then normal game audio. Repeat to check variety. Set
+   Voice to zero and repeat; the greeting should be silent. HOME return alone
+   should not play a greeting.
+6. Save, exit and reopen the game. Check progress and sound settings survived.
+
+Report console model and any error. Host checks and emulator screenshots do not
+establish physical-console sleep behavior, movie smoothness or performance.
 
 ## Homebrew Launcher build
 
@@ -181,8 +207,8 @@ rebuilds, packages, tags and uploads a test release. It verifies server checksum
 before publishing and does not overwrite an existing public version.
 
 ```sh
-python3 tools/3ds/release_cia.py --version 0.1.3-rc.1 --no-upload
-python3 tools/3ds/release_cia.py --version 0.1.3-rc.1 --resume
+python3 tools/3ds/release_cia.py --version 1.0.0 --stable --no-upload
+python3 tools/3ds/release_cia.py --version 1.0.0 --stable --resume
 ```
 
 The first command builds a versioned local package. The second resumes an

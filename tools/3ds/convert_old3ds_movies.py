@@ -12,7 +12,7 @@ import tempfile
 
 from setup_sd import MOVIE_HEADER, MOVIE_MAGIC, find_ffmpeg, probe
 
-STAMP = "mpeg1 320x240 30000/1001 q3 bf0 g15 / pcm16 stereo 32k v2 audio-tail-pad"
+STAMP = "mpeg1 320x240 30000/1001 q3 bf0 g15 / pcm16 stereo 32k v2 audio-tail-pad aspect-preserved"
 
 
 def convert(ffmpeg, source, destination, force=False):
@@ -25,7 +25,7 @@ def convert(ffmpeg, source, destination, force=False):
         pcm = Path(folder) / "audio.pcm"
         result = subprocess.run([
             ffmpeg, "-hide_banner", "-loglevel", "error", "-y", "-i", str(source), "-an",
-            "-vf", "fps=30000/1001,scale=320:240:flags=lanczos", "-c:v", "mpeg1video",
+            "-vf", "fps=30000/1001,scale=320:240:force_original_aspect_ratio=decrease:force_divisible_by=2:flags=lanczos,pad=320:240:(ow-iw)/2:(oh-ih)/2,setsar=1", "-c:v", "mpeg1video",
             "-pix_fmt", "yuv420p", "-q:v", "3", "-g", "15", "-bf", "0",
             "-threads", "1", "-progress", "pipe:1", "-nostats", "-f", "mpeg1video", str(video),
         ], check=True, capture_output=True, text=True)
@@ -45,7 +45,7 @@ def convert(ffmpeg, source, destination, force=False):
         if audio_frames > frames[-1]:
             subprocess.run([
                 ffmpeg, "-hide_banner", "-loglevel", "error", "-y", "-i", str(source), "-an",
-                "-vf", "fps=30000/1001,scale=320:240:flags=lanczos,tpad=stop_mode=clone:stop=-1",
+                "-vf", "fps=30000/1001,scale=320:240:force_original_aspect_ratio=decrease:force_divisible_by=2:flags=lanczos,pad=320:240:(ow-iw)/2:(oh-ih)/2,setsar=1,tpad=stop_mode=clone:stop=-1",
                 "-frames:v", str(audio_frames), "-c:v", "mpeg1video", "-pix_fmt", "yuv420p",
                 "-q:v", "3", "-g", "15", "-bf", "0", "-threads", "1", "-f", "mpeg1video", str(video),
             ], check=True)
