@@ -16,10 +16,14 @@ from prepare_native_bundle import index_bundle
 
 def prepare_release(data, output, encoder):
     output.mkdir(parents=True, exist_ok=True)
+    profile_path = Path(__file__).with_name('native_texture_profile.json')
+    profile = json.loads(profile_path.read_text())
+    accepted = profile['source_variant_keys']
     # Regenerate from source on a clean build; cache only an identical artwork set
     # and encoder. An old developer's out/ directory must never be required.
     assets = sorted(path for path in (data / 'art').glob('*.p3d') if world_source(path))
     digest = hashlib.sha256(encoder.read_bytes())
+    digest.update(profile_path.read_bytes())
     for path in assets:
         digest.update(path.name.encode())
         digest.update(path.read_bytes())
@@ -33,19 +37,27 @@ def prepare_release(data, output, encoder):
             return index_bundle(bundle, output / 'bundle_index.hpp', 16, bundle.name, True)
     with tempfile.TemporaryDirectory(prefix='srr-release-textures-') as temporary:
         root = Path(temporary)
+        print(f'Preparing {len(assets)} world artwork files...', flush=True)
         manifest = prepare(assets, root / 'native', include_images=False)
-        entries = {}
-        for source_key, entry in sorted(manifest['payloads'].items()):
+        missing = set(accepted) - manifest['payloads'].keys()
+        if missing:
+            raise ValueError(f'Retail artwork differs from the accepted texture profile: {len(missing)} variants missing')
+        entries = []
+        for index, source_key in enumerate(accepted):
             result = convert((root / 'native' / (source_key + '.ntx')).read_bytes(), source_key, encoder)
-            if result:
-                converted_key, body = result
-                entries[converted_key] = body
+            if result is None:
+                raise ValueError('An accepted opaque texture became transparent')
+            entries.append(result)
+            if (index + 1) % 200 == 0:
+                print(f'Textures: {index + 1}/{len(accepted)} prepared', flush=True)
         if not entries:
             raise ValueError('No opaque world textures were prepared')
         with (root / bundle.name).open('wb') as stream:
             stream.write(struct.pack('<II', 0x314e4233, len(entries)))
-            for payload_key, body in sorted(entries.items()):
+            for payload_key, body in entries:
                 stream.write((payload_key + '.ntx').encode() + struct.pack('<II', len(body), zlib.crc32(body)) + body)
+        if hashlib.file_digest((root / bundle.name).open('rb'), 'sha256').hexdigest() != profile['bundle_sha256']:
+            raise ValueError('Prepared texture bytes differ from the accepted baseline; check the tex3ds version and retail files')
         shutil.copy2(root / bundle.name, bundle)
     report = index_bundle(bundle, output / 'bundle_index.hpp', 16, bundle.name, True)
     stamp.write_text(json.dumps({'source_sha256': key, 'bundle_sha256': report['sha256']}, indent=2) + '\n')
