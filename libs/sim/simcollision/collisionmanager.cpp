@@ -1,9 +1,6 @@
+#include <main/old3dsrecurring.h>
 
 #include "simcollision/collisionmanager.hpp"
-#ifdef SRR2_OLD3DS_PARALLEL_COLLISION
-#include "simcollision/parallelcollision.hpp"
-#include <new>
-#endif
 #include "simcommon/simlistinitsize.hpp"
 #include "simcommon/simmath.hpp"
 #include "simcommon/simutility.hpp"
@@ -39,18 +36,12 @@ CollisionManager::CollisionManager():
     mNbArea(CollisionAreaListSize),
     mCacheActivatedArea( 64 )
 {
-#ifdef SRR2_OLD3DS_PARALLEL_COLLISION
-    mParallelCollision=new(std::nothrow) ParallelCollisionState;
-#endif
     mAreaArray = new Area[mNbArea];
     SetAreaActivated(0, true);
 }
 
 CollisionManager::~CollisionManager()
 {
-#ifdef SRR2_OLD3DS_PARALLEL_COLLISION
-    delete mParallelCollision;
-#endif
     delete[] mAreaArray;
     sInstance = NULL;
 }
@@ -177,9 +168,9 @@ void CollisionManager::DetectCollision(int area, float inDt, float gameTime, con
             }
         #endif
 
-        mAreaArray[area].PrepareForCollisionDetection(mCMAttributes);
+        { O3_RECUR(DetectPrepare); mAreaArray[area].PrepareForCollisionDetection(mCMAttributes); }
     
-        mCollisionDetector.DetectCollision(&mAreaArray[area].mPairList, &mAreaArray[area].mCollisionList, inDt, printOut);
+        { O3_RECUR(DetectPairs); mCollisionDetector.DetectCollision(&mAreaArray[area].mPairList, &mAreaArray[area].mCollisionList, inDt, printOut); }
     
         for( unsigned int i = 0; i < objectListSize; ++i )
         {
@@ -202,9 +193,6 @@ void CollisionManager::DetectCollision(int area, float inDt, float gameTime, con
 
 void CollisionManager::DetectCollision(float inDt, float gameTime, const bool printOut )
 {
-#ifdef SRR2_OLD3DS_PARALLEL_COLLISION
-    if(g_old3dsParallelCollisionMode && DetectParallel(inDt,gameTime,printOut))return;
-#endif
 #ifdef SRR2_OLD3DS_COLL_PREP
     // Only this synchronous all-area detection call shares preparation. No
     // solver, simulation, camera update or external callback runs between its

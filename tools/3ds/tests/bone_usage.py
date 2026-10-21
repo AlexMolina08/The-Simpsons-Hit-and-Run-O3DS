@@ -10,9 +10,10 @@ def extract(text,sig):
  a=text.index(sig);b=text.index('{',a)+1;e=b;depth=1
  while depth:depth+=(text[e]=='{')-(text[e]=='}');e+=1
  return text[a:e]
-loop=s[s.index('#ifdef SRR2_OLD3DS_BONE_USAGE\n    const bool selectiveBones'):s.index('#ifdef SRR2_OLD3DS_SKIN_CLIP',s.index('const bool selectiveBones'))]
+loop=s[s.index('#ifdef SRR2_OLD3DS_BONE_USAGE\n    const bool selectiveBones'):s.index('    pddiExtHardwareSkinning* hwSkin',s.index('const bool selectiveBones'))]
 code=r'''
 #include <p3d/anim/boneusage.hpp>
+#define O3_MAIN_SCOPE(x) ((void)0)
 #include <cassert>
 #define SRR2_OLD3DS_BONE_ONCE
 #include <cstring>

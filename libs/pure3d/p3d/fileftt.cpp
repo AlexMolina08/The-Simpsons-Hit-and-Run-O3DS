@@ -161,63 +161,9 @@ void tFileFTT::OnFileOperationsComplete(void*)
 }
 
 //--------------------------------------------------------------------------
-#ifdef SRR2_OLD3DS_IO_WAIT_YIELD
-struct Old3dsIoWaitCounters
-{
-    unsigned long long pollingTicks;
-    unsigned waits, pendingWaits, checks, handoffs, forcedHandoffs, maxPolls, earlyGameplayHandoffs;
-};
-static Old3dsIoWaitCounters old3dsIoWait={};
-extern "C" void old3dsDumpIoWait()
-{
-    printf("OLD3DS_IO_WAIT waits=%u pending_waits=%u checks=%u service_handoffs=%u forced_handoffs=%u max_gameplay_polls=%u early_gameplay_handoffs=%u polling_wall_ms=%.6f\n",
-           old3dsIoWait.waits,old3dsIoWait.pendingWaits,old3dsIoWait.checks,
-           old3dsIoWait.handoffs,old3dsIoWait.forcedHandoffs,old3dsIoWait.maxPolls,old3dsIoWait.earlyGameplayHandoffs,
-           old3dsIoWait.pollingTicks*1000.0/SYSCLOCK_ARM11);
-}
-#endif
 
 void tFileFTT::WaitForCompletion( void )
 {
-#ifdef SRR2_OLD3DS_IO_WAIT_YIELD
-    // Loading screens retain the original time-slice handoff. Only an active
-    // gameplay/pause budget yields early while an actual file read is pending.
-    ++old3dsIoWait.waits;
-    unsigned polls=0;
-    bool pending=false;
-    (void)radTimeGetMicroseconds64(); // Preserve the original wait-entry clock read.
-    unsigned long long pollStart=svcGetSystemTick();
-    for(;;)
-    {
-        ++old3dsIoWait.checks;
-        if(m_pIRadFile->CheckForCompletion()) break;
-        if(!pending) { ++old3dsIoWait.pendingWaits; pending=true; }
-        const bool forced=g_radLoadMainWaiting!=0;
-        const bool gameplay=g_p3dYieldTimeUs<=8000;
-        if(!forced && !gameplay)
-        {
-            // Same deadline check as the original loading-screen wait loop.
-            if(radTimeGetMicroseconds64()-gLastTime<gYieldTime) continue;
-        }
-        else
-        {
-            ++polls;
-            if(!forced && polls<64) continue;
-            if(polls>old3dsIoWait.maxPolls) old3dsIoWait.maxPolls=polls;
-            if(!forced && radTimeGetMicroseconds64()-gLastTime<gYieldTime)
-                ++old3dsIoWait.earlyGameplayHandoffs;
-        }
-        ++old3dsIoWait.handoffs;
-        if(forced) ++old3dsIoWait.forcedHandoffs;
-        old3dsIoWait.pollingTicks+=svcGetSystemTick()-pollStart;
-        p3d::loadManager->SwitchTask();
-        gLastTime=radTimeGetMicroseconds64();
-        polls=0;
-        pollStart=svcGetSystemTick();
-    }
-    if(polls>old3dsIoWait.maxPolls) old3dsIoWait.maxPolls=polls;
-    old3dsIoWait.pollingTicks+=svcGetSystemTick()-pollStart;
-#else
 
     int i = 0;
     unsigned int time = radTimeGetMicroseconds64();
@@ -239,7 +185,6 @@ void tFileFTT::WaitForCompletion( void )
         time = radTimeGetMicroseconds64()-time;
         rReleasePrintf("P3D Loading Starved for %d frames, %d ms\n",i,(time/1000));
     }
-#endif
 }
 
 extern "C" unsigned g_p3dMainThreadId;

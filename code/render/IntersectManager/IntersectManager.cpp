@@ -1,3 +1,4 @@
+#include <main/old3dsrecurring.h>
 //========================================================================
 // Copyright (C) 2002 Radical Entertainment Ltd.  All rights reserved.
 //
@@ -415,6 +416,7 @@ void IntersectManager::FindStaticPhysElems
    ReserveArray<StaticPhysDSG*>& orList 
 )
 {
+   O3_RECUR(StaticQuery);
 BEGIN_PROFILE("::FindStaticPhysElems")  
    //SpatialNode<StaticEntityDSG,StaticPhysDSG,IntersectDSG>& rCurrentLeaf = 
    SphereSP desiredVol;
@@ -595,6 +597,7 @@ void IntersectManager::FindDynaPhysElems
     ReserveArray<DynaPhysDSG*>& orList 
 )
 {
+   O3_RECUR(DynamicQuery);
 BEGIN_PROFILE("::FindDynaPhysElems")  
    //SpatialNode<StaticEntityDSG,StaticPhysDSG,IntersectDSG>& rCurrentLeaf = 
    SphereSP desiredVol;
@@ -657,6 +660,7 @@ void IntersectManager::FindAnimPhysElems
     ReserveArray<AnimCollisionEntityDSG*>& orList 
 )
 {
+   O3_RECUR(AnimatedQuery);
 #ifndef RAD_RELEASE
     char temp[100];
     sprintf(temp, "::FindAnimPhysElems %f", iRadius);

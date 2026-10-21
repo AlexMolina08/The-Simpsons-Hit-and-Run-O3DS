@@ -12,11 +12,7 @@
 static unsigned collisionTransformReads=0,collisionTransformReuses=0;
 static inline void CollisionTransformCount(unsigned& counter)
 {
-#ifdef SRR2_OLD3DS_PARALLEL_COLLISION
-    __atomic_fetch_add(&counter,1u,__ATOMIC_RELAXED);
-#else
     ++counter;
-#endif
 }
 extern "C" void old3dsDumpCollisionTransforms()
 {

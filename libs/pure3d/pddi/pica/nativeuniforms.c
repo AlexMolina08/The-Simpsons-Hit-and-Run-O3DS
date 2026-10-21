@@ -14,9 +14,6 @@ extern bool nativeBenchNativeUniforms(void);
 #endif
 #include <c3d/uniforms.h>
 #include "nativeuniformsnapshot.h"
-#ifdef SRR2_OLD3DS_RENDER_WORKER
-#include "renderworker.h"
-#endif
 _Static_assert(sizeof(bool)==1 && sizeof(unsigned)==4 && C3D_FVUNIF_COUNT%4==0,
                "Sparse uniform scan requires four-byte groups of bool flags");
 
@@ -59,9 +56,6 @@ static int trackedNext(GPU_SHADER_TYPE type,int first)
 }
 void picaNativeUniformInvalidate(GPU_SHADER_TYPE type,int first,int count)
 {
-#ifdef SRR2_OLD3DS_RENDER_WORKER
-    picaRenderWorkerFence();
-#endif
     if ((unsigned)type>1 || first<0 || count<0 || first>C3D_FVUNIF_COUNT-count)
         return;
     memset(&uploadedValid[type][first],0,(size_t)count);
@@ -175,9 +169,6 @@ static void ReferenceUpdateUniforms(GPU_SHADER_TYPE type)
 
 void C3D_UpdateUniforms(GPU_SHADER_TYPE type)
 {
-#ifdef SRR2_OLD3DS_RENDER_WORKER
-    picaRenderWorkerFence();
-#endif
 	int offset = type == GPU_GEOMETRY_SHADER ? (GPUREG_GSH_BOOLUNIFORM-GPUREG_VSH_BOOLUNIFORM) : 0;
 	int i = 0;
 	const bool fast=nativeUniformsEnabled();
@@ -269,9 +260,6 @@ void C3D_UpdateUniforms(GPU_SHADER_TYPE type)
 
 void C3Di_DirtyUniforms(GPU_SHADER_TYPE type)
 {
-#ifdef SRR2_OLD3DS_RENDER_WORKER
-    picaRenderWorkerFence();
-#endif
     memset(uploadedValid[type],0,sizeof(uploadedValid[type]));
 	int i;
 	C3D_BoolUnifsDirty[type] = true;
@@ -406,21 +394,3 @@ void picaNativeCompileUniforms(picaNativeCommandBlock* p,GPU_SHADER_TYPE type,
 #undef previousFast
 #undef avoidedVectors
 #undef uploadedVectors
-
-#ifdef SRR2_OLD3DS_PREPARED_THREAD
-void picaNativeSaveUniformCheckpoint(picaNativeUniformCheckpoint* checkpoint)
-{
-    memset(checkpoint,0,sizeof(*checkpoint));picaNativeSaveUniformProducer(&checkpoint->producer);
-    checkpoint->cache=uniformCache;
-    memcpy(checkpoint->floats,C3D_FVUnif,sizeof(C3D_FVUnif));memcpy(checkpoint->integers,C3D_IVUnif,sizeof(C3D_IVUnif));
-    memcpy(checkpoint->booleans,C3D_BoolUnifs,sizeof(C3D_BoolUnifs));
-    for(unsigned i=0;i<2;++i){checkpoint->constantCount[i]=C3Di_ShaderFVecData[i].count;checkpoint->constantData[i]=C3Di_ShaderFVecData[i].data;}
-}
-void picaNativeRestoreUniformCheckpoint(const picaNativeUniformCheckpoint* checkpoint)
-{
-    picaNativeRestoreUniformProducer(&checkpoint->producer);uniformCache=checkpoint->cache;
-    memcpy(C3D_FVUnif,checkpoint->floats,sizeof(C3D_FVUnif));memcpy(C3D_IVUnif,checkpoint->integers,sizeof(C3D_IVUnif));
-    memcpy(C3D_BoolUnifs,checkpoint->booleans,sizeof(C3D_BoolUnifs));
-    for(unsigned i=0;i<2;++i){C3Di_ShaderFVecData[i].count=checkpoint->constantCount[i];C3Di_ShaderFVecData[i].data=checkpoint->constantData[i];}
-}
-#endif

@@ -2,10 +2,11 @@
 """Execute production PolySkin submission with mixed and overridden group types."""
 from pathlib import Path
 import subprocess,tempfile,sys
-clip="--clip" in sys.argv
 root=Path(__file__).resolve().parents[3]
 s=(root/'libs/pure3d/p3d/anim/polyskin.cpp').read_text();a=s.index('void tPolySkin::Display(tPose* p)');b=s.index('\nvoid tPolySkin::DisplayInstanced',a);method=s[a:b]
 harness=r'''
+#define O3_POOL(a,b) ((void)0)
+#define O3_MAIN_SCOPE(x) ((void)0)
 #include <cassert>
 #include <vector>
 #include <typeinfo>
@@ -46,19 +47,6 @@ int main(){tPose pose;tPolySkin skin;tPrimGroupSkinnedPC a,b,f;f.ready=false;Pri
  assert(context.begins==3&&context.ends==3&&!context.bound);
  puts("PASS: production PolySkin display order; exact-type runs, CPU fallback, overridden/ordinary group barriers, null pose and hardware extension pairing");}
 '''
-if clip:
- harness=harness.replace('#define SRR2_OLD3DS_BONE_ONCE','#define SRR2_OLD3DS_BONE_ONCE\n#define SRR2_OLD3DS_SKIN_CLIP\nnamespace picaSkinClip {struct Bounds{};}\nstruct picaPrimBuffer {picaSkinClip::Bounds bounds;picaSkinClip::Bounds* skinClipBounds=&bounds;};')
- harness=harness.replace('struct Joint{','using pddiMatrix=Matrix;\nstruct Joint{')
- harness=harness.replace('struct picaContext{','struct picaContext{bool clipReject=false;unsigned clipCalls=0;\n bool CullSkinBounds(const picaSkinClip::Bounds*const* groups,unsigned count,const pddiMatrix*,unsigned matrices){assert(groups&&count==2&&matrices==3);++clipCalls;return clipReject;}\n')
- harness=harness.replace('struct tPrimGroupSkinnedPC:Prim{','struct tPrimGroupSkinnedPC:Prim{picaPrimBuffer buffer;picaPrimBuffer* GetBuffer(){return &buffer;}')
- tests=tests.replace(' puts("PASS:',r''' assert(!context.clipCalls);
- skin.primGroup={&a,&b};context.clipReject=true;
- unsigned beforeDraws=draws,beforeMultiplies=multiplies,beforeHardware=p3d::c.hw.begins;
- skin.Display(&pose);assert(context.clipCalls==1&&draws==beforeDraws&&multiplies==beforeMultiplies+2&&p3d::c.hw.begins==beforeHardware);
- a.buffer.skinClipBounds=nullptr;skin.Display(&pose);assert(context.clipCalls==1&&draws==beforeDraws+2);
- a.buffer.skinClipBounds=&a.buffer.bounds;context.clipReject=false;skin.Display(&pose);assert(context.clipCalls==2&&draws==beforeDraws+4);
- skin.primGroup.assign(33,&a);skin.Display(&pose);assert(context.clipCalls==2&&draws==beforeDraws+37);
- puts("PASS:''')
 with tempfile.TemporaryDirectory(prefix='srr-skin-batch-') as td:
  p=Path(td);(p/'test.cpp').write_text(harness+method+tests)
  subprocess.run(['clang++','-std=c++14','-O2','-Wall','-Wextra','-Werror','-fsanitize=address,undefined',str(p/'test.cpp'),'-o',str(p/'test')],check=True)

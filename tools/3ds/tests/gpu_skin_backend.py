@@ -3,10 +3,9 @@
 from pathlib import Path
 import subprocess
 import tempfile,sys
-prepared="--prepared" in sys.argv
 extra_budget="--extra-budget" in sys.argv
 borrow="--borrow" in sys.argv or extra_budget
-packed="--packed" in sys.argv or borrow or prepared
+packed="--packed" in sys.argv or borrow
 ROOT=Path(__file__).resolve().parents[3]
 source=(ROOT/'libs/pure3d/pddi/pica/context.cpp').read_text()
 def extract(signature):
@@ -18,7 +17,6 @@ methods='\n'.join(extract(s) for s in ['bool picaContext::BindSkinProgram(bool e
  'void picaPrimBuffer::PrepareGpuSkin(', 'void picaPrimBuffer::MutateGpuSkin()', 'bool picaPrimBuffer::TryGpuSkin(', 'bool picaPrimBuffer::SubmitGpuSkin('])
 methods += '\n#ifdef SRR2_OLD3DS_GPU_SKIN_BATCH\n'+'\n'.join(extract(s) for s in ['void picaContext::BeginSkinBatch()', 'void picaContext::EndSkinBatch()', 'void picaContext::SkinBatchBarrier()'])+'\n#endif\n'
 methods += '\n#ifdef SRR2_OLD3DS_GPU_SKIN_RIGID_PACK\n'+extract('void picaContext::SetSkinLayout(')+'\n#endif\n'
-if prepared:methods+='\n'+extract('bool picaContext::DrawWheelSkin(')+'\n'
 prelude=r'''
 #include <cassert>
 #define PDDIASSERT(x) assert(x)
@@ -50,12 +48,6 @@ void C3D_BindProgram(int* p){programSkin=*p==2;}
 static int attributeLayout;void C3D_SetAttrInfo(int* p){attributeLayout=*p;}
 const unsigned PDDI_V_NORMAL=16;
 const int GPU_VERTEX_SHADER=0,VSH_FVEC_u_bones=VSH_BONE_BASE;
-#ifdef SRR2_OLD3DS_PREPARED_BACKEND
-bool g_picaPreparedBackendEnabled=true;
-struct {unsigned skinCaptures=0;} preparedBackendStats;
-#include <pddi/pica/preparedskin.hpp>
-static picaPreparedSkinPalette queuedPalette;static bool palettePending=false,preparedBatching=false;
-#endif
 bool g_picaInFrame=true;
 struct {bool bufInfoSet;} g_picaState;
 bool PrimIsDrawable(int p){return p==1;}
@@ -64,16 +56,9 @@ struct EyeStack {pddiMatrix matrix={{{{1,0,0,0}},{{0,1,0,0}},{{0,0,1,0}},{{0,0,0
 const int PDDI_MATRIX_MODELVIEW=0;
 struct picaContext {
  void FlushPreparedExecution(bool){}bool PreparedBatching(){
-#ifdef SRR2_OLD3DS_PREPARED_BACKEND
- return preparedBatching;
-#else
  return false;
-#endif
  }
  bool QueuePreparedProgram(int*,int*,bool,unsigned,float){return false;}bool QueuePreparedLayout(int*,bool){return false;}
-#ifdef SRR2_OLD3DS_PREPARED_BACKEND
- bool QueuePreparedPalette(const picaPreparedSkinPalette& input,unsigned first){if(!preparedBatching)return false;assert(first==20);queuedPalette=input;palettePending=true;return true;}
-#endif
  picaSkin::EyeCache skinEyeCache;
  EyeStack stack;struct {EyeStack* matrixStack[1];} state={{&stack}};
  bool bottomPass=false;bool DrawWheelSkin(pddiShader*,picaPrimBuffer*,const pddiMatrix*);
@@ -96,9 +81,6 @@ struct picaPrimBuffer {
  bool TryGpuSkin(pddiShader*,const pddiMatrix* const*,unsigned);bool SubmitGpuSkin(pddiShader*);
 };
 void picaContext::DrawPrimBuffer(pddiShader*,picaPrimBuffer* p){assert(programSkin && p->skinDrawing);
-#ifdef SRR2_OLD3DS_PREPARED_BACKEND
- if(palettePending){assert(picaUploadPreparedSkinPalette(queuedPalette,20));palettePending=false;}
-#endif
 #ifdef SRR2_OLD3DS_GPU_SKIN_RIGID_PACK
  assert(attributeLayout==(p->skinRigid?3:2));
 #endif
@@ -123,9 +105,6 @@ int main(){
  unsigned initialFlushes=flushes;
  for(unsigned pose=0;pose<10;++pose){
   matrices[picaSkin::MaxBones-1].rows[3][0]=float(pose);g_picaState.bufInfoSet=true;
-#ifdef SRR2_OLD3DS_PREPARED_BACKEND
-  g_picaPreparedBackendEnabled=(pose&1)!=0;
-#endif
   bool used=p.TryGpuSkin(&material,palette,picaSkin::MaxBones);
 #ifdef SRR2_OLD3DS_GPU_SKIN
   assert(used && !programSkin && !g_picaState.bufInfoSet && !p.skinDrawing);
@@ -138,34 +117,6 @@ int main(){
 #endif
  }
  assert(flushes==initialFlushes);
-#ifdef SRR2_OLD3DS_PREPARED_BACKEND
- // Exercise the actual wheel entry point through both direct and owned uploads.
- picaPrimBuffer wheel=make();wheel.wheelSkinBuffer=true;wheel.skinRigid=true;
- for(unsigned trial=0;trial<1000;++trial){
-  preparedBatching=trial%2;g_picaPreparedBackendEnabled=true;
-  const unsigned before=preparedBackendStats.skinCaptures;
-  assert(context.DrawWheelSkin(&material,&wheel,matrices));
-  assert(!palettePending && !context.skinProgramBound && !wheel.skinDrawing);
-  assert(preparedBackendStats.skinCaptures==before+unsigned(preparedBatching));
-  for(unsigned i=0;i<4;++i)assert(uniforms[20+3*i].w==float(i));
- }
- preparedBatching=false;
- puts("PASS: 1000 production DrawWheelSkin calls alternate direct/owned palettes with identical transforms, upload order and restored program/layout state.");
- unsigned randomState=731;
- for(unsigned trial=0;trial<20000;++trial){
-  picaPreparedSkinPalette input;input.count=1+trial%picaSkin::MaxBones;
-  for(unsigned b=0;b<input.count;++b)for(unsigned r=0;r<3;++r)for(unsigned c=0;c<4;++c){randomState=randomState*1664525u+1013904223u;unsigned bits=(randomState&0x807fffffu)|0x3f000000u;memcpy(&input.values[b][r][c],&bits,4);}
-  picaPreparedSkinPalette owned;memcpy(&owned,&input,sizeof(input));memset(&input,0x67,sizeof(input));
-  C3D_FVec expected[96];memcpy(expected,uniforms,sizeof(expected));
-  for(unsigned b=0;b<owned.count;++b)for(unsigned r=0;r<3;++r)expected[VSH_BONE_BASE+3*b+r]={owned.values[b][r][0],owned.values[b][r][1],owned.values[b][r][2],owned.values[b][r][3]};
-  assert(picaUploadPreparedSkinPalette(owned,VSH_BONE_BASE));assert(!memcmp(expected,uniforms,sizeof(expected)));
- }
- picaPreparedSkinPalette invalid;invalid.count=0;assert(!picaUploadPreparedSkinPalette(invalid,VSH_BONE_BASE));
- invalid.count=picaSkin::MaxBones+1;assert(!picaUploadPreparedSkinPalette(invalid,VSH_BONE_BASE));
- invalid.count=1;assert(!picaUploadPreparedSkinPalette(invalid,96));assert(!picaUploadPreparedSkinPalette(invalid,97));
- g_picaPreparedBackendEnabled=true;
- puts("PASS: 20000 owned palette uploads preserve all register words after source poisoning; invalid bounds rejected. Actual TryGpuSkin also alternates original/prepared uploads. Mock SDK; not GPU/FPS proof.");
-#endif
  matrices[0].rows[0][0]=std::numeric_limits<float>::infinity();
  assert(!p.TryGpuSkin(&material,palette,picaSkin::MaxBones));matrices[0].rows[0][0]=1;
  g_picaInFrame=false;assert(!p.TryGpuSkin(&material,palette,picaSkin::MaxBones));g_picaInFrame=true;
@@ -284,7 +235,6 @@ with tempfile.TemporaryDirectory() as td:
  (p/'test.cpp').write_text(prelude+methods+tests)
  for enabled,compact,pedestrians,batch,rigid,eye,cast,eye_cache in ((False, False, False, False, False, False, False, False), (True, False, False, False, False, False, False, False), (True, True, False, False, False, False, False, False), (True, True, True, False, False, False, False, False), (True, True, True, True, False, False, False, False), (True, False, False, True, False, False, False, False), (True, True, True, True, True, False, False, False), (True, True, True, True, True, True, False, False), (True, True, True, True, True, True, True, False), (True, True, True, True, True, True, True, True)):
   if packed and not (enabled and compact and pedestrians and batch and rigid and eye and cast and eye_cache):continue
-  preparedFlags=['-DSRR2_OLD3DS_PREPARED_BACKEND','-DSRR2_OLD3DS_WHEEL_SKIN_BATCH'] if prepared else []
   flags=['-DSRR2_OLD3DS_GPU_SKIN_SUPPORT','-DSRR2_OLD3DS_GPU_SKIN_METRICS']+(['-DSRR2_OLD3DS_GPU_SKIN'] if enabled else [])
   flags+=(['-DSRR2_OLD3DS_GPU_SKIN_BORROW'] if borrow else [])
   flags+=(['-DSRR2_OLD3DS_GPU_SKIN_EXTRA_BUDGET'] if extra_budget else [])
@@ -296,6 +246,6 @@ with tempfile.TemporaryDirectory() as td:
   flags+=(['-DSRR2_OLD3DS_GPU_SKIN_CAST'] if cast else [])
   flags+=(['-DSRR2_OLD3DS_GPU_SKIN_EYE_PALETTE'] if eye else [])
   flags+=['-DVSH_BONE_BASE='+str(20 if eye else 24 if compact else 27)]+(['-DSRR2_OLD3DS_GPU_SKIN_COMPACT'] if compact else [])
-  subprocess.run(['clang++','-std=c++11','-fsanitize=address,undefined','-I',str(p),'-I',str(ROOT/'libs/pure3d'),*flags,*preparedFlags,
+  subprocess.run(['clang++','-std=c++11','-fsanitize=address,undefined','-I',str(p),'-I',str(ROOT/'libs/pure3d'),*flags,
       str(p/'test.cpp'),str(ROOT/'libs/pure3d/pddi/pica/skinning.cpp'),'-o',str(p/'test')],check=True)
   subprocess.run([str(p/'test')],cwd=p,check=True)

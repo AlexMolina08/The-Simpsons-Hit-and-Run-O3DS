@@ -562,13 +562,6 @@ bool tPrimGroupSkinnedPC::CollectBoneUsage(p3dSkin::BoneUsage& usage,const rmt::
 }
 #endif
 
-#ifdef SRR2_OLD3DS_DEFERRED_SKIN
-bool tPrimGroupSkinnedPC::CanDeferSkin(const rmt::Matrix* base,unsigned joints) const
-{
-    return mShader && static_cast<picaPrimBuffer*>(mBuffer)->CanDeferGpuSkin(mShader->GetShader(),
-        reinterpret_cast<const pddiMatrix* const*>(matrixPalette),nMatrices,base,joints);
-}
-#endif
 void tPrimGroupSkinnedPC::Display(void)
 {
 #ifdef SRR2_OLD3DS_GPU_SKIN_SUPPORT

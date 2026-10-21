@@ -12,8 +12,6 @@ namespace RadicalMathLibrary {
 // The SDK's combined kernel shares range reduction and polynomial powers.
 // Keep uncommon FP controls and large/nonfinite inputs on the original path.
 extern "C" void sincosf(float, float*, float*);
-bool old3dsFusedTrig=true;
-unsigned old3dsFusedTrigCalls=0,old3dsFusedTrigFallbacks=0;
 void Old3dsSinCos(float angle,float* sine,float* cosine)
 {
     unsigned control;
@@ -25,12 +23,10 @@ void Old3dsSinCos(float angle,float* sine,float* cosine)
         float s,c;
         sincosf(angle,&s,&c);
         *sine=s;*cosine=c;
-        __atomic_fetch_add(&old3dsFusedTrigCalls,1u,__ATOMIC_RELAXED);
         return;
     }
     *sine=sinf(angle);
     *cosine=cosf(angle);
-    __atomic_fetch_add(&old3dsFusedTrigFallbacks,1u,__ATOMIC_RELAXED);
 }
 #endif
 //

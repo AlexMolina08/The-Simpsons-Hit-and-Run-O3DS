@@ -9,14 +9,8 @@
 #ifdef SRR2_OLD3DS_LIGHT_CAPTURE
 #include <pddi/pica/lightcapture.hpp>
 #endif
-#ifdef SRR2_OLD3DS_SKIN_CLIP
-namespace picaSkinClip { struct Bounds; }
-#endif
 #ifdef SRR2_OLD3DS_GPU_SKIN_EYE_CACHE
 #include <pddi/pica/skineyecache.hpp>
-#endif
-#ifdef SRR2_OLD3DS_MATERIAL_QUEUE
-#include <pddi/pica/materialqueue.hpp>
 #endif
 
 const unsigned PICA_IMM_VERTEX_BYTES = 512 * 1024;
@@ -27,14 +21,7 @@ const int PICA_IMM_DEFAULT_VERTICES = 256;
 
 class picaExtGamma;
 class picaPrimBuffer;
-#ifdef SRR2_OLD3DS_DEFERRED_SKIN
-#include <cstdio>
-namespace picaDeferredSkin {struct Rest;struct Pool;struct Snapshot;}
-#endif
 
-#ifdef SRR2_OLD3DS_STATIC_BATCH
-#include <pddi/pica/staticbatch.hpp>
-#endif
 namespace picaOcclusion {struct Geometry;}
 struct picaPreparedUniformInput;
 struct picaPreparedDrawInputs;
@@ -64,12 +51,6 @@ public:
 #endif
 
     void Clear(unsigned bufferMask);
-#ifdef SRR2_OLD3DS_OCCLUSION
-    bool VisibilityPrepare();
-    bool VisibilityQuery(picaPrimBuffer* buffer);
-    void VisibilityRaster(picaPrimBuffer* buffer);
-    void VisibilityBarrier();
-#endif
 
     void SetScissor(pddiRect* rect);
 
@@ -78,10 +59,6 @@ public:
 
     void DrawPrimBuffer(pddiShader* material, pddiPrimBuffer* buffer);
 #ifdef SRR2_OLD3DS_WHEEL_LOD
-#ifdef SRR2_OLD3DS_WHEEL_GPU_BATCH
-    bool DrawWheelPalette(pddiShader*,picaPrimBuffer*,const pddiMatrix* wheels);
-    void SetWheelPaletteLayout(bool enabled);
-#endif
 #ifdef SRR2_OLD3DS_WHEEL_SKIN_BATCH
     bool DrawWheelSkin(pddiShader*,picaPrimBuffer*,const pddiMatrix* wheels);
 #endif
@@ -108,35 +85,7 @@ public:
     shaderProgram_s skinProgram;
     C3D_AttrInfo skinAttrInfo;
 #endif
-#ifdef SRR2_OLD3DS_MATERIAL_QUEUE
-    struct Submission
-    {
-        pddiShader* material;
-        picaPrimBuffer* buffer;
-        picaQueue::Rect rect;
-    };
-    bool CanQueue(pddiShader* material, pddiPrimBuffer* buffer);
-    void SubmitMaterialQueue(Submission* entries, unsigned count);
-    void SubmitQueuedPrim(pddiShader* material, picaPrimBuffer* buffer);
-    void SubmitQueuedOne(pddiShader* material, picaPrimBuffer* buffer, pddiShader*& previous);
-    // WorldScene owns this scope across consecutive exact StaticEntityDSGs.
-    // Their Display methods do not change transforms/lights or mutate assets.
-    void BeginStaticQueue() { staticQueueActive = true; staticQueueCount = 0; staticQueuePrevious = NULL; }
-    void EndStaticQueue() { SubmitMaterialQueue(staticQueue, staticQueueCount); staticQueueCount = 0; staticQueuePrevious = NULL; staticQueueActive = false; }
-    bool staticQueueActive;
-    unsigned staticQueueCount;
-    pddiShader* staticQueuePrevious;
-    Submission staticQueue[picaQueue::Capacity];
-#endif
 
-#ifdef SRR2_OLD3DS_STATIC_BATCH
-    bool DrawStaticBatch(pddiShader* material,picaPrimBuffer* const* sources,unsigned count);
-    void ClearStaticBatches();
-    picaStaticBatch::Entry<picaPrimBuffer> staticBatches[picaStaticBatch::Slots];
-    unsigned staticBatchFrame=0,staticBatchBuildFrame=~0u;
-    unsigned staticBatchBuilt=0,staticBatchHits=0,staticBatchAvoided=0,staticBatchMisses=0,staticBatchFailures=0;
-    unsigned staticBatchBytes=0,staticBatchPeak=0;
-#endif
     int  GetMaxLights();
     void SetAmbientLight(pddiColour col);
 
@@ -171,53 +120,6 @@ public:
     picaDisplay* GetDisplay(void) { return display; }
     bool ExtBGRA(void)            { return false; }
 
-#ifdef SRR2_OLD3DS_PREPARED_BACKEND
-#ifdef SRR2_OLD3DS_DEFERRED_SKIN
-    picaDeferredSkin::Pool* deferredSkinPool=nullptr;
-    picaDeferredSkin::Snapshot* deferredSkin=nullptr;
-    pddiMatrix* deferredSkinScratch=nullptr;
-    bool BeginDeferredSkin(picaDeferredSkin::Rest*,pddiMatrix*,const pddiMatrix* const*,const bool*);
-    void EndDeferredSkin();
-    void MaterializeDeferredSkin();
-    bool QueueDeferredSkinPalette(const pddiMatrix* const*,unsigned);
-    void DumpDeferredSkin(FILE*);
-#endif
-    picaPreparedDrawInputs* preparedDrawCapture=nullptr;
-    void ApplyDrawMaterial(pddiBaseShader*);
-    picaPreparedInputPool* preparedInputPool=nullptr;
-    picaPreparedExecutor* preparedExecutor=nullptr;
-#ifdef SRR2_OLD3DS_PREPARED_THREAD
-#ifdef SRR2_OLD3DS_FRAME_PIPELINE
-    picaFramePipeline* preparedFrame=nullptr;
-    bool preparedFrameAttempted=false,preparedGpuPending=false;
-    void RefreshPreparedOwnership();
-    bool PreparedFrameInFlight() const;
-    bool SubmitPreparedFrame();
-    bool QueuePreparedDriver(void(*)(const void*),const void*,unsigned);
-#endif
-    picaPreparedWorker* preparedWorker=nullptr;
-    bool preparedWorkerAttempted=false;
-    void PreparedCommandBuffer(u32**,u32*,u32*);
-#endif
-    bool preparedBatchFailed=false,preparedBatchReady=false;
-    bool PreparedBatching() const;
-    void BeginPreparedExecution();
-    void FlushPreparedExecution(bool release);
-    bool PreparedGeometryRoom();
-    void QueuePreparedGeometry(const picaPreparedGeometry&);
-    bool QueuePreparedState(const picaPreparedState&);
-    bool QueuePreparedPalette(const picaPreparedSkinPalette&,unsigned);
-    bool QueuePreparedProgram(shaderProgram_s*,C3D_AttrInfo*,bool,unsigned,float);
-    bool QueuePreparedLayout(C3D_AttrInfo*,bool);
-    void SubmitPreparedScissor(GPU_SCISSORMODE,u32,u32,u32,u32);
-    void ExecutePreparedUniforms(const picaPreparedUniformView&);
-    bool CapturePreparedUniformRecord(picaPreparedUniformRecord&,const void*,unsigned,bool,pddiColour,pddiColour,pddiColour,const float (*)[4],const picaPreparedMaterialUniforms* = nullptr);
-#ifdef SRR2_OLD3DS_RETAINED_MATERIAL
-    bool CanRetainMaterial() const;
-#endif
-    void CapturePreparedMaterialRaster(const picaPreparedMaterialPass&,picaPreparedMaterialRaster&);
-    bool CapturePreparedUniforms(picaPreparedUniformInput&,bool,pddiColour,pddiColour,pddiColour,const float (*)[4]);
-#endif
     void SetVertexUniforms(bool lit, pddiColour ambient, pddiColour diffuse, pddiColour emissive, const float (*prepared)[4] = NULL);
     void SetMaterialWriteMask(int mask);
 
@@ -296,10 +198,6 @@ public:
 #ifdef SRR2_OLD3DS_PARTICLE_CLIP
     bool PrepareParticleClip(picaClipBounds::Transform& output) const;
 #endif
-#ifdef SRR2_OLD3DS_SKIN_CLIP
-    bool CullSkinBounds(const picaSkinClip::Bounds* const* groups, unsigned groupCount,
-                        const pddiMatrix* matrices, unsigned count);
-#endif
 #endif
     bool BeginBottomScreen(float u0, float v0, float u1, float v1, bool fitFrame=true);
     void DrawBottomFrame(bool staticPicture=false);
@@ -311,15 +209,8 @@ private:
 #ifdef SRR2_OLD3DS_COARSE_POOLS
     int bottomPoolPrevious=-1;
 #endif
-#ifdef SRR2_OLD3DS_OCCLUSION
-    bool visibilityWorld = false;
-#endif
 #ifdef SRR2_OLD3DS_WHEEL_LOD
     float wheelLodPixelScale = 0.0f;
-#ifdef SRR2_OLD3DS_WHEEL_GPU_BATCH
-    bool wheelPaletteLayout = false;
-    C3D_AttrInfo wheelPaletteAttrInfo;
-#endif
 #endif
     float bottomSrc[4];
     float bottomDst[4];
@@ -374,9 +265,6 @@ private:
     bool       modelViewUploaded;
     pddiMatrix lastModelView;
 #endif
-#ifdef SRR2_OLD3DS_PREPARED_BACKEND
-    unsigned preparedUniformEpoch=0,preparedLightEpoch=0,preparedProjectionEpoch=0;
-#endif
     bool       projUploaded;
     bool       lightsUploaded;
     bool       matUploaded;
@@ -412,7 +300,7 @@ class picaPrimBuffer : public pddiPrimBuffer
 {
 public:
     picaPrimBuffer(picaContext* context, pddiPrimType type, unsigned vertexFormat, int nVertex, int nIndex
-#if defined(SRR2_OLD3DS_WHEEL_GPU_BATCH) || defined(SRR2_OLD3DS_WHEEL_SKIN_BATCH)
+#ifdef SRR2_OLD3DS_WHEEL_SKIN_BATCH
         , unsigned stride = 36
 #endif
     );
@@ -448,27 +336,9 @@ public:
     bool wheelSkinBuffer=false;
 #endif
     unsigned wheelSourceVersion=1,wheelLodBytes=0;
-#ifdef SRR2_OLD3DS_WHEEL_GPU_BATCH
-    bool wheelPaletteBuffer=false;
-#endif
-#endif
-#ifdef SRR2_OLD3DS_STATIC_BATCH
-    bool StaticBatchSource() const;
-    static unsigned StaticBatchSize(picaPrimBuffer* const* sources,unsigned count,unsigned& vertices,unsigned& indexCount);
-    static picaPrimBuffer* BakeStaticBatch(picaPrimBuffer* const* sources,unsigned count);
 #endif
     unsigned GetVertexFormat() { return vertexType; }
     void Display(void);
-#ifdef SRR2_OLD3DS_PREPARED_BACKEND
-    bool CapturePreparedGeometry(picaPreparedGeometry&);
-#endif
-#ifdef SRR2_OLD3DS_OCCLUSION
-    void VisibilityBuild();
-    void VisibilityInvalidate();
-    const picaOcclusion::Geometry* VisibilityGeometry() const;
-    unsigned VisibilityVertexCount() const {return indices?indexCount:allocated;}
-    picaOcclusion::Geometry* visibilityGeometry=nullptr;
-#endif
 #ifdef SRR2_OLD3DS_CAUSAL_DIAG
     unsigned DiagnosticVertexCount() const { return indices?indexCount:allocated; }
 #endif
@@ -484,27 +354,14 @@ public:
 #ifdef SRR2_OLD3DS_GPU_SKIN
     bool SubmitGpuSkin(pddiShader*);
 #endif
-#ifdef SRR2_OLD3DS_DEFERRED_SKIN
-    bool CanDeferGpuSkin(pddiShader*,const pddiMatrix* const*,unsigned,const pddiMatrix*,unsigned) const;
-#endif
     void MutateGpuSkin();
     picaSkinAllocation* skinAllocation;
     picaSkin::Reason skinReason;
     unsigned skinBoneCount;
     bool skinDrawing;
-#ifdef SRR2_OLD3DS_SKIN_CLIP
-    picaSkinClip::Bounds* skinClipBounds;
-
-#endif
 #ifdef SRR2_OLD3DS_GPU_SKIN_RIGID_PACK
     bool skinRigid;
 #endif
-#endif
-#ifdef SRR2_OLD3DS_MATERIAL_QUEUE
-#ifdef SRR2_OLD3DS_MATERIAL_QUEUE_SORT
-    bool QueueBounds(float* low, float* high);
-#endif
-    bool QueuePersistent();
 #endif
 
 #ifdef SRR2_OLD3DS_NO_NORMAL_FETCH
@@ -546,11 +403,6 @@ public:
 #endif
 
 protected:
-#ifdef SRR2_OLD3DS_FRAME_PIPELINE
-    // Never clear this after the first draw. Old allocations and all later
-    // writes retain conservative CPU/GPU fences for the rest of their lifetime.
-    bool renderExposed=false;
-#endif
     friend class picaPrimBufferStream;
     picaPrimBufferStream* stream;
     picaContext* context;
@@ -586,12 +438,5 @@ protected:
     bool defaultsValid;
     bool transient;
     unsigned mem;
-#ifdef SRR2_OLD3DS_MATERIAL_QUEUE
-    bool PrimQueueSupported() const { return primType == PDDI_PRIM_TRIANGLES || primType == PDDI_PRIM_TRISTRIP; }
-#ifdef SRR2_OLD3DS_MATERIAL_QUEUE_SORT
-    bool queueBoundsValid;
-    float queueLow[3], queueHigh[3];
-#endif
-#endif
 };
 #endif

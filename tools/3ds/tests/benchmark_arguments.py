@@ -9,10 +9,8 @@ with tempfile.TemporaryDirectory(prefix='srr-bench-args-') as directory:
 #include <cstring>
 #include <cstdlib>
 #include <cstdio>
-static bool candidateAB=false,candidateFlip=false;static unsigned candidateMask=0;
-namespace rmt { bool old3dsFusedTrig=false; }
 namespace Old3dsRecurring { bool requested=false;unsigned stationaryMs=0; }
-static unsigned seconds=25,warmup=8,seed=1;static bool hold=false,reload=false,serviceProfile=false,vehicleProfile=false,g_old3dsEmitterClip=false,g_old3dsPreparedParticleMotion=false,g_old3dsLazyParticleMotion=false,g_old3dsTrafficFacingOnly=false,g_old3dsAdpcmPrune=false,g_old3dsAdpcmVerify=false,g_old3dsAdpcmFast=false;
+static unsigned seconds=25,warmup=8,seed=1;static bool hold=false,reload=false,serviceProfile=false,vehicleProfile=false,g_old3dsTrafficFacingOnly=false,g_old3dsAdpcmPrune=false,g_old3dsAdpcmVerify=false,g_old3dsAdpcmFast=false;
 '''+fragment+'''
 int main(){
  assert(ParseRunArgument("bench_seconds=60")&&seconds==60);
@@ -31,17 +29,17 @@ int main(){
  assert(ParseRunArgument("bench_vehicle_profile=1")&&vehicleProfile);
  assert(!ParseRunArgument("bench_seconds_wrong=2")&&seconds==60);
  assert(!ParseRunArgument("bench_route=road"));
- assert(ParseRunArgument("bench_candidate_flip=1")&&candidateFlip);
- assert(ParseRunArgument("bench_candidate_ab=1")&&candidateAB);
- assert(ParseRunArgument("bench_candidate_mask=9")&&candidateMask==9);
- assert(ParseRunArgument("bench_emitter_clip=1")&&g_old3dsEmitterClip);
- assert(ParseRunArgument("bench_emitter_clip=0")&&!g_old3dsEmitterClip);
- assert(ParseRunArgument("bench_particle_motion=1")&&g_old3dsLazyParticleMotion);
- assert(ParseRunArgument("bench_particle_motion=0")&&!g_old3dsLazyParticleMotion);
- assert(ParseRunArgument("bench_particle_projection=1")&&g_old3dsPreparedParticleMotion);
- assert(ParseRunArgument("bench_particle_projection=0")&&!g_old3dsPreparedParticleMotion);
- assert(ParseRunArgument("bench_fused_trig=1")&&rmt::old3dsFusedTrig);
- assert(ParseRunArgument("bench_fused_trig=0")&&!rmt::old3dsFusedTrig);
+ assert(!ParseRunArgument("bench_candidate_flip=1"));
+ assert(!ParseRunArgument("bench_candidate_ab=1"));
+ assert(!ParseRunArgument("bench_candidate_mask=9"));
+ assert(!ParseRunArgument("bench_emitter_clip=1"));
+ assert(!ParseRunArgument("bench_emitter_clip=0"));
+ assert(!ParseRunArgument("bench_particle_motion=1"));
+ assert(!ParseRunArgument("bench_particle_motion=0"));
+ assert(!ParseRunArgument("bench_particle_projection=1"));
+ assert(!ParseRunArgument("bench_particle_projection=0"));
+ assert(!ParseRunArgument("bench_fused_trig=1"));
+ assert(!ParseRunArgument("bench_fused_trig=0"));
  assert(ParseRunArgument("bench_recurring=1")&&Old3dsRecurring::requested);
  assert(ParseRunArgument("bench_stationary_ms=6000")&&Old3dsRecurring::stationaryMs==6000);
 }

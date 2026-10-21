@@ -14,13 +14,7 @@
 ===========================================================================*/
 
 #include <p3d/anim/polyskin.hpp>
-#ifdef SRR2_OLD3DS_DEFERRED_SKIN
-#include <pddi/pica/deferredskin.hpp>
-#endif
-#ifdef SRR2_OLD3DS_SKIN_CLIP
-#include <pddi/pica/skinclip.hpp>
-#endif
-#if defined(SRR2_OLD3DS_GPU_SKIN_BATCH) || defined(SRR2_OLD3DS_SKIN_CLIP)
+#ifdef SRR2_OLD3DS_GPU_SKIN_BATCH
 #include <pddi/pica/context.hpp>
 #include <typeinfo>
 #endif
@@ -107,28 +101,6 @@ void tPolySkin::Display(tPose* p)
     ++boneUsageCalls;
     if(!selectiveBones) ++boneUsageFallbacks;
 #endif
-#ifdef SRR2_OLD3DS_DEFERRED_SKIN
-    // Evaluate above remains on main. Only renderer-owned matrix products move;
-    // no live pose, collision state, animation callback or shared scratch is lent.
-    struct DeferredScope {
-        picaContext* context;bool active=false;
-        ~DeferredScope(){if(active)context->EndDeferredSkin();}
-    } deferred={static_cast<picaContext*>(p3d::pddi)};
-    if(g_picaDeferredSkinEnabled && selectiveBones && primGroup.Size() &&
-       p->GetNumJoint()==skeleton->GetNumJoint()){
-        bool eligible=true;
-        for(unsigned i=0;eligible && i<primGroup.Size();++i)
-            eligible=primGroup[i] && typeid(*primGroup[i])==typeid(tPrimGroupSkinnedPC) &&
-                static_cast<tPrimGroupSkinnedPC*>(primGroup[i])->CanDeferSkin(boneMatrix,p->GetNumJoint());
-        if(eligible){
-            const pddiMatrix* posed[picaDeferredSkin::MaximumJoints];
-            bool used[picaDeferredSkin::MaximumJoints]={};
-            for(unsigned i=0;i<(unsigned)p->GetNumJoint();++i){posed[i]=&p->GetJoint(i)->worldMatrix;used[i]=boneUsage.Uses(i);}
-            deferred.active=deferred.context->BeginDeferredSkin(skeleton->GetDeferredSkinRest(),boneMatrix,posed,used);
-        }
-    }
-    if(!deferred.active)
-#endif
     {
     for(int i = 0; i < p->GetNumJoint(); i++)
     {
@@ -150,20 +122,6 @@ void tPolySkin::Display(tPose* p)
 
     boneMatrix[skeleton->GetNumJoint()].Identity();
     }
-#ifdef SRR2_OLD3DS_SKIN_CLIP
-    // Preserve pose evaluation and all custom Display overrides. Exact PC skins
-    // share one conservative bounds/transform check before their graphics work.
-    const picaSkinClip::Bounds* clipGroups[32];
-    bool clipComplete=primGroup.Size()>0 && primGroup.Size()<=32;
-    for(unsigned i=0;clipComplete && i<primGroup.Size();++i) {
-        auto* group=primGroup[i];
-        if(!group || typeid(*group)!=typeid(tPrimGroupSkinnedPC)) {clipComplete=false;break;}
-        clipGroups[i]=static_cast<picaPrimBuffer*>(static_cast<tPrimGroupSkinnedPC*>(group)->GetBuffer())->skinClipBounds;
-        if(!clipGroups[i]) clipComplete=false;
-    }
-    if(clipComplete && static_cast<picaContext*>(p3d::pddi)->CullSkinBounds(clipGroups,primGroup.Size(),
-        reinterpret_cast<const pddiMatrix*>(boneMatrix),skeleton->GetNumJoint()+1)) return;
-#endif
 
     pddiExtHardwareSkinning* hwSkin = p3d::context->GetHardwareSkinning();
 

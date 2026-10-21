@@ -17,9 +17,6 @@
 #include <p3d/array.hpp>
  
 class tSkeleton;
-#ifdef SRR2_OLD3DS_VEHICLE_RENDER_BINDINGS
-class tPreparedVehicleShaders;
-#endif
 
 class tCompositeDrawable;
 #ifdef SRR2_OLD3DS_WHEEL_LOD
@@ -50,10 +47,6 @@ public:
     void EnableBillboard(bool on) { billboard = on; }
 
     virtual void ProcessShaders(ShaderCallback&);
-#ifdef SRR2_OLD3DS_VEHICLE_RENDER_BINDINGS
-    void PrepareShaderBindings();
-    void ProcessElementShaders(unsigned index, ShaderCallback&);
-#endif
 #ifdef SRR2_OLD3DS_WHEEL_LOD
     void PrepareWheelLOD();
 #endif
@@ -183,9 +176,6 @@ public:
 
 private:
 
-#ifdef SRR2_OLD3DS_VEHICLE_RENDER_BINDINGS
-    tPreparedVehicleShaders* preparedVehicleShaders = NULL;
-#endif
 #ifdef SRR2_OLD3DS_WHEEL_LOD
     bool DrawWheelLOD(tPose* pose);
     bool wheelLodAttempted=false,wheelLodFar=false;

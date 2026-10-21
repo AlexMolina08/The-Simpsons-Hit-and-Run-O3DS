@@ -6,8 +6,9 @@ root=Path(__file__).resolve().parents[3]
 source=(root/'libs/pure3d/pddi/pica/material.cpp').read_text()
 header=(root/'libs/pure3d/pddi/pica/material.hpp').read_text()
 header='\n'.join(x for x in header.splitlines() if not x.startswith('#include'))
-source=source[source.index('static const GPU_TEXTURE_FILTER_PARAM'):source.index('#ifdef SRR2_OLD3DS_MATERIAL_QUEUE\nbool')]
+source=source[source.index('static const GPU_TEXTURE_FILTER_PARAM'):]
 prelude=r'''
+#define O3_MAIN_SCOPE(x) ((void)0)
 #include <cassert>
 #include <cstring>
 #include <cstdio>

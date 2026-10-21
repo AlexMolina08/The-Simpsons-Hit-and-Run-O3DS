@@ -24,14 +24,6 @@ public:
     void EndPreparationBatch(unsigned previous) { mPreparationBatchStamp = previous; }
 #endif
     
-#ifdef SRR2_OLD3DS_PARALLEL_COLLISION
-    void PrepareReadOnlyVolumes(TArray<CollisionObjectPair>* pairs);
-    void CopyPreparedConfiguration(const CollisionDetector& source);
-    bool DetectPreparedArea(TArray<CollisionObjectPair>* pairs,TArray<Collision>* contacts,float dt);
-    void SetPreparedDestination(TArray<Collision>* contacts) { SetCollisionList(*contacts); }
-    unsigned PreparedTailCount() const { return mNewColl; }
-    void RestorePreparedTail(float dt,bool hasPairs,unsigned contacts,bool updatedPair);
-#endif
     // collide two volumes
     void DetectCollision(CollisionVolume* volA, CollisionVolume* volB, TArray<Collision>* inCList);
 

@@ -1,20 +1,10 @@
+#include <main/old3dsrecurring.h>
 #include <main/old3dshot.h>
 
 #include "simphysics/articulatedphysicsobject.hpp"
 
 #include "p3d/anim/skeleton.hpp"
 #include <string.h>
-#ifdef SRR2_OLD3DS_VEHICLE_JOINT_PIPELINE
-#include <typeinfo>
-#include <cstdio>
-static unsigned jointPipelinePasses=0, jointPipelineHits=0, jointPipelineMisses=0, jointPipelineFallbacks=0;
-extern "C" void old3dsDumpJointPipeline()
-{
-    std::printf("OLD3DS_JOINT_PIPELINE passes=%u hits=%u misses=%u fallbacks=%u stack_bytes=%u\n",
-        jointPipelinePasses,jointPipelineHits,jointPipelineMisses,jointPipelineFallbacks,
-        (unsigned)sizeof(sim::jointPipeline::View<rmt::Matrix>));
-}
-#endif
 #ifdef SRR2_OLD3DS_INERTIA_TENSOR_CACHE
 #include <cstdio>
 static unsigned inertiaTensorCalls=0,inertiaTensorHits=0;
@@ -122,15 +112,6 @@ void ArticulatedPhysicsObject::SetSkeletonInfo(SkeletonInfo* inSkeletonInfo)
 
 void ArticulatedPhysicsObject::InitFromPose()
 {
-#ifdef SRR2_OLD3DS_VEHICLE_JOINT_PIPELINE
-    // Only these exact SetTransform implementations have been audited as pose
-    // readers. Unknown subclasses may write the pose or invoke external callbacks.
-    mJointPipelineSafe = mPose->GetJointCount() <= 64;
-    for(int i=0; i<mNumSimJoints && mJointPipelineSafe; ++i)
-        mJointPipelineSafe = typeid(*mSimJoints[i])==typeid(PhysicsJoint0D) ||
-            typeid(*mSimJoints[i])==typeid(PhysicsJoint1D) ||
-            typeid(*mSimJoints[i])==typeid(PhysicsJoint3D);
-#endif
     // not all the pose joint has physicsjoint => mNumSimJoints < pose->GetNumJoint()
     // we need a quick access from poseJointIndex to physicsJoint.
     tSkeleton* skel = mPose->GetSkeleton();
@@ -287,11 +268,7 @@ void ArticulatedPhysicsObject::JointAxis(int inIndex, rmt::Vector& axis, bool re
 {
     if (recompute || mJoints[inIndex] == NULL)
     {
-#ifdef SRR2_OLD3DS_VEHICLE_JOINT_PIPELINE
-        JointTransform(inIndex).RotateVector(JointInfo(inIndex).mAxis, &axis);
-#else
         mPose->GetJoint(inIndex)->GetWorldMatrix().RotateVector(JointInfo(inIndex).mAxis, &axis);
-#endif
     }
     else
         axis = mJoints[inIndex]->mAxis;
@@ -390,25 +367,13 @@ void ArticulatedPhysicsObject::UpdatePoseMatrix()
 {
     if (!ConvertedToRigidBody())
     {
-#ifdef SRR2_OLD3DS_VEHICLE_JOINT_PIPELINE
-        jointPipeline::View<Matrix> resolved;
-        jointPipeline::Scope<Matrix> scope(mJointTransformView,mJointPipelineSafe?&resolved:NULL);
-        if(mJointPipelineSafe) ++jointPipelinePasses;
-        else ++jointPipelineFallbacks;
-#endif
+        { O3_RECUR(JointTransforms);
         for (int i=0; i<mNumSimJoints; i++)
         {
-#ifdef SRR2_OLD3DS_VEHICLE_JOINT_PIPELINE
-            mSimJoints[i]->SetTransform(JointTransform(mSimJoints[i]->mIndex));
-#else
             mSimJoints[i]->SetTransform(mPose->GetJoint(mSimJoints[i]->mIndex)->GetWorldMatrix());
-#endif
         }
-        ComputeInertiaMatrix();
-#ifdef SRR2_OLD3DS_VEHICLE_JOINT_PIPELINE
-        jointPipelineHits+=resolved.hits;
-        jointPipelineMisses+=resolved.misses;
-#endif
+        }
+        { O3_RECUR(JointInertia); ComputeInertiaMatrix(); }
     }
 }
 

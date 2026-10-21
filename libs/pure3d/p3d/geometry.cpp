@@ -20,16 +20,6 @@
 #include <p3d/array.hpp>
 
 #include <string.h>
-#ifdef SRR2_OLD3DS_MATERIAL_QUEUE
-#include <pddi/pica/context.hpp>
-#include <p3d/shader.hpp>
-#include <typeinfo>
-#include <main/old3dsdiag.h>
-#endif
-#ifdef SRR2_OLD3DS_QUEUE_METRICS
-#include <pddi/pica/queuemetrics.hpp>
-#include <main/old3dsdiag.h>
-#endif
 
 
 
@@ -99,10 +89,6 @@ void tGeometry::ProcessShaders(ShaderCallback& callback)
 
 void tGeometry::SetPrimGroup(int i, tPrimGroup* group)
 {
-#ifdef SRR2_OLD3DS_VEHICLE_RENDER_BINDINGS
-    // Saturation permanently disables prepared slot reuse for this geometry.
-    if(shaderBindingRevision != ~0u) ++shaderBindingRevision;
-#endif
     tRefCounted::Assign(primGroup[i], group);
 }
 
@@ -110,90 +96,6 @@ void tGeometry::SetPrimGroup(int i, tPrimGroup* group)
 void tGeometry::Display()
 {
     O3_MAIN_SCOPE(Geometry);
-#if defined(SRR2_OLD3DS_MATERIAL_QUEUE) || defined(SRR2_OLD3DS_QUEUE_METRICS)
-    // Scope is deliberately inside Display: no entity, transform, light, pose,
-    // texture mutation, or transient stream outlives its original call site.
-    const bool staticWorld = (g_old3dsActiveEntity == O3_STATIC
-#ifdef SRR2_OLD3DS_MATERIAL_QUEUE
-        || static_cast<picaContext*>(p3d::pddi)->staticQueueActive
-#endif
-        ) && primGroup.Size() > 0;
-#ifdef SRR2_OLD3DS_QUEUE_METRICS
-    const bool sample = staticWorld && g_old3dsActiveEntity == O3_STATIC && ((++g_picaQueueMetrics.geometries & 31u) == 1u);
-    if(sample) ++g_picaQueueMetrics.geometrySamples;
-    picaQueueTimer geometryTimer(g_picaQueueMetrics.geometryTicks, sample);
-#endif
-#ifdef SRR2_OLD3DS_MATERIAL_QUEUE
-    if(picaQueue::Enabled() && staticWorld && (primGroup.Size() > 1 || static_cast<picaContext*>(p3d::pddi)->staticQueueActive))
-    {
-        picaContext* context = static_cast<picaContext*>(p3d::pddi);
-#ifndef SRR2_OLD3DS_MATERIAL_QUEUE_SORT
-        // With ordering disabled, consume packets immediately and retain only
-        // compatible native state. Avoid staging/copying an unchanged draw order.
-        const bool localScope = !context->staticQueueActive;
-        if(localScope) context->BeginStaticQueue();
-#else
-        picaContext::Submission localEntries[picaQueue::Capacity];
-        unsigned localCount = 0;
-        picaContext::Submission* entries = context->staticQueueActive ? context->staticQueue : localEntries;
-        unsigned& count = context->staticQueueActive ? context->staticQueueCount : localCount;
-#endif
-        for(unsigned i = 0; i < primGroup.Size(); ++i)
-        {
-            tPrimGroup* group = primGroup[i];
-            if(!group) continue;
-            // Exact type excludes skins, dynamic streamers and custom Display
-            // overrides. Unsupported Display executes exactly once, in place.
-            if(typeid(*group) == typeid(tPrimGroupOptimised))
-            {
-                tPrimGroupOptimised* optimised = static_cast<tPrimGroupOptimised*>(group);
-                pddiShader* material = group->GetShader()->GetShader();
-                if(context->CanQueue(material, optimised->GetBuffer()))
-                {
-#ifndef SRR2_OLD3DS_MATERIAL_QUEUE_SORT
-                    context->SubmitQueuedPrim(material, static_cast<picaPrimBuffer*>(optimised->GetBuffer()));
-#else
-                    entries[count].material = material;
-                    entries[count].buffer = static_cast<picaPrimBuffer*>(optimised->GetBuffer());
-                    entries[count].rect.valid = false;
-                    if(++count == picaQueue::Capacity)
-                    {
-#ifdef SRR2_OLD3DS_QUEUE_METRICS
-                        ++g_picaQueueMetrics.capacityFlushes;
-#endif
-                        context->SubmitMaterialQueue(entries, count);
-                        count = 0;
-                    }
-#endif
-                    continue;
-                }
-            }
-#ifndef SRR2_OLD3DS_MATERIAL_QUEUE_SORT
-            context->staticQueuePrevious = NULL;
-#else
-            context->SubmitMaterialQueue(entries, count);
-            count = 0;
-#endif
-#ifdef SRR2_OLD3DS_QUEUE_METRICS
-            ++g_picaQueueMetrics.barriers;
-#endif
-            // Arbitrary Display can call nested geometry, then mutate its
-            // transform or scratch storage. Never let that nested call borrow
-            // the outer world's deferred lifetime.
-            const bool sharedScope = context->staticQueueActive;
-            context->staticQueueActive = false;
-            group->Display();
-            context->staticQueueActive = sharedScope;
-        }
-#ifndef SRR2_OLD3DS_MATERIAL_QUEUE_SORT
-        if(localScope) context->EndStaticQueue();
-#else
-        if(!context->staticQueueActive) context->SubmitMaterialQueue(entries, count);
-#endif
-        return;
-    }
-#endif
-#endif
 
     for( unsigned i = 0; i < primGroup.Size(); i++)
     {

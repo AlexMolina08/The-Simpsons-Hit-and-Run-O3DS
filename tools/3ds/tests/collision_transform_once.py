@@ -28,7 +28,7 @@ prelude=prelude.replace('void SetRotation();','''void SetRotation();
 prelude=prelude.replace('void SetRotation();','void SetRotation() override;').replace('void UpdateBBox();','void UpdateBBox() override;')
 prelude=prelude.replace('struct BBoxVolume:','''struct CustomCylinder:CylinderVolume {bool flipOwner=false;void SetRotation()override{CylinderVolume::SetRotation();mAxis.x+=1;if(flipOwner && mCollisionObject)mCollisionObject->unknown=true;}};
 struct BBoxVolume:''')
-methods+='\n#ifdef SRR2_OLD3DS_COLL_TRANSFORM_ONCE\n'+extract(volume,'void CollisionVolume::UpdatePosRot(CollisionObject* stableOwner, SimState* stableState)')+'\n'
+methods+='\n#ifdef SRR2_OLD3DS_COLL_TRANSFORM_ONCE\n'+extract(volume,'static inline void CollisionTransformCount(')+'\n'+extract(volume,'void CollisionVolume::UpdatePosRot(CollisionObject* stableOwner, SimState* stableState)')+'\n'
 for shape in ['CylinderVolume','OBBoxVolume','WallVolume']:methods+=extract(volume,'void '+shape+'::SetRotationFromTransform(')+'\n'
 methods+='#endif\n'
 tests=tests.replace('int main(){','int main(int argc,char** argv){assert(argc==2);int modes[]={FE_TONEAREST,FE_UPWARD,FE_DOWNWARD,FE_TOWARDZERO};assert(!fesetround(modes[atoi(argv[1])]));')

@@ -1,6 +1,3 @@
-#ifdef SRR2_OLD3DS_PREPARED_BACKEND
-#include <pddi/pica/preparedbackend.h>
-#endif
 #include <pddi/pica/pica.hpp>
 #include <main/old3dsexperiment.h>
 #include <pddi/pica/texture.hpp>
@@ -184,12 +181,6 @@ public:
 };
 void picaTexture::TryPromoteVram()
 {
-#ifdef SRR2_OLD3DS_PREPARED_BACKEND
-#ifdef SRR2_OLD3DS_FRAME_PIPELINE
-    if(!g_picaUnexposedResourcePrep)
-#endif
-    picaPreparedBackendFence();
-#endif
     if(vramUploaded)return;
     vramUploaded=true;
     if(!vramEligible)return;
@@ -213,18 +204,8 @@ void picaTexture::TryPromoteVram()
     node->bytes=bytes;node->next=NULL;
     // UploadLevel already flushed every mip. This is a raw byte copy, with no
     // display-transfer format conversion, resampling or color quantization.
-#ifdef SRR2_OLD3DS_PREPARED_BACKEND
-    // Promotion touches the shared SDK queue and retires backing data. This
-    // fence remains mandatory even for a texture that has never been drawn.
-#ifdef SRR2_OLD3DS_FRAME_PIPELINE
-    if(g_picaUnexposedResourcePrep)picaPreparedBackendFence();
-#endif
-#endif
     C3D_SyncTextureCopy((u32*)tex.data,0,(u32*)node->data,0,copyBytes,8);
     linearFree(tex.data);tex.data=node->data;vramAllocation=node;
-#ifdef SRR2_OLD3DS_RETAINED_MATERIAL
-    ++nativeRevision;
-#endif
     vramTextureBytes+=bytes;++vramTextureCopies;
     if(vramTextureBytes>vramTexturePeak)vramTexturePeak=vramTextureBytes;
 }
@@ -326,9 +307,6 @@ picaTexture::picaTexture(picaContext* c)
 
 picaTexture::~picaTexture()
 {
-#ifdef SRR2_OLD3DS_PREPARED_BACKEND
-    picaPreparedBackendFence();
-#endif
     FreeStaging();
 
     if(created)
@@ -361,15 +339,6 @@ void picaTexture::FreeStaging(void)
 bool picaTexture::Create(int x, int y, int bpp, int alpha, int nMip,
                          pddiTextureType textureType, pddiTextureUsageHint usageHint)
 {
-#ifdef SRR2_OLD3DS_RETAINED_MATERIAL
-    ++nativeRevision;
-#endif
-#ifdef SRR2_OLD3DS_PREPARED_BACKEND
-#ifdef SRR2_OLD3DS_FRAME_PIPELINE
-    if(!g_picaUnexposedResourcePrep || renderExposed)
-#endif
-    picaPreparedBackendFence();
-#endif
 #ifdef SRR2_OLD3DS_VRAM_TEXTURES
     // Movie construction explicitly sets KeepFullSize, and font pages set
     // FontTexture. Keep both CPU-writable; later ordinary reuploads can demote.
@@ -552,12 +521,6 @@ pddiLockInfo* picaTexture::Lock(int mipMap, pddiRect* rect)
 
 void picaTexture::Unlock(int mipLevel)
 {
-#ifdef SRR2_OLD3DS_PREPARED_BACKEND
-#ifdef SRR2_OLD3DS_FRAME_PIPELINE
-    if(!g_picaUnexposedResourcePrep || renderExposed)
-#endif
-    picaPreparedBackendFence();
-#endif
     if((staging == NULL) || !created)
         return;
 
@@ -573,15 +536,6 @@ extern "C" int g_picaFontTexture = 0;
 
 void picaTexture::UploadLevel(int mipLevel)
 {
-#ifdef SRR2_OLD3DS_RETAINED_MATERIAL
-    ++nativeRevision;
-#endif
-#ifdef SRR2_OLD3DS_PREPARED_BACKEND
-#ifdef SRR2_OLD3DS_FRAME_PIPELINE
-    if(!g_picaUnexposedResourcePrep || renderExposed)
-#endif
-    picaPreparedBackendFence();
-#endif
 #ifdef SRR2_OLD3DS_CAUSAL_DIAG
     O3ExperimentTimer causalTimer(O3E_TEXTURE);
 #endif
@@ -869,9 +823,6 @@ int  picaTexture::GetPriority(void)  { return priority; }
 
 void picaTexture::Prefetch(void) { }
 void picaTexture::Discard(void)  {
-#ifdef SRR2_OLD3DS_PREPARED_BACKEND
-    picaPreparedBackendFence();
-#endif
 }
 
 int  picaTexture::GetNumPaletteEntries(void)                   { return 0; }
@@ -882,12 +833,6 @@ int  picaTexture::GetPalette(pddiColour* palette)              { return 0; }
 bool picaTexture::UploadMovieYUV(const unsigned char* y, const unsigned char* cr, const unsigned char* cb,
                                int width, int height, int yPitch, int chromaPitch)
 {
-#ifdef SRR2_OLD3DS_RETAINED_MATERIAL
-    ++nativeRevision;
-#endif
-#ifdef SRR2_OLD3DS_PREPARED_BACKEND
-    picaPreparedBackendFence();
-#endif
 #ifdef SRR2_OLD3DS_VRAM_TEXTURES
     // Movie construction is excluded from promotion. Keep this guard so a future
     // caller can use its ordinary writable-texture fallback instead of writing VRAM.
@@ -925,9 +870,6 @@ bool picaTexture::UploadPreparedPNG(const void* encoded,unsigned bytes,bool worl
 {
     if(!created || valid || !nativeEligible || type!=PDDI_TEXTYPE_RGB ||
        !ReadPrepared(encoded,bytes,picaNativeTexture::EncodedPNG,world))return false;
-#ifdef SRR2_OLD3DS_RETAINED_MATERIAL
-    ++nativeRevision;
-#endif
     C3D_TexFlush(&tex);
 #ifdef SRR2_OLD3DS_VRAM_TEXTURES
     TryPromoteVram();

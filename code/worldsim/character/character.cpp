@@ -1,3 +1,4 @@
+#include <main/old3dsrecurring.h>
 #include <main/old3dshot.h>
 #include <worldsim/character/character.h>
 
@@ -1543,7 +1544,7 @@ void Character::PreSimUpdate( float timeins )
     // Sense and think.
     //
     rmt::Vector direction;
-    UpdateController( direction, timeins );
+    { O3_RECUR(CharacterController); UpdateController( direction, timeins ); }
     if ( IsMovementLocked() == false )
     {
         UpdateDesiredDirAndSpeed( direction );
@@ -1590,6 +1591,7 @@ void Character::PreSimUpdate( float timeins )
         
         )
     {
+    O3_RECUR(CharacterActions);
     BEGIN_PROFILE("ActionController()->Update")
         GetActionController()->Update( mSecondsSinceActionControllerUpdate );
     END_PROFILE("ActionController()->Update")
@@ -1611,7 +1613,7 @@ void Character::PreSimUpdate( float timeins )
     // (given unto me by WorldPhysMan's substep)
     ResetCollisions( );
 
-    mpPuppet->UpdateBegin();
+    { O3_RECUR(CharacterPuppet); mpPuppet->UpdateBegin(); }
 
     // Zero out the prophandler.  If it is still valid it will get set 
     // during CollisioDetect.

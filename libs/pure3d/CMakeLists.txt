@@ -212,48 +212,12 @@ if(SRR2_P3D_PDDI STREQUAL "PICA")
         set(PICA_SHADER_SRC "${CMAKE_CURRENT_SOURCE_DIR}/pddi/pica/shaders/pddi_directional.v.pica")
     endif()
 
-    if(SRR2_OLD_3DS AND SRR2_OLD3DS_WHEEL_GPU_BATCH)
-        set(PICA_SHADER_SRC "${CMAKE_CURRENT_SOURCE_DIR}/pddi/pica/shaders/pddi_wheel_palette.v.pica")
-    endif()
 
-    if(SRR2_OLD3DS_OCCLUSION)
-        list(APPEND PDDI_SOURCES "pddi/pica/occlusion.cpp")
-    endif()
-    if(SRR2_OLD3DS_FRAME_PIPELINE)
-        list(APPEND PDDI_SOURCES "pddi/pica/framepipeline.cpp")
-    endif()
-    if(SRR2_OLD3DS_PREPARED_THREAD)
-        list(APPEND PDDI_SOURCES "pddi/pica/preparedworker.cpp")
-    endif()
-    if(SRR2_OLD3DS_RENDER_WORKER)
-        list(APPEND PDDI_SOURCES "pddi/pica/renderworker.c")
-    endif()
-    if(SRR2_OLD3DS_GPU_LISTS)
-        list(APPEND PDDI_SOURCES "pddi/pica/nativegpulist.c")
-    endif()
     if(SRR2_OLD3DS_NATIVE_CONTEXT)
         list(APPEND PDDI_SOURCES "pddi/pica/nativecontext.c")
     endif()
     if(SRR2_OLD3DS_NATIVE_UNIFORMS)
         list(APPEND PDDI_SOURCES "pddi/pica/nativeuniforms.c")
-    endif()
-    if(SRR2_OLD3DS_RESIDENT_SHADERS)
-        find_package(Python3 REQUIRED COMPONENTS Interpreter)
-        set(RESIDENT_SCRIPT "${CMAKE_SOURCE_DIR}/tools/3ds/link_resident_shaders.py")
-        add_custom_command(OUTPUT "${CMAKE_CURRENT_BINARY_DIR}/resident.shbin"
-            COMMAND "${Python3_EXECUTABLE}" "${RESIDENT_SCRIPT}"
-                --picasso "${PICASSO_EXE}" --output "${CMAKE_CURRENT_BINARY_DIR}/resident.shbin"
-                "${PICA_SHADER_SRC}" "${CMAKE_CURRENT_BINARY_DIR}/pddi_shbin.h"
-                "${PICA_SKIN_SRC}" "${CMAKE_CURRENT_BINARY_DIR}/skin_shbin.h"
-            DEPENDS "${RESIDENT_SCRIPT}" "${PICA_SHADER_SRC}" "${PICA_SKIN_SRC}"
-                "${CMAKE_CURRENT_BINARY_DIR}/pddi_shbin.h" "${CMAKE_CURRENT_BINARY_DIR}/skin_shbin.h"
-            VERBATIM)
-        add_custom_command(OUTPUT "${CMAKE_CURRENT_BINARY_DIR}/resident_shbin.c"
-            COMMAND "${CMAKE_COMMAND}" "-DINPUT=${CMAKE_CURRENT_BINARY_DIR}/resident.shbin"
-                "-DOUTPUT=${CMAKE_CURRENT_BINARY_DIR}/resident_shbin.c" "-DSYMBOL=pddi_resident_shbin"
-                -P "${CMAKE_SOURCE_DIR}/cmake/bin2c.cmake"
-            DEPENDS "${CMAKE_CURRENT_BINARY_DIR}/resident.shbin" "${CMAKE_SOURCE_DIR}/cmake/bin2c.cmake" VERBATIM)
-        list(APPEND PDDI_SOURCES "${CMAKE_CURRENT_BINARY_DIR}/resident_shbin.c")
     endif()
 
 	add_custom_command(

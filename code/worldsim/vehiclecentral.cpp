@@ -1,3 +1,4 @@
+#include <main/old3dsrecurring.h>
 //=============================================================================
 // Copyright (C) 2002 Radical Entertainment Ltd.  All rights reserved.
 //
@@ -1440,13 +1441,13 @@ void VehicleCentral::PreSubstepUpdate( float dt )
         Vehicle* vehicle = mActiveVehicleList[i];
         if( vehicle ) // TODO - wrap with render layer test
         {
-            vehicle->PreSubstepUpdate(dt);
+            { O3_RECUR(VehiclePreStep); vehicle->PreSubstepUpdate(dt); }
 
             // Update controller
             VehicleController* vController = mActiveVehicleControllerList[i];
             if( vController != 0 )
             {
-                vController->Update( dt );
+                { O3_RECUR(VehicleController); vController->Update( dt ); }
 
                 float test = vController->GetGas();
                 //?

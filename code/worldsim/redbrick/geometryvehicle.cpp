@@ -727,11 +727,7 @@ BEGIN_PROFILE("GeometryVehicle::Display SetUp")
                 {
                     tCompositeDrawable::DrawableElement* pElement = mCompositeDrawable->GetDrawableElement( i );
                     tDrawable* pDrawable = pElement->GetDrawable();
-                    #ifdef SRR2_OLD3DS_VEHICLE_RENDER_BINDINGS
-                    mCompositeDrawable->ProcessElementShaders(i, cbPos);
-#else
                     pDrawable->ProcessShaders( cbPos );
-#endif
                 }
 #endif
             }
@@ -834,11 +830,7 @@ BEGIN_PROFILE("GeometryVehicle::Display SetUp")
         {
             tCompositeDrawable::DrawableElement* pElement = mCompositeDrawable->GetDrawableElement (i);
             tDrawable* pDrawable = pElement->GetDrawable ();
-            #ifdef SRR2_OLD3DS_VEHICLE_RENDER_BINDINGS
-                    mCompositeDrawable->ProcessElementShaders(i, envBlend);
-#else
                     pDrawable->ProcessShaders( envBlend );
-#endif
         }
     }
 
@@ -905,16 +897,8 @@ BEGIN_PROFILE("GeometryVehicle::Display Render")
         {
             tCompositeDrawable::DrawableElement* pElement = mCompositeDrawable->GetDrawableElement( j );
             tDrawable* pDrawable = pElement->GetDrawable();
-            #ifdef SRR2_OLD3DS_VEHICLE_RENDER_BINDINGS
-                    mCompositeDrawable->ProcessElementShaders(j, blendMode);
-#else
                     pDrawable->ProcessShaders( blendMode );
-#endif
-            #ifdef SRR2_OLD3DS_VEHICLE_RENDER_BINDINGS
-                    mCompositeDrawable->ProcessElementShaders(j, emissive);
-#else
                     pDrawable->ProcessShaders( emissive );
-#endif
         }
 
         // so since we just made EVERY SHADER alpha blend, we need to take
@@ -2410,9 +2394,6 @@ bool GeometryVehicle::GetArt( const char* name)
 
 
     const bool damageTexturesFound = FindDamageShadersAndTextures(name);
-#ifdef SRR2_OLD3DS_VEHICLE_RENDER_BINDINGS
-    mCompositeDrawable->PrepareShaderBindings();
-#endif
     return damageTexturesFound;
     //return true;
 

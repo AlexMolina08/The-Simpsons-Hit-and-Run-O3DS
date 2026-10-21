@@ -23,18 +23,6 @@ typedef struct {
     bool intDirty[2][C3D_IVUNIF_COUNT],intEver[2][C3D_IVUNIF_COUNT],boolDirty[2],constantDirty[2];
     unsigned masks[2][3];
 } picaNativeUniformProducerState;
-#ifdef SRR2_OLD3DS_PREPARED_THREAD
-typedef struct {
-    picaNativeUniformProducerState producer;
-    picaNativeUniformCache cache;
-    C3D_FVec floats[2][C3D_FVUNIF_COUNT];
-    C3D_IVec integers[2][C3D_IVUNIF_COUNT];
-    u16 booleans[2];
-    int constantCount[2];float24Uniform_s* constantData[2];
-} picaNativeUniformCheckpoint;
-void picaNativeSaveUniformCheckpoint(picaNativeUniformCheckpoint*);
-void picaNativeRestoreUniformCheckpoint(const picaNativeUniformCheckpoint*);
-#endif
 void picaNativeSaveUniformProducer(picaNativeUniformProducerState* state);
 void picaNativeRestoreUniformProducer(const picaNativeUniformProducerState* state);
 bool picaNativeSameUniformProducer(const picaNativeUniformProducerState* a,const picaNativeUniformProducerState* b);

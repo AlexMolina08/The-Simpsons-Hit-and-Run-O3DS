@@ -17,9 +17,6 @@ if(VITA)
 	)
 endif()
 
-if(SRR2_OLD3DS_NATIVE_MATRIX)
-    list(APPEND RADMATH_SOURCES "radmath/nativematrix.cpp")
-endif()
 
 add_library(radmath STATIC ${RADMATH_SOURCES})
 target_include_directories(radmath

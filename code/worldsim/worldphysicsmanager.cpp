@@ -1276,7 +1276,7 @@ void WorldPhysicsManager::Update(unsigned int timeDeltaMilliSeconds)
     END_PROFILE("WorldPhysicsManager::PreSubstepUpdate")
 
     BEGIN_PROFILE("PreSim")
-    GetCharacterManager( )->PreSimUpdate( dt );
+    { O3_RECUR(CharacterPreSim); GetCharacterManager( )->PreSimUpdate( dt ); }
     END_PROFILE("PreSim")
     }
 

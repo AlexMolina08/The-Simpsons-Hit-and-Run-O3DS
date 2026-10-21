@@ -7,9 +7,6 @@
 #include "citro3d_171/internal.h"
 #include <stddef.h>
 #include <string.h>
-#ifdef SRR2_OLD3DS_GPU_LISTS
-#include "nativecontext.h"
-#endif
 _Static_assert(offsetof(C3D_Context,flags)==32,"Unsupported Citro3D flags ABI");
 _Static_assert(offsetof(C3D_Context,bufInfo)+offsetof(C3D_BufInfo,base_paddr)==64,"Unsupported Citro3D buffer ABI");
 #define CMD(reg,mask,value) (value),GPUCMD_HEADER(0,(mask),(reg))
@@ -52,9 +49,6 @@ void picaDrawPacketElements(GPU_Primitive_t primitive,int count,int type,const v
  C3D_Context* ctx=C3Di_GetContext();
  const u32 pa=osConvertVirtToPhys(indices),base=ctx->bufInfo.base_paddr;
  if(pa<base) return;
-#ifdef SRR2_OLD3DS_GPU_LISTS
- if(picaNativeRetainedDraw(primitive,count,true,pa-base,type,0))return;
-#endif
  C3Di_UpdateContext();
  u32 packet[sizeof(indexedTriangles)/sizeof(u32)];
  const unsigned words=picaEncodeDrawPacket(packet,primitive,count,true,pa-base,type,0);
@@ -63,9 +57,6 @@ void picaDrawPacketElements(GPU_Primitive_t primitive,int count,int type,const v
 }
 void picaDrawPacketArrays(GPU_Primitive_t primitive,int first,int count)
 {
-#ifdef SRR2_OLD3DS_GPU_LISTS
- if(picaNativeRetainedDraw(primitive,count,false,0,0,first))return;
-#endif
  C3Di_UpdateContext();
  u32 packet[sizeof(arrays)/sizeof(u32)];
  const unsigned words=picaEncodeDrawPacket(packet,primitive,count,false,0,0,first);

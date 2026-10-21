@@ -27,6 +27,7 @@ prelude=r'''
 #include <limits>
 #include <vector>
 #include <algorithm>
+#define O3_MAIN_SCOPE(x) ((void)0)
 #define PDDIASSERT(x) assert(x)
 #define SRR2_OLD_3DS
 static bool skinTimingActive=false, expectSkinTiming=false;

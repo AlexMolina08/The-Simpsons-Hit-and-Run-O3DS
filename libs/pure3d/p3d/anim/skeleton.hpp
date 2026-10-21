@@ -14,9 +14,6 @@
 #include <p3d/array.hpp>
 
 class tPose;
-#ifdef SRR2_OLD3DS_DEFERRED_SKIN
-namespace picaDeferredSkin {struct Rest;}
-#endif
 
 class tSkeleton : public tEntity
 {
@@ -63,17 +60,11 @@ public:
     tPose* NewPose();
 
     void Rebuild();
-#ifdef SRR2_OLD3DS_DEFERRED_SKIN
-    picaDeferredSkin::Rest* GetDeferredSkinRest();
-#endif
 
 protected:
     tSkeleton();
     virtual ~tSkeleton();
 
-#ifdef SRR2_OLD3DS_DEFERRED_SKIN
-    picaDeferredSkin::Rest* deferredSkinRest=nullptr;
-#endif
     tArray<Joint> joint;
 
     friend class tSkeletonLoader;

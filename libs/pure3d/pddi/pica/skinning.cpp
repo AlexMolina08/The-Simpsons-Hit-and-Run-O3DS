@@ -1,9 +1,3 @@
-#ifdef SRR2_OLD3DS_FRAME_PIPELINE
-#include <citro3d.h>
-#include <pddi/pica/preparedbackend.h>
-#define C3D_GetProcessingTime picaFrameProcessingTime
-#define C3D_GetDrawingTime picaFrameDrawingTime
-#endif
 #include <pddi/pica/skinning.hpp>
 #ifdef SRR2_OLD3DS_GPU_SKIN_SUPPORT
 #include <citro3d.h>

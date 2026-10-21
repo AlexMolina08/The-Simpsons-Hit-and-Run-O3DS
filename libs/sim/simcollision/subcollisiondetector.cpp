@@ -2184,11 +2184,6 @@ void SubCollisionDetector::TestNormalIntegrity(Collision* c)
 
 void SubCollisionDetector::AddCollision(CollisionVolume* volA, const Vector& pa, CollisionVolume* volB, const Vector& pb, float dist, const Vector& N)
 {
-#ifdef SRR2_OLD3DS_PARALLEL_COLLISION
-    if(mPreparedContactLimit>=0 && mCollisionList->GetSize()>=mPreparedContactLimit) {
-        mPreparedOverflow=true;return;
-    }
-#endif
     float test = Fabs(N.MagnitudeSqr()-1.0f);
     rAssert(test < 0.01f);
     if (test > 0.01f)

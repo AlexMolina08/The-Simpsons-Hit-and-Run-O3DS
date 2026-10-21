@@ -43,7 +43,6 @@ set(SIM_SOURCES
 	"simphysics/virtualcm.cpp"
 )
 
-list(APPEND SIM_SOURCES "simcollision/parallelcollision.cpp")
 add_library(sim STATIC ${SIM_SOURCES})
 target_include_directories(sim
 	PUBLIC "."

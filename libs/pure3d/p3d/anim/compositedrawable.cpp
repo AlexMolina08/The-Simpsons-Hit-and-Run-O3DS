@@ -36,18 +36,6 @@
 #include <typeinfo>
 #include <cstdio>
 #endif
-#ifdef SRR2_OLD3DS_VEHICLE_RENDER_BINDINGS
-#include <p3d/geometry.hpp>
-#include <p3d/primgroup.hpp>
-#include <p3d/anim/vehicleshaderbindings.hpp>
-#include <cstdio>
-static unsigned vehicleBindingsPrepared=0, vehicleBindingsCalls=0, vehicleBindingsFallbacks=0, vehicleBindingsSlots=0;
-extern "C" void old3dsDumpVehicleBindings()
-{
-    std::printf("OLD3DS_VEHICLE_BINDINGS prepared=%u calls=%u fallback=%u slots=%u\n",
-        vehicleBindingsPrepared,vehicleBindingsCalls,vehicleBindingsFallbacks,vehicleBindingsSlots);
-}
-#endif
 #include <float.h>
 #include <string.h>
 
@@ -96,9 +84,6 @@ tCompositeDrawable::tCompositeDrawable(int initialElementSize) :
 
 tCompositeDrawable::~tCompositeDrawable()
 {
-#ifdef SRR2_OLD3DS_VEHICLE_RENDER_BINDINGS
-    delete preparedVehicleShaders;
-#endif
 #ifdef SRR2_OLD3DS_WHEEL_LOD
     if(wheelLodBuffer) wheelLodBuffer->Release();
     if(wheelLodSource) wheelLodSource->Release();
@@ -286,7 +271,7 @@ bool tCompositeDrawable::DrawWheelLOD(tPose* p)
     if(!wheelLodBuffer || !g_picaInFrame || billboard || p->GetNumJoint()!=int(wheelLodJoints) ||
        wheelLodSource->WheelSourceVersion()!=wheelLodVersion || wheelLodVersion==~0u ||
        wheelLodFirst+4>elements.Size()) return false;
-#if !defined(SRR2_OLD3DS_WHEEL_GPU_BATCH) && !defined(SRR2_OLD3DS_WHEEL_SKIN_BATCH)
+#ifndef SRR2_OLD3DS_WHEEL_SKIN_BATCH
     const rmt::Matrix& root=p->GetJoint(0)->worldMatrix;
     rmt::Matrix modelView;modelView.Mult(root,*p3d::stack->GetMatrix());
     const rmt::Vector& cameraPosition=modelView.Row(3);
@@ -296,7 +281,7 @@ bool tCompositeDrawable::DrawWheelLOD(tPose* p)
     if(!picaWheelLOD::SmallEnough(static_cast<picaContext*>(p3d::pddi)->WheelLodPixelScale(),
                                  wheelLodRadius,wheelLodExtent,view)) return false;
 #endif
-#if defined(SRR2_OLD3DS_WHEEL_GPU_BATCH) || defined(SRR2_OLD3DS_WHEEL_SKIN_BATCH)
+#ifdef SRR2_OLD3DS_WHEEL_SKIN_BATCH
     pddiMatrix wheels[4];
 #else
     float wheels[4][4][4];
@@ -317,9 +302,6 @@ bool tCompositeDrawable::DrawWheelLOD(tPose* p)
     if(!group->GetShader() || !group->GetShader()->GetShader()) return false;
 #ifdef SRR2_OLD3DS_WHEEL_SKIN_BATCH
     if(!static_cast<picaContext*>(p3d::pddi)->DrawWheelSkin(group->GetShader()->GetShader(),wheelLodBuffer,
-            wheels)) return false;
-#elif defined(SRR2_OLD3DS_WHEEL_GPU_BATCH)
-    if(!static_cast<picaContext*>(p3d::pddi)->DrawWheelPalette(group->GetShader()->GetShader(),wheelLodBuffer,
             wheels)) return false;
 #else
     if(!static_cast<picaMat*>(group->GetShader()->GetShader())->WheelLodOpaque()) return false;
@@ -403,41 +385,6 @@ void tCompositeDrawable::Display(tPose* p)
     }
 }
 
-#ifdef SRR2_OLD3DS_VEHICLE_RENDER_BINDINGS
-void tCompositeDrawable::PrepareShaderBindings()
-{
-    delete preparedVehicleShaders;
-    preparedVehicleShaders = new(std::nothrow) tPreparedVehicleShaders;
-    if(preparedVehicleShaders && !preparedVehicleShaders->Prepare(*this))
-    {
-        delete preparedVehicleShaders;
-        preparedVehicleShaders = NULL;
-    }
-    if(preparedVehicleShaders) ++vehicleBindingsPrepared;
-}
-
-void tCompositeDrawable::ProcessElementShaders(unsigned index, ShaderCallback& callback)
-{
-    DrawableElement* element = elements[index];
-    if(!element) return;
-    tDrawable* current = element->GetDrawable();
-    if(preparedVehicleShaders)
-    {
-        const unsigned before=preparedVehicleShaders->preparedCalls;
-        const unsigned legacy=preparedVehicleShaders->legacyCalls;
-        const unsigned slots=preparedVehicleShaders->slotCalls;
-        preparedVehicleShaders->Process(index,current,callback);
-        vehicleBindingsCalls+=preparedVehicleShaders->preparedCalls-before;
-        vehicleBindingsFallbacks+=preparedVehicleShaders->legacyCalls-legacy;
-        vehicleBindingsSlots+=preparedVehicleShaders->slotCalls-slots;
-    }
-    else
-    {
-        ++vehicleBindingsFallbacks;
-        current->ProcessShaders(callback);
-    }
-}
-#endif
 
 void tCompositeDrawable::ProcessShaders(ShaderCallback& callback)
 {
@@ -445,11 +392,7 @@ void tCompositeDrawable::ProcessShaders(ShaderCallback& callback)
     {
         if(elements[i])
         {
-#ifdef SRR2_OLD3DS_VEHICLE_RENDER_BINDINGS
-            ProcessElementShaders(i,callback);
-#else
             elements[i]->GetDrawable()->ProcessShaders(callback);
-#endif
         }
     }
 }

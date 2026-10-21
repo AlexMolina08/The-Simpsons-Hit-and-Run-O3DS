@@ -1,7 +1,4 @@
 #include <main/old3dscadence.h>
-#ifdef SRR2_OLD3DS_PREPARED_BACKEND
-#include <pddi/pica/preparedbackend.h>
-#endif
 #include <pddi/pica/display.hpp>
 #include <pddi/pica/context.hpp>
 #include <pddi/base/debug.hpp>
@@ -75,9 +72,6 @@ picaDisplay::picaDisplay(pddiDisplayInfo* info)
 
 picaDisplay::~picaDisplay()
 {
-#ifdef SRR2_OLD3DS_PREPARED_BACKEND
-    picaPreparedBackendFence();
-#endif
     if(inFrame)
     {
         C3D_FrameEnd(0);
@@ -349,19 +343,6 @@ bool picaDisplay::BeginBottomTarget(void)
     if(!inFrame || targetBottom == NULL)
         return false;
 
-#ifdef SRR2_OLD3DS_FRAME_PIPELINE
-    struct TargetInput {C3D_RenderTarget* target;};const TargetInput input={targetBottom};
-    if(!stereoThisFrame && context && context->QueuePreparedDriver([](const void* bytes){TargetInput value;memcpy(&value,bytes,sizeof(value));
-        C3D_FrameDrawOn(value.target);picaWriteEye(0.0f);
-    },&input,sizeof(input))){
-        // SDK clears are queued before its draw command lists in the original
-        // path. Keep that ordering, including repeated clears of one target,
-        // before the consumer can start an early draw prefix.
-        C3D_RenderTargetClear(targetBottom,C3D_CLEAR_ALL,0x000000FF,0x00FFFFFF);
-        return true;
-    }
-    picaPreparedBackendFence();
-#endif
     FinishTopSegment();
 
     C3D_RenderTargetClear(targetBottom, C3D_CLEAR_ALL, 0x000000FF, 0x00FFFFFF);
@@ -372,11 +353,6 @@ bool picaDisplay::BeginBottomTarget(void)
 
 void picaDisplay::EndBottomTarget(void)
 {
-#ifdef SRR2_OLD3DS_FRAME_PIPELINE
-    struct TargetInput {C3D_RenderTarget* target;};const TargetInput input={target};
-    if(!stereoThisFrame && context && context->QueuePreparedDriver([](const void* bytes){TargetInput value;memcpy(&value,bytes,sizeof(value));C3D_FrameDrawOn(value.target);picaWriteEye(0.0f);},&input,sizeof(input)))return;
-    picaPreparedBackendFence();
-#endif
     C3D_FrameDrawOn(target);
     StartTopSegment();
 }
@@ -385,13 +361,6 @@ void picaDisplay::EndFrame(void)
 {
     if(inFrame)
     {
-#ifdef SRR2_OLD3DS_FRAME_PIPELINE
-        if(!stereoThisFrame && context && context->SubmitPreparedFrame()){
-            inFrame=false;g_picaInFrame=0;
-            ++g_picaPresentedFrames;++g_old3dsFramePresented;
-            return;
-        }
-#endif
         FinishTopSegment();
         stereoThisFrame = false;
 
@@ -422,12 +391,6 @@ void picaDisplay::EndFrame(void)
 
 void picaDisplay::SwapBuffers(void)
 {
-#ifdef SRR2_OLD3DS_PREPARED_BACKEND
-#ifdef SRR2_OLD3DS_FRAME_PIPELINE
-    if(!context || !context->PreparedFrameInFlight())
-#endif
-    picaPreparedBackendFence();
-#endif
     EndFrame();
     reset = false;
 }

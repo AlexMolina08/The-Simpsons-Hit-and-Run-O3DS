@@ -1,11 +1,5 @@
 #include <main/old3dsrecurring.h>
 #include <main/old3dspools.h>
-#ifdef SRR2_OLD3DS_FRAME_PIPELINE
-#include <citro3d.h>
-#include <pddi/pica/preparedbackend.h>
-#define C3D_GetProcessingTime picaFrameProcessingTime
-#define C3D_GetDrawingTime picaFrameDrawingTime
-#endif
 //=============================================================================
 // Copyright (C) 2002 Radical Entertainment Ltd.  All rights reserved.
 //

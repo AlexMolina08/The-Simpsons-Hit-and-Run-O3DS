@@ -1,15 +1,6 @@
 #ifdef SRR2_OLD3DS_PARTICLE_CLIP
 extern "C" void old3dsDumpParticleClip();
 #endif
-#ifdef SRR2_OLD3DS_PARTICLE_TRIG_REUSE
-extern "C" void old3dsDumpParticleTrig();
-#endif
-#ifdef SRR2_OLD3DS_VEHICLE_JOINT_PIPELINE
-extern "C" void old3dsDumpJointPipeline();
-#endif
-#ifdef SRR2_OLD3DS_VEHICLE_RENDER_BINDINGS
-extern "C" void old3dsDumpVehicleBindings();
-#endif
 #ifdef SRR2_OLD3DS_WHEEL_LOD
 extern "C" void old3dsDumpWheelLOD();
 extern "C" void picaDumpWheelLodMemory();
@@ -31,9 +22,6 @@ extern "C" void old3dsDumpInertiaTensors();
 #endif
 #ifdef SRR2_OLD3DS_JOINT_VECTOR_REUSE
 extern "C" void old3dsDumpJointVectors();
-#endif
-#ifdef SRR2_OLD3DS_IO_WAIT_YIELD
-extern "C" void old3dsDumpIoWait();
 #endif
 #if defined(SRR2_OLD_3DS) && defined(SRR2_OLD3DS_COLL_PREP)
 extern "C" void old3dsDumpPairTail();
@@ -312,9 +300,6 @@ extern "C" int main( int argc, char *argv[] )
 #ifdef SRR2_OLD3DS_NATIVE_BENCH
     NativeBench::Dump();
 #endif
-#ifdef SRR2_OLD3DS_IO_WAIT_YIELD
-    old3dsDumpIoWait();
-#endif
 #if defined(SRR2_OLD_3DS) && defined(SRR2_OLD3DS_COLL_PREP)
     old3dsDumpPairTail();
 #endif
@@ -324,9 +309,6 @@ extern "C" int main( int argc, char *argv[] )
 #ifdef SRR2_OLD3DS_PARTICLE_CLIP
     old3dsDumpParticleClip();
 #endif
-#ifdef SRR2_OLD3DS_PARTICLE_TRIG_REUSE
-    old3dsDumpParticleTrig();
-#endif
 #ifdef SRR2_OLD3DS_MATERIAL_WRITES
     picaDumpMaterialWrites();
 #endif
@@ -335,12 +317,6 @@ extern "C" int main( int argc, char *argv[] )
 #endif
 #ifdef SRR2_OLD3DS_JOINT_VECTOR_REUSE
     old3dsDumpJointVectors();
-#endif
-#ifdef SRR2_OLD3DS_VEHICLE_JOINT_PIPELINE
-    old3dsDumpJointPipeline();
-#endif
-#ifdef SRR2_OLD3DS_VEHICLE_RENDER_BINDINGS
-    old3dsDumpVehicleBindings();
 #endif
 #ifdef SRR2_OLD3DS_WHEEL_LOD
     old3dsDumpWheelLOD();
@@ -373,12 +349,6 @@ extern "C" int main( int argc, char *argv[] )
 #ifdef SRR2_OLD3DS_GPU_SKIN_SUPPORT
     extern void picaSkinDump();
     picaSkinDump();
-#endif
-#ifdef SRR2_OLD3DS_QUEUE_METRICS
-    // The 3DS shutdown uses _exit, which bypasses renderer destructors/atexit.
-    // Write the independent graphics experiment buffer only after gameplay ends.
-    extern void picaQueueDump();
-    picaQueueDump();
 #endif
 
 
