@@ -2300,7 +2300,8 @@ namespace
     void DrawUpperPortCredits(tView* view,CGuiScreen* screen)
     {
         if(!view || !screen || !screen->IsRunning() || screen->GetWindowID()!=CGuiWindow::GUI_SCREEN_ID_SETTINGS)return;
-        Scrooby::Text* label=FindText(screen->GetScroobyScreen(),"Camera");
+        CGuiMenu* menu=screen->HasMenu();
+        Scrooby::Text* label=menu && menu->GetNumItems() ? MenuLabel(menu->GetMenuItem(0)) : NULL;
         tFont* font=label?label->GetFont():NULL;if(!font)return;
         NativeViewPass nativePass(view);
         p3d::pddi->EnableZBuffer(false);p3d::pddi->SetCullMode(PDDI_CULL_NONE);
