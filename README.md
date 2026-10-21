@@ -5,7 +5,7 @@ New 3DS and New 2DS XL, enabling their faster CPU and L2 cache automatically.
 You need your own retail PC copy of the game to build from source.
 Game data and DSP firmware are not distributed in this source repository.
 
-<img src="images/game.jpg" width="320" alt="The Simpsons: Hit & Run on Nintendo 3DS">
+
 
 ## Install
 
