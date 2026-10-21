@@ -244,6 +244,11 @@ def main():
     copied += copy_files(game, sd, rcfs)
     log(f"data: {copied} files copied, {removed} removed ({len(rcfs)} archives)")
 
+    if args.old3ds:
+        from prepare_lid_audio import prepare as prepare_lid_audio
+        clips = prepare_lid_audio(sd, args.ffmpeg)
+        log(f"lid greetings: {len(clips)} complete retail character clips prepared")
+
     if args.native_textures:
         from prepare_native_textures import prepare
         manifest = prepare(sorted((sd / "art").rglob("*.p3d")), sd / "native-textures" / "v1")

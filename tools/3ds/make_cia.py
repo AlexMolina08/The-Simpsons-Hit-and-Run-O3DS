@@ -16,6 +16,7 @@ from release_tools import locate
 from release_version import parse
 from setup_sd import check_game, find_ffmpeg
 from prepare_home_menu import archive_member, TRACK
+from prepare_lid_audio import MEMBERS
 
 ROOT = Path(__file__).resolve().parents[2]
 
@@ -69,6 +70,8 @@ def main():
     if not (game / 'art/frontend/scrooby/bootup.p3d').is_file() or len(list((game / 'movies').glob('*.rmv'))) < 17:
         parser.error('The retail installation must include boot artwork and all 17 movies')
     archive_member(game / 'music02.rcf', TRACK)
+    for member in MEMBERS:
+        archive_member(game / 'dialog.rcf', member)
     for tool in ('git', 'bash', 'cmake', 'ninja', 'make', 'cc'):
         if not shutil.which(tool):
             parser.error(f'Missing {tool}; install the prerequisites in README.md')

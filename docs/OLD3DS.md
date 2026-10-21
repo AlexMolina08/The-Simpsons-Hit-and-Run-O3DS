@@ -152,6 +152,26 @@ The radar refreshes at up to 15 Hz. Mission timing and driving overlays retain
 their existing update paths. Original-model builds use one 400×240 gameplay view.
 New models automatically enable CPU/L2 acceleration with the same memory budget.
 
+## Lid-open greetings
+
+A confirmed sleep/wake cycle triggers one complete character greeting. Ten
+original English retail lines cover Homer, Bart, Lisa, Marge and Apu equally.
+A shuffled bag plays every line before repeating, including a repeat guard at
+bag boundaries. The random generator is separate from gameplay randomness.
+HOME suspension/restoration alone does not play a greeting.
+
+Setup extracts these lines from your `dialog.rcf`, matches their volume gently
+and prepares mono 24 kHz PCM. Source archives remain unchanged. No voice assets
+are committed to Git. CIA packaging includes the prepared clips automatically.
+The game reserves one of the 24 DSP channels, reads only the chosen clip after
+wake and frees its PCM when playback ends. The bounded buffer is at most 144 KB;
+no polling file reads or audio decoding run during normal gameplay.
+
+The cue respects master and Voice volume, and remains silent if DSP firmware is
+unavailable. It does not change music playback positions or game settings. This
+feature runs while the game is active; it cannot add sounds to the system HOME
+Menu or other applications. Actual sleep/wake audio needs a physical console check.
+
 ## Publish a release
 
 Publishing is separate from local building. **Release CIA.command** invokes the

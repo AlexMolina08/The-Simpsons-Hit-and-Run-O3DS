@@ -73,6 +73,13 @@ extern "C" void radSoundCtrFreeChannel( int channel )
     FreeChannel( channel );
 }
 
+#include "lidgreeting.hpp"
+
+extern "C" void radSoundCtrServiceLid(float volume)
+{
+    ctrLidGreeting::Service(volume);
+}
+
 static u16 s_AdpcmCoefs[ 16 ] =
 {
        0,                0,
@@ -951,6 +958,7 @@ class radSoundHalSystemCtr
 
         if( g_NdspAvailable )
         {
+            ctrLidGreeting::Shutdown();
             for( int c = 0; c < NDSP_NUM_CHANNELS; c++ )
             {
                 ndspChnWaveBufClear( c );
@@ -978,6 +986,7 @@ class radSoundHalSystemCtr
             ndspSetOutputMode( NDSP_OUTPUT_STEREO );
             ndspSetOutputCount( 1 );
             ndspSetMasterVol( 1.0f );
+            ctrLidGreeting::Initialize();
         }
 
         const unsigned int size  = systemDescription.m_ReservedSoundMemory;
@@ -1134,6 +1143,7 @@ extern "C" void radSoundHal3dsShutdownForExit( void )
 {
     if( g_NdspAvailable )
     {
+        ctrLidGreeting::Shutdown();
         for( int c = 0; c < NDSP_NUM_CHANNELS; c++ )
         {
             ndspChnWaveBufClear( c );

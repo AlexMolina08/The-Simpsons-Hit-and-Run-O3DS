@@ -11,7 +11,7 @@ with tempfile.TemporaryDirectory() as tmp:
  (game/'scripts.rcf').write_bytes(b'test');(game/'movies/fmv1A.rmv').write_bytes(b'test')
  for skip in [False,True]:
   argv=['setup_sd',str(game),'--out',str(root/'sd'),'--old3ds','--no-romfs','--force-movies']+(['--no-movies'] if skip else [])
-  with patch.object(sys,'argv',argv),patch.object(setup_sd,'find_ffmpeg',return_value='ffmpeg'),patch.object(setup_sd,'convert_movie',side_effect=AssertionError('Old 3DS selected H.264')),patch.object(convert_old3ds_movies,'convert',return_value={'status':'converted','bytes':52}) as converter:
+  with patch('prepare_lid_audio.prepare',return_value=[]),patch.object(sys,'argv',argv),patch.object(setup_sd,'find_ffmpeg',return_value='ffmpeg'),patch.object(setup_sd,'convert_movie',side_effect=AssertionError('Old 3DS selected H.264')),patch.object(convert_old3ds_movies,'convert',return_value={'status':'converted','bytes':52}) as converter:
    setup_sd.main()
    assert converter.call_count==(0 if skip else 1)
    if not skip:

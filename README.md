@@ -90,6 +90,11 @@ focus a row; their tracks adjust the value. The map always uses the lower screen
 Port credits are under **Pause → Options → Settings**. Original game credits
 remain available through the game's existing credits menu.
 
+Reopening the lid while the game is running plays a short greeting from Homer,
+Bart, Lisa, Marge or Apu. Ten complete retail lines play in a shuffled order,
+with no consecutive repeats. Greetings follow the **Voice** volume setting;
+setting Voice to zero silences them. Returning from HOME alone does not trigger one.
+
 ## Development
 
 `cmake/old3ds-release.cmake` defines the normal-play build profile. It preserves the accepted v104 rendering options and

@@ -173,8 +173,15 @@ void SoundManager::DestroyInstance()
 // Return:      None.
 //
 //==============================================================================
+#ifdef RAD_3DS
+extern "C" void radSoundCtrServiceLid(float volume);
+#endif
 void SoundManager::Update()
 {
+#ifdef RAD_3DS
+    radSoundCtrServiceLid(m_isMuted || m_noDialogue ? 0.0f : GetMasterVolume()*GetDialogueVolume());
+#endif
+
     unsigned int now = radTimeGetMilliseconds( );
     unsigned int dif = now - gLastServiceTime;
     
