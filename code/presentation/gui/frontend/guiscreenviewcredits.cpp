@@ -34,6 +34,7 @@
 #include <Sprite.h>
 #ifdef SRR2_OLD_3DS
 #include <p3d/font.hpp>
+#include <presentation/gui/utility/handheldcredits.h>
 #endif
 
 // ATG
@@ -82,6 +83,7 @@ CGuiScreenViewCredits::CGuiScreenViewCredits
     m_lastLineDisplayed( 0 ),
     m_elapsedIdleTime( 0 )
 {
+    memset(m_credits,0,sizeof(m_credits));
     Scrooby::Page* pPage = m_pScroobyScreen->GetPage( "ViewCredits" );
     rAssert( pPage != NULL );
 
@@ -152,6 +154,26 @@ CGuiScreenViewCredits::CGuiScreenViewCredits
             break;
         }
     }
+
+#ifdef SRR2_OLD_3DS
+    // Original PC partitions have independent positions and font transforms.
+    // Draw a measured native roll instead of submitting that off-screen layout.
+    m_creditsGroup->SetVisible(false);
+    float baseline=HandheldCredits::OriginalY;
+    for(unsigned i=0;i<MAX_NUM_CREDITS_PARTITIONS;++i)
+    {
+        Scrooby::Text* text=m_credits[i];
+        if(!text || !text->IsVisible() || !text->GetFont())continue;
+        const tFont* font=text->GetFont();
+        const unsigned rows=HandheldCredits::Walk(
+            static_cast<const P3D_UNICODE*>(text->GetStringBuffer()),
+            [font](const P3D_UNICODE* line){return font->GetTextWidth(line)*HandheldCredits::Height/font->GetFontHeight()<=HandheldCredits::Width;},
+            [](const P3D_UNICODE*,unsigned){});
+        baseline+=rows*HandheldCredits::Advance+HandheldCredits::PartitionGap;
+    }
+    s_totalTranslateY=(baseline+24.0f)*2.0f;
+    isFirstTime=false;
+#endif
 
     // increment total translation for the screen area
     //
@@ -390,6 +412,13 @@ void CGuiScreenViewCredits::InitOutro()
     GetEventManager()->TriggerEvent( EVENT_PLAY_FE_MUSIC );
 }
 
+
+#ifdef RAD_3DS
+Scrooby::Text* CGuiScreenViewCredits::GetCreditsText3DS(unsigned index) const
+{
+    return index<MAX_NUM_CREDITS_PARTITIONS?m_credits[index]:NULL;
+}
+#endif
 
 void
 CGuiScreenViewCredits::ResetScrolling()

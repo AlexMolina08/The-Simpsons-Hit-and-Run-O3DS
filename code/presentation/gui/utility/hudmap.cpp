@@ -1,3 +1,5 @@
+#include <presentation/gui/frontend/guiscreenviewcredits.h>
+#include <presentation/gui/utility/handheldcredits.h>
 #include <presentation/gui/utility/handheldiconbounds.h>
 #include <main/old3dsbottommap.h>
 //===========================================================================
@@ -2248,23 +2250,38 @@ namespace
     void DrawUpperCredits(tView* view,CGuiScreen* screen)
     {
         if(!view || !screen || !screen->IsRunning() || screen->GetWindowID()!=CGuiWindow::GUI_SCREEN_ID_VIEW_CREDITS)return;
-        Scrooby::Text* text=FirstText(screen->GetScroobyScreen()->GetPage("ViewCredits"));
-        tFont* font=text?text->GetFont():NULL;
+        CGuiScreenViewCredits* credits=static_cast<CGuiScreenViewCredits*>(screen);
+        Scrooby::Text* first=credits->GetCreditsText3DS(0);
+        tFont* font=first?first->GetFont():NULL;
         if(!font)return;
         NativeViewPass nativePass(view);
         p3d::pddi->EnableZBuffer(false);p3d::pddi->SetCullMode(PDDI_CULL_NONE);
         p3d::pddi->SetCamera(0.1f,10,1.5708f,4.0f/3);p3d::pddi->SetProjectionMode(PDDI_PROJECTION_PERSPECTIVE);
-        p3d::stack->LoadIdentity();p3d::stack->Translate(-0.5f,-0.375f,0.5f);
-        // A separate gold heading stays above the original white credit roll.
-        Fill(25,14,295,65,tColour(0,0,0));FlushUI();
-        const char* lines[]={"3DS adaptation made by","AlexMolina08"};
-        for(unsigned i=0;i<2;++i){
-            P3D_UNICODE label[64];p3d::AsciiToUnicode(lines[i],label,64);
-            const float height=i?15:12;
-            const float width=font->GetTextWidth(label)*height/font->GetFontHeight();
-            BottomLabel(font,label,(320-width)*0.5f,i?52:31,height,Gold,250);
+        p3d::stack->LoadIdentity();p3d::stack->Translate(-0.4f,-0.375f,0.5f);
+        p3d::stack->Scale(0.8f,1,1); // Square text pixels on the 400-wide LCD.
+        const float scroll=credits->GetCreditsScroll3DS();
+        auto line=[&](tFont* face,const P3D_UNICODE* label,float baseline,tColour colour){
+            const float y=baseline-scroll;
+            if(y<20 || y>224)return;
+            const float fade=fminf(1.0f,fminf((y-20)/12,(224-y)/12));
+            colour.SetAlpha(int(fmaxf(0.0f,fade)*255));
+            const float width=face->GetTextWidth(label)*HandheldCredits::Height/face->GetFontHeight();
+            BottomLabel(face,label,(320-width)*0.5f,y,HandheldCredits::Height,colour,HandheldCredits::Width);
+        };
+        P3D_UNICODE role[64],name[32];
+        p3d::AsciiToUnicode("3DS adaptation made by",role,64);p3d::AsciiToUnicode("AlexMolina08",name,32);
+        line(font,role,HandheldCredits::RoleY,Gold);line(font,name,HandheldCredits::NameY,Gold);
+        float baseline=HandheldCredits::OriginalY;
+        for(unsigned i=0;i<credits->GetNumCreditsTexts3DS();++i){
+            Scrooby::Text* source=credits->GetCreditsText3DS(i);
+            if(!source || !source->IsVisible() || !source->GetFont())continue;
+            tFont* face=source->GetFont();
+            const unsigned rows=HandheldCredits::Walk(
+                static_cast<const P3D_UNICODE*>(source->GetStringBuffer()),
+                [face](const P3D_UNICODE* text){return face->GetTextWidth(text)*HandheldCredits::Height/face->GetFontHeight()<=HandheldCredits::Width;},
+                [&](const P3D_UNICODE* text,unsigned row){line(face,text,baseline+row*HandheldCredits::Advance,White);});
+            baseline+=rows*HandheldCredits::Advance+HandheldCredits::PartitionGap;
         }
-        Fill(55,64,265,65,tColour(105,88,33));FlushUI();
         nativePass.End();
     }
 
@@ -2499,7 +2516,7 @@ namespace
         if(tv && tube<=0){} // The old picture fades out while the retail camera changes screens.
         else if(credits)
         {
-            Scrooby::Text* text=FirstText(screen->GetScroobyScreen()->GetPage("ViewCredits"));
+            Scrooby::Text* text=static_cast<CGuiScreenViewCredits*>(screen)->GetCreditsText3DS(0);
             tFont* font=text?text->GetFont():NULL;
             Ascii(font,"CREDITS",46,51,16,Gold,228);
             const picaBottomFrame::Rect back={44,146,276,178};

@@ -1,11 +1,49 @@
 #!/usr/bin/env python3
 """Run production text/sprite submission against the fixed 3DS vertex budget."""
 from pathlib import Path
+import json
 import shutil
+import struct
 import subprocess
 import tempfile
 
 root = Path(__file__).resolve().parents[3]
+retail = []
+advances = {}
+data = root / 'sdcard/3ds/simpsons/art/frontend'
+bible = data / 'scrooby/resource/txtbible/srr2.p3d'
+if bible.is_file():
+    b = bible.read_bytes()
+    a = 12 + struct.unpack_from('<I', b, 16)[0] + 12
+    a += 1 + b[a]
+    count, modulo, _ = struct.unpack_from('<III', b, a + 1)
+    entries = {}
+    for i in range(count):
+        key = struct.unpack_from('<I', b, a + 13 + i * 4)[0]
+        start = a + 13 + count * 8 + struct.unpack_from('<I', b, a + 13 + count * 4 + i * 4)[0]
+        end = start
+        while b[end:end + 2] != b'\0\0': end += 2
+        entries[key] = b[start:end].decode('utf-16le')
+    for i in range(34):
+        key = 0
+        for c in f'CREDITS_{i:02}': key = (64 * key + ord(c)) % modulo
+        if key in entries: retail.append(entries[key])
+    assert len(retail) == 34
+    b = (data / 'scrooby2/resource/_frontend/font1_14.p3d').read_bytes()
+    a = 12
+    _, header, total = struct.unpack_from('<III', b, a)
+    cursor = a + 16
+    cursor += 1 + b[cursor]
+    cursor += 1 + b[cursor]
+    height = struct.unpack_from('<4f', b, cursor)[2]
+    cursor = a + header
+    while cursor < a + total:
+        kind, _, size = struct.unpack_from('<III', b, cursor)
+        if kind == 0x22001:
+            for i in range(struct.unpack_from('<I', b, cursor + 12)[0]):
+                record = cursor + 16 + i * 40
+                advances[struct.unpack_from('<I', b, record + 36)[0]] = struct.unpack_from('<f', b, record + 32)[0] / height
+        cursor += size
 
 def function(path, signature):
     source = (root / path).read_text()
@@ -29,9 +67,11 @@ program = r'''
 #include <cassert>
 #include <cmath>
 #include <cstdio>
+#include <map>
 #include <string>
 #include <vector>
 #include "libs/pure3d/pddi/pica/clipbounds.hpp"
+#include "code/presentation/gui/utility/handheldcredits.h"
 #define SRR2_OLD_3DS 1
 using P3D_UNICODE=char16_t;
 enum {CENTRE_X=1,PDDI_MATRIX_MODELVIEW,PDDI_SP_BASETEX,PDDI_PRIM_TRIANGLES,PDDI_PRIM_TRISTRIP,PDDI_V_CT};
@@ -82,6 +122,7 @@ namespace Scrooby {struct Text {std::u16string text;tFont* font;void GetBounding
 struct CGuiScreenViewCredits {static float s_numPixelsPerLine;float FormatTextWithLineBreaks(Scrooby::Text*);};
 float CGuiScreenViewCredits::s_numPixelsPerLine=0;
 ''' + production + r'''
+std::map<unsigned,float> retailAdvances={''' + ','.join(f'{{{k},{v}f}}' for k,v in advances.items()) + r'''};
 int main(){
  Stack stack;Device device;Display display;picaContext renderer;renderer.display=&display;renderer.state.matrixStack[PDDI_MATRIX_MODELVIEW]=&stack;
  context=&renderer;p3d::stack=&stack;p3d::pddi=&device;TestShader shader;tTextureFont font;font.shader=&shader;
@@ -91,6 +132,20 @@ int main(){
     const float row=44*(size<=32?0.75f:0.5f);
     assert(std::fabs(credits.FormatTextWithLineBreaks(&text)-3*row)<0.001f);
     assert(text.text==u"FIRST\nSECOND\nFINAL");
+ }
+ const std::vector<std::u16string> fixtures={u"FIRST\\SECOND\\FINAL",u"FIRST\n\nLAST\n",std::u16string(1536,u'W'),u"A long original credit with spaces between all the names and roles",''' + ','.join('u'+json.dumps(t,ensure_ascii=True) for t in retail) + r'''};
+ auto measure=[](const char16_t* p){float width=0;while(*p){auto found=retailAdvances.find(*p++);width+=found==retailAdvances.end()?7:found->second*HandheldCredits::Height;}return width;};
+ for(const auto& source:fixtures){
+    std::u16string expected,actual;
+    for(auto c:source)if(c!=' ' && c!='\n' && c!='\\')expected+=c;
+    unsigned last=0;
+    const auto rows=HandheldCredits::Walk(source.c_str(),
+        [&](const char16_t* p){return measure(p)<=HandheldCredits::Width;},
+        [&](const char16_t* p,unsigned row){
+            assert(measure(p)<=HandheldCredits::Width);
+            assert(row==last++);while(*p){if(*p!=' ')actual+=*p;++p;}
+        });
+    assert(rows==last && expected==actual);
  }
  Texture texture;tSprite sprite;sprite.textures[0]=&texture;sprite.Shader=&shader;
  const std::u16string line(32,u'A');
@@ -129,3 +184,4 @@ with tempfile.TemporaryDirectory(prefix='srr-credits-') as work:
     subprocess.run([shutil.which('c++') or 'c++', '-std=c++17', '-fsanitize=address,undefined',
                     '-fno-sanitize-recover=all', '-I', str(root), str(work / 'test.cpp'), '-o', str(work / 'check')], check=True)
     subprocess.run([str(work / 'check')], check=True)
+print(f'PASS: {len(retail)} retail credit sections retain every character at the shipped font metrics.' if retail else 'Retail assets absent; synthetic credits checked.')
