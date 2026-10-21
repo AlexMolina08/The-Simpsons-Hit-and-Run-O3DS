@@ -1,3 +1,4 @@
+#include <main/old3dsperformance.h>
 #ifdef SRR2_OLD3DS_PARTICLE_CLIP
 #include <pddi/pica/particleclip.hpp>
 #include <cstdio>
@@ -406,7 +407,9 @@ void tBaseEmitter::Update(float deltaTime, float deltaFrame, const rmt::Matrix* 
       
     UpdateEmitterAttributes();
     
-    numParticlesQueued += currEmissionRate*deltaFrame;    
+    // Keep sparse markers intact; thin dense effects without changing their clocks or callbacks.
+    const float emissionScale = currNumParticles > 8 ? Old3dsPerformance::ParticleEmissionScale() : 1.0f;
+    numParticlesQueued += currEmissionRate*deltaFrame*emissionScale;
     float numAvailParticles = rmt::Max((float)(currNumParticles-particles->GetNumLiveParticles()),0.0f);
 
     if (numParticlesQueued>numAvailParticles)

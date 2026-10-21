@@ -127,6 +127,9 @@ void picaSkinEndFrame(u64 work, u64 update, u64 render, bool gameplay)
 }
 extern "C" void picaSkinDump()
 {
+    std::printf("GPU_SKIN_SUMMARY eligible_groups=%u gpu_groups=%u eligible_vertices=%u gpu_vertices=%u budget_fallbacks=%u alloc_failures=%u live=%u peak=%u pedestrians=%u named=%u minimum_linear_free=%u\n",
+        g_picaSkinMetrics.eligibleGroups,g_picaSkinMetrics.gpuGroups,g_picaSkinMetrics.eligibleVertices,g_picaSkinMetrics.gpuVertices,
+        g_picaSkinMetrics.fallback[picaSkin::BudgetLimit],g_picaSkinMetrics.failures,liveBytes,peakBytes,pedestrianBytes,namedBytes,g_picaSkinMetrics.minFree);
 #ifdef SRR2_OLD3DS_GPU_SKIN_METRICS
     if (g_picaSkinMetrics.frames)
         capture();

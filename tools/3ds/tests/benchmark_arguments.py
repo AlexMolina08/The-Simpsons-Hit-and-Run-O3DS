@@ -9,10 +9,20 @@ with tempfile.TemporaryDirectory(prefix='srr-bench-args-') as directory:
 #include <cstring>
 #include <cstdlib>
 #include <cstdio>
+namespace Old3dsPerformance { unsigned mode=1; }
 namespace Old3dsRecurring { bool requested=false;unsigned stationaryMs=0; }
 static unsigned seconds=25,warmup=8,seed=1;static bool hold=false,reload=false,serviceProfile=false,vehicleProfile=false,g_old3dsTrafficFacingOnly=false,g_old3dsAdpcmPrune=false,g_old3dsAdpcmVerify=false,g_old3dsAdpcmFast=false;
 '''+fragment+'''
 int main(){
+ assert(ParseRunArgument("bench_quality=0")&&Old3dsPerformance::mode==0);
+ assert(ParseRunArgument("bench_quality=2")&&Old3dsPerformance::mode==2);
+ assert(ParseRunArgument("bench_quality=7")&&Old3dsPerformance::mode==7);
+ assert(ParseRunArgument("bench_quality=6")&&Old3dsPerformance::mode==6);
+ assert(ParseRunArgument("bench_quality=5")&&Old3dsPerformance::mode==5);
+ assert(ParseRunArgument("bench_quality=4")&&Old3dsPerformance::mode==4);
+ assert(ParseRunArgument("bench_quality=3")&&Old3dsPerformance::mode==3);
+ assert(ParseRunArgument("bench_quality=1")&&Old3dsPerformance::mode==1);
+ assert(!ParseRunArgument("bench_quality_wrong=0")&&Old3dsPerformance::mode==1);
  assert(ParseRunArgument("bench_seconds=60")&&seconds==60);
  assert(ParseRunArgument("bench_warmup=3")&&warmup==3);
  assert(ParseRunArgument("bench_hold=1")&&hold);

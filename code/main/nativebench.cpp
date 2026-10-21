@@ -1,3 +1,4 @@
+#include <main/old3dsperformance.h>
 #include <main/old3dsrecurring.h>
 #ifdef SRR2_OLD3DS_NATIVE_BENCH
 #endif
@@ -112,7 +113,7 @@ extern "C" unsigned g_picaPresentedFrames;
 extern bool g_old3dsTrafficFacingOnly;
 extern bool g_old3dsAdpcmPrune,g_old3dsAdpcmVerify,g_old3dsAdpcmFast;
 extern void old3dsDumpAdpcmVerification(FILE*);
-extern unsigned g_old3dsAdpcmFastCalls,g_old3dsAdpcmFastFallbacks;
+extern unsigned g_old3dsAdpcmFastCalls,g_old3dsAdpcmFastFallbacks,g_old3dsAdpcmBudgetCalls;
 extern unsigned g_old3dsAdpcmVerified,g_old3dsAdpcmMismatches,g_old3dsAdpcmVerifyAllocFailures;
 namespace NativeBench {
 bool detail=false,collecting=false,validation=false,serviceProfile=false;
@@ -302,6 +303,7 @@ static bool ParseRunArgument(const char* argument)
  else if(!strncmp(argument,keep,sizeof(keep)-1))hold=atoi(argument+sizeof(keep)-1)!=0;
  else if(!strncmp(argument,restart,sizeof(restart)-1))reload=atoi(argument+sizeof(restart)-1)!=0;
  else if(!strncmp(argument,random,sizeof(random)-1))seed=strtoul(argument+sizeof(random)-1,nullptr,10);
+ else if(!strncmp(argument,"bench_quality=",14))Old3dsPerformance::mode=strtoul(argument+14,nullptr,10)%8;
  else if(!strncmp(argument,"bench_adpcm_fast=",17))g_old3dsAdpcmFast=atoi(argument+17)!=0;
  else if(!strncmp(argument,"bench_adpcm_verify=",19))g_old3dsAdpcmVerify=atoi(argument+19)!=0;
  else if(!strncmp(argument,"bench_adpcm_prune=",18))g_old3dsAdpcmPrune=atoi(argument+18)!=0;
@@ -326,6 +328,7 @@ void Init(int argc,char** argv){
  if(f){
  char key[64],value[64];while(fscanf(f,"%63[^=]=%63s\n",key,value)==2){
  if(!strcmp(key,"recurring"))Old3dsRecurring::requested=atoi(value)!=0;
+ else if(!strcmp(key,"quality"))Old3dsPerformance::mode=strtoul(value,nullptr,10)%8;
  else if(!strcmp(key,"stationary_ms"))Old3dsRecurring::stationaryMs=strtoul(value,nullptr,10);
  else if(!strcmp(key,"mode"))replay=!strcmp(value,"replay");
  else if(!strcmp(key,"seconds"))seconds=strtoul(value,0,10);
@@ -641,7 +644,7 @@ void Dump(){if(!enabled)return;
  Old3dsRecurring::Dump(f);
  fprintf(f,"NATIVE_FUSED_TRIG enabled=1 nearest_only=1 bounded_radians=8192 per_call_counters=0 runtime_selector=0\n");
  old3dsDumpAdpcmVerification(f);
- fprintf(f,"NATIVE_ADPCM_FAST enabled=%u calls=%u fallbacks=%u predictor_order_unchanged=1 callbacks_deferred=0\n",g_old3dsAdpcmFast,g_old3dsAdpcmFastCalls,g_old3dsAdpcmFastFallbacks);
+ fprintf(f,"NATIVE_ADPCM_FAST enabled=%u calls=%u fallbacks=%u predictor_order_unchanged=%u budget_calls=%u budget_predictors=3 callbacks_deferred=0\n",g_old3dsAdpcmFast,g_old3dsAdpcmFastCalls,g_old3dsAdpcmFastFallbacks,g_old3dsAdpcmBudgetCalls==0,g_old3dsAdpcmBudgetCalls);
  fprintf(f,"NATIVE_ADPCM_VERIFY enabled=%u verified=%u mismatches=%u allocation_failures=%u performance_capture=%u\n",g_old3dsAdpcmVerify,g_old3dsAdpcmVerified,g_old3dsAdpcmMismatches,g_old3dsAdpcmVerifyAllocFailures,!g_old3dsAdpcmVerify);
  fprintf(f,"NATIVE_ADPCM_PRUNE enabled=%u exact_predictor_order=1 callbacks_deferred=0\n",g_old3dsAdpcmPrune);
  fprintf(f,"NATIVE_TRAFFIC_FACING enabled=%u\n",g_old3dsTrafficFacingOnly);
@@ -692,6 +695,7 @@ void Dump(){if(!enabled)return;
  fprintf(f,"NATIVE_AUTOMATION diagnostic=%u resident=%u uniforms=%u context_mode=%u source=automation_only clock_complete=%u validation_instrumented=%u gpu_last_is_unassociated=1\n",diagnostic,residentShaders,nativeUniforms,nativeContextMode,done && !aborted,
  0u
  );
+ fprintf(f,"NATIVE_QUALITY mode=%u draw_distance=%.1f ambient_traffic=%u ambient_pedestrians=%u physics_step_ms=%u audio_predictors=%u particle_emission_scale=%.2f distant_pedestrian_actions=%u flat_lighting=%u shadow_distance=%.1f mission_simulation=full\n",Old3dsPerformance::mode,Old3dsPerformance::Enabled()?Old3dsPerformance::DrawDistance():200.0f,Old3dsPerformance::Enabled()?Old3dsPerformance::TrafficLimit():5u,Old3dsPerformance::Enabled()?Old3dsPerformance::PedestrianLimit():7u,Old3dsPerformance::PhysicsStepMilliseconds(),Old3dsPerformance::ReducedAudioSearch()?3u:8u,Old3dsPerformance::ParticleEmissionScale(),Old3dsPerformance::DistantPedestrianActions(),Old3dsPerformance::FlatLighting(),Old3dsPerformance::Enabled()?0.0f:200.0f);
  fprintf(f,"NATIVE_PERIOD samples=%u mean_us=%.3f fps=%.6f\n",periodSamples,periodSamples?(double)periodSum*1e6/SYSCLOCK_ARM11/periodSamples:0,periodSum?(double)periodSamples*SYSCLOCK_ARM11/periodSum:0);
  fprintf(f,"NATIVE_LOAD_WINDOW placement_valid=%u boot_to_placement_us=%.3f includes_initialization_and_loading=1 includes_realtime_stability_ms=%u excludes_netloader_transfer=1\n",
      placementTick!=0,placementTick?(placementTick-initializationTick)*1000000.0/SYSCLOCK_ARM11:0,replay?0u:3000u);

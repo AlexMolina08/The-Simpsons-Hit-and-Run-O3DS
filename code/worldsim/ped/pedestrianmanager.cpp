@@ -1,3 +1,4 @@
+#include <main/old3dsperformance.h>
 //=============================================================================
 // Copyright (C) 2002 Radical Entertainment Ltd.  All rights reserved.
 //
@@ -1309,6 +1310,9 @@ void PedestrianManager::HandleEvent( EventEnum id, void* pEventData )
 
 void PedestrianManager::AddPeds( rmt::Vector center, float addRadius )
 {
+    // Named mission characters do not enter this ambient pedestrian pool.
+    if( Old3dsPerformance::Enabled() &&
+        mActivePeds.GetNumElems() >= int(Old3dsPerformance::PedestrianLimit()) ) return;
     if( CommandLineOptions::Get( CLO_NO_PEDS ) )
     {
         return;

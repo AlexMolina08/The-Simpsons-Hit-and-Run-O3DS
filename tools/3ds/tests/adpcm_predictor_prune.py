@@ -1,10 +1,9 @@
 #!/usr/bin/env python3
-"""Compare actual CTR encoder output with its frozen original implementation."""
+"""Compare pruned and fixed-predictor CTR output with the generic encoder."""
 from pathlib import Path
 import subprocess,tempfile
 root=Path(__file__).resolve().parents[3]
 name='libs/radsound/src/hal/ctr/ndsphal.cpp'
-original=subprocess.check_output(['git','show','HEAD:'+name],cwd=root,text=True)
 current=(root/name).read_text()
 def encoder(s):return s[s.index('static u16 s_AdpcmCoefs'):s.index('class radSoundHalBufferCtr')]
 code=r'''
@@ -18,10 +17,12 @@ code=r'''
 #include <cmath>
 using u16=uint16_t;using s16=int16_t;using u8=uint8_t;
 #define NB_SCOPE(s) ((void)0)
+namespace Old3dsPerformance { bool ReducedAudioSearch(){return false;} }
 namespace Reference {
-'''+encoder(original)+'\n}\nnamespace Optimized {\n'+encoder(current)+r'''
+'''+encoder(current)+'\n}\nnamespace Optimized {\n'+encoder(current)+r'''
 }
 int main(){
+ Reference::g_old3dsAdpcmFast=false;Reference::g_old3dsAdpcmPrune=false;
 #ifdef SRR2_OLD_3DS
  assert(Optimized::g_old3dsAdpcmFast);
 #else

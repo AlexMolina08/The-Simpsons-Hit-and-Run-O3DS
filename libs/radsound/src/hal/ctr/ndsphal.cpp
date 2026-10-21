@@ -1,3 +1,4 @@
+#include <main/old3dsperformance.h>
 #include "pch.hpp"
 #include <main/nativebench.h>
 
@@ -167,16 +168,21 @@ static unsigned int AdpcmEncodeInPlaceKernel( void * pData, unsigned int numSamp
 
         int bestP = 0, bestMax = 0, bestBits = 99;
         unsigned int bestEnergy = 0xffffffffu;
-        if(mode==2)
+        if(mode==2 || mode==3)
         {
             AdpcmScorePredictor<0,0,0>(in,h1,h2,bestP,bestMax,bestBits,bestEnergy);
             AdpcmScorePredictor<1,2048,0>(in,h1,h2,bestP,bestMax,bestBits,bestEnergy);
             AdpcmScorePredictor<2,4096,-2048>(in,h1,h2,bestP,bestMax,bestBits,bestEnergy);
+            // The performance policy trades predictor search quality for bounded
+            // callback cost. PCM sample count, pitch, duration and DSP format stay unchanged.
+            if(mode!=3)
+            {
             AdpcmScorePredictor<3,1536,512>(in,h1,h2,bestP,bestMax,bestBits,bestEnergy);
             AdpcmScorePredictor<4,1920,0>(in,h1,h2,bestP,bestMax,bestBits,bestEnergy);
             AdpcmScorePredictor<5,3680,-1664>(in,h1,h2,bestP,bestMax,bestBits,bestEnergy);
             AdpcmScorePredictor<6,3136,-1856>(in,h1,h2,bestP,bestMax,bestBits,bestEnergy);
             AdpcmScorePredictor<7,3968,-1984>(in,h1,h2,bestP,bestMax,bestBits,bestEnergy);
+            }
         }
         else
         {
@@ -249,6 +255,7 @@ bool g_old3dsAdpcmFast = true;
 bool g_old3dsAdpcmFast = false;
 #endif
 unsigned g_old3dsAdpcmFastCalls=0,g_old3dsAdpcmFastFallbacks=0;
+unsigned g_old3dsAdpcmBudgetCalls=0;
 bool g_old3dsAdpcmVerify = false;
 unsigned g_old3dsAdpcmVerified = 0, g_old3dsAdpcmMismatches = 0, g_old3dsAdpcmVerifyAllocFailures = 0;
 #ifdef SRR2_OLD3DS_NATIVE_BENCH
@@ -311,7 +318,10 @@ static unsigned int AdpcmEncodeInPlace( void * pData, unsigned int numSamples )
 #ifdef SRR2_OLD3DS_NATIVE_BENCH
     const u64 optimizedStart=reference?svcGetSystemTick():0;
 #endif
-    const unsigned int bytes = fast ? AdpcmEncodeInPlaceKernel<2>(pData,numSamples)
+    const bool reduced = fast && !g_old3dsAdpcmVerify && Old3dsPerformance::ReducedAudioSearch();
+    if(reduced) ++g_old3dsAdpcmBudgetCalls;
+    const unsigned int bytes = reduced ? AdpcmEncodeInPlaceKernel<3>(pData,numSamples)
+        : fast ? AdpcmEncodeInPlaceKernel<2>(pData,numSamples)
         : g_old3dsAdpcmPrune ? AdpcmEncodeInPlaceKernel<1>(pData,numSamples)
                             : AdpcmEncodeInPlaceKernel<0>(pData,numSamples);
     if(reference)

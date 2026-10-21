@@ -1,3 +1,4 @@
+#include <main/old3dsperformance.h>
 #include <main/old3dsrecurring.h>
 #include <main/old3dsmainprofile.h>
 #include <render/Culling/WorldScene.h>
@@ -294,6 +295,13 @@ bool WorldScene::IsSphereInCone( rmt::Vector& irCenter, float iRadius )
     if( (iRadius < SMALL_THING) && (v.MagnitudeSqr() > SMALL_THING_CULL_DIST_SQR) )
     {
         return false;
+    }
+
+    if( Old3dsPerformance::Enabled() )
+    {
+        const float distance = Old3dsPerformance::DrawDistance() + iRadius;
+        if( v.MagnitudeSqr() > distance * distance ) return false;
+        if( Old3dsPerformance::AggressiveSmallCull() && iRadius < 1.5f && v.MagnitudeSqr() > 900.0f ) return false;
     }
 
     float Dsqr, e;
@@ -1628,6 +1636,7 @@ END_PROFILE("list construction")
 //========================================================================
 void WorldScene::RenderShadows()
 {
+    if( Old3dsPerformance::Enabled() ) return;
     O3_RECUR(Shadow);
     for( int i=mShadowCastersPass1.mUseSize-1; i>-1; i-- )
     {
@@ -1649,6 +1658,7 @@ shadow generator setup since the tris won't shade properly.
 ========================================================================*/
 void WorldScene::RenderSimpleShadows( void )
 {
+    if( Old3dsPerformance::Enabled() ) return;
     O3_RECUR(Shadow);
 #ifdef SRR2_OLD3DS_CAUSAL_DIAG
     O3ExperimentWorld worldScope;
@@ -2278,9 +2288,11 @@ void WorldScene::MarkCameraVisible( tPointCamera* pCam, unsigned int iFilter )
 
    SetVisCone( ViewVector, CamPosn, pCam->GetFieldOfView()/1.87f );//this tweak was done to account for the pop-in along the diagonal, especially evident in the interiors//0.8726645f ); // 50 degrees 1.745329f ); //100 degrees
 
-   ViewVector.Mult( mDrawDist / 2.0f );
+   const float drawDistance = Old3dsPerformance::Enabled()
+       ? rmt::Min(mDrawDist, Old3dsPerformance::DrawDistance()) : mDrawDist;
+   ViewVector.Mult( drawDistance / 2.0f );
    ViewVector.Add( CamPosn );
-   ViewVolSP.SetTo( ViewVector, mDrawDist / 2.0f );
+   ViewVolSP.SetTo( ViewVector, drawDistance / 2.0f );
 
 
    //comment this out

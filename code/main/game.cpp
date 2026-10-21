@@ -1,3 +1,7 @@
+#include <main/old3dsperformance.h>
+#ifdef SRR2_OLD_3DS
+unsigned Old3dsPerformance::mode = 7;
+#endif
 #include <main/old3dsrecurring.h>
 #include <main/old3dspools.h>
 //=============================================================================

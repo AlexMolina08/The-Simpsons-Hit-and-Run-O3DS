@@ -1,3 +1,4 @@
+#include <main/old3dsperformance.h>
 #include <main/old3dsrecurring.h>
 #include <main/old3dspools.h>
 #include <main/old3dsmainprofile.h>
@@ -1227,9 +1228,12 @@ void WorldPhysicsManager::Update(unsigned int timeDeltaMilliSeconds)
     //       one frame WAY over the threshold
     unsigned numSubsteps = 1;
 
-    if(((mLastTime > 35) && (timeDeltaMilliSeconds > 35)) || (timeDeltaMilliSeconds > 50))
+    // Performance tiers permit larger physics steps. Keep elapsed time,
+    // all pre/post updates, contacts and mission timers; subdivide longer stalls.
+    const unsigned stepLimit = Old3dsPerformance::PhysicsStepMilliseconds();
+    if(((mLastTime > stepLimit) && (timeDeltaMilliSeconds > stepLimit)) || (timeDeltaMilliSeconds > 50))
     {
-        numSubsteps = (timeDeltaMilliSeconds + 34) / 35;
+        numSubsteps = (timeDeltaMilliSeconds + stepLimit - 1) / stepLimit;
     }
 
 #ifdef SRR2_OLD_3DS

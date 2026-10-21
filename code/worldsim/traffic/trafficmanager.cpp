@@ -1,3 +1,4 @@
+#include <main/old3dsperformance.h>
 //=============================================================================
 // Copyright (C) 2002 Radical Entertainment Ltd.  All rights reserved.
 //
@@ -703,6 +704,9 @@ BEGIN_PROFILE( "Traffic Man: Add" );
                                 maxTrafficToUse = MAX_TRAFFIC_MODEL_GROUPS;
                             }
 
+                            // Cap ambient spawns only. Mission vehicles use VehicleCentral.
+                            if( Old3dsPerformance::Enabled() && maxTrafficToUse > int(Old3dsPerformance::TrafficLimit()) )
+                                maxTrafficToUse = int(Old3dsPerformance::TrafficLimit());
                             if( mNumTraffic < maxTrafficToUse )
                             {
                                 // set cPos;

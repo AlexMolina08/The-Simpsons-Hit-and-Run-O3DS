@@ -1,3 +1,4 @@
+#include <main/old3dsperformance.h>
 #include <main/old3dsrecurring.h>
 #include <main/old3dshot.h>
 #include <worldsim/character/character.h>
@@ -1572,6 +1573,13 @@ void Character::PreSimUpdate( float timeins )
     unsigned int modulo = 0x7;
     unsigned int frameCount = GetGame()->GetFrameCount();
 
+    // Reuse the existing accumulated-time action path for distant ambient pedestrians.
+    // Movement, sensing, collision reset and puppet root updates still run every frame.
+    const bool lowDetailActions = Old3dsPerformance::DistantPedestrianActions() &&
+        mRole == ROLE_PEDESTRIAN && mTooFarToUpdate && mbInAnyonesFrustrum &&
+        mbSimpleLoco && !mpTargetVehicle && mpSimStateObj->GetControl() != sim::simSimulationCtrl;
+    if(lowDetailActions) modulo = 0x3;
+
     mSecondsSinceActionControllerUpdate += timeins;
     
     //chuck: changed the herusitic to also include drivers in cars
@@ -1579,7 +1587,7 @@ void Character::PreSimUpdate( float timeins )
     if(        
                 !mIsNPC 
             || 
-                (mbInAnyonesFrustrum) 
+                (mbInAnyonesFrustrum && !lowDetailActions)
             || 
                 ((frameCount & modulo) == (mIntersectFrame & modulo)
             || 
@@ -2014,9 +2022,13 @@ void Character::PostSimUpdate( float timeins )
     // determine how frequently we need to make some of the expensive calls
     unsigned int modulo = 0x7;
     unsigned int frameCount = GetGame()->GetFrameCount();
+    const bool lowDetailActions = Old3dsPerformance::DistantPedestrianActions() &&
+        mRole == ROLE_PEDESTRIAN && mTooFarToUpdate && mbInAnyonesFrustrum &&
+        mbSimpleLoco && !mpTargetVehicle && mpSimStateObj->GetControl() != sim::simSimulationCtrl;
+    if(lowDetailActions) modulo = 0x3;
     bool shouldUpdate = !mIsNPC || // update the PC at full rate
                         IsInCar() || // or parent transform will get screwed
-                        (mbInAnyonesFrustrum) || // update if we are visible
+                        (mbInAnyonesFrustrum && !lowDetailActions) || // update if we are visible
                         ((frameCount & modulo) == (mIntersectFrame & modulo));
 
 BEGIN_PROFILE("OnPostSimUpdate")
@@ -2028,7 +2040,8 @@ BEGIN_PROFILE("OnPostSimUpdate")
         mSecondsSinceOnPostSimUpdate = 0.0f;
     }
 
-    mbNeedChoreoUpdate = mbNeedChoreoUpdate && shouldUpdate && (!mTooFarToUpdate || ((frameCount & modulo) == (mIntersectFrame & modulo)));
+    // Keep the original distant-pose cadence independent of the action cadence.
+    mbNeedChoreoUpdate = mbNeedChoreoUpdate && shouldUpdate && (!mTooFarToUpdate || ((frameCount & 0x7) == (mIntersectFrame & 0x7)));
 
 END_PROFILE("OnPostSimUpdate")
 
@@ -4892,7 +4905,7 @@ void Character::Display(void)
     {
         JumpRatio = 0.5f / GetJumpHeight();
     }
-	if( !IsInCar() && IsSimpleShadow() )
+	if( !Old3dsPerformance::Enabled() && !IsInCar() && IsSimpleShadow() )
 	{
 		rmt::Vector groundPos;
 		rmt::Vector groundNormal;

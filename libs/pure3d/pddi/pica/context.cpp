@@ -1,3 +1,5 @@
+#include <main/old3dsperformance.h>
+extern "C" int g_picaWorldScaleAllowed;
 #include <main/old3dsrecurring.h>
 #include <main/old3dspools.h>
 #ifdef SRR2_OLD3DS_MAIN_PROFILE
@@ -1340,6 +1342,9 @@ void picaContext::RebuildLightArray(void)
 
 void picaContext::SetVertexUniforms(bool lit, pddiColour ambient, pddiColour diffuse, pddiColour emissive, const float (*prepared)[4])
 {
+    // Gameplay may trade dynamic vertex lighting for the existing unlit path.
+    // Geometry, texture/alpha state, camera matrices and skin palettes are unchanged.
+    if(Old3dsPerformance::FlatLighting() && g_picaWorldScaleAllowed) lit = false;
 #ifdef SRR2_OLD3DS_CAUSAL_DIAG
     O3ExperimentTimer causalUniform(O3E_UNIFORM);
 #endif
