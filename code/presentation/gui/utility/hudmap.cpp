@@ -2297,27 +2297,6 @@ namespace
         FlushUI();nativePass.End();
     }
 
-    void DrawUpperPortCredits(tView* view,CGuiScreen* screen)
-    {
-        if(!view || !screen || !screen->IsRunning() || screen->GetWindowID()!=CGuiWindow::GUI_SCREEN_ID_SETTINGS)return;
-        CGuiMenu* menu=screen->HasMenu();
-        Scrooby::Text* label=menu && menu->GetNumItems() ? MenuLabel(menu->GetMenuItem(0)) : NULL;
-        tFont* font=label?label->GetFont():NULL;if(!font)return;
-        NativeViewPass nativePass(view);
-        p3d::pddi->EnableZBuffer(false);p3d::pddi->SetCullMode(PDDI_CULL_NONE);
-        p3d::pddi->SetCamera(0.1f,10,1.5708f,4.0f/3);p3d::pddi->SetProjectionMode(PDDI_PROJECTION_PERSPECTIVE);
-        p3d::stack->LoadIdentity();p3d::stack->Translate(-0.5f,-0.375f,0.5f);
-        p3d::stack->Scale(0.8f,1,1);
-        Rounded(80,183,320,228,tColour(62,53,95,190),tColour(26,25,49,210));
-        const char* lines[]={"3DS port created by","AlexMolina08"};
-        for(unsigned i=0;i<2;++i){
-            P3D_UNICODE text[48];p3d::AsciiToUnicode(lines[i],text,48);
-            const float size=i?15:12,width=font->GetTextWidth(text)*size/font->GetFontHeight();
-            BottomLabel(font,text,(400-width)*0.5f,i?220:201,size,i?Gold:White,216);
-        }
-        FlushUI();nativePass.End();
-    }
-
     void DrawUpperStats(tView* view,CGuiScreen* screen)
     {
         if(!view || !screen || !screen->IsRunning() || screen->GetWindowID()!=CGuiWindow::GUI_SCREEN_ID_SCRAP_BOOK_STATS)return;
@@ -2687,6 +2666,8 @@ namespace
                     if(tv)Ascii(hintFont,"B BACK",224,201,12,White,50);
                     else FooterAction(hintFont,"B","BACK",238,310);
                 }
+                if(id==CGuiWindow::GUI_SCREEN_ID_SETTINGS)
+                    Ascii(hintFont,"Port created by AlexMolina08",14,231,11,tColour(210,201,225),210);
             }
         }
         else if( stats || gameStats )
@@ -3078,7 +3059,6 @@ void CHudMap::AfterRenderLayers3DS( tView* guiView )
 
     DrawUpperPreview(guiView,CurrentBottomScreen());
     DrawUpperStats(guiView,CurrentBottomScreen());
-    DrawUpperPortCredits(guiView,CurrentBottomScreen());
     DrawUpperObjective(guiView,CurrentBottomScreen());
     const ContextEnum context=GetGameFlow()->GetCurrentContext();
 #ifdef SRR2_OLD3DS_BOTTOM_MAP_15HZ
