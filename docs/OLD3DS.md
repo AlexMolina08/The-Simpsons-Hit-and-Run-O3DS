@@ -154,8 +154,8 @@ Camera and map settings are available from the game menus.
 ## Screens
 
 Gameplay uses the native 400×240 top screen. The lower screen shows a live map,
-with tutorials moved below to keep the world visible. The map refreshes with each
-rendered frame; its refresh rate follows the game's frame rate.
+with tutorials moved below to keep the world visible. The gameplay map refreshes
+at up to 15 Hz; menus and tutorial interaction retain their normal update paths.
 
 The main menu uses a purple TV surround and animated static behind the menu choices.
 Use the controller as usual, or tap a choice to highlight it and tap again to select.
@@ -170,6 +170,19 @@ Original-model builds disable stereoscopic rendering. The same build runs on New
 original 3DS and 2DS retain their normal CPU settings and 64 MiB application mode.
 The loop targets 30 FPS, but busy scenes and streaming can run slower. An emulator's
 frame rate does not predict performance on the original console.
+
+## Performance profile
+
+Original-model source builds prioritize 25–30 FPS with 120 m visibility, up to four
+ambient pedestrians and one traffic vehicle, flatter gameplay lighting, no blob
+shadows and fewer dense particles. Distant ambient walkers update actions less
+often, and physics permits larger steps during slow frames. Mission-owned actors
+remain active. Audio encoding searches fewer predictors while retaining sample
+count and playback duration.
+
+The target is not yet stable across tested scenes. See
+[implementation status](OLD3DS_IMPLEMENTATION_STATUS.md) for physical measurements
+and validation limits. Published CIA releases may predate these source changes.
 
 ## Development
 

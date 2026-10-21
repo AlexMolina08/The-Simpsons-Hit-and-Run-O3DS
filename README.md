@@ -32,7 +32,7 @@ The guide covers toolchain installation, PC game data, movie conversion and
 building an executable for the original hardware.
 
 The original models use a single 400×240 gameplay view. The lower screen shows a
-TV menu with touch selection and a frame-synced gameplay map. Loading uses the
+TV menu with touch selection and a gameplay map refreshed at up to 15 Hz. Loading uses the
 original newspaper art above, with status and dynamite progress below.
 Performance varies by scene; demanding areas do not maintain 30 FPS.
 
