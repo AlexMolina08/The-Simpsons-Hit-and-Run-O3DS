@@ -2871,7 +2871,7 @@ bool picaContext::BeginBottomScreen(float u0, float v0, float u1, float v1, bool
     if(availableHeight/srcH<k)k=availableHeight/srcH;
     const float dw=srcW*k/PICA_BOTTOM_WIDTH,dh=srcH*k/PICA_BOTTOM_HEIGHT;
     const float cx=(picaBottomFrame::Left+picaBottomFrame::Right)/(2*PICA_BOTTOM_WIDTH);
-    const float cy=(picaBottomFrame::Top+picaBottomFrame::Bottom)/(2*PICA_BOTTOM_HEIGHT);
+    const float cy=fitFrame ? (picaBottomFrame::Top+picaBottomFrame::Bottom)/(2*PICA_BOTTOM_HEIGHT) : 0.5f;
     bottomDst[0]=cx-0.5f*dw;bottomDst[1]=cy-0.5f*dh;
     bottomDst[2]=cx+0.5f*dw;bottomDst[3]=cy+0.5f*dh;
 
@@ -2886,6 +2886,21 @@ bool picaContext::BeginBottomScreen(float u0, float v0, float u1, float v1, bool
     hwViewport[0] = hwViewport[1] = hwViewport[2] = hwViewport[3] = -1;
     SetupHardwareProjection();
     return true;
+}
+
+void picaContext::SetBottomMapping(const float* source,float l,float t,float r,float b)
+{
+    if(!bottomPass)return;
+    memcpy(bottomSrc,source,sizeof(bottomSrc));
+    bottomDst[0]=l/320;bottomDst[1]=t/240;bottomDst[2]=r/320;bottomDst[3]=b/240;
+    SetupHardwareProjection();InvalidateUniformCache();
+    // A radar crop changes the hardware scissor as well as projection. Reapply
+    // the saved logical rectangle before the next full-screen native HUD draw.
+    SetScissor(&state.viewState->scissor);
+}
+extern "C" void picaBottomScreenMapping(const float* source,float l,float t,float r,float b)
+{
+    if(s_picaContext)s_picaContext->SetBottomMapping(source,l,t,r,b);
 }
 
 void picaContext::DrawBottomFrame(bool staticPicture)

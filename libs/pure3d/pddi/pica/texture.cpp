@@ -22,6 +22,13 @@ extern "C" {
 #include <bundle_index.hpp>
 bool g_picaNativeBundleEnabled=true;
 namespace {
+FILE* OpenNativeBundle()
+{
+    char bundled[128];
+    snprintf(bundled,sizeof(bundled),"romfs:/%s",picaNativeBundle::BundlePath);
+    FILE* file=fopen(bundled,"rb");
+    return file ? file : fopen(picaNativeBundle::BundlePath,"rb");
+}
 struct NativeBundleSlot {void* owner=nullptr;FILE* file=nullptr;bool active=false;};
 NativeBundleSlot bundleSlots[2];
 struct NativeBundleFile {
@@ -35,12 +42,12 @@ struct NativeBundleFile {
             }
             if(owner!=tls || candidate.active)continue;
             candidate.active=true;slot=&candidate;
-            if(!candidate.file)candidate.file=fopen(picaNativeBundle::BundlePath,"rb");
+            if(!candidate.file)candidate.file=OpenNativeBundle();
             file=candidate.file;return;
         }
         // Reentrancy or additional resource threads use an independent cursor.
         // Never hold a shared FILE lock across a cooperative loader yield.
-        file=fopen(picaNativeBundle::BundlePath,"rb");
+        file=OpenNativeBundle();
     }
     ~NativeBundleFile(){if(slot)slot->active=false;else if(file)fclose(file);}
 };
@@ -412,12 +419,15 @@ bool picaTexture::Create(int x, int y, int bpp, int alpha, int nMip,
 
     const unsigned mipExtra = (unsigned)(texW * texH * bytesPerPixel) / 3;
     const bool roomForMips = linearSpaceFree() > (PICA_MIPMAP_LINEAR_RESERVE + mipExtra);
-    const bool wantMips = g_picaMipmapsAllowed && roomForMips &&
+    const bool wantMips = (g_picaMipmapsAllowed || g_picaFontTexture) && roomForMips &&
                           (texW >= 2 * PICA_MIN_TEXTURE_DIMENSION) &&
                           (texH >= 2 * PICA_MIN_TEXTURE_DIMENSION);
 
-    if(wantMips ? !C3D_TexInitMipmap(&tex, (u16)texW, (u16)texH, hwFormat)
-                : !C3D_TexInit(&tex, (u16)texW, (u16)texH, hwFormat))
+    const C3D_TexInitParams fontParams={(u16)texW,(u16)texH,1,hwFormat,GPU_TEX_2D,false};
+    const bool initialized=g_picaFontTexture && wantMips ? C3D_TexInitWithParams(&tex,NULL,fontParams) :
+        wantMips ? C3D_TexInitMipmap(&tex,(u16)texW,(u16)texH,hwFormat) :
+        C3D_TexInit(&tex,(u16)texW,(u16)texH,hwFormat);
+    if(!initialized)
     {
         lastError = PDDI_ERR;
         return false;
@@ -858,7 +868,10 @@ bool picaNativeTexturesAvailable()
     if(selected<0){
         struct stat st;
 #ifdef SRR2_OLD3DS_NATIVE_TEXTURE_BUNDLE
-        if(g_picaNativeBundleEnabled)selected=stat(picaNativeBundle::BundlePath,&st)==0 && S_ISREG(st.st_mode) && st.st_size==picaNativeBundle::BundleBytes;
+        if(g_picaNativeBundleEnabled){
+            char bundled[128];snprintf(bundled,sizeof(bundled),"romfs:/%s",picaNativeBundle::BundlePath);
+            selected=((stat(bundled,&st)==0 || stat(picaNativeBundle::BundlePath,&st)==0) && S_ISREG(st.st_mode) && st.st_size==picaNativeBundle::BundleBytes);
+        }
         else
 #endif
         selected=stat("native-textures/v1",&st)==0 && S_ISDIR(st.st_mode);

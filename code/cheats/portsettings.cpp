@@ -13,7 +13,6 @@ namespace
 
     bool s_Loaded   = false;
     bool s_NoTimers = false;
-    bool s_MapOnTop = false;
 
     void LoadOnce()
     {
@@ -37,10 +36,7 @@ namespace
             {
                 s_NoTimers = ( value != 0 );
             }
-            else if( sscanf( line, "maptop=%d", &value ) == 1 )
-            {
-                s_MapOnTop = ( value != 0 );
-            }
+
         }
         fclose( f );
     }
@@ -58,18 +54,6 @@ void PortSettings::SetNoTimers( bool enabled )
     s_NoTimers = enabled;
 }
 
-bool PortSettings::MapOnTop()
-{
-    LoadOnce();
-    return s_MapOnTop;
-}
-
-void PortSettings::SetMapOnTop( bool onTop )
-{
-    LoadOnce();
-    s_MapOnTop = onTop;
-}
-
 void PortSettings::Save()
 {
     LoadOnce();
@@ -80,6 +64,5 @@ void PortSettings::Save()
         return;
     }
     fprintf( f, "notimers=%d\n", s_NoTimers ? 1 : 0 );
-    fprintf( f, "maptop=%d\n", s_MapOnTop ? 1 : 0 );
     fclose( f );
 }

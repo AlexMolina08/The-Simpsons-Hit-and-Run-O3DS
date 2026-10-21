@@ -13,7 +13,7 @@ with tempfile.TemporaryDirectory(prefix='srr-bundle-') as directory:
   f.write(struct.pack('<II',0x314e4233,len(payloads)))
   for key,encoded in payloads:f.write((key+'.ntx').encode()+struct.pack('<II',len(encoded),zlib.crc32(encoded))+encoded)
  index_bundle(p/'native143.bundle',p/'bundle_index.hpp')
- texture=(root/'libs/pure3d/pddi/pica/texture.cpp').read_text();start=texture.index('namespace {\nstruct NativeBundleSlot');end=texture.index('\n#endif\nbool g_picaNativeTexturesEnabled',start);ownership=texture[start:end]
+ texture=(root/'libs/pure3d/pddi/pica/texture.cpp').read_text();start=texture.index('namespace {\nFILE* OpenNativeBundle()');end=texture.index('\n#endif\nbool g_picaNativeTexturesEnabled',start);ownership=texture[start:end]
  a=texture.index('bool picaNativeTexturesAvailable()');b=texture.index('bool picaTexture::UploadPreparedPNG',a);availability=texture[a:b].replace('stat(', 'ObservedStat(')
  source=r'''
 #include <cassert>

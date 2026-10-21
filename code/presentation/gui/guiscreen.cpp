@@ -19,6 +19,9 @@
 //===========================================================================
 #include <memory/classsizetracker.h>
 #include <presentation/gui/guiscreen.h>
+#ifdef RAD_3DS
+#include <presentation/gui/utility/hudmap.h>
+#endif
 #include <presentation/gui/guimanager.h>
 #include <presentation/gui/utility/specialfx.h>
 
@@ -134,6 +137,18 @@ CGuiScreen::CGuiScreen
     m_playTransitionAnimationLast( false )
 {
     CLASSTRACKER_CREATE( CGuiScreen );
+#ifdef RAD_3DS
+    // Native touch menus use short transitions; cinematics, loading and iris
+    // sequences retain their authored timing.
+    switch(id){
+        case GUI_SCREEN_ID_PAUSE_SUNDAY:case GUI_SCREEN_ID_PAUSE_MISSION:
+        case GUI_SCREEN_ID_OPTIONS:case GUI_SCREEN_ID_SOUND:case GUI_SCREEN_ID_SETTINGS:
+        case GUI_SCREEN_ID_DISPLAY:case GUI_SCREEN_ID_LEVEL_STATS:case GUI_SCREEN_ID_VIEW_CARDS:
+        case GUI_SCREEN_ID_GENERIC_PROMPT:case GUI_SCREEN_ID_ERROR_PROMPT:
+            m_fadeTime=m_zoomTime=m_slideTime=120.0f;break;
+        default:break;
+    }
+#endif
     memset( m_foregroundLayers, 0, sizeof( m_foregroundLayers ) );
     memset( m_backgroundLayers, 0, sizeof( m_backgroundLayers ) );
     memset( m_buttonIcons, 0, sizeof( m_buttonIcons ) );
@@ -461,6 +476,9 @@ void CGuiScreen::HandleMessage
 
         case GUI_MSG_UPDATE:
         {
+#ifdef RAD_3DS
+            if(IsRunning())CHudMap::HandleScreenInput3DS();
+#endif
             #ifdef PRINTSCREENUPDATES
                 const char* screenName = GetWatcherName();
                 rDebugPrintf( "Screen - %s\n", screenName );

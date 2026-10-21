@@ -1281,6 +1281,9 @@ CGuiScreenHud::HandleEvent( EventEnum id, void* pEventData )
         case EVENT_COLLECTED_COINS:
         case EVENT_LOST_COINS:
         {
+#ifdef RAD_3DS
+            CHudMap::NotifyCoins3DS(int(reinterpret_cast<intptr_t>(pEventData))*(id==EVENT_LOST_COINS?-1:1));
+#endif
             rAssert( m_hudEventHandlers[ HUD_EVENT_HANDLER_CARD_COLLECTED ] != NULL );
             if( !m_hudEventHandlers[ HUD_EVENT_HANDLER_CARD_COLLECTED ]->IsActive() )
             {
@@ -1504,6 +1507,9 @@ CGuiScreenHud::UpdateNumCoinsDisplay( int numCoins, bool show )
 //===========================================================================
 void CGuiScreenHud::InitIntro()
 {
+#ifdef RAD_3DS
+    CHudMap::LoadBottomAssets3DS();
+#endif
     Scrooby::Screen* screen = GetScroobyScreen();
     screen->SetAlpha( 1.0f );
 

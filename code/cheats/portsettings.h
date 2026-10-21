@@ -6,9 +6,6 @@ namespace PortSettings
     bool NoTimers();
     void SetNoTimers( bool enabled );
 
-    bool MapOnTop();
-    void SetMapOnTop( bool onTop );
-
     void Save();
 }
 #endif

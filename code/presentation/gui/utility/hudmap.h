@@ -114,10 +114,21 @@ struct HudMapIcon
 //===========================================================================
 // Interface Definitions
 //===========================================================================
+class CGuiMenu;
+
 class CHudMap
 {
 public:
     CHudMap( Scrooby::Page* pPage, int playerID, const char* p3dFile = NULL );
+#ifdef RAD_3DS
+    static bool HandleMenuInput3DS(CGuiMenu* menu,int message);
+    static void NotifyCoins3DS(int amount);
+    static void HandleScreenInput3DS();
+    static void LoadBottomAssets3DS();
+    void GetBottomScreenSource( float rect[ 4 ] ) const;
+    void DisplayOnBottomScreen( tView* guiView, Scrooby::Group* background );
+
+#endif
     virtual ~CHudMap();
 
     // Camera Target must be set before doing anything else!
@@ -216,8 +227,6 @@ private:
     Scrooby::Group* m_hudMapGroup;
     Scrooby::Layer* m_hudLayer;
 
-    void GetBottomScreenSource( float rect[ 4 ] ) const;
-    void DisplayOnBottomScreen( tView* guiView, Scrooby::Group* background );
 #endif
 
     HudMapCam* m_hudMapCam;

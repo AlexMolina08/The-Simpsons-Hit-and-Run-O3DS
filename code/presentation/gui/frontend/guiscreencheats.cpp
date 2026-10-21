@@ -80,7 +80,6 @@ CGuiScreenCheats::CGuiScreenCheats
 )
 :   CGuiScreen( pScreen, pParent, GUI_SCREEN_ID_DISPLAY ),
     m_pMenu( NULL ),
-    m_mapValue( NULL ),
     m_cheatValue( NULL ),
     m_applyText( NULL ),
     m_cheatIndex( 0 ),
@@ -102,13 +101,11 @@ MEMTRACK_PUSH_GROUP( "CGuiScreenCheats" );
 
     Scrooby::Text* timerLabel = timerRow != NULL ? timerRow->GetText( "DisplayMode" )       : NULL;
     Scrooby::Text* timerValue = timerRow != NULL ? timerRow->GetText( "DisplayMode_Value" ) : NULL;
-    Scrooby::Text* mapLabel   = resRow   != NULL ? resRow->GetText( "Resolution" )          : NULL;
-    m_mapValue                = resRow   != NULL ? resRow->GetText( "Resolution_Value" )    : NULL;
     Scrooby::Text* cheatLabel = cheatRow != NULL ? cheatRow->GetText( "ColourDepth" )       : NULL;
     m_cheatValue              = cheatRow != NULL ? cheatRow->GetText( "ColourDepth_Value" ) : NULL;
     m_applyText               = menu     != NULL ? menu->GetText( "ApplyChanges" )          : NULL;
 
-    if( timerLabel != NULL && timerValue != NULL && mapLabel != NULL && m_mapValue != NULL &&
+    if( timerLabel != NULL && timerValue != NULL &&
         cheatLabel != NULL && m_cheatValue != NULL && m_applyText != NULL )
     {
         {
@@ -116,7 +113,6 @@ MEMTRACK_PUSH_GROUP( "CGuiScreenCheats" );
             const int pitch      = CentreY( cheatLabel ) - timerY;
             const int labelToVal = CentreY( cheatLabel ) - CentreY( m_cheatValue );
             timerRow->Translate( 0, pitch );
-            resRow->Translate( 0, timerY - CentreY( mapLabel ) );
             const int cheatMove = ( timerY - pitch ) - CentreY( cheatLabel );
             cheatRow->Translate( 0, cheatMove );
             const int cheatValueY = CentreY( m_cheatValue ) + cheatMove;
@@ -134,15 +130,6 @@ MEMTRACK_PUSH_GROUP( "CGuiScreenCheats" );
                               timerRow->GetSprite( "DisplayMode_ArrowR" ),
                               SELECTION_ENABLED | VALUES_WRAPPED | TEXT_OUTLINE_ENABLED );
 
-        SetAllStrings( mapLabel, "MAP" );
-        m_pMenu->AddMenuItem( mapLabel,
-                              m_mapValue,
-                              NULL,
-                              NULL,
-                              resRow->GetSprite( "Resolution_ArrowL" ),
-                              resRow->GetSprite( "Resolution_ArrowR" ),
-                              SELECTION_ENABLED | VALUES_WRAPPED | TEXT_OUTLINE_ENABLED );
-
         SetAllStrings( cheatLabel, "CHEAT" );
         m_pMenu->AddMenuItem( cheatLabel,
                               m_cheatValue,
@@ -154,17 +141,16 @@ MEMTRACK_PUSH_GROUP( "CGuiScreenCheats" );
 
         m_pMenu->AddMenuItem( m_applyText );
 
-        RefreshMapLabel();
         RefreshCheatLabels();
     }
     else
     {
         if( resRow != NULL ) resRow->SetVisible( false );
-        m_mapValue = NULL;
         m_cheatValue = NULL;
         m_applyText = NULL;
     }
 
+    if( resRow != NULL ) resRow->SetVisible( false );
     if( gammaRow != NULL ) gammaRow->SetVisible( false );
 MEMTRACK_POP_GROUP( "CGuiScreenCheats" );
 }
@@ -204,12 +190,6 @@ void CGuiScreenCheats::HandleMessage
                 if( m_pMenu->GetSelection() == MENU_ITEM_CHEAT )
                 {
                     StepCheat( message == GUI_MSG_CONTROLLER_RIGHT ? 1 : -1 );
-                }
-                else if( m_pMenu->GetSelection() == MENU_ITEM_MAP )
-                {
-                    PortSettings::SetMapOnTop( !PortSettings::MapOnTop() );
-                    m_changed = true;
-                    RefreshMapLabel();
                 }
                 break;
             }
@@ -289,11 +269,6 @@ void CGuiScreenCheats::ApplyCheat()
     RefreshCheatLabels();
 }
 
-void CGuiScreenCheats::RefreshMapLabel()
-{
-    SetAllStrings( m_mapValue, PortSettings::MapOnTop() ? "TOP SCREEN" : "BOTTOM SCREEN" );
-}
-
 void CGuiScreenCheats::RefreshCheatLabels()
 {
     if( m_cheatValue == NULL || m_applyText == NULL )
@@ -324,7 +299,6 @@ void CGuiScreenCheats::InitIntro()
         this->SetButtonVisible( BUTTON_ICON_ACCEPT, m_pMenu->GetSelection() == MENU_ITEM_APPLY );
     }
 
-    RefreshMapLabel();
     RefreshCheatLabels();
 }
 

@@ -31,7 +31,6 @@ private:
     enum eMenuItem
     {
         MENU_ITEM_NO_TIMERS,
-        MENU_ITEM_MAP,
         MENU_ITEM_CHEAT,
         MENU_ITEM_APPLY,
 
@@ -41,10 +40,8 @@ private:
     void StepCheat( int direction );
     void ApplyCheat();
     void RefreshCheatLabels();
-    void RefreshMapLabel();
 
     CGuiMenu* m_pMenu;
-    Scrooby::Text* m_mapValue;
     Scrooby::Text* m_cheatValue;
     Scrooby::Text* m_applyText;
     int m_cheatIndex;

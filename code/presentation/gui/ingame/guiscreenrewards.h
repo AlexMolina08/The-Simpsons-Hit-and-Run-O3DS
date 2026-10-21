@@ -78,6 +78,10 @@ public:
                                 unsigned int param2 = 0 );
 
     void OnProcessRequestsComplete( void* pUserData );
+#ifdef RAD_3DS
+    virtual CGuiMenu* HasMenu() { return m_pRewardsMenu; }
+    CGuiMenu* GetPreviewMenu3DS() const { return m_pRewardsMenu; }
+#endif
 
 protected:
     void InitIntro();

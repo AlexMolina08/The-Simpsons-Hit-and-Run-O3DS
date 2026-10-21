@@ -1033,6 +1033,9 @@ We set the state once and do all the rendering.
 =============================================================================*/
 void CoinManager::HUDRender( void )
 {
+#ifdef RAD_3DS
+    return;
+#endif
     if( !m_pCoinDrawable )
     {
         return;

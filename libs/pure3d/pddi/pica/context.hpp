@@ -205,6 +205,7 @@ public:
 #endif
     bool BeginBottomScreen(float u0, float v0, float u1, float v1, bool fitFrame=true);
     void DrawBottomFrame(bool staticPicture=false);
+    void SetBottomMapping(const float* source,float l,float t,float r,float b);
     void DrawBottomPanel(int selection,int count);
     void EndBottomScreen(void);
 

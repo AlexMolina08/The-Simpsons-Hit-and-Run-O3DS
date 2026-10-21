@@ -53,9 +53,15 @@ cmake --install "$deps/old3ds-sdl-build"
 
 bash "$source_root/tools/3ds/build_old3ds_ffmpeg.sh" "$source_root" "$jobs"
 
+python3 "$source_root/tools/3ds/prepare_release_textures.py" \
+    --data "$repo/sdcard/3ds/simpsons" --out "$repo/out/native-textures" \
+    --encoder "$DEVKITPRO/tools/bin/tex3ds"
+cp "$repo/out/native-textures/native-ui.bundle" "$repo/sdcard/3ds/simpsons/native-ui.bundle"
+
 build="$source_root/out/old3ds-build"
 cmake -S "$source_root" -B "$build" -C "$source_root/cmake/old3ds-release.cmake" "${common[@]}" \
     -DCMAKE_POLICY_VERSION_MINIMUM=3.5 -DSRR2_OLD_3DS=ON -DSRR2_3DS_MOVIES=ON \
+    "-DSRR2_OLD3DS_NATIVE_BUNDLE_INDEX:FILEPATH=$repo/out/native-textures/bundle_index.hpp" \
     "-DSDL2_DIR=$prefix/lib/cmake/SDL2" \
     "-DPNG_LIBRARY=$prefix/lib/liblibpng16_static.a" "-DPNG_PNG_INCLUDE_DIR=$prefix/include" \
     "-DZLIB_LIBRARY=$zlib" "-DZLIB_INCLUDE_DIR=$prefix/include" "$@"

@@ -117,6 +117,9 @@ public:
     GuiMenuItem* GetMenuItem( int index ) const;
     int GetNumItems() const { return m_numItems; }
     int GetSelection() const { return m_selection; }
+#ifdef RAD_3DS
+    void SetHandheldSelection(int index) { if(index>=0 && index<m_numItems && IsMenuItemEnabled(index)) ChangeSelection(index-m_selection); }
+#endif
     int GetSelectionValue( int index ) const;
 
 protected:

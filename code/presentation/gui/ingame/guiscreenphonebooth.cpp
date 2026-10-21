@@ -407,6 +407,16 @@ CGuiScreenPhoneBooth::~CGuiScreenPhoneBooth()
 // Return:      N/A.
 //
 //===========================================================================
+#ifdef SRR2_OVERRIDE_CAR_SELECTION
+CGuiMenu* CGuiScreenPhoneBooth::HasMenu()
+{
+#ifdef RAD_3DS
+    if(!m_carSelectOverlay || !m_carSelectOverlay->IsVisible())return m_pRewardsMenu;
+#endif
+    return m_pMenu;
+}
+#endif
+
 void CGuiScreenPhoneBooth::HandleMessage
 (
 	eGuiMessage message, 

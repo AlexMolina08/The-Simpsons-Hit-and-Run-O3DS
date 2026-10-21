@@ -449,6 +449,13 @@ void CGuiScreenMissionLoad::InitPositionsNormal()
     Scrooby::BoundedDrawable* missionStart = GetMissionStartBitmap();
     missionStart->SetPosition       ( g_BitmapPositionX, g_BitmapPositionY );
     missionStart->SetBoundingBoxSize( g_BitmapSizeX,     g_BitmapSizeY     );
+#ifdef RAD_3DS
+    // Objectives now live on the touch screen. Fit the original striped board
+    // around its mission artwork rather than leaving an empty text area above.
+    Scrooby::Group* board=m_pScroobyScreen->GetPage("MissionLoad")->GetGroup("background");
+    board->ResetTransformation();board->ScaleAboutCenter(1.0f,0.66f,1.0f);
+    missionStart->SetPosition(g_BitmapPositionX,g_BitmapPositionY-38);
+#endif
 
     Scrooby::Text* title = GetTitleText();
 #ifndef RAD_WIN32  // temp fix.
@@ -474,6 +481,10 @@ void CGuiScreenMissionLoad::InitPositionsNormal()
 //===========================================================================
 void CGuiScreenMissionLoad::InitPositionsWager()
 {
+#ifdef RAD_3DS
+    // Wager fees and payouts still use the complete original board upstairs.
+    m_pScroobyScreen->GetPage("MissionLoad")->GetGroup("background")->ResetTransformation();
+#endif
     Scrooby::BoundedDrawable* missionStart = GetMissionStartBitmap();
     missionStart->SetPosition(        g_BitmapPositionWagerX, g_BitmapPositionWagerY );
     missionStart->SetBoundingBoxSize( g_BitmapSizeWagerX,     g_BitmapSizeWagerY     );

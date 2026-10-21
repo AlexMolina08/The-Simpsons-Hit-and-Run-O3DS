@@ -1,114 +1,108 @@
 # The Simpsons: Hit & Run for Nintendo 3DS
 
-**You must own a legal copy of The Simpsons: Hit & Run to use this port.**
-
-A homebrew port for Nintendo 3DS, optimized for the original Nintendo 3DS and 2DS.
-The same CIA also supports New 3DS and New 2DS XL, enabling their faster CPU and
-L2 cache automatically while retaining the original-model memory budget.
-Based on x2apic's New 3DS port, with original-model rendering, memory, controls
-and software movie playback work.
-Building from source requires your own legal copy of the PC game. Game assets and DSP
-firmware are not included in this source repository.
+A homebrew port for original Nintendo 3DS and 2DS. The same build also runs on
+New 3DS and New 2DS XL, enabling their faster CPU and L2 cache automatically.
+You need your own retail PC copy of the game to build from source.
+Game data and DSP firmware are not distributed in this source repository.
 
 <img src="images/game.jpg" width="320" alt="The Simpsons: Hit & Run on Nintendo 3DS">
 
-## Install the CIA
+## Install
 
-The complete CIA test build is available under
-[Releases](https://github.com/AlexMolina08/The-Simpsons-Hit-and-Run-O3DS/releases).
-Install it with FBI on a console configured to run homebrew CIAs. No separate
-game-data copy is needed.
-Saves and settings use `sd:/3ds/simpsons/`. Audio requires your console's DSP
-firmware at `sd:/3ds/dspfirm.cdc`, dumped with DSP1.
+1. Download a CIA from [Releases](https://github.com/AlexMolina08/The-Simpsons-Hit-and-Run-O3DS/releases),
+   or build one below. Read that version's release notes; published packages may
+   predate the current source.
+2. Copy the CIA to your console's SD card. Keep enough free space for both the
+   CIA and the installed game.
+3. In **FBI → SD**, select the CIA and choose **Install CIA**. Once installed,
+   launch it from the HOME Menu. The complete CIA includes the game data and movies.
+4. Sound needs your console's DSP firmware at `sd:/3ds/dspfirm.cdc`, dumped with DSP1.
 
-This is a test release. Check its release notes for the current validation status
-and known limits. Performance varies by scene; demanding areas do not maintain
-30 FPS.
+Saves and settings live in `sd:/3ds/simpsons/`. Keep that folder when updating.
+Performance varies by scene; demanding areas can run below 30 FPS. Emulator
+results do not establish performance on an original console.
 
-## Original 3DS and 2DS
+## Build a CIA
 
-See the [complete source build guide and controls](docs/OLD3DS.md).
-The guide covers toolchain installation, PC game data, movie conversion and
-building an executable for the original hardware.
+macOS and Linux need Git, Bash, CMake 3.28+, Ninja, GNU Make, a host C compiler,
+Python 3.11+, Pillow and FFmpeg. Install devkitPro's `3ds-dev` package group using its
+[setup guide](https://devkitpro.org/wiki/Getting_Started).
+Windows users use WSL 2 with Ubuntu 24.04. Install its Linux devkitPro toolchain,
+then follow the [Windows setup steps](docs/OLD3DS.md#windows-wsl-2).
 
-The original models use a single 400×240 gameplay view. The lower screen shows a
-TV menu with touch selection and a gameplay map refreshed at up to 15 Hz. Loading uses the
-original newspaper art above, with status and dynamite progress below.
-Performance varies by scene; demanding areas do not maintain 30 FPS.
+On macOS, install the Xcode command-line tools and host dependencies:
 
 ```sh
+xcode-select --install
+brew install cmake ninja python ffmpeg
+```
+
+After installing devkitPro, clone the source and build:
+
+```sh
+git clone https://github.com/AlexMolina08/The-Simpsons-Hit-and-Run-O3DS.git
+cd The-Simpsons-Hit-and-Run-O3DS
 python3 -m venv .venv
-. .venv/bin/activate
-python3 -m pip install imageio-ffmpeg
-python3 tools/3ds/setup_sd.py "/path/to/PC game" --old3ds
-bash tools/3ds/build_old3ds.sh
-cp out/old3ds/SimpsonsNTSC.3dsx sdcard/3ds/simpsons/
+source .venv/bin/activate
+python3 -m pip install Pillow
+python3 tools/3ds/make_cia.py "/path/to/PC game"
 ```
 
-Install the prerequisites in the build guide before running these commands.
-Keep `--old3ds`: it selects the software movie format required by original models.
-These commands produce a Homebrew Launcher build. The guide also explains
-[complete CIA packaging](docs/OLD3DS.md#build-a-complete-cia).
+Point at the PC folder containing `art/`, `scripts/`, `sound/`, `movies/` and the
+`.rcf` archives. The command prepares retail data, converts and fully validates all 17 movies, rebuilds the accepted native texture bundle, builds
+the original-model executable and packages **`out/release/Simpsons-Hit-and-Run-3DS.cia`**.
+Its checksum, movie validation report and asset manifest appear alongside it. The first build downloads
+source dependencies and can take several minutes. Later builds reuse them.
 
-Copy `sdcard/3ds` to the SD card root. Launch through the Homebrew Launcher.
-Sound requires your console's DSP firmware at `sd:/3ds/dspfirm.cdc`, dumped with DSP1.
+On macOS, **Build CIA.command** runs the same local build and asks for the PC
+folder. It does not upload, tag or publish anything. macOS (Apple Silicon and Intel), Linux x86-64 and WSL can
+prepare makerom and bannertool automatically. Other architectures must install them or
+pass `--makerom /path/to/makerom --bannertool /path/to/bannertool`.
 
-## New 3DS and New 2DS XL
+Use `--clean` for a fresh dependency and game compilation. It moves previous
+compilation outputs and generated texture cache to the system Trash after checking prerequisites. Retail
+files, saves, screenshots and existing release packages are preserved.
+See the [build guide](docs/OLD3DS.md) for Linux prerequisites, Homebrew Launcher
+builds, controls and publishing a separate release.
 
-Install devkitPro with `3ds-dev`, `3ds-sdl` and `3ds-libpng`, plus Python and
-`imageio-ffmpeg`. On Windows:
+## Interface and controls
 
-```bat
-build.bat "C:\Program Files (x86)\Vivendi Universal Games\The Simpsons Hit & Run"
-```
+Gameplay uses the native 400×240 top screen. The touch screen carries the original
+radar, coin and wasp counters, current objective and a contextual interaction control.
+Menus use original game artwork and fonts, with touch, D-pad and Circle Pad navigation.
+Tap a menu item to select it; drag away before releasing to cancel. Slider labels
+focus a row; their tracks adjust the value. The map always uses the lower screen.
 
-This builds the game and prepares its data under `sdcard/`.
-To prepare data without building:
+| Input | Action |
+| --- | --- |
+| Circle Pad / D-pad | Move, steer or navigate menus |
+| A | Jump / accelerate / confirm |
+| B | Run / brake and reverse / back |
+| X | Interact / enter or exit vehicle |
+| Y | Attack / handbrake |
+| Hold L + Circle Pad | Move camera |
+| R | Handbrake |
+| L + R | Horn |
+| Select | Reset vehicle |
+| L + Select | Cycle camera |
+| Start | Pause / continue |
 
-```sh
-python3 tools/3ds/setup_sd.py "/path/to/PC game"
-```
-
-## Make a new CIA release
-
-On macOS, double-click **Release CIA.command** and choose the suggested version.
-Commit your source changes on `main` first. The launcher builds the game, packages
-the complete CIA, creates a version tag and uploads a test release to GitHub.
-It verifies uploaded checksums before publishing and never replaces an existing
-public version.
-
-Use the [release guide](docs/OLD3DS.md#local-release-launcher) for prerequisites,
-local-only builds and resuming an interrupted upload.
+Port credits are under **Pause → Options → Settings**. Original game credits
+remain available through the game's existing credits menu.
 
 ## Development
 
-The current Old 3DS working baseline is the owner-accepted v104 release candidate.
-See [its status and validation](docs/OLD3DS_IMPLEMENTATION_STATUS.md) before changing
-gameplay settings or comparing performance.
+`cmake/old3ds-release.cmake` defines the normal-play build profile. It preserves the accepted v104 rendering options and
+original-model memory limits, with benchmark automation and profiling disabled. The local `old3ds-ui-baseline` tag marks the
+UI baseline. Build and package checks do not replace installed-console testing.
 
-See [CONTRIBUTING.md](CONTRIBUTING.md) for host checks, patch guidelines and
-hardware test reports. The [build guide](docs/OLD3DS.md) covers the toolchain,
-controls and packaging. Report reproducible problems through
-[Issues](https://github.com/AlexMolina08/The-Simpsons-Hit-and-Run-O3DS/issues).
+See [CONTRIBUTING.md](CONTRIBUTING.md) for regression checks and bug reports.
 
 ## Credits
 
-Based on [x2apic's New 3DS port](https://github.com/x2apic/The-Simpsons-Hit-and-Run-N3DS)
+The original game was developed by Radical Entertainment.
+This port builds on [x2apic's New 3DS port](https://github.com/x2apic/The-Simpsons-Hit-and-Run-N3DS)
 and [ZenoArrows' Switch and PS Vita port](https://github.com/ZenoArrows/The-Simpsons-Hit-and-Run).
+Old 3DS work is maintained by [AlexMolina08](https://github.com/AlexMolina08).
 Movie playback follows [REGTA-3DSPort-Complete](https://github.com/Epic0522/REGTA-3DSPort-Complete) by Epic0522.
 Built with devkitPro, libctru and Citro3D.
-
-## Install with a QR code
-
-Open **FBI → Remote Install → Scan QR Code** on your Nintendo 3DS.
-This QR code links directly to the v0.1.2-rc.2 CIA preview for testing.
-This is a test build, not a stable release. We recommend obtaining a legal copy
-of the original game before testing this port.
-
-<img src="images/cia-install-qr.png" width="392" alt="Direct CIA installation QR code">
-
-[Download the CIA](https://github.com/AlexMolina08/The-Simpsons-Hit-and-Run-O3DS/releases/download/v0.1.2-rc.2/Simpsons-Hit-and-Run-3DS-v0.1.2-rc.2.cia)
-
-The download is approximately 1.90 GB. See the
-[release notes](https://github.com/AlexMolina08/The-Simpsons-Hit-and-Run-O3DS/releases/tag/v0.1.2-rc.2)
-for requirements and the current test-build status.

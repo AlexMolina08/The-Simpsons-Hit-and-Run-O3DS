@@ -328,7 +328,7 @@ void CGuiScreenController::HandleMessage
             case GUI_MSG_CONTROLLER_LEFT:
             case GUI_MSG_CONTROLLER_RIGHT:
             {
-                if( m_pMenu->GetSelection() == MENU_ITEM_VIBRATION )
+                if( m_pMenu != NULL && m_pMenu->GetSelection() == MENU_ITEM_VIBRATION )
                 {
                     m_currentControllerID = static_cast<int>( param1 );
                 }

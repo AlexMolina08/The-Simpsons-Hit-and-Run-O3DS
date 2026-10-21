@@ -18,6 +18,9 @@
 // Includes
 //===========================================================================
 #include <presentation/gui/guimenu.h>
+#ifdef RAD_3DS
+#include <presentation/gui/utility/hudmap.h>
+#endif
 #include <presentation/gui/guiscreen.h>
 #include <presentation/gui/guisystem.h>
 #include <presentation/gui/guiuserinputhandler.h>
@@ -46,7 +49,11 @@ const tColour DEFAULT_DISABLED_ITEM_COLOUR( 128, 128, 128 );   // the same as in
 const tColour DEFAULT_OUTLINE_COLOUR( 0, 0, 0, 192 );
 
 const float SLIDER_FULL_RANGE_TIME = 2000; // in milliseconds
+#ifdef RAD_3DS
+const int SELECTION_MADE_DURATION = 80; // brief confirmation before changing screens
+#else
 const int SELECTION_MADE_DURATION = 250; // in milliseconds
+#endif
 
 #ifdef RAD_WIN32
 const float ARROW_SCALE = 0.5f;
@@ -159,6 +166,9 @@ void CGuiMenu::HandleMessage( eGuiMessage message, unsigned int param1,
         return;
     }
 
+#ifdef RAD_3DS
+    if(CHudMap::HandleMenuInput3DS(this,message))return;
+#endif
     switch( message )
     {
         case GUI_MSG_UPDATE:
@@ -1240,6 +1250,10 @@ CGuiMenu2D::CGuiMenu2D( CGuiEntity* pParent,
 :   CGuiMenu( pParent, numItems, menuType, specialEffects ),
     m_numColumns( static_cast<short>( numColumns ) )
 {
+#ifdef RAD_3DS
+    // Native galleries share four columns with their touch hit regions.
+    if(menuType==GUI_SPRITE_MENU)m_numColumns=4;
+#endif
 }
 
 CGuiMenu2D::~CGuiMenu2D()
@@ -1250,6 +1264,11 @@ void
 CGuiMenu2D::HandleMessage( eGuiMessage message, unsigned int param1,
                                                 unsigned int param2 )
 {
+#ifdef RAD_3DS
+    if(m_numItems && dynamic_cast<Scrooby::Text*>(m_menuItems[0]->GetItem())) {
+        CGuiMenu::HandleMessage(message,param1,param2);return;
+    }
+#endif
     if( m_isSelectionMade && this->IsControllerMessage( message ) )
     {
         // selection has already been made, ignore all controller messages

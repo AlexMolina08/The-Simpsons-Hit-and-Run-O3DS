@@ -47,7 +47,7 @@ public:
 								unsigned int param2 = 0 );
 
 #ifdef SRR2_OVERRIDE_CAR_SELECTION
-    virtual CGuiMenu* HasMenu() { return m_pMenu; }
+    virtual CGuiMenu* HasMenu();
 #endif
 
 #ifdef RAD_PC

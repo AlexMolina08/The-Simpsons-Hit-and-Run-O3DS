@@ -8,8 +8,11 @@ import subprocess
 import urllib.request
 import zipfile
 
-MAKEROM_URL = 'https://github.com/3DSGuy/Project_CTR/releases/download/makerom-v0.19.0/makerom-v0.19.0-macos_arm64.zip'
-MAKEROM_SHA256 = 'ea222647bf362d1aa0d8b7570dc65e7968ce6b3d7b103e9cc815a99698d930e0'
+MAKEROM_PACKAGES = {
+    ('Darwin', 'arm64'): ('macos_arm64', 'ea222647bf362d1aa0d8b7570dc65e7968ce6b3d7b103e9cc815a99698d930e0'),
+    ('Darwin', 'x86_64'): ('macos_x86_64', 'a52563e5549cd2dd84e9b8d1cb0d1fdf15ea9bd0f6241e2e178fe4e4bf3a9277'),
+    ('Linux', 'x86_64'): ('ubuntu_x86_64', '287b809dec064e0ad597e3d272c49ecb7eed41693d5ee6fef9d8a8aa24c2497e'),
+}
 BANNERTOOL_REVISION = '734d33be79fd3f8c29c6296158f06ac7c5ca9dcb'
 
 
@@ -20,13 +23,16 @@ def locate(repo, makerom=None, bannertool=None):
     bannertool = bannertool or os.environ.get('BANNERTOOL') or shutil.which('bannertool') or root / 'bannertool-build/bannertool'
     makerom, bannertool = Path(makerom).resolve(), Path(bannertool).resolve()
     if not makerom.is_file():
-        if makerom != root.resolve() / 'makerom' or (platform.system(), platform.machine()) != ('Darwin', 'arm64'):
-            raise RuntimeError('Install makerom or pass --makerom /path/to/makerom; automatic download supports Apple Silicon macOS')
+        package = MAKEROM_PACKAGES.get((platform.system(), platform.machine()))
+        if makerom != root.resolve() / 'makerom' or package is None:
+            raise RuntimeError('Install makerom or pass --makerom /path/to/makerom; automatic download supports macOS and x86-64 Linux/WSL')
         print('Downloading makerom v0.19.0...', flush=True)
         archive = root / 'makerom.zip'
-        with urllib.request.urlopen(MAKEROM_URL, timeout=60) as response, archive.open('wb') as output:
+        suffix, expected_hash = package
+        url = f'https://github.com/3DSGuy/Project_CTR/releases/download/makerom-v0.19.0/makerom-v0.19.0-{suffix}.zip'
+        with urllib.request.urlopen(url, timeout=60) as response, archive.open('wb') as output:
             shutil.copyfileobj(response, output)
-        if hashlib.sha256(archive.read_bytes()).hexdigest() != MAKEROM_SHA256:
+        if hashlib.sha256(archive.read_bytes()).hexdigest() != expected_hash:
             raise RuntimeError('Downloaded makerom archive failed SHA-256 verification')
         with zipfile.ZipFile(archive) as package:
             member = next(name for name in package.namelist() if Path(name).name == 'makerom')

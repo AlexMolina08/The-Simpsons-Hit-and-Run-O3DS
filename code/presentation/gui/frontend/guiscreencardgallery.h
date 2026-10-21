@@ -44,7 +44,12 @@ public:
 			                    unsigned int param1 = 0,
 								unsigned int param2 = 0 );
 
-    virtual CGuiMenu* HasMenu() { return m_pMenu; }
+    virtual CGuiMenu* HasMenu() {
+#ifdef RAD_3DS
+        if(m_cardGalleryState!=STATE_BROWSING_CARDS)return NULL;
+#endif
+        return m_pMenu;
+    }
 
 protected:
     void InitIntro();

@@ -3,6 +3,14 @@
 
 namespace Old3DSInput
 {
+    struct TouchActionPulse
+    {
+        static constexpr unsigned Duration=150;
+        unsigned started=0;bool pending=false;
+        void Request(unsigned now){started=now;pending=true;}
+        void Cancel(){pending=false;}
+        bool Value(unsigned now){if(pending && now-started<Duration)return true;pending=false;return false;}
+    };
     struct SelectChord
     {
         bool wasDown = false;

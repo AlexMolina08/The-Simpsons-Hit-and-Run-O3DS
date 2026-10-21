@@ -40,6 +40,9 @@ extern "C" int nativeBenchInput(int,int,int);
 #endif
 #ifdef SRR2_OLD_3DS
 #include "old3dsinput.hpp"
+static Old3DSInput::TouchActionPulse g_touchAction;
+extern "C" void old3dsTouchActionRequest(){g_touchAction.Request(SDL_GetTicks());}
+extern "C" void old3dsTouchActionCancel(){g_touchAction.Cancel();}
 #endif
 
 //============================================================================
@@ -312,6 +315,8 @@ class radControllerInputPointSDL
                 newValue=nativeBenchInput(0,m_Identifier,(int)newValue);
 #endif
 #ifdef SRR2_OLD_3DS
+                // A touch interaction enters the same action input point as physical X.
+                if(strcmp(m_pName,"Y")==0 && g_touchAction.Value(SDL_GetTicks()))newValue=1.0f;
                 // L is reserved for camera movement. L+Select cycles camera modes;
                 // Select alone retains the vehicle reset binding.
                 const bool cameraHeld = SDL_GameControllerGetButton(m_pController, SDL_CONTROLLER_BUTTON_LEFTSHOULDER) != 0;
