@@ -72,7 +72,7 @@ def main():
     archive_member(game / 'music02.rcf', TRACK)
     for member in MEMBERS:
         archive_member(game / 'dialog.rcf', member)
-    for tool in ('git', 'bash', 'cmake', 'ninja', 'make', 'cc'):
+    for tool in ('git', 'bash', 'cmake', 'ninja', 'make', 'cc', 'c++'):
         if not shutil.which(tool):
             parser.error(f'Missing {tool}; install the prerequisites in README.md')
     cmake_version = subprocess.check_output(['cmake', '--version'], text=True)

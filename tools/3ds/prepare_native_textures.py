@@ -10,6 +10,7 @@ native-textures/v1 directory only after correctness and physical acceptance.
 import argparse
 import hashlib
 import json
+import shutil
 import io
 from pathlib import Path
 import struct
@@ -91,7 +92,7 @@ int main(){
     translation += function(source, 'void picaTexture::ConvertAndTile') + main
     cpp, binary = folder / 'convert.cpp', folder / 'convert'
     cpp.write_text(translation)
-    subprocess.run(['clang++', '-std=c++14', '-O2', '-DSRR2_OLD3DS_TEXTURE_TILES',
+    subprocess.run([shutil.which('c++') or 'c++', '-std=c++14', '-O2', '-DSRR2_OLD3DS_TEXTURE_TILES',
                     '-I', str(ROOT / 'libs/pure3d'), str(cpp),
                     str(ROOT / 'libs/pure3d/pddi/pica/swizzle.cpp'),
                     str(ROOT / 'libs/pure3d/pddi/gl/decompress.cpp'), '-o', str(binary)], check=True)

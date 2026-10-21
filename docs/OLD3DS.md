@@ -7,7 +7,7 @@ inside it. The original `build.bat` follows the separate New 3DS build path.
 
 - Install devkitPro's [3ds-dev package group](https://devkitpro.org/wiki/Getting_Started).
   Keep `/opt/devkitpro`, or export `DEVKITPRO` with your installation path.
-- Install Git, Bash, CMake 3.28+, Ninja, GNU Make, Python 3.11+ with Pillow and a host C compiler.
+- Install Git, Bash, CMake 3.28+, Ninja, GNU Make, Python 3.11+ with Pillow and host C and C++ compilers.
   On Debian/Ubuntu: `sudo apt install git build-essential cmake ninja-build python3 ffmpeg`.
   Check `cmake --version` and `python3 --version`; older distributions need newer packages.
 - Install FFmpeg, or use `python3 -m pip install imageio-ffmpeg` in a Python virtual environment.

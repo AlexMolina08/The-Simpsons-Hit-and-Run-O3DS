@@ -45,7 +45,7 @@ for package checks and console testing information.
 
 ## Build a CIA
 
-macOS and Linux need Git, Bash, CMake 3.28+, Ninja, GNU Make, a host C compiler,
+macOS and Linux need Git, Bash, CMake 3.28+, Ninja, GNU Make, host C and C++ compilers,
 Python 3.11+, Pillow and FFmpeg. Install devkitPro's `3ds-dev` package group using its
 [setup guide](https://devkitpro.org/wiki/Getting_Started).
 Windows users use WSL 2 with Ubuntu 24.04. Install its Linux devkitPro toolchain,
