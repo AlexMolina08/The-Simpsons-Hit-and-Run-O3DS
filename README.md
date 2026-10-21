@@ -108,8 +108,8 @@ focus a row; their tracks adjust the value. The map always uses the lower screen
 | L + Select | Cycle camera |
 | Start | Pause / continue |
 
-Port credits are under **Pause → Options → Settings**. Original game credits
-remain available through the game's existing credits menu.
+Port attribution appears above the original game credits under
+**Main Menu → Options → View Credits**.
 
 Reopening the lid while the game is running plays a short greeting from Homer,
 Bart, Lisa, Marge or Apu. Ten complete retail lines play in a shuffled order,

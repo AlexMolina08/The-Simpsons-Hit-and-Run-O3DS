@@ -32,6 +32,9 @@
 #include <Group.h>
 #include <Text.h>
 #include <Sprite.h>
+#ifdef SRR2_OLD_3DS
+#include <p3d/font.hpp>
+#endif
 
 // ATG
 #include <raddebug.hpp>
@@ -283,18 +286,23 @@ void CGuiScreenViewCredits::HandleMessage
 
                 break;
             }
+#ifdef RAD_3DS
+            case GUI_MSG_CONTROLLER_BACK:
+#endif
             case GUI_MSG_CONTROLLER_SELECT:
             {
                 this->OnScrollingDone();
 
                 break;
             }
+#ifndef RAD_3DS
             case GUI_MSG_CONTROLLER_BACK:
             {
                 // ignore back controller inputs
                 //
                 return;
             }
+#endif
             default:
             {
                 break;
@@ -417,6 +425,18 @@ CGuiScreenViewCredits::FormatTextWithLineBreaks( Scrooby::Text* pText )
 #endif
 
     s_numPixelsPerLine = height * SPACING_FUDGE_FACTOR;
+#ifdef SRR2_OLD_3DS
+    // Match FeText's PC-font reduction and handheld readability scale. Using
+    // the old bounding-box height makes adjacent credits partitions overlap.
+    const tFont* font=pText->GetFont();
+    if (font)
+    {
+        const float scale=0.5f*(font->GetFontSize()<=32.0f ? 1.5f : 1.0f);
+        s_numPixelsPerLine=(font->GetFontHeight()+font->GetLineSpacing())*scale;
+    }
+    // The final line also occupies a row, even without a trailing line break.
+    totalTranslateY=s_numPixelsPerLine;
+#endif
 
     P3D_UNICODE* textBuffer = static_cast<P3D_UNICODE*>( pText->GetStringBuffer() );
     rAssert( textBuffer != NULL );

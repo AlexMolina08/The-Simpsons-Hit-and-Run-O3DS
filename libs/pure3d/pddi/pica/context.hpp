@@ -203,6 +203,7 @@ public:
     bool PrepareParticleClip(picaClipBounds::Transform& output) const;
 #endif
 #endif
+    bool TextLineVisible(float left, float bottom, float right, float top) const;
     bool BeginBottomScreen(float u0, float v0, float u1, float v1, bool fitFrame=true);
     void DrawBottomFrame(bool staticPicture=false);
     void SetBottomMapping(const float* source,float l,float t,float r,float b);

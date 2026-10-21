@@ -17,6 +17,7 @@
 #ifdef SRR2_OLD_3DS
 extern "C" int g_picaKeepFullSize;
 extern "C" int g_picaFontTexture;
+extern "C" bool picaTextLineVisible(float left, float bottom, float right, float top);
 #endif
 static const unsigned TEXTURE_FONT_VERSION = 0;
 
@@ -190,6 +191,16 @@ tTextureFont::DisplayLine(const P3D_UNICODE* text, int formatting) const
 
     p3d::stack->Push();
     p3d::stack->Translate((formatting & CENTRE_X) ? -GetLineWidth(text) / 2.0f : 0.0f, fontBaseLine-fontHeight, 0.0f);
+#ifdef SRR2_OLD_3DS
+    // Credits contain the entire roll, including hundreds of off-screen lines.
+    // Reject those lines before they consume the fixed immediate vertex ring.
+    // A glyph-width margin preserves bearings and partially visible edge glyphs.
+    if (!picaTextLineVisible(-fontWidth, 0.0f, GetLineWidth(text)+fontWidth, fontHeight))
+    {
+        p3d::stack->Pop();
+        return;
+    }
+#endif
        
     // Render all the letters from each texture at the same time
     for(unsigned int currTex = 0; currTex < numTextures; currTex++)

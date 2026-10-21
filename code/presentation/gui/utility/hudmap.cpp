@@ -1592,7 +1592,7 @@ namespace
                       float height, tColour colour, float maxWidth=230 )
     {
         FlushUI();
-        if( text == NULL || font->GetFontHeight() <= 0 ) return;
+        if( font == NULL || text == NULL || font->GetFontHeight() <= 0 ) return;
         float scale=height/(320.0f*font->GetFontHeight());
         const float width=font->GetTextWidth(text);
         if( width*scale > maxWidth/320 ) scale=maxWidth/(320*width);
@@ -1706,7 +1706,7 @@ namespace
     bool Television(CGuiScreen* screen)
     {
         const ContextEnum context=GetGameFlow()->GetCurrentContext();
-        return screen && screen->HasMenu() && context!=CONTEXT_GAMEPLAY && context!=CONTEXT_PAUSE && UIAsset("tvframe.png");
+        return screen && (screen->HasMenu() || screen->GetWindowID()==CGuiWindow::GUI_SCREEN_ID_VIEW_CREDITS) && context!=CONTEXT_GAMEPLAY && context!=CONTEXT_PAUSE && UIAsset("tvframe.png");
     }
 
     void Gradient(float l,float t,float r,float b,tColour top,tColour bottom)
@@ -2245,6 +2245,29 @@ namespace
         nativePass.End();
     }
 
+    void DrawUpperCredits(tView* view,CGuiScreen* screen)
+    {
+        if(!view || !screen || !screen->IsRunning() || screen->GetWindowID()!=CGuiWindow::GUI_SCREEN_ID_VIEW_CREDITS)return;
+        Scrooby::Text* text=FirstText(screen->GetScroobyScreen()->GetPage("ViewCredits"));
+        tFont* font=text?text->GetFont():NULL;
+        if(!font)return;
+        NativeViewPass nativePass(view);
+        p3d::pddi->EnableZBuffer(false);p3d::pddi->SetCullMode(PDDI_CULL_NONE);
+        p3d::pddi->SetCamera(0.1f,10,1.5708f,4.0f/3);p3d::pddi->SetProjectionMode(PDDI_PROJECTION_PERSPECTIVE);
+        p3d::stack->LoadIdentity();p3d::stack->Translate(-0.5f,-0.375f,0.5f);
+        // A separate gold heading stays above the original white credit roll.
+        Fill(25,14,295,65,tColour(0,0,0));FlushUI();
+        const char* lines[]={"3DS adaptation made by","AlexMolina08"};
+        for(unsigned i=0;i<2;++i){
+            P3D_UNICODE label[64];p3d::AsciiToUnicode(lines[i],label,64);
+            const float height=i?15:12;
+            const float width=font->GetTextWidth(label)*height/font->GetFontHeight();
+            BottomLabel(font,label,(320-width)*0.5f,i?52:31,height,Gold,250);
+        }
+        Fill(55,64,265,65,tColour(105,88,33));FlushUI();
+        nativePass.End();
+    }
+
     void DrawUpperObjective(tView* view,CGuiScreen* screen)
     {
         if(!view || !screen || !screen->IsRunning() || !PauseGrid(screen))return;
@@ -2427,6 +2450,7 @@ namespace
         const bool stats=id==CGuiWindow::GUI_SCREEN_ID_LEVEL_STATS;
         const bool gameStats=id==CGuiWindow::GUI_SCREEN_ID_SCRAP_BOOK_STATS;
         const bool splash=id==CGuiWindow::GUI_SCREEN_ID_SPLASH;
+        const bool credits=id==CGuiWindow::GUI_SCREEN_ID_VIEW_CREDITS;
         const bool briefing=Briefing(screen),rewards=Rewards(screen);
         const bool messageOnly=id==CGuiWindow::GUI_SCREEN_ID_GENERIC_MESSAGE;
         const bool conversation=ConversationButtons(screen)!=NULL;
@@ -2434,7 +2458,7 @@ namespace
         const bool movie=GetPresentationManager() && GetPresentationManager()->GetFMVPlayer() &&
             GetPresentationManager()->GetFMVPlayer()->IsPlaying();
         // Cinematics and boot artwork belong to the upper display only.
-        if( view == NULL || screen == NULL || movie || (!loading && !tutorial && !stats && !gameStats && !briefing && !messageOnly && !gallery && !conversation && !screen->HasMenu()) )
+        if( view == NULL || screen == NULL || movie || (!loading && !tutorial && !stats && !gameStats && !briefing && !messageOnly && !gallery && !conversation && !credits && !screen->HasMenu()) )
         {
             if( picaBottomScreenInterfaceBegin() )
             {
@@ -2473,6 +2497,17 @@ namespace
         FlushUI();if(tv)TVClip(true);
         const float tube=tv?TubeOpacity(screen):1;
         if(tv && tube<=0){} // The old picture fades out while the retail camera changes screens.
+        else if(credits)
+        {
+            Scrooby::Text* text=FirstText(screen->GetScroobyScreen()->GetPage("ViewCredits"));
+            tFont* font=text?text->GetFont():NULL;
+            Ascii(font,"CREDITS",46,51,16,Gold,228);
+            const picaBottomFrame::Rect back={44,146,276,178};
+            TVRow(back,true,false);
+            Ascii(font,"BACK",126,168,16,Gold,100);
+            Ascii(font,"A BACK",46,201,12,White,100);
+            Ascii(font,"B BACK",224,201,12,White,50);
+        }
         else if( startupLoading || splash )
         {
             Scrooby::Screen* resource=screen->GetScroobyScreen();
@@ -2666,8 +2701,6 @@ namespace
                     if(tv)Ascii(hintFont,"B BACK",224,201,12,White,50);
                     else FooterAction(hintFont,"B","BACK",238,310);
                 }
-                if(id==CGuiWindow::GUI_SCREEN_ID_SETTINGS)
-                    Ascii(hintFont,"Port created by AlexMolina08",14,231,11,tColour(210,201,225),210);
             }
         }
         else if( stats || gameStats )
@@ -2836,7 +2869,8 @@ void CHudMap::HandleScreenInput3DS()
     const bool card=id==CGuiWindow::GUI_SCREEN_ID_CARD_GALLERY || id==CGuiWindow::GUI_SCREEN_ID_VIEW_CARDS;
     const bool conversation=ConversationButtons(screen)!=NULL;
     const bool messageOnly=id==CGuiWindow::GUI_SCREEN_ID_GENERIC_MESSAGE;
-    if(!gameplay && !Briefing(screen) && id!=CGuiWindow::GUI_SCREEN_ID_TUTORIAL && id!=CGuiWindow::GUI_SCREEN_ID_LEVEL_STATS && id!=CGuiWindow::GUI_SCREEN_ID_SCRAP_BOOK_STATS && !card && !conversation && !messageOnly)return;
+    const bool credits=id==CGuiWindow::GUI_SCREEN_ID_VIEW_CREDITS;
+    if(!gameplay && !Briefing(screen) && id!=CGuiWindow::GUI_SCREEN_ID_TUTORIAL && id!=CGuiWindow::GUI_SCREEN_ID_LEVEL_STATS && id!=CGuiWindow::GUI_SCREEN_ID_SCRAP_BOOK_STATS && !card && !conversation && !messageOnly && !credits)return;
     static CGuiScreen* owner=NULL;static int pressed=-1,last=-1,startY=0,lastY=0;
     static picaBottomFrame::TouchEdges edges;static unsigned epoch=~0u;
     if(owner!=screen || epoch!=s_touchOwner.epoch){owner=screen;epoch=s_touchOwner.epoch;pressed=last=-1;
@@ -2845,6 +2879,7 @@ void CHudMap::HandleScreenInput3DS()
     touchPosition touch;hidTouchRead(&touch);
     int hit=touch.py>=212 ? (touch.px<220?0:1) : -1;
     if(card && touch.px<220)hit=-1;
+    if(credits)hit=picaBottomFrame::Rect{44,146,276,178}.Contains(touch.px,touch.py)?0:-1;
     if(conversation)hit=picaBottomFrame::Rect{16,86,304,132}.Contains(touch.px,touch.py)?0:
         picaBottomFrame::Rect{16,146,304,186}.Contains(touch.px,touch.py)?1:-1;
     if(gameplay){
@@ -2865,6 +2900,7 @@ void CHudMap::HandleScreenInput3DS()
 #endif
             return;
         }
+        if(credits){screen->HandleMessage(GUI_MSG_CONTROLLER_SELECT,GetGuiSystem()->GetPrimaryController());return;}
         if(id==CGuiWindow::GUI_SCREEN_ID_TUTORIAL){
             if(commit==0){
                 Scrooby::Page* page=screen->GetScroobyScreen()->GetPage("Tutorial");
@@ -3060,6 +3096,7 @@ void CHudMap::AfterRenderLayers3DS( tView* guiView )
     DrawUpperPreview(guiView,CurrentBottomScreen());
     DrawUpperStats(guiView,CurrentBottomScreen());
     DrawUpperObjective(guiView,CurrentBottomScreen());
+    DrawUpperCredits(guiView,CurrentBottomScreen());
     const ContextEnum context=GetGameFlow()->GetCurrentContext();
 #ifdef SRR2_OLD3DS_BOTTOM_MAP_15HZ
     CGuiManagerInGame* cadenceManager=GetGuiSystem()->GetInGameManager();

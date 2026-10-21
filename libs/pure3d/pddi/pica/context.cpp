@@ -30,6 +30,7 @@ namespace picaCharacterForm { bool enabled=true; unsigned groups=0,vertices=0; }
 #endif
 #endif
 #include <pddi/pica/bottomframe.hpp>
+#include <pddi/pica/clipbounds.hpp>
 #include <pddi/pica/statecache.hpp>
 #ifdef SRR2_OLD3DS_DIRECTIONAL_LIGHT
 #include <pddi/pica/directionallight.hpp>
@@ -819,6 +820,27 @@ unsigned char* picaContext::AllocSkinVertices(unsigned count)
     return result;
 }
 #endif
+
+bool picaContext::TextLineVisible(float left, float bottom, float right, float top) const
+{
+    if (!g_picaInFrame || (stereoOn && display->StereoActive())) return true;
+    // Use the current UI transform and projection on either display. Scissor
+    // clipping alone happens after vertex submission and cannot save ring space.
+    const pddiMatrix* mv=state.matrixStack[PDDI_MATRIX_MODELVIEW]->Top();
+    float modelView[4][4], projection[4][4];
+    for (unsigned row=0;row<4;++row)
+    {
+        for (unsigned col=0;col<4;++col) modelView[row][col]=mv->Row4(col)[row];
+        projection[row][0]=hwProjection.r[row].x;projection[row][1]=hwProjection.r[row].y;
+        projection[row][2]=hwProjection.r[row].z;projection[row][3]=hwProjection.r[row].w;
+    }
+    const float low[3]={left,bottom,0.0f}, high[3]={right,top,0.0f};
+    return picaClipBounds::Reject(picaClipBounds::Prepare(modelView,projection),low,high)==0;
+}
+extern "C" bool picaTextLineVisible(float left, float bottom, float right, float top)
+{
+    return !s_picaContext || s_picaContext->TextLineVisible(left,bottom,right,top);
+}
 
 unsigned char* picaContext::AllocImmVertices(unsigned count)
 {

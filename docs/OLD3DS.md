@@ -148,7 +148,9 @@ After installing, verify the following on your console model:
    one short greeting, then normal game audio. Repeat to check variety. Set
    Voice to zero and repeat; the greeting should be silent. HOME return alone
    should not play a greeting.
-6. Save, exit and reopen the game. Check progress and sound settings survived.
+6. Open **Main Menu → Options → View Credits**. Check scrolling, then leave with
+   A, B or the touch-screen Back control. Reopen credits to check the return path.
+7. Save, exit and reopen the game. Check progress and sound settings survived.
 
 Report console model and any error. Host checks and emulator screenshots do not
 establish physical-console sleep behavior, movie smoothness or performance.

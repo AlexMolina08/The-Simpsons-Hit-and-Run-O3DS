@@ -607,6 +607,10 @@ void tSprite::Display()
             Shader->GetShader()->SetTexture(PDDI_SP_BASETEX, textures[i]->GetTexture());   
 
             pddiPrimStream* stream = p3d::pddi->BeginPrims(Shader->GetShader(), PDDI_PRIM_TRISTRIP, PDDI_V_CT, 4);
+            if (!stream)
+            {
+                continue;
+            }
             stream->Vertex(&polys[i*4].v, polys[i*4].c, &polys[i*4].uv0);
             stream->Vertex(&polys[(i*4)+1].v, polys[(i*4)+1].c, &polys[(i*4)+1].uv0);
             stream->Vertex(&polys[(i*4)+2].v, polys[(i*4)+2].c, &polys[(i*4)+2].uv0);

@@ -42,6 +42,8 @@ jobs:
         run: python3 tools/3ds/tests/gui_input.py
       - name: Newspaper entrance and asynchronous font readiness
         run: python3 tools/3ds/tests/loading_animation.py
+      - name: Credits rendering and vertex exhaustion
+        run: python3 tools/3ds/tests/credits_rendering.py
       - name: Handheld tutorial text layout
         run: python3 tools/3ds/tests/handheld_text.py
       - name: Character form preparation and depth haze
