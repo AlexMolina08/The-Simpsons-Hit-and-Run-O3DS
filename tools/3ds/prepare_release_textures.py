@@ -26,7 +26,7 @@ def prepare_release(data, output, encoder):
     for name in ('prepare_native_textures.py', 'prepare_etc1_textures.py', 'prepare_release_textures.py'):
         digest.update(Path(__file__).with_name(name).read_bytes())
     key = digest.hexdigest()
-    bundle, stamp = output / 'native-ui.bundle', output / 'source.json'
+    bundle, stamp = output / 'native146.bundle', output / 'source.json'
     if bundle.is_file() and stamp.is_file():
         cached = json.loads(stamp.read_text())
         if cached.get('source_sha256') == key and cached.get('bundle_sha256') == hashlib.file_digest(bundle.open('rb'), 'sha256').hexdigest():

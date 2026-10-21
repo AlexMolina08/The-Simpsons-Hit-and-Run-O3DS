@@ -57,9 +57,9 @@ def main():
             shutil.copytree(args.data / name, romfs / name, copy_function=copy_asset)
         for source in args.data.glob('*.rcf'):
             copy_asset(source, romfs / source.name)
-        bundle = args.data / 'native-ui.bundle'
+        bundle = args.data / 'native146.bundle'
         if not bundle.is_file():
-            parser.error('Missing prepared native-ui.bundle; run build_old3ds.sh first')
+            parser.error('Missing prepared native146.bundle; run build_old3ds.sh first')
         copy_asset(bundle, romfs / bundle.name)
         if not (romfs / 'scripts.rcf').is_file():
             parser.error('Prepared data is missing scripts.rcf')

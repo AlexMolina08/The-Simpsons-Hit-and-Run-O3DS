@@ -248,6 +248,8 @@ def main():
         from prepare_lid_audio import prepare as prepare_lid_audio
         clips = prepare_lid_audio(sd, args.ffmpeg)
         log(f"lid greetings: {len(clips)} complete retail character clips prepared")
+        if not args.no_romfs and clips:
+            shutil.copytree(sd / 'sound/3ds-lid', args.romfs.resolve() / 'sound/3ds-lid', dirs_exist_ok=True)
 
     if args.native_textures:
         from prepare_native_textures import prepare

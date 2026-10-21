@@ -56,7 +56,7 @@ bash "$source_root/tools/3ds/build_old3ds_ffmpeg.sh" "$source_root" "$jobs"
 python3 "$source_root/tools/3ds/prepare_release_textures.py" \
     --data "$repo/sdcard/3ds/simpsons" --out "$repo/out/native-textures" \
     --encoder "$DEVKITPRO/tools/bin/tex3ds"
-cp "$repo/out/native-textures/native-ui.bundle" "$repo/sdcard/3ds/simpsons/native-ui.bundle"
+cp "$repo/out/native-textures/native146.bundle" "$repo/sdcard/3ds/simpsons/native146.bundle"
 
 build="$source_root/out/old3ds-build"
 cmake -S "$source_root" -B "$build" -C "$source_root/cmake/old3ds-release.cmake" "${common[@]}" \
