@@ -45,12 +45,12 @@ static void Service(float volume)
     if(pcm && (wave.status==NDSP_WBUF_DONE || volume==0)) Stop();
     if(wake) {
         Stop();
-        if(volume==0) return;
+        if(volume==0) { printf("3DS_LID_GREETING muted=1\n");return; }
         const unsigned clip=state.Next();
         char path[96];snprintf(path,sizeof(path),"romfs:/sound/3ds-lid/%02u.bin",clip);
         FILE* file=fopen(path,"rb");
         if(!file) { snprintf(path,sizeof(path),"sound/3ds-lid/%02u.bin",clip);file=fopen(path,"rb"); }
-        if(!file) return;
+        if(!file) { printf("3DS_LID_GREETING missing_clip=%u\n",clip);return; }
         struct Header { char magic[4];u32 rate,samples; } header;
         bool valid=fread(&header,sizeof(header),1,file)==1 && !memcmp(header.magic,"LID1",4) &&
             header.rate==24000 && header.samples>0 && header.samples<=72000;
@@ -64,10 +64,11 @@ static void Service(float volume)
                 ndspChnSetRate(channel,float(header.rate));ndspChnSetFormat(channel,NDSP_FORMAT_MONO_PCM16);
                 memset(&wave,0,sizeof(wave));wave.data_vaddr=pcm;wave.nsamples=header.samples;
                 ndspChnSetPaused(channel,false);ndspChnWaveBufAdd(channel,&wave);
+                printf("3DS_LID_GREETING clip=%u samples=%lu\n",clip,(unsigned long)header.samples);
             }
         }
         fclose(file);
-        if(!valid) Stop();
+        if(!valid) { Stop();printf("3DS_LID_GREETING invalid_clip=%u\n",clip); }
     }
     if(pcm) {
         float mix[12]={0};mix[0]=mix[1]=0.6f*volume*volume;
