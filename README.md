@@ -5,22 +5,6 @@ New 3DS and New 2DS XL, enabling their faster CPU and L2 cache automatically.
 You need your own retail PC copy of the game to build from source.
 Game data and DSP firmware are not distributed in this source repository.
 
-
-
-## Install
-
-1. Download the [complete 1.0 CIA](https://github.com/AlexMolina08/The-Simpsons-Hit-and-Run-O3DS/releases/download/v1.0.0/Simpsons-Hit-and-Run-3DS-v1.0.0.cia),
-   or build one below.
-2. Copy the CIA to your console's SD card. Keep enough free space for both the
-   CIA and the installed game.
-3. In **FBI → SD**, select the CIA and choose **Install CIA**. Once installed,
-   launch it from the HOME Menu. The complete CIA includes the game data and movies.
-4. Sound needs your console's DSP firmware at `sd:/3ds/dspfirm.cdc`, dumped with DSP1.
-
-Saves and settings live in `sd:/3ds/simpsons/`. Keep that folder when updating.
-Performance varies by scene; demanding areas can run below 30 FPS. Emulator
-results do not establish performance on an original console.
-
 ### Updating an existing installation
 
 Back up `sd:/3ds/simpsons/` first. Install the new CIA with FBI over the existing
@@ -33,15 +17,8 @@ For a fresh start, back up and rename `sd:/3ds/simpsons/` before launching the n
 version. The game creates a new folder; your backup retains the old saves.
 Uninstalling the existing title is not required.
 
-### Install with a QR code
 
-Open **FBI → Remote Install → Scan QR Code**. This QR code downloads the complete
-1.0 CIA directly. A PC-to-SD transfer is also available above for large downloads.
 
-<img src="images/cia-install-qr.png" width="392" alt="Install version 1.0 with FBI">
-
-See the [1.0 release notes](https://github.com/AlexMolina08/The-Simpsons-Hit-and-Run-O3DS/releases/tag/v1.0.0)
-for package checks and console testing information.
 
 ## Build a CIA
 
@@ -123,6 +100,30 @@ original-model memory limits, with benchmark automation and profiling disabled. 
 baseline. Build and package checks do not replace installed-console testing.
 
 See [CONTRIBUTING.md](CONTRIBUTING.md) for regression checks and bug reports.
+
+### Install with a QR code
+
+Open **FBI → Remote Install → Scan QR Code**. This QR code downloads the complete
+1.0 CIA directly. A PC-to-SD transfer is also available above for large downloads.
+
+<img src="images/cia-install-qr.png" width="392" alt="Install version 1.0 with FBI">
+
+See the [1.0 release notes](https://github.com/AlexMolina08/The-Simpsons-Hit-and-Run-O3DS/releases/tag/v1.0.0)
+for package checks and console testing information.
+
+## Install from SD
+
+1. Download the [complete 1.0 CIA](https://github.com/AlexMolina08/The-Simpsons-Hit-and-Run-O3DS/releases/download/v1.0.0/Simpsons-Hit-and-Run-3DS-v1.0.0.cia),
+   or build one below.
+2. Copy the CIA to your console's SD card. Keep enough free space for both the
+   CIA and the installed game.
+3. In **FBI → SD**, select the CIA and choose **Install CIA**. Once installed,
+   launch it from the HOME Menu. The complete CIA includes the game data and movies.
+4. Sound needs your console's DSP firmware at `sd:/3ds/dspfirm.cdc`, dumped with DSP1.
+
+Saves and settings live in `sd:/3ds/simpsons/`. Keep that folder when updating.
+Performance varies by scene; demanding areas can run below 30 FPS. Emulator
+results do not establish performance on an original console.
 
 ## Credits
 
