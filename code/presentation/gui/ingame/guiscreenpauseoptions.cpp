@@ -1,3 +1,6 @@
+#ifdef RAD_3DS
+#include <presentation/gui/frontend/guiscreencheats.h>
+#endif
 //===========================================================================
 // Copyright (C) 2000 Radical Entertainment Ltd.  All rights reserved.
 //
@@ -33,7 +36,7 @@
 
 enum ePauseMenuItem
 {
-#ifdef RAD_PC
+#if defined(RAD_PC) || defined(RAD_3DS)
     MENU_ITEM_DISPLAY,
 #endif
     MENU_ITEM_CONTROLLER,
@@ -47,7 +50,7 @@ enum ePauseMenuItem
 
 static const char* PAUSE_MENU_ITEMS[] =
 {
-#ifdef RAD_PC
+#if defined(RAD_PC) || defined(RAD_3DS)
     "Display",
 #endif
     "Controller",
@@ -118,7 +121,7 @@ MEMTRACK_PUSH_GROUP( "CGUIScreenPauseOptions" );
                               pRArrow );
     }
 
-#ifndef RAD_PC
+#if !defined(RAD_PC) && !defined(RAD_3DS)
     Scrooby::Text* pText = menu->GetText( "Display" );
     if( pText )
         pText->SetVisible( false );
@@ -133,6 +136,9 @@ MEMTRACK_PUSH_GROUP( "CGUIScreenPauseOptions" );
     //
 #if defined( RAD_3DS )
     Scrooby::Text* pControllerText = menu->GetText( "Controller" );
+    Scrooby::Text* graphicsLabel = menu->GetText("Display");
+    if(graphicsLabel) graphicsLabel->SetString(0, "GRAPHICS");
+    m_pMenu->SetMenuItemEnabled(MENU_ITEM_DISPLAY, true, true);
     if( pControllerText != NULL )
     {
         pControllerText->SetString( 0, "CHEATS" );
@@ -218,6 +224,7 @@ void CGuiScreenPauseOptions::HandleMessage
                 if( param1 == MENU_ITEM_CONTROLLER )
                 {
 #ifdef RAD_3DS
+                    CGuiScreenCheats::OpenGraphicsPage(false);
                     m_pParent->HandleMessage( GUI_MSG_GOTO_SCREEN, GUI_SCREEN_ID_DISPLAY );
 #else
                     m_pParent->HandleMessage( GUI_MSG_GOTO_SCREEN, GUI_SCREEN_ID_CONTROLLER );
@@ -231,9 +238,12 @@ void CGuiScreenPauseOptions::HandleMessage
                 {
                     m_pParent->HandleMessage( GUI_MSG_GOTO_SCREEN, GUI_SCREEN_ID_SETTINGS );
                 }
-#ifdef RAD_PC
+#if defined(RAD_PC) || defined(RAD_3DS)
                 else if( param1 == MENU_ITEM_DISPLAY )
                 {
+#ifdef RAD_3DS
+                    CGuiScreenCheats::OpenGraphicsPage(true);
+#endif
                     m_pParent->HandleMessage( GUI_MSG_GOTO_SCREEN, GUI_SCREEN_ID_DISPLAY );
                 }
 #endif

@@ -3,6 +3,7 @@
 from pathlib import Path
 import subprocess
 import tempfile,sys
+stereo="--stereo" in sys.argv
 extra_budget="--extra-budget" in sys.argv
 borrow="--borrow" in sys.argv or extra_budget
 packed="--packed" in sys.argv or borrow
@@ -26,6 +27,14 @@ prelude=r'''
 #include <set>
 #include <pddi/pica/skinning.hpp>
 #include <pddi/pica/skineyecache.hpp>
+namespace Graphics3DS {bool Stereo(){
+#ifdef SRR2_3DS_STEREO_GPU_SKIN
+ return true;
+#else
+ return false;
+#endif
+}}
+
 static unsigned freeSpace=8*1024*1024, flushes, draws, materialCalls, frees;
 static bool failAllocation, programSkin;
 static std::set<void*> allocations;
@@ -239,6 +248,7 @@ with tempfile.TemporaryDirectory() as td:
   flags+=(['-DSRR2_OLD3DS_GPU_SKIN_BORROW'] if borrow else [])
   flags+=(['-DSRR2_OLD3DS_GPU_SKIN_EXTRA_BUDGET'] if extra_budget else [])
   flags+=(['-DSRR2_OLD3DS_GPU_SKIN_PACKED'] if packed else [])
+  flags+=(['-DSRR2_3DS_STEREO_GPU_SKIN'] if stereo and packed else [])
   flags+=(['-DSRR2_OLD3DS_GPU_SKIN_RIGID_PACK'] if rigid else [])
   flags+=(['-DSRR2_OLD3DS_GPU_SKIN_BATCH'] if batch else [])
   flags+=(['-DSRR2_OLD3DS_GPU_SKIN_PEDESTRIANS'] if pedestrians else [])

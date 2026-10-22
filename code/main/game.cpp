@@ -1,3 +1,4 @@
+#include <main/graphics3ds.h>
 #include <main/old3dsperformance.h>
 #ifdef SRR2_OLD_3DS
 unsigned Old3dsPerformance::mode = 7;
@@ -137,6 +138,10 @@ static void srr2AptHook( APT_HookType hook, void* )
 // Project Includes
 //========================================
 #include <contexts/contextenum.h>
+#ifdef RAD_3DS
+#include <camera/supercammanager.h>
+#include <camera/supercam.h>
+#endif
 #include <debug/profiler.h>
 #include <gameflow/gameflow.h>
 #include <presentation/gui/ingame/guiscreenmissionload.h>
@@ -652,6 +657,7 @@ void Game::Run()
         #ifdef SRR2_OLD3DS_CAUSAL_DIAG
         // Begin after the interval capture resets its counters below.
 #endif
+        Graphics3DS::AllowChanges(ctx == CONTEXT_FRONTEND || ctx == CONTEXT_PAUSE);
         const u64 frameStartTick = svcGetSystemTick();
         const u64 diagnosticTick = svcGetSystemTick();
         const u64 sampleTicks = diagnosticTick - lastDiagnosticTick;
@@ -886,6 +892,44 @@ void Game::Run()
                     O3ExperimentTimer causalRender(O3E_RENDER);
 #endif
                     NB_SCOPE(Render); O3_RECUR(Render);
+#ifdef RAD_3DS
+                    if(Graphics3DS::Stereo())
+                    {
+                        StereoDepth::Camera profile = StereoDepth::Default;
+                        if(ctx == CONTEXT_GAMEPLAY || ctx == CONTEXT_PAUSE ||
+                           ctx == CONTEXT_DEMO || ctx == CONTEXT_SUPERSPRINT)
+                        {
+                            SuperCamManager* manager = GetSuperCamManager();
+                            SuperCamCentral* central = manager ? manager->GetSCC(0) : NULL;
+                            SuperCam* camera = central ? central->GetActiveSuperCam() : NULL;
+                            if(camera)
+                            {
+                                switch(camera->GetType())
+                                {
+                                    case SuperCam::FOLLOW_CAM:
+                                    case SuperCam::NEAR_FOLLOW_CAM:
+                                    case SuperCam::FAR_FOLLOW_CAM:
+                                    case SuperCam::CHASE_CAM:
+                                    case SuperCam::REVERSE_CAM:
+                                    case SuperCam::WRECKLESS_CAM:
+                                    case SuperCam::BURNOUT_CAM:
+                                    case SuperCam::SUPER_SPRINT_CAM:
+                                        profile = StereoDepth::Driving; break;
+                                    case SuperCam::WALKER_CAM:
+                                        profile = StereoDepth::Walking; break;
+                                    case SuperCam::BUMPER_CAM:
+                                    case SuperCam::FIRST_PERSON_CAM:
+                                        profile = StereoDepth::Close; break;
+                                    case SuperCam::DEFAULT_CAM:
+                                        break;
+                                    default:
+                                        profile = StereoDepth::Cinematic; break;
+                                }
+                            }
+                        }
+                        Graphics3DS::UpdateStereoCamera(profile, elapsed);
+                    }
+#endif
                     mpRenderFlow->OnTimerDone(elapsed, NULL);
                 }
                 DEMOPROFILE( g_DemoProfiler.Stop(PROFILE_CHANNEL_RENDER); )
@@ -985,7 +1029,7 @@ void Game::Run()
         // The original backend can spin while FrameBegin skips a busy GPU.
         // A 30 Hz deadline gives simulation, loading and input one bounded frame
         // budget and lets other threads run on the original ARM11 hardware.
-        const u64 frameBudgetTicks = (u64)SYSCLOCK_ARM11 / 30;
+        const u64 frameBudgetTicks = (u64)SYSCLOCK_ARM11 / Graphics3DS::TargetFPS();
         const u64 frameTicks = svcGetSystemTick() - frameStartTick;
         const double currentWorkMs = frameTicks * 1000.0 / SYSCLOCK_ARM11;
 #ifdef SRR2_OLD3DS_CAUSAL_DIAG
@@ -1000,7 +1044,12 @@ void Game::Run()
         workMs += currentWorkMs;
         if(currentWorkMs > peakWorkMs) peakWorkMs = currentWorkMs;
         if(frameTicks > frameBudgetTicks) ++overBudgetFrames;
-        if(frameTicks < frameBudgetTicks)
+        if(Graphics3DS::IsNew() && Graphics3DS::TargetFPS() == 60)
+        {
+            // Follow the LCD refresh instead of drifting against a nominal 60 Hz clock.
+            gspWaitForVBlank();
+        }
+        else if(frameTicks < frameBudgetTicks)
             svcSleepThread((s64)((frameBudgetTicks - frameTicks) * 1000000000ULL / SYSCLOCK_ARM11));
 #endif
 

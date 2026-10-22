@@ -1,3 +1,7 @@
+#ifdef RAD_3DS
+#include <main/graphics3ds.h>
+#include <presentation/gui/frontend/guiscreencheats.h>
+#endif
 #include <presentation/gui/frontend/guiscreenviewcredits.h>
 #include <presentation/gui/utility/handheldcredits.h>
 #include <presentation/gui/utility/handheldiconbounds.h>
@@ -1964,7 +1968,7 @@ namespace
         else if(screen->GetWindowID()==CGuiWindow::GUI_SCREEN_ID_MISSION_SELECT)BottomLabel(font,GetTextBibleString("MISSION_SELECT"),12,23,17,Gold,200);
         else if(screen->GetWindowID()==CGuiWindow::GUI_SCREEN_ID_SAVE_GAME)BottomLabel(font,GetTextBibleString("SAVE_GAME"),x,y,size,Gold,width);
         else if(screen->GetWindowID()==CGuiWindow::GUI_SCREEN_ID_VIEW_CARDS || screen->GetWindowID()==CGuiWindow::GUI_SCREEN_ID_CARD_GALLERY)BottomLabel(font,GetTextBibleString("VIEW_CARDS"),x,y,size,Gold,width);
-        else if(screen->GetWindowID()==CGuiWindow::GUI_SCREEN_ID_DISPLAY)Ascii(font,"CHEATS",x,y,size,Gold,width);
+        else if(screen->GetWindowID()==CGuiWindow::GUI_SCREEN_ID_DISPLAY)Ascii(font,static_cast<CGuiScreenCheats*>(screen)->IsGraphicsPage()?"GRAPHICS":"CHEATS",x,y,size,Gold,width);
         else if(screen->GetWindowID()==CGuiWindow::GUI_SCREEN_ID_SOUND)BottomLabel(font,GetTextBibleString("SOUND"),x,y,size,Gold,width);
         else if(screen->GetWindowID()==CGuiWindow::GUI_SCREEN_ID_SETTINGS)BottomLabel(font,GetTextBibleString("SETTINGS"),x,y,size,Gold,width);
         else if(screen->GetWindowID()==CGuiWindow::GUI_SCREEN_ID_PHONE_BOOTH || screen->GetWindowID()==CGuiWindow::GUI_SCREEN_ID_PURCHASE_REWARDS)Ascii(font,screen->GetWindowID()==CGuiWindow::GUI_SCREEN_ID_PHONE_BOOTH?"PHONE BOOTH":"SHOP",12,23,18,Gold,222);
@@ -2449,7 +2453,19 @@ namespace
             Rounded(29,124+press,51,143+press,tColour(130,126,145),tColour(53,50,67));
             Ascii(font,"X",35,138+press,13,White,14);
             P3D_UNICODE label[32];p3d::AsciiToUnicode(caption,label,32);
-            Wrapped(font,label,12,149+press,56,12,2,s_hudActionPressed?Ink:White,27,true);
+            // Fit compelete words rather than letting the narrow caption split glyphs across rows.
+            P3D_UNICODE* second=NULL;
+            for(P3D_UNICODE* c=label;*c;++c)if(*c==' '){*c=0;second=c+1;break;}
+            const unsigned rows=second?2:1;
+            const float top=149+press+(27-(rows*12+(rows-1)*3))*0.5f;
+            for(unsigned row=0;row<rows;++row){
+                const P3D_UNICODE* word=row?second:label;
+                const float naturalWidth=font->GetTextWidth(word)*12/font->GetFontHeight();
+                const float height=naturalWidth>56?12*56/naturalWidth:12;
+                const float width=font->GetTextWidth(word)*height/font->GetFontHeight();
+                const float baseline=top+row*15+(12-height)*0.5f+height*font->GetFontBaseLine()/font->GetFontHeight();
+                BottomLabel(font,word,12+(56-width)*0.5f,baseline,height,s_hudActionPressed?Ink:White,56);
+            }
         }
         if(text)Wrapped(font,text,hasPortrait?64:20,190,hasPortrait?237:280,13,3,White,41);
         FlushUI();nativePass.End();picaBottomScreenEnd();
@@ -2613,6 +2629,11 @@ namespace
         {
             tFont* hintFont=MenuLabel(menu->GetMenuItem(rows[first]))->GetFont();
             Header(screen,hintFont);
+            if(id==CGuiWindow::GUI_SCREEN_ID_DISPLAY && static_cast<CGuiScreenCheats*>(screen)->IsGraphicsPage())
+            {
+                Ascii(hintFont,Graphics3DS::Description(),tv?46:16,tv?77:56,12,White,tv?228:288);
+                Ascii(hintFont,Graphics3DS::Status(),tv?46:16,tv?93:73,11,White,tv?228:288);
+            }
             if(Question(screen)){
                 Scrooby::Text* question=FindText(screen->GetScroobyScreen(),"Message");
                 Scrooby::Text* reason=FindText(screen->GetScroobyScreen(),"MissionFailureReason");

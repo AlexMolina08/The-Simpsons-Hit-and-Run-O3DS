@@ -11,6 +11,7 @@ int g_picaInFrame=1;unsigned submits=0,finishes=0;
 unsigned g_picaPresentedFrames=0,g_old3dsFramePresented=0;
 double g_picaFrameSubmitMs=0;
 const unsigned GX_CMDLIST_FLUSH=1,SYSCLOCK_ARM11=268123480;
+namespace Old3dsCadence {void Submit(unsigned){}}
 u64 svcGetSystemTick(){static u64 n=0;return ++n;}
 void C3D_FrameEnd(unsigned flags){assert(flags==GX_CMDLIST_FLUSH);++submits;}
 struct picaDisplay {bool inFrame=true,stereoThisFrame=true;

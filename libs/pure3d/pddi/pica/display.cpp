@@ -4,25 +4,105 @@
 #include <pddi/base/debug.hpp>
 #include <main/old3dsdiag.h>
 #include <stdio.h>
+#include <main/graphics3ds.h>
+#ifdef SRR2_OLD3DS_NATIVE_BENCH
+#include <main/nativebench.h>
+#endif
 #include "pddi_shbin.h"
 
 extern "C" void C3Di_UpdateContext(void);
+extern "C" void C3Di_RenderQueueWaitDone(void);
 extern "C" bool C3Di_SplitFrame(u32** pBuf, u32* pSize);
 #ifdef SRR2_OLD3DS_NATIVE_UNIFORMS
 extern "C" void picaNativeUniformInvalidate(GPU_SHADER_TYPE type, int first, int count);
 #endif
 
-static const float PICA_STEREO_MAX_SHIFT   = 0.045f;
+#ifdef SRR2_OLD3DS_NATIVE_BENCH
+static unsigned stereoFrames = 0, stereoSegments = 0;
+static float minimumStereoSlider = 1.0f, maximumStereoSlider = 0.0f;
+static unsigned measuredStereoFrames = 0, measuredFrames = 0;
+static float measuredSliderMinimum = 1.0f, measuredSliderMaximum = 0.0f;
+static float measuredConvergenceMinimum = 1000.0f, measuredConvergenceMaximum = 0.0f;
+static unsigned stereoSliderBins[16]={};
+static float minimumEyeShift=1.0f,maximumEyeShift=0.0f;
+static unsigned auditedStereoSegments=0, sceneEyeWrites=0, sceneEyeFloat24Writes=0, auditErrors=0;
+static u32 lastSceneEye[4]={};
+// Inspect only a bounded number of visual-test command buffers. A scene write
+// to register 95 would override both external eye setups during replay.
+static void picaAuditStereoScene(const u32* commands,unsigned words)
+{
+    if(!NativeBench::collecting || !NativeBench::StereoVisualAudit() || auditedStereoSegments>=32)return;
+    ++auditedStereoSegments;
+    unsigned cursor=0,components=0;bool known=false,float32=false;
+    for(unsigned offset=0;offset+1<words;)
+    {
+        const u32 header=commands[offset+1];
+        const unsigned count=1+((header>>20)&0x7ff),reg=header&0x3ff;
+        if(count+1>words-offset){++auditErrors;return;}
+        for(unsigned i=0;i<count;++i)
+        {
+            const unsigned target=reg+((header>>31)?i:0);
+            const u32 value=commands[offset+(i?i+1:0)];
+            if(target==GPUREG_VSH_FLOATUNIFORM_CONFIG)
+            {
+                known=((header>>16)&15)==15;float32=(value>>31)!=0;
+                components=float32?4:3;cursor=(value&0x7f)*components;
+            }
+            else if(known && target>=GPUREG_VSH_FLOATUNIFORM_DATA && target<GPUREG_VSH_FLOATUNIFORM_DATA+8)
+            {
+                if(cursor/components==95)
+                {
+                    if(float32){if(cursor%components==0)++sceneEyeWrites;lastSceneEye[cursor%components]=value;}
+                    else if(cursor%components==0)++sceneEyeFloat24Writes;
+                }
+                ++cursor;
+            }
+        }
+        offset+=(count+2)&~1u;
+    }
+}
+extern "C" void picaDumpStereoDiagnostics(FILE* file)
+{
+    fprintf(file, "NATIVE_STEREO active_frames=%u replayed_segments=%u minimum_slider=%.4f maximum_slider=%.4f scope=whole_session cpu_scene_traversals_per_segment=1\n",
+        stereoFrames, stereoSegments, minimumStereoSlider, maximumStereoSlider);
+    fprintf(file, "NATIVE_STEREO_DEPTH measured_frames=%u stereo_frames=%u slider_min=%.4f slider_max=%.4f convergence_min=%.4f convergence_max=%.4f maximum_pair_disparity_pixels=18 shader_register=95 gpu_bones=25 foreground_limited=1\n",
+        measuredFrames, measuredStereoFrames, measuredFrames ? measuredSliderMinimum : 0.0f,
+        measuredSliderMaximum, measuredFrames ? measuredConvergenceMinimum : 0.0f, measuredConvergenceMaximum);
+    fprintf(file,"NATIVE_STEREO_SLIDER shift_min=%.6f shift_max=%.6f bins=16 counts=",measuredFrames?minimumEyeShift:0.0f,maximumEyeShift);
+    for(unsigned i=0;i<16;++i)fprintf(file,"%s%u",i?",":"",stereoSliderBins[i]);
+    fprintf(file," measured_route_only=1\n");
+    fprintf(file,"NATIVE_STEREO_COMMAND_AUDIT segments=%u scene_eye_writes=%u float24_eye_writes=%u errors=%u last_wzyx=%08lx,%08lx,%08lx,%08lx performance_capture=0\n",
+        auditedStereoSegments,sceneEyeWrites,sceneEyeFloat24Writes,auditErrors,
+        (unsigned long)lastSceneEye[0],(unsigned long)lastSceneEye[1],(unsigned long)lastSceneEye[2],(unsigned long)lastSceneEye[3]);
+}
+#endif
+
 
 static void picaWriteEye(float shift)
 {
     C3D_FVec v;
     v.x = shift;
-    v.y = PICA_STEREO_CONVERGENCE;
+    v.y = Graphics3DS::Stereo() ? Graphics3DS::StereoConvergence() : PICA_STEREO_CONVERGENCE;
     v.z = 0.0f;
     v.w = 0.0f;
     GPUCMD_AddWrite(GPUREG_VSH_FLOATUNIFORM_CONFIG, 0x80000000u | VSH_FVEC_u_eye);
     GPUCMD_AddWrites(GPUREG_VSH_FLOATUNIFORM_DATA, (u32*)v.c, 4);
+#ifdef SRR2_3DS_STEREO_GPU_SKIN
+    if(Graphics3DS::Stereo())
+    {
+        // Slot 95 stays outside the complete 25-bone palette. Stereo companions
+        // derive position/UV scales from x; yzw hold limit, bias, and eye shift.
+        C3D_FVec packed;
+        packed.x = 1.0f / 32768.0f;
+        packed.y = shift < 0.0f ? -shift : shift;
+        packed.z = shift * Graphics3DS::StereoConvergence(); packed.w = shift;
+        GPUCMD_AddWrite(GPUREG_VSH_FLOATUNIFORM_CONFIG, 0x80000000u | 95u);
+        GPUCMD_AddWrites(GPUREG_VSH_FLOATUNIFORM_DATA, (u32*)packed.c, 4);
+#ifdef SRR2_OLD3DS_NATIVE_UNIFORMS
+        picaNativeUniformInvalidate(GPU_VERTEX_SHADER, 95, 1);
+#endif
+    }
+#endif
 #ifdef SRR2_OLD3DS_NATIVE_UNIFORMS
     picaNativeUniformInvalidate(GPU_VERTEX_SHADER, VSH_FVEC_u_eye, 1);
 #endif
@@ -61,6 +141,7 @@ picaDisplay::picaDisplay(pddiDisplayInfo* info)
     worldActive = false;
     worldWidth = 400;
     worldHeight = 240;
+    renderWidth = 400;
 #endif
     stereoThisFrame = false;
     eyeShift    = 0.0f;
@@ -227,9 +308,53 @@ bool picaDisplay::InitDisplay(const pddiDisplayInit* init)
     printf("OLD3DS_WORLD width=%d height=%d native_ui=1\n", worldWidth, worldHeight);
 #endif
 
+#ifdef SRR2_OLD_3DS
+    if(!ApplyGraphicsMode()) return false;
+#endif
     reset = true;
     return true;
 }
+
+#ifdef SRR2_OLD_3DS
+bool picaDisplay::ApplyGraphicsMode(void)
+{
+    if(!Graphics3DS::Pending()) return target != NULL;
+    const int requestedWidth = Graphics3DS::RequestedQuality() && Graphics3DS::SupportsWide() ? 800 : 400;
+    const bool requestedStereo = Graphics3DS::Stereo();
+    // Retire every command referencing these buffers before changing output.
+    // FrameSync waits for VBlank; it does not drain an unfinished GPU queue.
+    C3Di_RenderQueueWaitDone();
+    C3D_FrameSync();
+    bool success = true;
+    if(requestedWidth != renderWidth || requestedStereo != (targetRight != NULL))
+    {
+        if(targetRight) { C3D_RenderTargetDelete(targetRight); targetRight = NULL; }
+        if(target) { C3D_RenderTargetDelete(target); target = NULL; }
+        target = C3D_RenderTargetCreate(winHeight, requestedWidth, GPU_RB_RGBA8, GPU_RB_DEPTH24_STENCIL8);
+        if(target && requestedStereo)
+            targetRight = C3D_RenderTargetCreate(winHeight, 400, GPU_RB_RGBA8, GPU_RB_DEPTH24_STENCIL8);
+        success = target && (!requestedStereo || targetRight);
+        if(!success)
+        {
+            if(targetRight) { C3D_RenderTargetDelete(targetRight); targetRight = NULL; }
+            if(target) C3D_RenderTargetDelete(target);
+            target = C3D_RenderTargetCreate(winHeight, 400, GPU_RB_RGBA8, GPU_RB_DEPTH24_STENCIL8);
+        }
+        renderWidth = success ? requestedWidth : 400;
+    }
+    Graphics3DS::Complete(success);
+    // gfxSet3D(false) also clears wide mode, so set wide mode last.
+    gfxSet3D(Graphics3DS::Stereo());
+    if(!Graphics3DS::Stereo()) gfxSetWide(renderWidth == 800);
+    const u32 flags = GX_TRANSFER_FLIP_VERT(0) | GX_TRANSFER_OUT_TILED(0) |
+        GX_TRANSFER_RAW_COPY(0) | GX_TRANSFER_IN_FORMAT(GX_TRANSFER_FMT_RGBA8) |
+        GX_TRANSFER_OUT_FORMAT(GX_TRANSFER_FMT_RGB8) | GX_TRANSFER_SCALING(GX_TRANSFER_SCALE_NO);
+    if(target) C3D_RenderTargetSetOutput(target, GFX_TOP, GFX_LEFT, flags);
+    if(targetRight) C3D_RenderTargetSetOutput(targetRight, GFX_TOP, GFX_RIGHT, flags);
+    reset = true;
+    return target != NULL;
+}
+#endif
 
 pddiDisplayInfo* picaDisplay::GetDisplayInfo(void)
 {
@@ -253,6 +378,9 @@ unsigned picaDisplay::GetFreeTextureMem(void)
 
 void picaDisplay::BeginFrame(void)
 {
+#ifdef SRR2_OLD_3DS
+    if(!inFrame && Graphics3DS::CanApply() && !ApplyGraphicsMode()) return;
+#endif
     if(!inFrame && target != NULL)
     {
         if(g_picaGpuWaitHook) g_picaGpuWaitHook(1);
@@ -291,9 +419,35 @@ void picaDisplay::BeginFrame(void)
             return;
         }
 
-        const float slider = osGet3DSliderState();
-        stereoThisFrame = (targetRight != NULL) && (slider > 0.01f);
-        eyeShift = stereoThisFrame ? slider * PICA_STEREO_MAX_SHIFT : 0.0f;
+        float slider = osGet3DSliderState();
+#ifdef SRR2_OLD3DS_NATIVE_BENCH
+        slider=NativeBench::StereoSlider(slider);
+#endif
+        eyeShift = targetRight ? Graphics3DS::StereoShift(slider) : 0.0f;
+        stereoThisFrame = eyeShift > 0.0f;
+
+#ifdef SRR2_OLD3DS_NATIVE_BENCH
+        if(NativeBench::collecting)
+        {
+            ++measuredFrames;
+            const unsigned bin=slider>0.0f?(slider>=1.0f?15:unsigned(slider*16.0f)):0;
+            ++stereoSliderBins[bin];
+            if(eyeShift<minimumEyeShift)minimumEyeShift=eyeShift;
+            if(eyeShift>maximumEyeShift)maximumEyeShift=eyeShift;
+            if(stereoThisFrame) ++measuredStereoFrames;
+            if(slider < measuredSliderMinimum) measuredSliderMinimum = slider;
+            if(slider > measuredSliderMaximum) measuredSliderMaximum = slider;
+            const float convergence = Graphics3DS::StereoConvergence();
+            if(convergence < measuredConvergenceMinimum) measuredConvergenceMinimum = convergence;
+            if(convergence > measuredConvergenceMaximum) measuredConvergenceMaximum = convergence;
+        }
+        if(stereoThisFrame)
+        {
+            ++stereoFrames;
+            if(slider < minimumStereoSlider) minimumStereoSlider = slider;
+            if(slider > maximumStereoSlider) maximumStereoSlider = slider;
+        }
+#endif
 
         StartTopSegment();
 
@@ -309,7 +463,7 @@ void picaDisplay::StartTopSegment(void)
         if(context) context->FlushStreams();
         C3Di_UpdateContext();
         picaWriteEye(-eyeShift);
-        C3D_FrameSplit(0);
+        C3D_FrameSplit(GX_CMDLIST_FLUSH);
     }
     else
     {
@@ -327,12 +481,18 @@ void picaDisplay::FinishTopSegment(void)
     u32  sceneSize = 0;
     if(C3Di_SplitFrame(&sceneBuf, &sceneSize))
     {
-        GX_ProcessCommandList(sceneBuf, sceneSize * 4, 0);
+#ifdef SRR2_OLD3DS_NATIVE_BENCH
+        ++stereoSegments;
+        picaAuditStereoScene(sceneBuf,sceneSize);
+#endif
+        // Old-model EndFrame flushes only its final command segment. Publish
+        // this scene segment before either eye consumes it on real hardware.
+        GX_ProcessCommandList(sceneBuf, sceneSize * 4, GX_CMDLIST_FLUSH);
 
         C3D_FrameDrawOn(targetRight);
         C3Di_UpdateContext();
         picaWriteEye(eyeShift);
-        C3D_FrameSplit(0);
+        C3D_FrameSplit(GX_CMDLIST_FLUSH);
 
         GX_ProcessCommandList(sceneBuf, sceneSize * 4, 0);
     }
@@ -415,6 +575,7 @@ float picaDisplay::EndTiming(void)
 #ifdef SRR2_OLD_3DS
 bool picaDisplay::BeginWorldTarget(void)
 {
+    if(Graphics3DS::Quality() || Graphics3DS::Stereo() || Graphics3DS::IsNew()) return false;
     if(!inFrame || !worldTarget || !g_picaWorldScaleAllowed) return false;
     C3D_RenderTargetClear(worldTarget, C3D_CLEAR_ALL, 0x000000FF, 0x00FFFFFF);
     worldActive = C3D_FrameDrawOn(worldTarget);

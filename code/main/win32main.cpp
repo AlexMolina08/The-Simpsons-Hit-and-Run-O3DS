@@ -1,3 +1,4 @@
+#include <main/graphics3ds.h>
 #ifdef SRR2_OLD3DS_PARTICLE_CLIP
 extern "C" void old3dsDumpParticleClip();
 #endif
@@ -160,6 +161,13 @@ extern "C" int main( int argc, char *argv[] )
     const bool new3dsSpeedup = R_SUCCEEDED( APT_CheckNew3DS( &isNew3DS ) ) && isNew3DS;
     // Keep original-model compatibility while enabling New 3DS CPU and L2 acceleration.
     osSetSpeedupEnable( new3dsSpeedup );
+    u8 systemModel = 255;
+    if(R_SUCCEEDED(cfguInit()))
+    {
+        if(R_FAILED(CFGU_GetSystemModel(&systemModel))) systemModel = 255;
+        cfguExit();
+    }
+    Graphics3DS::Initialize(systemModel, argc, argv);
     gfxInitDefault();
     romfsInit();
     // Installed titles keep bundled assets in RomFS and writable saves on SD.

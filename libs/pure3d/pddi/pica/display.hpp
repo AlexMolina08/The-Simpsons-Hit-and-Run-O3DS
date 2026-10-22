@@ -50,6 +50,7 @@ public:
     bool IsWorldTarget(void) const { return worldActive; }
     int WorldWidth(void) const { return worldWidth; }
     int WorldHeight(void) const { return worldHeight; }
+    int RenderWidth(void) const { return renderWidth; }
     C3D_Tex* WorldTexture(void) { return &worldTexture; }
 #endif
 
@@ -76,6 +77,8 @@ private:
     C3D_RenderTarget* worldTarget;
     bool worldActive;
     int worldWidth, worldHeight;
+    int renderWidth;
+    bool ApplyGraphicsMode(void);
 #endif
     bool  stereoThisFrame;
 

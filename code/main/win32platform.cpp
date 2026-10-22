@@ -845,6 +845,9 @@ bool Win32Platform::OnDriveError( radFileError error, const char* pDriveName, vo
 
             radFileRequest* request = static_cast<radFileRequest*>( pUserData );
             const char* fileName = request->GetFilename();
+#ifdef SRR2_OLD3DS_NATIVE_BENCH
+            printf("NATIVE_FILE_ERROR requested=%s error=FileNotFound\n", fileName);
+#endif
 
             //Get rid of the slashes.
             unsigned int i;
