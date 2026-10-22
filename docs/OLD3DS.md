@@ -52,7 +52,7 @@ home directory (`cd ~`), rather than under `/mnt/c`, for faster compilation and
 reliable file permissions. Your PC game can remain on Windows: for example,
 `C:\Games\Hit and Run` becomes `/mnt/c/Games/Hit and Run`.
 All remaining commands run in Ubuntu, not PowerShell. To retrieve the result,
-run `explorer.exe out/releases/v1.0.0` from the repository root.
+run `explorer.exe out/releases/v1.1.0` from the repository root.
 
 ## Clone and prepare Python
 
@@ -87,11 +87,11 @@ benchmark routes and profiling.
 
 Outputs:
 
-- `out/releases/v1.0.0/Simpsons-Hit-and-Run-3DS-v1.0.0.cia`
-- `out/releases/v1.0.0/Simpsons-Hit-and-Run-3DS-v1.0.0.sha256`
-- `out/releases/v1.0.0/Simpsons-Hit-and-Run-3DS-v1.0.0.manifest.json`
-- `out/releases/v1.0.0/Simpsons-Hit-and-Run-3DS-v1.0.0.movies.json`: full decode, frame count and exact source PCM checks.
-- `out/releases/v1.0.0/Simpsons-Hit-and-Run-3DS-v1.0.0.home-menu/`: generated banner, icon and audio provenance.
+- `out/releases/v1.1.0/Simpsons-Hit-and-Run-3DS-v1.1.0.cia`
+- `out/releases/v1.1.0/Simpsons-Hit-and-Run-3DS-v1.1.0.sha256`
+- `out/releases/v1.1.0/Simpsons-Hit-and-Run-3DS-v1.1.0.manifest.json`
+- `out/releases/v1.1.0/Simpsons-Hit-and-Run-3DS-v1.1.0.movies.json`: full decode, frame count and exact source PCM checks.
+- `out/releases/v1.1.0/Simpsons-Hit-and-Run-3DS-v1.1.0.home-menu/`: generated banner, icon and audio provenance.
 
 The HOME Menu sound is a short excerpt of the retail game's theme, with fades.
 The music excerpt is generated from your files rather than stored in Git.
@@ -209,8 +209,8 @@ rebuilds, packages, tags and uploads a test release. It verifies server checksum
 before publishing and does not overwrite an existing public version.
 
 ```sh
-python3 tools/3ds/release_cia.py --version 1.0.0 --stable --no-upload
-python3 tools/3ds/release_cia.py --version 1.0.0 --stable --resume
+python3 tools/3ds/release_cia.py --version 1.1.0 --stable --no-upload
+python3 tools/3ds/release_cia.py --version 1.1.0 --stable --resume
 ```
 
 The first command builds a versioned local package. The second resumes an

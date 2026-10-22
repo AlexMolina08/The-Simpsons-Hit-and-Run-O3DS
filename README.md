@@ -1,11 +1,11 @@
 # The Simpsons: Hit & Run for Nintendo 3DS
 
-Version **1.0**. A homebrew port for original Nintendo 3DS and 2DS. The same build also runs on
+Version **1.1.0**. A homebrew port for original Nintendo 3DS and 2DS. The same build also runs on
 New 3DS and New 2DS XL, enabling their faster CPU and L2 cache automatically.
 You need your own retail PC copy of the game to build from source.
 Game data and DSP firmware are not distributed in this source repository.
 
-[Install](#install) · [Build from your PC copy](#build-a-cia) · [Controls](#interface-and-controls) · [Release notes](https://github.com/AlexMolina08/The-Simpsons-Hit-and-Run-O3DS/releases/tag/v1.0.0)
+[Install](#install) · [Build from your PC copy](#build-a-cia) · [Controls](#interface-and-controls) · [Release notes](https://github.com/AlexMolina08/The-Simpsons-Hit-and-Run-O3DS/releases/tag/v1.1.0)
 
 ## Screenshots and menu tour
 
@@ -44,7 +44,7 @@ These are emulator captures, not measurements of console performance.
 
 ## Install
 
-The [complete 1.0 CIA](https://github.com/AlexMolina08/The-Simpsons-Hit-and-Run-O3DS/releases/download/v1.0.0/Simpsons-Hit-and-Run-3DS-v1.0.0.cia) includes game data and all 17 cinematics.
+The [complete 1.1.0 CIA](https://github.com/AlexMolina08/The-Simpsons-Hit-and-Run-O3DS/releases/download/v1.1.0/Simpsons-Hit-and-Run-3DS-v1.1.0.cia) includes game data and all 17 cinematics.
 It is **1.92 GB**. A console with custom firmware and FBI is required.
 
 ### Install from SD — recommended
@@ -60,16 +60,16 @@ Saves and settings live in `sd:/3ds/simpsons/`; keep that folder when updating.
 ### Install with a QR code
 
 Open **FBI → Remote Install → Scan QR Code** and scan the image below from another screen.
-The code points directly to the same complete 1.0 CIA.
+The code points directly to the same complete 1.1.0 CIA.
 
-<a href="images/cia-install-qr.png"><img src="images/cia-install-qr.png" width="424" alt="Scan with FBI to install the complete version 1.0 CIA"></a>
+<a href="images/cia-install-qr.png"><img src="images/cia-install-qr.png" width="424" alt="Scan with FBI to install the complete version 1.1.0 CIA"></a>
 
 [Open the QR at full size](images/cia-install-qr.png). Keep its white border visible; if it does not scan, open the full-size image and adjust your screen brightness or camera distance.
 
 If FBI reads the code but the download or installation fails, use the SD method above.
 The complete game is a large download over console Wi-Fi. For a bug report, include your FBI version, exact error code and the percentage reached.
 
-See the [1.0 release notes](https://github.com/AlexMolina08/The-Simpsons-Hit-and-Run-O3DS/releases/tag/v1.0.0) for package details.
+See the [1.1.0 release notes](https://github.com/AlexMolina08/The-Simpsons-Hit-and-Run-O3DS/releases/tag/v1.1.0) for package details.
 
 ### Updating an existing installation
 
@@ -112,7 +112,7 @@ python3 tools/3ds/make_cia.py "/path/to/PC game"
 Point at the PC folder containing `art/`, `scripts/`, `sound/`, `movies/` and the
 `.rcf` archives. The command prepares retail data, converts and fully validates all 17 movies,
 rebuilds the accepted native texture bundle, builds the original-model executable
-and packages **`out/releases/v1.0.0/Simpsons-Hit-and-Run-3DS-v1.0.0.cia`**.
+and packages **`out/releases/v1.1.0/Simpsons-Hit-and-Run-3DS-v1.1.0.cia`**.
 Its checksum, movie validation report and asset manifest appear alongside it.
 The first build downloads source dependencies and can take several minutes. Later builds reuse them.
 
@@ -129,7 +129,13 @@ builds, controls and publishing a separate release.
 
 ## Interface and controls
 
-Gameplay uses the native 400×240 top screen. The touch screen carries the original
+The top screen uses 400×240 in Normal Mode or 400×240 per eye in Stereo 3D.
+Quality Mode defaults to On and uses 800×240 wide output on 3DS models and New
+2DS XL. Original 2DS keeps 400×240 with richer lighting. Open **Options → Graphics**
+to change modes; Stereo 3D requires a restart and is unavailable on 2DS models.
+See [Graphics modes](docs/GRAPHICS_MODES.md) for frame-rate targets and details.
+
+The touch screen carries the original
 radar, coin and wasp counters, current objective and a contextual interaction control.
 Menus use original game artwork and fonts, with touch, D-pad and Circle Pad navigation.
 Tap a menu item to select it; drag away before releasing to cancel. Slider labels
