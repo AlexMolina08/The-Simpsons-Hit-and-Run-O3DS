@@ -11,9 +11,13 @@ def prefix(name,ending):
 begin=prefix('BeginWorld','    if(display->BeginWorldTarget())')
 end=prefix('EndWorld','    if(!display->IsWorldTarget()) return;')
 objects=s[s.index('bool picaContext::BeginStereoObject('):s.index('void picaContext::BeginWorld(void)')]
+menu=(root/'libs/scrooby/src/FePure3dObject.cpp').read_text()
+start=menu.index('    const bool stereoModel =')
+selector=menu[start:menu.index(';',start)+1]
 fixture=r'''
 #include <cassert>
 #include <vector>
+#include <cstring>
 #define SRR2_OLD_3DS
 namespace Graphics3DS {bool stereo=false;bool Stereo(){return stereo;}}
 enum {PDDI_PROJECTION_PERSPECTIVE,PDDI_PROJECTION_ORTHOGRAPHIC};
@@ -55,10 +59,24 @@ int main(){
  assert(!c.BeginStereoObject(.66f));c.EndWorld();c.bottomPass=false;
  c.BeginWorld();assert(!c.BeginStereoObject(.66f));c.EndWorld();
  Graphics3DS::stereo=false;assert(!c.BeginStereoObject(4.5f));
+ Graphics3DS::stereo=true;activeContext=&c;
+ Camera room{37},other{99};
+ assert(RenderMenu(&room)); // Release builds retain the UID, not the camera's name string.
+ assert(!RenderMenu(&other) && !RenderMenu(nullptr));
+}
+'''
+menu_fixture=r'''
+struct tEntity {static unsigned MakeUID(const char* name){assert(!strcmp(name,"FE_Camera"));return 37;}};
+struct Camera {unsigned uid;unsigned GetUID(){return uid;}const char* GetName(){return "NO_NAME_TEXT";}};
+picaContext* activeContext=nullptr;
+bool picaStereoObjectBegin(float distance){return activeContext->BeginStereoObject(distance);}
+bool RenderMenu(Camera* m_Camera){
+'''+selector+r'''
+ if(stereoModel)activeContext->EndStereoObject();return stereoModel;
 }
 '''
 with tempfile.TemporaryDirectory(prefix='srr-world-stereo-') as d:
- p=Path(d);(p/'test.cpp').write_text(fixture+projection+'}\n'+begin+end+objects+main)
+ p=Path(d);(p/'test.cpp').write_text(fixture+projection+'}\n'+begin+end+objects+menu_fixture+main)
  subprocess.run(['clang++','-std=c++17','-Wall','-Wextra','-Werror','-fsanitize=address,undefined',str(p/'test.cpp'),'-o',str(p/'test')],check=True)
  subprocess.run([str(p/'test')],check=True)
 print('PASS: world/menu/artwork depth scopes, nested-scope rejection, flat HUD/lower screen, drain order and unchanged mono scope.')
