@@ -28,6 +28,7 @@
 #include <stdio.h>
 #include <string.h>
 #include <strings.h>
+#include <errno.h>
 #include <SDL.h>
 
 enum { SRR2_MAX_TRACKED_FILES = 64 };
@@ -201,6 +202,7 @@ radSdlDrive::radSdlDrive( const char* pdrivespec, radMemoryAllocator alloc )
     m_OpenFiles( 0 ),
     m_pMutex( NULL )
 {
+    m_DrivePath[0] = '\0';
     //
     // Create a mutex for lock/unlock
     //
@@ -246,6 +248,9 @@ radSdlDrive::radSdlDrive( const char* pdrivespec, radMemoryAllocator alloc )
     }
 
 #if SDL_MAJOR_VERSION < 3
+#ifdef SRR2_OLD3DS_NATIVE_BENCH
+    printf("NATIVE_FILE_ROOT drive=%s path=%s\n", m_DriveName, m_DrivePath);
+#endif
     m_Capabilities = ( radDriveWriteable | radDriveFile );
 #else
     m_Capabilities = ( radDriveEnumerable | radDriveWriteable | radDriveDirectory | radDriveFile );
@@ -408,6 +413,14 @@ radDrive::CompletionStatus radSdlDrive::OpenFile
     }
     else
     {
+#ifdef SRR2_OLD3DS_NATIVE_BENCH
+        const int openError = errno;
+        unsigned tracked = 0;
+        for(int i = 0; i < SRR2_MAX_TRACKED_FILES; ++i)
+            if(s_Tracked[i].rw) ++tracked;
+        printf("NATIVE_FILE_OPEN_FAILED requested=%s resolved=%s mode=%s errno=%d open_files=%u tracked=%u sdl=%s\n",
+            fileName, fullName, createFlags, openError, unsigned(m_OpenFiles), tracked, SDL_GetError());
+#endif
         m_LastError = FileNotFound;
         return Error;
     }
