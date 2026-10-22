@@ -14,8 +14,7 @@ objects=s[s.index('bool picaContext::BeginStereoObject('):s.index('void picaCont
 flag_start=s.index('#ifdef SRR2_3DS_STEREO_GPU_SKIN\n        if(skinProgramBound && Graphics3DS::Stereo())')
 skin_flag=s[flag_start:s.index('#endif',flag_start)+len('#endif')]
 menu=(root/'libs/scrooby/src/FePure3dObject.cpp').read_text()
-start=menu.index('    const bool stereoModel =')
-selector=menu[start:menu.index(';',start)+1]
+assert 'picaStereoObjectBegin(' not in menu, 'Frontend close-up cameras must remain flat'
 fixture=r'''
 #include <cassert>
 #include <vector>
@@ -65,10 +64,12 @@ int main(){
  assert(!c.BeginStereoObject(.66f));c.EndWorld();c.bottomPass=false;
  c.BeginWorld();assert(!c.BeginStereoObject(.66f));c.EndWorld();
  Graphics3DS::stereo=false;assert(!c.BeginStereoObject(4.5f));
- Graphics3DS::stereo=true;activeContext=&c;
- Camera room{37},pedestal{38},other{99};
- assert(RenderMenu(&room));assert(RenderMenu(&pedestal)); // Release builds retain the UID, not the camera's name string.
- assert(!RenderMenu(&other) && !RenderMenu(nullptr));
+ Graphics3DS::stereo=true;
+ // Frontend zooms cannot acquire depth from the legacy narrow-FOV heuristic.
+ for(float fov:{.3f,1.0f,1.5707963f,2.4f}){
+  c.view.camera.fov=fov;c.SetupHardwareProjection();assert(!c.stereoOn);
+  c.UploadStereoFlag();assert(!skinDepth.back());
+ }
  c.BeginWorld();c.UploadStereoFlag();assert(skinDepth.back());
  c.EndWorld();c.UploadStereoFlag();assert(!skinDepth.back());
  c.BeginStereoObject(4.5f);c.UploadStereoFlag();assert(skinDepth.back());
@@ -77,18 +78,8 @@ int main(){
  c.skinProgramBound=true;Graphics3DS::stereo=false;c.UploadStereoFlag();assert(skinDepth.size()==writes);
 }
 '''
-menu_fixture=r'''
-struct tEntity {static unsigned MakeUID(const char* name){assert(!strcmp(name,"FE_Camera") || !strcmp(name,"Pedestal_Camera"));return !strcmp(name,"FE_Camera")?37:38;}};
-struct Camera {unsigned uid;unsigned GetUID(){return uid;}const char* GetName(){return "NO_NAME_TEXT";}};
-picaContext* activeContext=nullptr;
-bool picaStereoObjectBegin(float distance){return activeContext->BeginStereoObject(distance);}
-bool RenderMenu(Camera* m_Camera){
-'''+selector+r'''
- if(stereoModel)activeContext->EndStereoObject();return stereoModel;
-}
-'''
 with tempfile.TemporaryDirectory(prefix='srr-world-stereo-') as d:
- p=Path(d);(p/'test.cpp').write_text(fixture+projection+'}\n'+begin+end+objects+'void picaContext::UploadStereoFlag(){\n'+skin_flag+'\n}\n'+menu_fixture+main)
+ p=Path(d);(p/'test.cpp').write_text(fixture+projection+'}\n'+begin+end+objects+'void picaContext::UploadStereoFlag(){\n'+skin_flag+'\n}\n'+main)
  subprocess.run(['clang++','-std=c++17','-Wall','-Wextra','-Werror','-fsanitize=address,undefined',str(p/'test.cpp'),'-o',str(p/'test')],check=True)
  subprocess.run([str(p/'test')],check=True)
-print('PASS: world/menu/artwork depth scopes, nested-scope rejection, flat HUD/lower screen, drain order and unchanged mono scope.')
+print('PASS: world/artwork depth scopes, flat frontend zooms/HUD/lower screen, nested-scope rejection, drain order and unchanged mono scope.')

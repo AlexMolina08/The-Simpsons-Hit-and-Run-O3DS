@@ -29,10 +29,6 @@
 #include <radmath/radmath.hpp>
 #include "ResourceManager/FeResourceManager.h"
 
-#ifdef SRR2_OLD_3DS
-extern "C" bool picaStereoObjectBegin(float screenDistance);
-extern "C" void picaStereoObjectEnd(void);
-#endif
 
 // TC [HACK]: Override camera settings.
 //
@@ -511,18 +507,9 @@ void FePure3dObject::Render()
     // draw the damn thing!
     //
     rAssert( m_RuntimeDrawable != NULL );
-#ifdef SRR2_OLD_3DS
-    // Every living-room object shares this camera and screen plane, including
-    // Homer, the TV picture, glow overlays and animated gags.
-    const bool stereoModel = m_Camera &&
-        (m_Camera->GetUID() == tEntity::MakeUID("FE_Camera") ||
-         m_Camera->GetUID() == tEntity::MakeUID("Pedestal_Camera")) &&
-        picaStereoObjectBegin(4.5f);
-#endif
+    // Frontend cameras include extreme close-ups authored for a flat TV.
+    // Keep them at screen depth; dedicated vehicle previews opt in to stereo.
     m_RuntimeDrawable->Display();
-#ifdef SRR2_OLD_3DS
-    if(stereoModel) picaStereoObjectEnd();
-#endif
 
     // restore everything we changed
     //
