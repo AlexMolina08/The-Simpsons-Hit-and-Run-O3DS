@@ -2,6 +2,7 @@
 #include <presentation/gui/guimenu.h>
 #include <cheats/cheatinputsystem.h>
 #include <cheats/portsettings.h>
+#include <main/graphics3ds.h>
 #include <events/eventmanager.h>
 #include <memory/srrmemory.h>
 
@@ -11,6 +12,9 @@
 #include <Group.h>
 #include <Text.h>
 #include <Sprite.h>
+
+namespace { bool s_openGraphicsPage = false; }
+void CGuiScreenCheats::OpenGraphicsPage(bool enabled) { s_openGraphicsPage = enabled; }
 
 enum eCheatKind
 {
@@ -84,7 +88,9 @@ CGuiScreenCheats::CGuiScreenCheats
     m_applyText( NULL ),
     m_cheatIndex( 0 ),
     m_isInGame( isInGame ),
-    m_changed( false )
+    m_changed( false ),
+    m_graphicsPage( false ),
+    m_qualityValue( NULL )
 {
 MEMTRACK_PUSH_GROUP( "CGuiScreenCheats" );
     Scrooby::Page* pPage = m_pScroobyScreen != NULL ? m_pScroobyScreen->GetPage( "Display" ) : NULL;
@@ -140,6 +146,20 @@ MEMTRACK_PUSH_GROUP( "CGuiScreenCheats" );
                               SELECTION_ENABLED | VALUES_WRAPPED | TEXT_OUTLINE_ENABLED );
 
         m_pMenu->AddMenuItem( m_applyText );
+
+        Scrooby::Text* qualityLabel = resRow ? resRow->GetText("Resolution") : NULL;
+        m_qualityValue = resRow ? resRow->GetText("Resolution_Value") : NULL;
+        if(qualityLabel && m_qualityValue)
+        {
+            SetAllStrings(qualityLabel, "QUALITY MODE");
+            m_qualityValue->SetString(0, "OFF");
+            m_qualityValue->SetString(1, "ON");
+            m_pMenu->AddMenuItem(qualityLabel, m_qualityValue, NULL, NULL,
+                resRow->GetSprite("Resolution_ArrowL"), resRow->GetSprite("Resolution_ArrowR"),
+                SELECTION_ENABLED | VALUES_WRAPPED | TEXT_OUTLINE_ENABLED);
+            m_pMenu->GetMenuItem(MENU_ITEM_QUALITY)->m_itemValueCount = 2;
+            m_pMenu->SetMenuItemEnabled(MENU_ITEM_QUALITY, false, true);
+        }
 
         RefreshCheatLabels();
     }
@@ -200,6 +220,8 @@ void CGuiScreenCheats::HandleMessage
             }
             case GUI_MSG_MENU_SELECTION_VALUE_CHANGED:
             {
+                if(param1 == MENU_ITEM_QUALITY && m_graphicsPage)
+                    Graphics3DS::RequestQuality(param2 == 1);
                 if( param1 == MENU_ITEM_NO_TIMERS )
                 {
                     PortSettings::SetNoTimers( param2 == 1 );
@@ -220,6 +242,9 @@ void CGuiScreenCheats::HandleMessage
                 break;
             }
         }
+
+        if(m_graphicsPage && message == GUI_MSG_UPDATE && m_qualityValue)
+            m_qualityValue->SetIndex(Graphics3DS::RequestedQuality() ? 1 : 0);
 
         m_pMenu->HandleMessage( message, param1, param2 );
     }
@@ -293,8 +318,17 @@ void CGuiScreenCheats::RefreshCheatLabels()
 
 void CGuiScreenCheats::InitIntro()
 {
+    m_graphicsPage = s_openGraphicsPage;
     if( m_pMenu != NULL && m_pMenu->GetNumItems() == NUM_MENU_ITEMS )
     {
+        for(int item = MENU_ITEM_NO_TIMERS; item <= MENU_ITEM_APPLY; ++item)
+            m_pMenu->SetMenuItemEnabled(item, !m_graphicsPage, true);
+        m_pMenu->SetMenuItemEnabled(MENU_ITEM_QUALITY, m_graphicsPage &&
+            Graphics3DS::SystemModel() != Graphics3DS::Unknown && !Graphics3DS::Stereo(), false);
+        m_pMenu->GetMenuItem(MENU_ITEM_QUALITY)->GetItem()->SetVisible(m_graphicsPage);
+        m_qualityValue->SetVisible(m_graphicsPage);
+        m_pMenu->Reset(m_graphicsPage ? MENU_ITEM_QUALITY : MENU_ITEM_NO_TIMERS);
+        m_pMenu->SetSelectionValue(MENU_ITEM_QUALITY, Graphics3DS::RequestedQuality() ? 1 : 0);
         m_pMenu->SetSelectionValue( MENU_ITEM_NO_TIMERS, PortSettings::NoTimers() ? 1 : 0 );
         this->SetButtonVisible( BUTTON_ICON_ACCEPT, m_pMenu->GetSelection() == MENU_ITEM_APPLY );
     }

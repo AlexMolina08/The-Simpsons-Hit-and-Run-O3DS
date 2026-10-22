@@ -1,3 +1,4 @@
+#include <main/graphics3ds.h>
 #include <main/old3dsperformance.h>
 #include <main/old3dsrecurring.h>
 #ifdef SRR2_OLD3DS_NATIVE_BENCH
@@ -681,7 +682,7 @@ static void DumpVisual(FILE* f)
  const GSPGPU_FramebufferFormat format=gfxGetScreenFormat(GFX_TOP);
  unsigned char* pixels=gfxGetFramebuffer(GFX_TOP,GFX_LEFT,&width,&height);
  const unsigned bytes=unsigned(width)*height*3;
- const bool valid=pixels && format==GSP_BGR8_OES && width==240 && height==400 &&
+ const bool valid=pixels && format==GSP_BGR8_OES && width==240 && (height==400 || height==800) &&
      R_SUCCEEDED(GSPGPU_InvalidateDataCache(pixels,bytes));
  fprintf(f,"NATIVE_VISUAL enabled=1 valid=%u screen=top raw_width=%u raw_height=%u format=%u back_buffer=1 age_unknown=1 after_route=1 performance_capture=0\n",valid,width,height,unsigned(format));
  if(!valid)return;
@@ -757,6 +758,7 @@ void Dump(){if(!enabled)return;
  fprintf(f,"NATIVE_AUTOMATION diagnostic=%u resident=%u uniforms=%u context_mode=%u source=automation_only clock_complete=%u validation_instrumented=%u gpu_last_is_unassociated=1\n",diagnostic,residentShaders,nativeUniforms,nativeContextMode,done && !aborted,
  0u
  );
+ fprintf(f,"NATIVE_GRAPHICS model=%u quality=%u stereo=%u width=%u height=240 target_fps=%u\n",unsigned(Graphics3DS::SystemModel()),Graphics3DS::Quality(),Graphics3DS::Stereo(),Graphics3DS::RenderWidth(),Graphics3DS::TargetFPS());
  fprintf(f,"NATIVE_QUALITY mode=%u draw_distance=%.1f ambient_traffic=%u ambient_pedestrians=%u physics_step_ms=%u audio_predictors=%u particle_emission_scale=%.2f distant_pedestrian_actions=%u flat_lighting=%u shadow_distance=%.1f mission_simulation=full\n",Old3dsPerformance::mode,Old3dsPerformance::Enabled()?Old3dsPerformance::DrawDistance():200.0f,Old3dsPerformance::Enabled()?Old3dsPerformance::TrafficLimit():5u,Old3dsPerformance::Enabled()?Old3dsPerformance::PedestrianLimit():7u,Old3dsPerformance::PhysicsStepMilliseconds(),Old3dsPerformance::ReducedAudioSearch()?3u:8u,Old3dsPerformance::ParticleEmissionScale(),Old3dsPerformance::DistantPedestrianActions(),Old3dsPerformance::FlatLighting(),Old3dsPerformance::Enabled()?0.0f:200.0f);
  fprintf(f,"NATIVE_PORTRAIT angle=%u level=%u performance_capture=0\n",portrait,portraitLevel);
 #ifdef SRR2_OLD3DS_NATIVE_CONTEXT

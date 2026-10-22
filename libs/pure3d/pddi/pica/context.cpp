@@ -114,6 +114,10 @@ extern "C" void C3Di_RenderQueueWaitDone(void);
 
 extern "C" const unsigned char pddi_pica_shbin[];
 extern "C" const unsigned int  pddi_pica_shbin_size;
+#ifdef SRR2_3DS_STEREO_GPU_SKIN
+extern "C" const unsigned char pddi_stereo_main_shbin[], pddi_stereo_skin_shbin[];
+extern "C" const unsigned int pddi_stereo_main_shbin_size, pddi_stereo_skin_shbin_size;
+#endif
 #ifdef SRR2_OLD3DS_GPU_SKIN
 #include "skin_shbin.h"
 #ifdef SRR2_OLD3DS_GPU_SKIN_EYE_PALETTE
@@ -240,7 +244,12 @@ picaContext::picaContext(picaDevice* dev, picaDisplay* disp)
 
     extGamma = new picaExtGamma;
 
+#ifdef SRR2_3DS_STEREO_GPU_SKIN
+    shaderBinary = Graphics3DS::Stereo() ? DVLB_ParseFile((u32*)pddi_stereo_main_shbin, pddi_stereo_main_shbin_size) :
+        DVLB_ParseFile((u32*)pddi_pica_shbin, pddi_pica_shbin_size);
+#else
     shaderBinary = DVLB_ParseFile((u32*)pddi_pica_shbin, pddi_pica_shbin_size);
+#endif
     PDDIASSERT(shaderBinary != NULL);
     if(shaderBinary == NULL)
     {
@@ -282,7 +291,12 @@ picaContext::picaContext(picaDevice* dev, picaDisplay* disp)
         noNormalLayout = false;
 #endif
 #ifdef SRR2_OLD3DS_GPU_SKIN
+#ifdef SRR2_3DS_STEREO_GPU_SKIN
+    skinBinary = Graphics3DS::Stereo() ? DVLB_ParseFile((u32*)pddi_stereo_skin_shbin, pddi_stereo_skin_shbin_size) :
+        DVLB_ParseFile((u32*)pddi_skin_shbin, pddi_skin_shbin_size);
+#else
     skinBinary = DVLB_ParseFile((u32*)pddi_skin_shbin, pddi_skin_shbin_size);
+#endif
     if(skinBinary) {
         shaderProgramInit(&skinProgram);
         shaderProgramSetVsh(&skinProgram, &skinBinary->DVLE[0]);
@@ -669,6 +683,14 @@ void picaContext::SetupViewport(void)
         wantViewport[3] = wantViewport[3] * display->WorldWidth() / PICA_SCREEN_WIDTH;
     }
 #endif
+#ifdef SRR2_OLD_3DS
+    if(!display->IsWorldTarget())
+    {
+        // Logical coordinates stay 400x240; wide output samples twice horizontally.
+        wantViewport[1] = wantViewport[1] * display->RenderWidth() / PICA_SCREEN_WIDTH;
+        wantViewport[3] = wantViewport[3] * display->RenderWidth() / PICA_SCREEN_WIDTH;
+    }
+#endif
     ApplyViewport();
 }
 
@@ -785,6 +807,13 @@ void picaContext::SetScissor(pddiRect* rect)
             (w - r->right) * display->WorldWidth() / w,
             (h - r->top) * display->WorldHeight() / h,
             (w - r->left) * display->WorldWidth() / w);
+        return;
+    }
+    if(!bottomPass)
+    {
+        C3D_SetScissor(GPU_SCISSOR_NORMAL, (u32)(h-r->bottom),
+            (u32)((w-r->right)*display->RenderWidth()/w), (u32)(h-r->top),
+            (u32)((w-r->left)*display->RenderWidth()/w));
         return;
     }
 #endif
@@ -1411,6 +1440,9 @@ void picaContext::SetVertexUniforms(bool lit, pddiColour ambient, pddiColour dif
     if(skinProgramBound)
     {
         static_assert(VSH_FVEC_u_eye_quant == 95, "Packed scales follow the bone palette");
+#ifdef SRR2_3DS_STEREO_GPU_SKIN
+        if(!Graphics3DS::Stereo())
+#endif
         C3D_FVUnifSet(GPU_VERTEX_SHADER, VSH_FVEC_u_eye_quant,
                       1.0f / 8192.0f, 1.0f / 32768.0f, 1.0f / 4096.0f, 1.0f);
     }
@@ -3402,6 +3434,12 @@ bool picaPrimBuffer::TryGpuSkin(pddiShader *material, const pddiMatrix *const *m
             reason = picaSkin::Disabled;
     }
 #ifdef SRR2_OLD3DS_GPU_SKIN
+#ifndef SRR2_3DS_STEREO_GPU_SKIN
+    // Compact skin shaders spend their uniform budget on bones and have no eye offset.
+    // Use the existing CPU skin fallback so characters retain correct stereo depth.
+    if (reason == picaSkin::Ready && Graphics3DS::Stereo())
+        reason = picaSkin::NoShader;
+#endif
     if (reason == picaSkin::Ready && !g_picaInFrame)
         reason = picaSkin::NoFrame;
     if (reason == picaSkin::Ready && (!skinAllocation || !context->skinBinary))

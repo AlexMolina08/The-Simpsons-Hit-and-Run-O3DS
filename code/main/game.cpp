@@ -1,3 +1,4 @@
+#include <main/graphics3ds.h>
 #include <main/old3dsperformance.h>
 #ifdef SRR2_OLD_3DS
 unsigned Old3dsPerformance::mode = 7;
@@ -652,6 +653,7 @@ void Game::Run()
         #ifdef SRR2_OLD3DS_CAUSAL_DIAG
         // Begin after the interval capture resets its counters below.
 #endif
+        Graphics3DS::AllowChanges(ctx == CONTEXT_FRONTEND || ctx == CONTEXT_PAUSE);
         const u64 frameStartTick = svcGetSystemTick();
         const u64 diagnosticTick = svcGetSystemTick();
         const u64 sampleTicks = diagnosticTick - lastDiagnosticTick;
@@ -985,7 +987,7 @@ void Game::Run()
         // The original backend can spin while FrameBegin skips a busy GPU.
         // A 30 Hz deadline gives simulation, loading and input one bounded frame
         // budget and lets other threads run on the original ARM11 hardware.
-        const u64 frameBudgetTicks = (u64)SYSCLOCK_ARM11 / 30;
+        const u64 frameBudgetTicks = (u64)SYSCLOCK_ARM11 / Graphics3DS::TargetFPS();
         const u64 frameTicks = svcGetSystemTick() - frameStartTick;
         const double currentWorkMs = frameTicks * 1000.0 / SYSCLOCK_ARM11;
 #ifdef SRR2_OLD3DS_CAUSAL_DIAG
@@ -1000,7 +1002,12 @@ void Game::Run()
         workMs += currentWorkMs;
         if(currentWorkMs > peakWorkMs) peakWorkMs = currentWorkMs;
         if(frameTicks > frameBudgetTicks) ++overBudgetFrames;
-        if(frameTicks < frameBudgetTicks)
+        if(Graphics3DS::IsNew() && Graphics3DS::TargetFPS() == 60)
+        {
+            // Follow the LCD refresh instead of drifting against a nominal 60 Hz clock.
+            gspWaitForVBlank();
+        }
+        else if(frameTicks < frameBudgetTicks)
             svcSleepThread((s64)((frameBudgetTicks - frameTicks) * 1000000000ULL / SYSCLOCK_ARM11));
 #endif
 

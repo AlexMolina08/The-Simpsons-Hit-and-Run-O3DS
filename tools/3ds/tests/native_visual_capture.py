@@ -16,13 +16,13 @@ enum {GFX_TOP,GFX_LEFT};
 static bool visualCapture=false;
 static unsigned syncs=0,invalidations=0;
 static int cacheResult=0;
-static unsigned char pixels[240*400*3];
+static unsigned char pixels[240*800*3];
 static u16 rawWidth=240,rawHeight=400;
 static GSPGPU_FramebufferFormat selected=GSP_BGR8_OES;
 void C3D_FrameSync(){++syncs;}
 GSPGPU_FramebufferFormat gfxGetScreenFormat(int){return selected;}
 unsigned char* gfxGetFramebuffer(int,int,u16* w,u16* h){*w=rawWidth;*h=rawHeight;return pixels;}
-int GSPGPU_InvalidateDataCache(void* p,unsigned n){assert(p==pixels && n==sizeof(pixels));++invalidations;return cacheResult;}
+int GSPGPU_InvalidateDataCache(void* p,unsigned n){assert(p==pixels && n==unsigned(rawWidth)*rawHeight*3);++invalidations;return cacheResult;}
 '''
 main=r'''
 int main(){
@@ -36,7 +36,9 @@ int main(){
  char buffer[4096];size_t n;while((n=fread(buffer,1,sizeof(buffer),f)))fwrite(buffer,1,n,stdout);fclose(f);
  cacheResult=-1;f=tmpfile();DumpVisual(f);assert(syncs==2 && invalidations==2);rewind(f);
  char failed[512]={};assert(fread(failed,1,sizeof(failed)-1,f)>0);assert(std::strstr(failed,"valid=0") && !std::strstr(failed,"NATIVE_VISUAL_BYTES"));fclose(f);
- rawWidth=239;f=tmpfile();DumpVisual(f);assert(syncs==3 && invalidations==2);fclose(f);
+ cacheResult=0;rawHeight=800;f=tmpfile();DumpVisual(f);assert(syncs==3 && invalidations==3);
+ assert(ftell(f)>576000);fclose(f);
+ rawWidth=239;f=tmpfile();DumpVisual(f);assert(syncs==4 && invalidations==3);fclose(f);
 }
 '''
 with tempfile.TemporaryDirectory() as d:

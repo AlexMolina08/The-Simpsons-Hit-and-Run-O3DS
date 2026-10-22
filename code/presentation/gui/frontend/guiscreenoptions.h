@@ -57,6 +57,9 @@ private:
 
     enum eMenuItem
     {
+#ifdef RAD_3DS
+        MENU_ITEM_DISPLAY_MODE,
+#endif
 #if defined( RAD_PC ) || defined( RAD_3DS )
         MENU_ITEM_DISPLAY,
 #endif
@@ -64,7 +67,9 @@ private:
         MENU_ITEM_SOUND,
         MENU_ITEM_VIEW_MOVIES,
         MENU_ITEM_VIEW_CREDITS,
+#ifndef RAD_3DS
         MENU_ITEM_DISPLAY_MODE,
+#endif
 
         NUM_MENU_ITEMS
     };

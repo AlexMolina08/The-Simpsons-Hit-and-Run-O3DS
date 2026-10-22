@@ -13,6 +13,7 @@ namespace
 
     bool s_Loaded   = false;
     bool s_NoTimers = false;
+    int s_GraphicsQuality[3] = {-1, -1, -1};
 
     void LoadOnce()
     {
@@ -36,6 +37,10 @@ namespace
             {
                 s_NoTimers = ( value != 0 );
             }
+
+            unsigned group = 0;
+            if(sscanf(line, "graphics_quality_%u=%d", &group, &value) == 2 &&
+               group < 3 && (value == 0 || value == 1)) s_GraphicsQuality[group] = value;
 
         }
         fclose( f );
@@ -64,5 +69,20 @@ void PortSettings::Save()
         return;
     }
     fprintf( f, "notimers=%d\n", s_NoTimers ? 1 : 0 );
+    for(unsigned group = 0; group < 3; ++group)
+        if(s_GraphicsQuality[group] >= 0)
+            fprintf(f, "graphics_quality_%u=%d\n", group, s_GraphicsQuality[group]);
     fclose( f );
+}
+
+bool PortSettings::GraphicsQuality(unsigned group, bool defaultValue)
+{
+    LoadOnce();
+    return group < 3 && s_GraphicsQuality[group] >= 0 ? s_GraphicsQuality[group] != 0 : defaultValue;
+}
+
+void PortSettings::SetGraphicsQuality(unsigned group, bool enabled)
+{
+    LoadOnce();
+    if(group < 3) s_GraphicsQuality[group] = enabled ? 1 : 0;
 }

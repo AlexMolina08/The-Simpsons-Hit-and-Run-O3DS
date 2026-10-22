@@ -220,6 +220,32 @@ if(SRR2_P3D_PDDI STREQUAL "PICA")
         list(APPEND PDDI_SOURCES "pddi/pica/nativeuniforms.c")
     endif()
 
+    if(SRR2_OLD_3DS AND SRR2_OLD3DS_GPU_SKIN_PACKED AND SRR2_OLD3DS_GPU_SKIN_EYE_PALETTE AND SRR2_OLD3DS_DIRECTIONAL_LIGHT)
+        add_definitions(-DSRR2_3DS_STEREO_GPU_SKIN)
+        foreach(kind main skin)
+            if(kind STREQUAL "main")
+                set(stereo_source "${PICA_SHADER_SRC}")
+                set(stereo_symbol pddi_stereo_main_shbin)
+            else()
+                set(stereo_source "${PICA_SKIN_SRC}")
+                set(stereo_symbol pddi_stereo_skin_shbin)
+            endif()
+            set(stereo_base "${CMAKE_CURRENT_BINARY_DIR}/stereo_${kind}")
+            list(APPEND PDDI_SOURCES "${stereo_base}_shbin.c")
+            add_custom_command(OUTPUT "${stereo_base}.v.pica"
+                COMMAND "${CMAKE_COMMAND}" "-DINPUT=${stereo_source}" "-DOUTPUT=${stereo_base}.v.pica"
+                    "-DMODE=${kind}" -P "${CMAKE_SOURCE_DIR}/cmake/stereo_shader.cmake"
+                DEPENDS "${stereo_source}" "${CMAKE_SOURCE_DIR}/cmake/stereo_shader.cmake" VERBATIM)
+            add_custom_command(OUTPUT "${stereo_base}.shbin" "${stereo_base}_shbin.h"
+                COMMAND "${PICASSO_EXE}" -o "${stereo_base}.shbin" -h "${stereo_base}_shbin.h" "${stereo_base}.v.pica"
+                DEPENDS "${stereo_base}.v.pica" VERBATIM)
+            add_custom_command(OUTPUT "${stereo_base}_shbin.c"
+                COMMAND "${CMAKE_COMMAND}" "-DINPUT=${stereo_base}.shbin" "-DOUTPUT=${stereo_base}_shbin.c"
+                    "-DSYMBOL=${stereo_symbol}" -P "${CMAKE_SOURCE_DIR}/cmake/bin2c.cmake"
+                DEPENDS "${stereo_base}.shbin" "${CMAKE_SOURCE_DIR}/cmake/bin2c.cmake" VERBATIM)
+        endforeach()
+    endif()
+
 	add_custom_command(
 		OUTPUT  "${CMAKE_CURRENT_BINARY_DIR}/pddi.shbin"
 		        "${CMAKE_CURRENT_BINARY_DIR}/pddi_shbin.h"

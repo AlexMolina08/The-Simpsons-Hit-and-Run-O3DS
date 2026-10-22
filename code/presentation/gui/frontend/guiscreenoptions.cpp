@@ -1,3 +1,6 @@
+#ifdef RAD_3DS
+#include <presentation/gui/frontend/guiscreencheats.h>
+#endif
 //===========================================================================
 // Copyright (C) 2000 Radical Entertainment Ltd.  All rights reserved.
 //
@@ -89,6 +92,9 @@ MEMTRACK_PUSH_GROUP( "CGUIScreenOptions" );
     Scrooby::Group* pGroup = pPage->GetGroup( "Menu" );
     rAssert( pGroup != NULL );
 
+#ifdef RAD_3DS
+    m_pMenu->AddMenuItem(pGroup->GetText("DisplayMode"));
+#endif
 #if defined( RAD_PC ) || defined( RAD_3DS )
     m_pMenu->AddMenuItem( pGroup->GetText( "Display" ) );
 #endif
@@ -111,6 +117,7 @@ MEMTRACK_PUSH_GROUP( "CGUIScreenOptions" );
     }
 #endif
 
+#ifndef RAD_3DS
     m_pMenu->AddMenuItem( pGroup->GetText( "DisplayMode" ),
                           pGroup->GetText( "DisplayMode_Value" ),
                           NULL,
@@ -118,6 +125,7 @@ MEMTRACK_PUSH_GROUP( "CGUIScreenOptions" );
                           pGroup->GetSprite( "DisplayMode_ArrowL" ),
                           pGroup->GetSprite( "DisplayMode_ArrowR" ),
                           SELECTION_ENABLED | VALUES_WRAPPED | TEXT_OUTLINE_ENABLED );
+#endif
 
 #ifdef RAD_DEMO
     m_pMenu->SetMenuItemEnabled( MENU_ITEM_VIEW_MOVIES, false );
@@ -143,7 +151,15 @@ MEMTRACK_PUSH_GROUP( "CGUIScreenOptions" );
 //#ifndef RAD_PS2
     // hide display mode menu item for non-PS2 platforms
     //
+#ifdef RAD_3DS
+    Scrooby::Text* graphicsLabel = pGroup->GetText("DisplayMode");
+    if(graphicsLabel) graphicsLabel->SetString(0, "GRAPHICS");
+    m_pMenu->SetMenuItemEnabled(MENU_ITEM_DISPLAY_MODE, true, true);
+    m_pMenu->GetMenuItem(MENU_ITEM_DISPLAY_MODE)->m_itemValueCount = 0;
+    m_pMenu->GetMenuItem(MENU_ITEM_DISPLAY_MODE)->m_attributes |= SELECTABLE;
+#else
     m_pMenu->SetMenuItemEnabled( MENU_ITEM_DISPLAY_MODE, false, true );
+#endif
 
     #if !defined( RAD_PC ) && !defined( RAD_3DS )
     // re-center menu items
@@ -316,7 +332,11 @@ void CGuiScreenOptions::HandleMessage
         {
             case GUI_MSG_MENU_SELECTION_CHANGED:
             {
+#ifdef RAD_3DS
+                this->SetButtonVisible(BUTTON_ICON_ACCEPT, true);
+#else
                 this->SetButtonVisible( BUTTON_ICON_ACCEPT, param1 != MENU_ITEM_DISPLAY_MODE );
+#endif
 
                 break;
             }
@@ -344,6 +364,12 @@ void CGuiScreenOptions::HandleMessage
             {
                 switch( param1 )
                 {
+#ifdef RAD_3DS
+                    case MENU_ITEM_DISPLAY_MODE:
+                        CGuiScreenCheats::OpenGraphicsPage(true);
+                        m_pParent->HandleMessage(GUI_MSG_GOTO_SCREEN, GUI_SCREEN_ID_DISPLAY);
+                        break;
+#endif
                     case MENU_ITEM_CONTROLLER:
                     {
                         m_pParent->HandleMessage( GUI_MSG_GOTO_SCREEN, GUI_SCREEN_ID_CONTROLLER );
@@ -385,6 +411,9 @@ void CGuiScreenOptions::HandleMessage
 #if defined( RAD_PC ) || defined( RAD_3DS )
                     case MENU_ITEM_DISPLAY:
                     {
+#ifdef RAD_3DS
+                        CGuiScreenCheats::OpenGraphicsPage(false);
+#endif
                         m_pParent->HandleMessage( GUI_MSG_GOTO_SCREEN, GUI_SCREEN_ID_DISPLAY );
 
                         break;
@@ -471,11 +500,13 @@ void CGuiScreenOptions::InitIntro()
 #endif
 
     rAssert( m_pMenu != NULL );
+#ifndef RAD_3DS
     if( m_pMenu->GetSelection() == MENU_ITEM_DISPLAY_MODE )
     {
         this->SetButtonVisible( BUTTON_ICON_ACCEPT, false );
     }
 
+#endif
 #ifdef RAD_PS2
     // update current display mode
     //

@@ -157,6 +157,7 @@ set(SRR2_SOURCES
 	"main/linearlock3ds.cpp"
 	"main/commandlineoptions.cpp"
 	"main/game.cpp"
+	"main/graphics3ds.cpp"
     "main/old3dsexperiment.cpp"
     "main/nativebench.cpp"
     "main/old3dsrecurring.cpp"

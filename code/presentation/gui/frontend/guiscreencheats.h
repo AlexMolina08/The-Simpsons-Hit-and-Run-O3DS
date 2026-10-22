@@ -13,6 +13,8 @@ namespace Scrooby
 class CGuiScreenCheats : public CGuiScreen
 {
 public:
+    static void OpenGraphicsPage(bool enabled);
+    bool IsGraphicsPage() const { return m_graphicsPage; }
     CGuiScreenCheats( Scrooby::Screen* pScreen, CGuiEntity* pParent, bool isInGame );
     virtual ~CGuiScreenCheats();
 
@@ -33,6 +35,7 @@ private:
         MENU_ITEM_NO_TIMERS,
         MENU_ITEM_CHEAT,
         MENU_ITEM_APPLY,
+        MENU_ITEM_QUALITY,
 
         NUM_MENU_ITEMS
     };
@@ -47,5 +50,7 @@ private:
     int m_cheatIndex;
     bool m_isInGame;
     bool m_changed;
+    bool m_graphicsPage;
+    Scrooby::Text* m_qualityValue;
 };
 #endif
