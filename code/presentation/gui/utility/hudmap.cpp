@@ -2453,7 +2453,19 @@ namespace
             Rounded(29,124+press,51,143+press,tColour(130,126,145),tColour(53,50,67));
             Ascii(font,"X",35,138+press,13,White,14);
             P3D_UNICODE label[32];p3d::AsciiToUnicode(caption,label,32);
-            Wrapped(font,label,12,149+press,56,12,2,s_hudActionPressed?Ink:White,27,true);
+            // Fit compelete words rather than letting the narrow caption split glyphs across rows.
+            P3D_UNICODE* second=NULL;
+            for(P3D_UNICODE* c=label;*c;++c)if(*c==' '){*c=0;second=c+1;break;}
+            const unsigned rows=second?2:1;
+            const float top=149+press+(27-(rows*12+(rows-1)*3))*0.5f;
+            for(unsigned row=0;row<rows;++row){
+                const P3D_UNICODE* word=row?second:label;
+                const float naturalWidth=font->GetTextWidth(word)*12/font->GetFontHeight();
+                const float height=naturalWidth>56?12*56/naturalWidth:12;
+                const float width=font->GetTextWidth(word)*height/font->GetFontHeight();
+                const float baseline=top+row*15+(12-height)*0.5f+height*font->GetFontBaseLine()/font->GetFontHeight();
+                BottomLabel(font,word,12+(56-width)*0.5f,baseline,height,s_hudActionPressed?Ink:White,56);
+            }
         }
         if(text)Wrapped(font,text,hasPortrait?64:20,190,hasPortrait?237:280,13,3,White,41);
         FlushUI();nativePass.End();picaBottomScreenEnd();
