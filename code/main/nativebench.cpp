@@ -695,6 +695,7 @@ static void DumpVisual(FILE* f)
  }
  fprintf(f,"NATIVE_VISUAL_END bytes=%u\n",bytes);
 }
+extern "C" void picaDumpStereoDiagnostics(FILE*);
 void Dump(){if(!enabled)return;
  FILE*f=fopen("native-" SRR2_OLD3DS_BUILD_ID ".log","w");if(!f)return;
  unsigned optionalDiagnostics=0,memoryDiagnostics=0;
@@ -705,6 +706,7 @@ void Dump(){if(!enabled)return;
  memoryDiagnostics=1;
 #endif
  Old3dsRecurring::Dump(f);
+ picaDumpStereoDiagnostics(f);
  fprintf(f,"NATIVE_FUSED_TRIG enabled=1 nearest_only=1 bounded_radians=8192 per_call_counters=0 runtime_selector=0\n");
  old3dsDumpAdpcmVerification(f);
  fprintf(f,"NATIVE_ADPCM_FAST enabled=%u calls=%u fallbacks=%u predictor_order_unchanged=%u budget_calls=%u budget_predictors=3 callbacks_deferred=0\n",g_old3dsAdpcmFast,g_old3dsAdpcmFastCalls,g_old3dsAdpcmFastFallbacks,g_old3dsAdpcmBudgetCalls==0,g_old3dsAdpcmBudgetCalls);

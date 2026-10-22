@@ -16,6 +16,17 @@ extern "C" void picaNativeUniformInvalidate(GPU_SHADER_TYPE type, int first, int
 
 static const float PICA_STEREO_MAX_SHIFT   = 0.045f;
 
+#ifdef SRR2_OLD3DS_NATIVE_BENCH
+static unsigned stereoFrames = 0, stereoSegments = 0;
+static float minimumStereoSlider = 1.0f, maximumStereoSlider = 0.0f;
+extern "C" void picaDumpStereoDiagnostics(FILE* file)
+{
+    fprintf(file, "NATIVE_STEREO active_frames=%u replayed_segments=%u minimum_slider=%.4f maximum_slider=%.4f scope=whole_session cpu_scene_traversals_per_segment=1\n",
+        stereoFrames, stereoSegments, minimumStereoSlider, maximumStereoSlider);
+}
+#endif
+
+
 static void picaWriteEye(float shift)
 {
     C3D_FVec v;
@@ -360,6 +371,15 @@ void picaDisplay::BeginFrame(void)
         stereoThisFrame = (targetRight != NULL) && (slider > 0.01f);
         eyeShift = stereoThisFrame ? slider * PICA_STEREO_MAX_SHIFT : 0.0f;
 
+#ifdef SRR2_OLD3DS_NATIVE_BENCH
+        if(stereoThisFrame)
+        {
+            ++stereoFrames;
+            if(slider < minimumStereoSlider) minimumStereoSlider = slider;
+            if(slider > maximumStereoSlider) maximumStereoSlider = slider;
+        }
+#endif
+
         StartTopSegment();
 
         inFrame = true;
@@ -374,7 +394,7 @@ void picaDisplay::StartTopSegment(void)
         if(context) context->FlushStreams();
         C3Di_UpdateContext();
         picaWriteEye(-eyeShift);
-        C3D_FrameSplit(0);
+        C3D_FrameSplit(GX_CMDLIST_FLUSH);
     }
     else
     {
@@ -392,12 +412,17 @@ void picaDisplay::FinishTopSegment(void)
     u32  sceneSize = 0;
     if(C3Di_SplitFrame(&sceneBuf, &sceneSize))
     {
-        GX_ProcessCommandList(sceneBuf, sceneSize * 4, 0);
+#ifdef SRR2_OLD3DS_NATIVE_BENCH
+        ++stereoSegments;
+#endif
+        // Old-model EndFrame flushes only its final command segment. Publish
+        // this scene segment before either eye consumes it on real hardware.
+        GX_ProcessCommandList(sceneBuf, sceneSize * 4, GX_CMDLIST_FLUSH);
 
         C3D_FrameDrawOn(targetRight);
         C3Di_UpdateContext();
         picaWriteEye(eyeShift);
-        C3D_FrameSplit(0);
+        C3D_FrameSplit(GX_CMDLIST_FLUSH);
 
         GX_ProcessCommandList(sceneBuf, sceneSize * 4, 0);
     }
