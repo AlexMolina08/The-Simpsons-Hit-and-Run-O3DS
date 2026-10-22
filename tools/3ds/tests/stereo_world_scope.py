@@ -11,6 +11,8 @@ def prefix(name,ending):
 begin=prefix('BeginWorld','    if(display->BeginWorldTarget())')
 end=prefix('EndWorld','    if(!display->IsWorldTarget()) return;')
 objects=s[s.index('bool picaContext::BeginStereoObject('):s.index('void picaContext::BeginWorld(void)')]
+flag_start=s.index('#ifdef SRR2_3DS_STEREO_GPU_SKIN\n        if(skinProgramBound && Graphics3DS::Stereo())')
+skin_flag=s[flag_start:s.index('#endif',flag_start)+len('#endif')]
 menu=(root/'libs/scrooby/src/FePure3dObject.cpp').read_text()
 start=menu.index('    const bool stereoModel =')
 selector=menu[start:menu.index(';',start)+1]
@@ -19,12 +21,16 @@ fixture=r'''
 #include <vector>
 #include <cstring>
 #define SRR2_OLD_3DS
+#define SRR2_3DS_STEREO_GPU_SKIN
 namespace Graphics3DS {bool stereo=false;bool Stereo(){return stereo;}}
+enum {GPU_VERTEX_SHADER};std::vector<bool> skinDepth;
+void C3D_BoolUnifSet(int shader,int slot,bool value){assert(shader==GPU_VERTEX_SHADER && slot==0x6b);skinDepth.push_back(value);}
 enum {PDDI_PROJECTION_PERSPECTIVE,PDDI_PROJECTION_ORTHOGRAPHIC};
 struct View {int projectionMode=PDDI_PROJECTION_PERSPECTIVE;struct {float fov=1.57f;} camera;};
 struct picaContext {
  View view;struct {View* viewState;} state{&view};
  bool stereoWorldPass=false,stereoObjectPass=false,stereoOn=false,bottomPass=false;
+ bool skinProgramBound=true;void UploadStereoFlag();
  float stereoObjectDistance=0;unsigned updates=0;std::vector<bool> flushDepth;
  void SetupHardwareProjection();void FlushStreams(){flushDepth.push_back(stereoOn);}
  void BeginWorld();void EndWorld();
@@ -60,13 +66,19 @@ int main(){
  c.BeginWorld();assert(!c.BeginStereoObject(.66f));c.EndWorld();
  Graphics3DS::stereo=false;assert(!c.BeginStereoObject(4.5f));
  Graphics3DS::stereo=true;activeContext=&c;
- Camera room{37},other{99};
- assert(RenderMenu(&room)); // Release builds retain the UID, not the camera's name string.
+ Camera room{37},pedestal{38},other{99};
+ assert(RenderMenu(&room));assert(RenderMenu(&pedestal)); // Release builds retain the UID, not the camera's name string.
  assert(!RenderMenu(&other) && !RenderMenu(nullptr));
+ c.BeginWorld();c.UploadStereoFlag();assert(skinDepth.back());
+ c.EndWorld();c.UploadStereoFlag();assert(!skinDepth.back());
+ c.BeginStereoObject(4.5f);c.UploadStereoFlag();assert(skinDepth.back());
+ c.EndStereoObject();c.UploadStereoFlag();assert(!skinDepth.back());
+ const unsigned writes=skinDepth.size();c.skinProgramBound=false;c.UploadStereoFlag();
+ c.skinProgramBound=true;Graphics3DS::stereo=false;c.UploadStereoFlag();assert(skinDepth.size()==writes);
 }
 '''
 menu_fixture=r'''
-struct tEntity {static unsigned MakeUID(const char* name){assert(!strcmp(name,"FE_Camera"));return 37;}};
+struct tEntity {static unsigned MakeUID(const char* name){assert(!strcmp(name,"FE_Camera") || !strcmp(name,"Pedestal_Camera"));return !strcmp(name,"FE_Camera")?37:38;}};
 struct Camera {unsigned uid;unsigned GetUID(){return uid;}const char* GetName(){return "NO_NAME_TEXT";}};
 picaContext* activeContext=nullptr;
 bool picaStereoObjectBegin(float distance){return activeContext->BeginStereoObject(distance);}
@@ -76,7 +88,7 @@ bool RenderMenu(Camera* m_Camera){
 }
 '''
 with tempfile.TemporaryDirectory(prefix='srr-world-stereo-') as d:
- p=Path(d);(p/'test.cpp').write_text(fixture+projection+'}\n'+begin+end+objects+menu_fixture+main)
+ p=Path(d);(p/'test.cpp').write_text(fixture+projection+'}\n'+begin+end+objects+'void picaContext::UploadStereoFlag(){\n'+skin_flag+'\n}\n'+menu_fixture+main)
  subprocess.run(['clang++','-std=c++17','-Wall','-Wextra','-Werror','-fsanitize=address,undefined',str(p/'test.cpp'),'-o',str(p/'test')],check=True)
  subprocess.run([str(p/'test')],check=True)
 print('PASS: world/menu/artwork depth scopes, nested-scope rejection, flat HUD/lower screen, drain order and unchanged mono scope.')

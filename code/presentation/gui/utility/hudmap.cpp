@@ -2345,6 +2345,9 @@ namespace
         p3d::stack->LoadIdentity();p3d::stack->Translate(-0.5f,-0.375f,0.5f);
         // Upper LCD is 400 pixels wide. Keep lettering and portraits square.
         p3d::stack->Scale(0.8f,1,1);
+#ifdef SRR2_OLD_3DS
+        const bool stereoCard = picaStereoObjectBegin(0.95f);
+#endif
         const float width=lines==1?fmaxf(240,layout.width+(hasPortrait?88:32)):360;
         const float left=(400-width)*0.5f;
         Rounded(left,top,left+width,top+height,tColour(62,53,95,200),tColour(26,25,49,212));
@@ -2358,7 +2361,11 @@ namespace
             if(hasPortrait)ObjectiveArt(portrait,60,120,48);
             Wrapped(font,text,hasPortrait?96:64,top+12,272,16,7,Gold,height-24);
         }
-        FlushUI();nativePass.End();
+        FlushUI();
+#ifdef SRR2_OLD_3DS
+        if(stereoCard) picaStereoObjectEnd();
+#endif
+        nativePass.End();
     }
 
     void DrawUpperStats(tView* view,CGuiScreen* screen)

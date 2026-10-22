@@ -514,7 +514,9 @@ void FePure3dObject::Render()
 #ifdef SRR2_OLD_3DS
     // Every living-room object shares this camera and screen plane, including
     // Homer, the TV picture, glow overlays and animated gags.
-    const bool stereoModel = m_Camera && m_Camera->GetUID() == tEntity::MakeUID("FE_Camera") &&
+    const bool stereoModel = m_Camera &&
+        (m_Camera->GetUID() == tEntity::MakeUID("FE_Camera") ||
+         m_Camera->GetUID() == tEntity::MakeUID("Pedestal_Camera")) &&
         picaStereoObjectBegin(4.5f);
 #endif
     m_RuntimeDrawable->Display();
