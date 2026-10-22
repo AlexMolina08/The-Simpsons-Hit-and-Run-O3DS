@@ -191,11 +191,20 @@ protected:
     DVLB_s*         shaderBinary;
     shaderProgram_s shaderProgram;
     bool stereoOn;
+#ifdef SRR2_3DS_STEREO_GPU_SKIN
+    DVLB_s* stereoShaderBinary = nullptr;
+    DVLB_s* stereoSkinBinary = nullptr;
+    shaderProgram_s stereoShaderProgram, stereoSkinProgram;
+#endif
+    shaderProgram_s* MainProgram();
+    shaderProgram_s* SkinProgram();
 #ifdef SRR2_OLD_3DS
     bool stereoWorldPass;
 #endif
 
 public:
+    bool StereoShadersReady() const;
+    void PrepareFramePrograms();
 #ifdef SRR2_OLD3DS_UNLIT_PROJECTION
     void DumpUnlitProjectionStats();
 #endif

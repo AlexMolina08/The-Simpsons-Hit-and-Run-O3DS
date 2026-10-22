@@ -26,6 +26,7 @@ enum {GPU_RB_RGBA8,GPU_RB_DEPTH24_STENCIL8,GFX_TOP,GFX_LEFT,GFX_RIGHT};
 const int PICA_SCREEN_WIDTH=400,PICA_SCREEN_HEIGHT=240,PICA_BOTTOM_HEIGHT=240,PICA_BOTTOM_WIDTH=320;
 struct C3D_RenderTarget {int width;};
 bool synced=false,failWide=false,failRight=false,wide=false,stereo=false;
+bool readyStereo=true,shaderStereo=false;
 unsigned allocations=0,deleted=0;
 bool queueDone=false;
 void C3Di_RenderQueueWaitDone(){queueDone=true;}
@@ -39,9 +40,14 @@ void C3D_RenderTargetDelete(C3D_RenderTarget* p){assert(synced);++deleted;delete
 void C3D_RenderTargetSetOutput(C3D_RenderTarget* p,int,int,u32){assert(p);}
 void gfxSet3D(bool on){stereo=on;wide=false;}
 void gfxSetWide(bool on){assert(!stereo);wide=on;}
+struct Context {
+ bool StereoShadersReady(){return readyStereo;}
+ void PrepareFramePrograms(){assert(synced && queueDone);shaderStereo=Graphics3DS::Stereo();}
+};
 struct picaDisplay {
  int renderWidth=400,winHeight=240;bool reset=false;
  C3D_RenderTarget* target=new C3D_RenderTarget{400};C3D_RenderTarget* targetRight=nullptr;
+ Context storage;Context* context=&storage;
  bool ApplyGraphicsMode();
  int GetWidth(){return 400;}int GetHeight(){return 240;}
  int RenderWidth(){return renderWidth;}bool world=false;
@@ -81,6 +87,23 @@ int main(){
  char executable[]="test",arg[]="graphics_stereo=1";char* argv[]={executable,arg};
  Initialize(Old3DS,2,argv);assert(d.ApplyGraphicsMode());assert(stereo&&!wide&&d.targetRight);
  Initialize(Old3DS);assert(d.ApplyGraphicsMode());assert(!stereo&&!wide&&!d.targetRight);
+ Initialize(Old3DS);RequestQuality(true);assert(d.ApplyGraphicsMode());
+ AllowChanges(false);
+ for(unsigned cycle=0;cycle<32;++cycle){
+  UpdateSlider(.25f);assert(CanApply());synced=false;assert(d.ApplyGraphicsMode());
+  assert(stereo&&shaderStereo&&!wide&&d.targetRight&&d.RenderWidth()==400);
+  const unsigned before=allocations;
+  UpdateSlider(.75f);assert(!Pending());assert(d.ApplyGraphicsMode());assert(allocations==before);
+  UpdateSlider(0);assert(CanApply());synced=false;assert(d.ApplyGraphicsMode());
+  assert(!stereo&&!shaderStereo&&wide&&!d.targetRight&&d.RenderWidth()==800);
+ }
+ readyStereo=false;UpdateSlider(1);assert(d.ApplyGraphicsMode());
+ assert(!stereo&&!shaderStereo&&!wide&&!d.targetRight&&d.RenderWidth()==400);
+ const unsigned failedAllocations=allocations;
+ UpdateSlider(1);assert(!Pending());assert(d.ApplyGraphicsMode());assert(allocations==failedAllocations);
+ readyStereo=true;UpdateSlider(0);assert(d.ApplyGraphicsMode());assert(wide);
+ failRight=true;UpdateSlider(1);assert(d.ApplyGraphicsMode());
+ assert(!stereo&&!shaderStereo&&!d.targetRight&&d.RenderWidth()==400);
 }
 '''
 with tempfile.TemporaryDirectory(prefix="srr-targets-") as directory:
@@ -94,4 +117,4 @@ with tempfile.TemporaryDirectory(prefix="srr-targets-") as directory:
         "-o", str(binary),
     ], check=True)
     subprocess.run([str(binary)], cwd=path, check=True)
-print("PASS: production target switching, GPU retirement, wide/3D exclusion, allocation recovery and logical/top/bottom/world viewports.")
+print("PASS: target switching, GPU retirement, live slider cycles, shader/right-eye failure recovery and logical/top/bottom/world viewports.")

@@ -22,16 +22,15 @@ stored separately.
 An unknown model uses the standard display. If a Quality render target cannot be
 allocated, the game restores Normal output without saving the failed selection.
 
-**Stereo 3D** is available on Nintendo 3DS, 3DS XL, New Nintendo 3DS and New
-Nintendo 3DS XL. It defaults to Off. Change the switch in **Options → Graphics**,
-then restart the game to apply it. Move the console's 3D slider to adjust depth
-gradually; the lowest position shows a flat image.
+**Stereo 3D** follows the console's 3D slider on Nintendo 3DS, 3DS XL, New Nintendo
+3DS and New Nintendo 3DS XL. Raise the slider to enable 3D and adjust its depth
+gradually. Lower it fully to restore flat output. No menu switch or restart is
+required.
 
-Stereo uses 400×240 per eye. Quality Mode is unavailable while stereo is active
-or selected for the next session. The game keeps your Quality preference and
-restores it after you turn Stereo 3D off and restart. Stereo preferences are
-remembered separately for original and New 3DS models. Nintendo 2DS and New
-Nintendo 2DS XL keep stereo disabled.
+Stereo automatically uses the Normal profile at 400×240 per eye. Quality Mode is
+unavailable while stereo is active. The game keeps your Quality preference and
+restores it when you lower the slider fully, including during gameplay.
+Nintendo 2DS and New Nintendo 2DS XL keep stereo disabled.
 
 Stereo can reduce frame-rate headroom. Its target is 30 FPS on original 3DS and
 60 FPS on New 3DS; achieved performance depends on the scene.

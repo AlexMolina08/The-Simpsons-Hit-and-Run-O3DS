@@ -321,19 +321,21 @@ bool picaDisplay::ApplyGraphicsMode(void)
     if(!Graphics3DS::Pending()) return target != NULL;
     const int requestedWidth = Graphics3DS::RequestedQuality() && Graphics3DS::SupportsWide() ? 800 : 400;
     const bool requestedStereo = Graphics3DS::Stereo();
+    const bool shadersReady = !requestedStereo || !context || context->StereoShadersReady();
+    const bool allocateStereo = requestedStereo && shadersReady;
     // Retire every command referencing these buffers before changing output.
     // FrameSync waits for VBlank; it does not drain an unfinished GPU queue.
     C3Di_RenderQueueWaitDone();
     C3D_FrameSync();
-    bool success = true;
-    if(requestedWidth != renderWidth || requestedStereo != (targetRight != NULL))
+    bool success = shadersReady;
+    if(requestedWidth != renderWidth || allocateStereo != (targetRight != NULL))
     {
         if(targetRight) { C3D_RenderTargetDelete(targetRight); targetRight = NULL; }
         if(target) { C3D_RenderTargetDelete(target); target = NULL; }
         target = C3D_RenderTargetCreate(winHeight, requestedWidth, GPU_RB_RGBA8, GPU_RB_DEPTH24_STENCIL8);
-        if(target && requestedStereo)
+        if(target && allocateStereo)
             targetRight = C3D_RenderTargetCreate(winHeight, 400, GPU_RB_RGBA8, GPU_RB_DEPTH24_STENCIL8);
-        success = target && (!requestedStereo || targetRight);
+        success = shadersReady && target && (!allocateStereo || targetRight);
         if(!success)
         {
             if(targetRight) { C3D_RenderTargetDelete(targetRight); targetRight = NULL; }
@@ -343,6 +345,7 @@ bool picaDisplay::ApplyGraphicsMode(void)
         renderWidth = success ? requestedWidth : 400;
     }
     Graphics3DS::Complete(success);
+    if(context) context->PrepareFramePrograms();
     // gfxSet3D(false) also clears wide mode, so set wide mode last.
     gfxSet3D(Graphics3DS::Stereo());
     if(!Graphics3DS::Stereo()) gfxSetWide(renderWidth == 800);
@@ -378,9 +381,18 @@ unsigned picaDisplay::GetFreeTextureMem(void)
 
 void picaDisplay::BeginFrame(void)
 {
-#ifdef SRR2_OLD_3DS
-    if(!inFrame && Graphics3DS::CanApply() && !ApplyGraphicsMode()) return;
+    float slider = 0.0f;
+    if(!inFrame)
+    {
+        slider = osGet3DSliderState();
+#ifdef SRR2_OLD3DS_NATIVE_BENCH
+        slider = NativeBench::StereoSlider(slider);
 #endif
+#ifdef SRR2_OLD_3DS
+        Graphics3DS::UpdateSlider(slider);
+        if(Graphics3DS::CanApply() && !ApplyGraphicsMode()) return;
+#endif
+    }
     if(!inFrame && target != NULL)
     {
         if(g_picaGpuWaitHook) g_picaGpuWaitHook(1);
@@ -419,11 +431,7 @@ void picaDisplay::BeginFrame(void)
             return;
         }
 
-        float slider = osGet3DSliderState();
-#ifdef SRR2_OLD3DS_NATIVE_BENCH
-        slider=NativeBench::StereoSlider(slider);
-#endif
-        eyeShift = targetRight ? Graphics3DS::StereoShift(slider) : 0.0f;
+        eyeShift = targetRight && Graphics3DS::Stereo() ? Graphics3DS::StereoShift(slider) : 0.0f;
         stereoThisFrame = eyeShift > 0.0f;
 
 #ifdef SRR2_OLD3DS_NATIVE_BENCH

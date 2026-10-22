@@ -7,7 +7,8 @@ namespace
 {
     Graphics3DS::Model model = Graphics3DS::Unknown;
     bool quality = false, requested = false, stereo = false;
-    bool requestedStereo = false;
+    bool normalQuality = false, sliderMode = false, sliderChange = false;
+    int stereoOverride = -1;
     bool pending = false, allowed = true, remember = false, failed = false;
     unsigned fpsOverride = 0;
     StereoDepth::State stereoDepth;
@@ -22,15 +23,15 @@ void Graphics3DS::Initialize(int value, int argc, char** argv)
     model = value >= Old3DS && value <= New2DSXL ? Model(value) : Unknown;
     quality = false;
     requested = model != Unknown && PortSettings::GraphicsQuality(PreferenceGroup(), true);
-    stereo = SupportsStereo() && PortSettings::Stereo3D(PreferenceGroup());
+    stereo = false; sliderChange = false; stereoOverride = -1;
     fpsOverride = 0; failed = false; remember = false; allowed = true;
     stereoDepth.Reset();
     // Diagnostic arguments never change the player's saved preference.
     const auto argument = [](const char* value) {
         if(!strcmp(value, "graphics_quality=0")) requested = false;
         if(!strcmp(value, "graphics_quality=1") && model != Unknown) requested = true;
-        if(!strcmp(value, "graphics_stereo=0")) stereo = false;
-        if(!strcmp(value, "graphics_stereo=1") && SupportsStereo()) stereo = true;
+        if(!strcmp(value, "graphics_stereo=0")) { stereo = false; stereoOverride = 0; }
+        if(!strcmp(value, "graphics_stereo=1") && SupportsStereo()) { stereo = true; stereoOverride = 1; }
         if(!strcmp(value, "graphics_fps=60")) fpsOverride = 60;
         if(!strcmp(value, "graphics_fps=30")) fpsOverride = 30;
     };
@@ -48,7 +49,8 @@ void Graphics3DS::Initialize(int value, int argc, char** argv)
     }
 #endif
     for(int i = 1; i < argc; ++i) argument(argv[i]);
-    requestedStereo = stereo;
+    normalQuality = requested;
+    sliderMode = stereo;
     if(stereo) requested = false;
     pending = true;
 }
@@ -60,16 +62,17 @@ bool Graphics3DS::SupportsStereo() { return SupportsWide() && model != New2DSXL;
 bool Graphics3DS::Quality() { return quality; }
 bool Graphics3DS::RequestedQuality() { return requested; }
 bool Graphics3DS::Stereo() { return stereo; }
-bool Graphics3DS::RequestedStereo() { return requestedStereo; }
-void Graphics3DS::RequestStereo(bool enabled)
+void Graphics3DS::UpdateSlider(float slider)
 {
-    if(!SupportsStereo() || enabled == requestedStereo) return;
-    // Shader programs and stereo targets are created together at startup.
-    // Save the next session's mode without changing a live rendering context.
-    requestedStereo = enabled;
-    failed = false;
-    PortSettings::SetStereo3D(PreferenceGroup(), enabled);
-    PortSettings::Save();
+    const bool enabled = SupportsStereo() &&
+        (stereoOverride >= 0 ? stereoOverride != 0 : slider > StereoDepth::SliderDeadzone);
+    if(enabled == sliderMode) return;
+    sliderMode = stereo = enabled;
+    requested = enabled ? false : normalQuality;
+    // The display samples this only between frames, before retiring GPU targets.
+    // A slider change also applies during gameplay and never saves a preference.
+    pending = sliderChange = true;
+    remember = failed = false;
 }
 void Graphics3DS::UpdateStereoCamera(StereoDepth::Camera camera, unsigned elapsedMilliseconds)
 {
@@ -79,11 +82,11 @@ float Graphics3DS::StereoShift(float slider) { return stereoDepth.Shift(slider);
 float Graphics3DS::StereoConvergence() { return stereoDepth.convergence; }
 bool Graphics3DS::Pending() { return pending; }
 void Graphics3DS::AllowChanges(bool allow) { allowed = allow; }
-bool Graphics3DS::CanApply() { return pending && allowed; }
+bool Graphics3DS::CanApply() { return pending && (allowed || sliderChange); }
 
 void Graphics3DS::RequestQuality(bool enabled)
 {
-    if(model == Unknown || stereo || requestedStereo || (!failed && enabled == requested)) return;
+    if(model == Unknown || stereo || (!failed && enabled == requested)) return;
     requested = enabled; pending = true; remember = true; failed = false;
 }
 
@@ -93,10 +96,11 @@ void Graphics3DS::Complete(bool success)
     if(!success) { requested = false; stereo = false; failed = true; }
     if(success && remember)
     {
+        normalQuality = quality;
         PortSettings::SetGraphicsQuality(PreferenceGroup(), quality);
         PortSettings::Save();
     }
-    pending = remember = false;
+    pending = remember = sliderChange = false;
     printf("GRAPHICS3DS model=%u quality=%u wide=%u stereo=%u width=%u height=240 target_fps=%u fallback=%u\n",
         unsigned(model), quality, quality && SupportsWide(), stereo, RenderWidth(), TargetFPS(), !success);
 }
@@ -108,14 +112,12 @@ const char* Graphics3DS::Description()
 {
     if(model == Unknown) return "STANDARD DISPLAY";
     if(stereo) return "SLIDER CONTROLS 3D DEPTH";
-    if(requestedStereo) return "3D USES 400x240 PER EYE";
     if(model == Old2DS) return "ON: RICHER LIGHTING";
     return "ON: SHARPER IMAGE";
 }
 const char* Graphics3DS::Status()
 {
-    if(failed) return requestedStereo ? "3D UNAVAILABLE" : "QUALITY UNAVAILABLE";
-    if(requestedStereo != stereo) return "RESTART GAME TO APPLY 3D";
+    if(failed) return "QUALITY UNAVAILABLE";
     if(pending) return "APPLYING...";
     if(stereo) return "400x240 PER EYE";
     if(quality && SupportsWide()) return "800x240 / 30 FPS TARGET";

@@ -201,6 +201,60 @@ static void picaAptHook(APT_HookType hook, void*)
 }
 
 static picaContext* s_picaContext = NULL;
+#ifdef SRR2_3DS_STEREO_GPU_SKIN
+static void LoadStereoProgram(DVLB_s*& binary, shaderProgram_s& program, const u8* data, unsigned size)
+{
+    binary = DVLB_ParseFile((u32*)data, size);
+    if(!binary) return;
+    shaderProgramInit(&program);
+    if(R_FAILED(shaderProgramSetVsh(&program, &binary->DVLE[0])))
+    {
+        shaderProgramFree(&program);
+        DVLB_Free(binary);
+        binary = nullptr;
+    }
+}
+#endif
+
+shaderProgram_s* picaContext::MainProgram()
+{
+#ifdef SRR2_3DS_STEREO_GPU_SKIN
+    if(Graphics3DS::Stereo() && stereoShaderBinary) return &stereoShaderProgram;
+#endif
+    return &shaderProgram;
+}
+
+shaderProgram_s* picaContext::SkinProgram()
+{
+#ifdef SRR2_3DS_STEREO_GPU_SKIN
+    if(Graphics3DS::Stereo()) return stereoSkinBinary ? &stereoSkinProgram : nullptr;
+#endif
+#ifdef SRR2_OLD3DS_GPU_SKIN
+    return skinBinary ? &skinProgram : nullptr;
+#else
+    return nullptr;
+#endif
+}
+
+bool picaContext::StereoShadersReady() const
+{
+#ifdef SRR2_3DS_STEREO_GPU_SKIN
+    return stereoShaderBinary && stereoSkinBinary;
+#else
+    return true;
+#endif
+}
+
+void picaContext::PrepareFramePrograms()
+{
+#ifdef SRR2_OLD3DS_GPU_SKIN
+    skinProgramBound = false;
+#endif
+#ifdef SRR2_OLD3DS_NATIVE_CONTEXT
+    picaNativeRegisterPrograms(MainProgram(), SkinProgram());
+#endif
+    C3D_BindProgram(MainProgram());
+}
 #ifdef SRR2_OLD3DS_UNLIT_PROJECTION
 void picaContext::DumpUnlitProjectionStats()
 {
@@ -247,12 +301,7 @@ picaContext::picaContext(picaDevice* dev, picaDisplay* disp)
 
     extGamma = new picaExtGamma;
 
-#ifdef SRR2_3DS_STEREO_GPU_SKIN
-    shaderBinary = Graphics3DS::Stereo() ? DVLB_ParseFile((u32*)pddi_stereo_main_shbin, pddi_stereo_main_shbin_size) :
-        DVLB_ParseFile((u32*)pddi_pica_shbin, pddi_pica_shbin_size);
-#else
     shaderBinary = DVLB_ParseFile((u32*)pddi_pica_shbin, pddi_pica_shbin_size);
-#endif
     PDDIASSERT(shaderBinary != NULL);
     if(shaderBinary == NULL)
     {
@@ -294,12 +343,7 @@ picaContext::picaContext(picaDevice* dev, picaDisplay* disp)
         noNormalLayout = false;
 #endif
 #ifdef SRR2_OLD3DS_GPU_SKIN
-#ifdef SRR2_3DS_STEREO_GPU_SKIN
-    skinBinary = Graphics3DS::Stereo() ? DVLB_ParseFile((u32*)pddi_stereo_skin_shbin, pddi_stereo_skin_shbin_size) :
-        DVLB_ParseFile((u32*)pddi_skin_shbin, pddi_skin_shbin_size);
-#else
     skinBinary = DVLB_ParseFile((u32*)pddi_skin_shbin, pddi_skin_shbin_size);
-#endif
     if(skinBinary) {
         shaderProgramInit(&skinProgram);
         shaderProgramSetVsh(&skinProgram, &skinBinary->DVLE[0]);
@@ -328,10 +372,21 @@ picaContext::picaContext(picaDevice* dev, picaDisplay* disp)
     }
 #endif
 
+#ifdef SRR2_3DS_STEREO_GPU_SKIN
+    // Keep both programs resident. The slider can change output between frames
+    // without rebuilding shaders or adding work to the mono vertex programs.
+    if(Graphics3DS::SupportsStereo())
+    {
+        LoadStereoProgram(stereoShaderBinary, stereoShaderProgram, pddi_stereo_main_shbin, pddi_stereo_main_shbin_size);
+        LoadStereoProgram(stereoSkinBinary, stereoSkinProgram, pddi_stereo_skin_shbin, pddi_stereo_skin_shbin_size);
+    }
+    if(Graphics3DS::Stereo() && !StereoShadersReady()) Graphics3DS::Complete(false);
+    C3D_BindProgram(MainProgram());
+#endif
 #ifdef SRR2_OLD3DS_NATIVE_CONTEXT
-    picaNativeRegisterPrograms(shaderBinary ? &shaderProgram : NULL,
+    picaNativeRegisterPrograms(shaderBinary ? MainProgram() : NULL,
 #ifdef SRR2_OLD3DS_GPU_SKIN
-                              skinBinary ? &skinProgram : NULL
+                              SkinProgram()
 #else
                               NULL
 #endif
@@ -430,6 +485,10 @@ picaContext::~picaContext()
     immVertices = NULL;
     immIndices  = NULL;
 
+#ifdef SRR2_3DS_STEREO_GPU_SKIN
+    if(stereoSkinBinary) { shaderProgramFree(&stereoSkinProgram); DVLB_Free(stereoSkinBinary); }
+    if(stereoShaderBinary) { shaderProgramFree(&stereoShaderProgram); DVLB_Free(stereoShaderBinary); }
+#endif
 #ifdef SRR2_OLD3DS_GPU_SKIN
     if(skinBinary) {
         shaderProgramFree(&skinProgram);
@@ -483,7 +542,7 @@ void picaContext::BeginFrame()
     if(s_picaResumed && !display->HasReset())
     {
         s_picaResumed = false;
-        C3D_BindProgram(&shaderProgram);
+        C3D_BindProgram(MainProgram());
         C3D_SetAttrInfo(&attrInfo);
 #ifdef SRR2_OLD3DS_NO_NORMAL_FETCH
         noNormalLayout = false;
@@ -501,7 +560,10 @@ void picaContext::BeginFrame()
         s_picaResumed = false;
         contextID++;
 
-        C3D_BindProgram(&shaderProgram);
+#ifdef SRR2_OLD3DS_NATIVE_CONTEXT
+        picaNativeRegisterPrograms(MainProgram(), SkinProgram());
+#endif
+        C3D_BindProgram(MainProgram());
         C3D_SetAttrInfo(&attrInfo);
 #ifdef SRR2_OLD3DS_NO_NORMAL_FETCH
         noNormalLayout = false;
@@ -3202,7 +3264,7 @@ void picaContext::EndWorld(void)
         }
         C3D_Mtx identity;
         Mtx_Identity(&identity);
-        C3D_BindProgram(&shaderProgram);
+        C3D_BindProgram(MainProgram());
         C3D_SetAttrInfo(&attrInfo);
 #ifdef SRR2_OLD3DS_NO_NORMAL_FETCH
         noNormalLayout = false;
@@ -3285,7 +3347,7 @@ void picaContext::SetSkinLayout(bool rigid)
 #endif
 bool picaContext::BindSkinProgram(bool enabled)
 {
-    if (enabled && !skinBinary)
+    if (enabled && !SkinProgram())
         return false;
 #ifdef SRR2_OLD3DS_GPU_SKIN_BATCH
     if(skinBatchDepth && enabled == skinProgramBound) return true;
@@ -3294,7 +3356,7 @@ bool picaContext::BindSkinProgram(bool enabled)
     noNormalLayout = false;
 #endif
     skinProgramBound = enabled;
-    C3D_BindProgram(enabled ? &skinProgram : &shaderProgram);
+    C3D_BindProgram(enabled ? SkinProgram() : MainProgram());
 
 #ifdef SRR2_OLD3DS_GPU_SKIN_COMPACT
     if(!enabled)

@@ -132,7 +132,8 @@ builds, controls and publishing a separate release.
 The top screen uses 400×240 in Normal Mode or 400×240 per eye in Stereo 3D.
 Quality Mode defaults to On and uses 800×240 wide output on 3DS models and New
 2DS XL. Original 2DS keeps 400×240 with richer lighting. Open **Options → Graphics**
-to change modes; Stereo 3D requires a restart and is unavailable on 2DS models.
+to change Quality Mode. Raise the 3D slider to enable Stereo 3D at 400×240 per eye;
+lower it fully to restore your Quality preference. 2DS models keep stereo disabled.
 See [Graphics modes](docs/GRAPHICS_MODES.md) for frame-rate targets and details.
 
 The touch screen carries the original

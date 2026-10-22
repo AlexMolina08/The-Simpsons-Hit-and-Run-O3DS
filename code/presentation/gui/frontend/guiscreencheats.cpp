@@ -224,12 +224,8 @@ void CGuiScreenCheats::HandleMessage
                     Graphics3DS::RequestQuality(param2 == 1);
                 if( param1 == MENU_ITEM_NO_TIMERS )
                 {
-                    if(m_graphicsPage) Graphics3DS::RequestStereo(param2 == 1);
-                    else
-                    {
-                        PortSettings::SetNoTimers( param2 == 1 );
-                        m_changed = true;
-                    }
+                    PortSettings::SetNoTimers( param2 == 1 );
+                    m_changed = true;
                 }
                 break;
             }
@@ -248,13 +244,7 @@ void CGuiScreenCheats::HandleMessage
         }
 
         if(m_graphicsPage && message == GUI_MSG_UPDATE && m_qualityValue)
-        {
             m_qualityValue->SetIndex(Graphics3DS::RequestedQuality() ? 1 : 0);
-            m_pMenu->SetSelectionValue(MENU_ITEM_NO_TIMERS, Graphics3DS::RequestedStereo() ? 1 : 0);
-            m_pMenu->SetMenuItemEnabled(MENU_ITEM_QUALITY,
-                Graphics3DS::SystemModel() != Graphics3DS::Unknown &&
-                !Graphics3DS::Stereo() && !Graphics3DS::RequestedStereo(), false);
-        }
 
         m_pMenu->HandleMessage( message, param1, param2 );
     }
@@ -333,22 +323,13 @@ void CGuiScreenCheats::InitIntro()
     {
         for(int item = MENU_ITEM_NO_TIMERS; item <= MENU_ITEM_APPLY; ++item)
             m_pMenu->SetMenuItemEnabled(item, !m_graphicsPage, true);
-        const bool qualityEnabled = m_graphicsPage &&
-            Graphics3DS::SystemModel() != Graphics3DS::Unknown &&
-            !Graphics3DS::Stereo() && !Graphics3DS::RequestedStereo();
-        m_pMenu->SetMenuItemEnabled(MENU_ITEM_QUALITY, qualityEnabled, false);
+        m_pMenu->SetMenuItemEnabled(MENU_ITEM_QUALITY, m_graphicsPage &&
+            Graphics3DS::SystemModel() != Graphics3DS::Unknown && !Graphics3DS::Stereo(), false);
         m_pMenu->GetMenuItem(MENU_ITEM_QUALITY)->GetItem()->SetVisible(m_graphicsPage);
         m_qualityValue->SetVisible(m_graphicsPage);
+        m_pMenu->Reset(m_graphicsPage ? MENU_ITEM_QUALITY : MENU_ITEM_NO_TIMERS);
         m_pMenu->SetSelectionValue(MENU_ITEM_QUALITY, Graphics3DS::RequestedQuality() ? 1 : 0);
-        Scrooby::Text* stereoLabel=dynamic_cast<Scrooby::Text*>(m_pMenu->GetMenuItem(MENU_ITEM_NO_TIMERS)->GetItem());
-        Scrooby::Text* stereoValue=dynamic_cast<Scrooby::Text*>(m_pMenu->GetMenuItem(MENU_ITEM_NO_TIMERS)->GetItemValue());
-        SetAllStrings(stereoLabel,m_graphicsPage?"STEREO 3D":"NO TIMERS");
-        m_pMenu->SetMenuItemEnabled(MENU_ITEM_NO_TIMERS,!m_graphicsPage || Graphics3DS::SupportsStereo(),false);
-        stereoLabel->SetVisible(true);
-        stereoValue->SetVisible(true);
-        m_pMenu->SetSelectionValue(MENU_ITEM_NO_TIMERS,
-            (m_graphicsPage ? Graphics3DS::RequestedStereo() : PortSettings::NoTimers()) ? 1 : 0);
-        m_pMenu->Reset(qualityEnabled ? MENU_ITEM_QUALITY : MENU_ITEM_NO_TIMERS);
+        m_pMenu->SetSelectionValue( MENU_ITEM_NO_TIMERS, PortSettings::NoTimers() ? 1 : 0 );
         this->SetButtonVisible( BUTTON_ICON_ACCEPT, m_pMenu->GetSelection() == MENU_ITEM_APPLY );
     }
 

@@ -14,7 +14,6 @@ namespace
     bool s_Loaded   = false;
     bool s_NoTimers = false;
     int s_GraphicsQuality[3] = {-1, -1, -1};
-    bool s_Stereo3D[3] = {false, false, false};
 
     void LoadOnce()
     {
@@ -42,8 +41,6 @@ namespace
             unsigned group = 0;
             if(sscanf(line, "graphics_quality_%u=%d", &group, &value) == 2 &&
                group < 3 && (value == 0 || value == 1)) s_GraphicsQuality[group] = value;
-            if(sscanf(line, "stereo_3d_%u=%d", &group, &value) == 2 &&
-               group < 3 && (value == 0 || value == 1)) s_Stereo3D[group] = value != 0;
 
         }
         fclose( f );
@@ -73,11 +70,8 @@ void PortSettings::Save()
     }
     fprintf( f, "notimers=%d\n", s_NoTimers ? 1 : 0 );
     for(unsigned group = 0; group < 3; ++group)
-    {
         if(s_GraphicsQuality[group] >= 0)
             fprintf(f, "graphics_quality_%u=%d\n", group, s_GraphicsQuality[group]);
-        if(s_Stereo3D[group]) fprintf(f, "stereo_3d_%u=1\n", group);
-    }
     fclose( f );
 }
 
@@ -91,16 +85,4 @@ void PortSettings::SetGraphicsQuality(unsigned group, bool enabled)
 {
     LoadOnce();
     if(group < 3) s_GraphicsQuality[group] = enabled ? 1 : 0;
-}
-
-bool PortSettings::Stereo3D(unsigned group)
-{
-    LoadOnce();
-    return group < 3 && s_Stereo3D[group];
-}
-
-void PortSettings::SetStereo3D(unsigned group, bool enabled)
-{
-    LoadOnce();
-    if(group < 3) s_Stereo3D[group] = enabled;
 }

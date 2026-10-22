@@ -8,8 +8,6 @@ namespace PortSettings
 
     bool GraphicsQuality(unsigned group, bool defaultValue);
     void SetGraphicsQuality(unsigned group, bool enabled);
-    bool Stereo3D(unsigned group);
-    void SetStereo3D(unsigned group, bool enabled);
 
     void Save();
 }
