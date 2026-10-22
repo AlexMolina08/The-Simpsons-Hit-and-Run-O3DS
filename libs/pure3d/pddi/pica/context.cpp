@@ -1533,6 +1533,12 @@ void picaContext::SetVertexUniforms(bool lit, pddiColour ambient, pddiColour dif
 
     if(!projUploaded)
     {
+#ifdef SRR2_3DS_STEREO_GPU_SKIN
+        if(skinProgramBound && Graphics3DS::Stereo())
+            // b3 gates depth for skinned GUI models without consuming a bone
+            // vector or overwriting the per-eye register during command replay.
+            C3D_BoolUnifSet(GPU_VERTEX_SHADER, 0x6b, stereoOn);
+#endif
 #ifdef SRR2_OLD3DS_GPU_SKIN_COMPACT
         if(!skinProgramBound)
 #endif

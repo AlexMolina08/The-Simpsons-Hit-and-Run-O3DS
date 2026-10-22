@@ -28,7 +28,8 @@ with tempfile.TemporaryDirectory(prefix="srr-stereo-") as directory:
         source = generated.read_text()
         if kind == "skin":
             assert "VSH_FVEC_u_bones 0x14" in registers and "VSH_ULEN_u_bones 75" in registers
-        start = source.index("mov r11, u_" + ("stereoParams" if kind == "main" else "eye_quant"))
+            assert "VSH_FLAG_u_stereoEnabled BIT(3)" in registers # b3, separate from all 25 bone matrices.
+        start = source.index("mov r11, u_stereoParams" if kind == "main" else "ifu u_stereoEnabled")
         offsets[kind] = source[start:source.index("mov\to_pos, r1" if kind == "main" else "mov o_pos, r1", start)]
         if kind == "main":
             offsets[kind] = offsets[kind].replace("\t.end", "")
@@ -47,8 +48,17 @@ with tempfile.TemporaryDirectory(prefix="srr-stereo-") as directory:
                 values = [values["xyzw".index(c)] for c in swizzle]
                 if len(values) == 1: values *= 4
             return [sign*v for v in values]
+        active = [True]
         for line in instructions.strip().splitlines():
             if not line.strip(): continue
+            line = line.strip()
+            if line.startswith("ifu "):
+                active.append(active[-1] and bool(registers[line.split()[1]][0]))
+                continue
+            if line == ".end":
+                active.pop()
+                continue
+            if not active[-1]: continue
             op, operands = line.strip().split(None, 1)
             dest, *sources = [item.strip() for item in operands.split(",")]
             result = read(sources[0])
@@ -66,7 +76,7 @@ with tempfile.TemporaryDirectory(prefix="srr-stereo-") as directory:
     def execute(kind, clip, shift, convergence, enabled):
         parameters = [1/32768, abs(shift), convergence*shift, shift]
         registers = {"r1": clip[:], "u_eye_quant": parameters, "u_stereoParams": parameters,
-                     "u_stereoOn": [float(enabled),0,0,0], "zeros": [0.0]*4}
+                     "u_stereoOn": [float(enabled),0,0,0], "u_stereoEnabled": [float(enabled)], "zeros": [0.0]*4}
         return run_instructions(offsets[kind], registers)["r1"]
 
     for value in range(-32768,32768):
@@ -78,24 +88,45 @@ with tempfile.TemporaryDirectory(prefix="srr-stereo-") as directory:
         assert registers["r10"] == [value/4096.0]*2+[0,1]
     for depth in (0.0,-1.0,-100.0):
         clip=[1.0,2.0,3.0,depth]
-        assert execute("main",clip,.045,7,True)==clip
-        assert execute("skin",clip,.045,7,True)==clip
+        expected=[1.0,2.0-(depth-7)*.045,3.0,depth]
+        for kind in ("main","skin"):
+            assert all(math.isclose(u,v,abs_tol=1e-10) for u,v in zip(execute(kind,clip,.045,7,True),expected))
 
     for _ in range(10000):
         clip = [rng.uniform(-100,100), rng.uniform(-100,100), rng.uniform(-100,100),
                 rng.uniform(.0001,200)]
         shift, convergence = rng.uniform(-.045,.045), rng.uniform(2.5,7)
         raw = (clip[3]-convergence)*shift
-        limit = clip[3]*abs(shift)
-        expected = clip[1]-max(-limit,min(limit,raw))
+        expected = clip[1]-raw
         world = execute("main",clip,shift,convergence,True)
         character = execute("skin",clip,shift,convergence,True)
         assert math.isclose(world[1],expected,abs_tol=1e-10)
         assert world == character
         assert world[0] == clip[0] and world[2:] == clip[2:]
-        assert abs(world[1]-clip[1])/clip[3] <= abs(shift)+1e-8
         assert execute("main",clip,shift,convergence,False) == clip # Flat HUD.
+        assert execute("skin",clip,shift,convergence,False) == clip # Skinned GUI objects must obey the same scope.
         assert execute("main",clip,0,convergence,True) == clip
         mirror = execute("main",clip,-shift,convergence,True)
         assert math.isclose(world[1]+mirror[1],2*clip[1],abs_tol=1e-10)
-print("PASS: stereo shaders assemble; all 25 bones retained; packed scales exact; 10000 world/skin depth, foreground limit, eye symmetry and flat-HUD cases pass.")
+
+    # A foot touching a road triangle must share that triangle's projection.
+    # Clamping each vertex separately bends coarse roads away from fine meshes.
+    for kind in ("main", "skin"):
+        a, b = [0.0,0.0,0.0,1.0], [0.0,0.0,0.0,10.0]
+        blend = lambda x,y: [(2*u+v)/3 for u,v in zip(x,y)]
+        contact = execute(kind,blend(a,b),.045,7,True)
+        road = blend(execute(kind,a,.045,7,True),execute(kind,b,.045,7,True))
+        pair_error_pixels = 400*abs(contact[1]-road[1])/contact[3]
+        assert pair_error_pixels < .00001, f"{kind}: foot/road separation {pair_error_pixels:.3f} pixels"
+    for _ in range(10000):
+        # Shared vertices, arbitrary tessellation and near-plane clipping must
+        # commute with the same projection in world and character programs.
+        a=[rng.uniform(-10,10) for _ in range(4)]
+        b=[rng.uniform(-10,10) for _ in range(4)]
+        t=rng.random()
+        blend=lambda x,y:[u*(1-t)+v*t for u,v in zip(x,y)]
+        for kind in ("main","skin"):
+            point=execute(kind,blend(a,b),.02,1.75,True)
+            edge=blend(execute(kind,a,.02,1.75,True),execute(kind,b,.02,1.75,True))
+            assert all(math.isclose(u,v,abs_tol=1e-10) for u,v in zip(point,edge))
+print("PASS: stereo shaders assemble; 25 bones and packed scales retained; matching world/skin projections, foot/road contact, tessellation, clipping, eye symmetry and flat HUD.")

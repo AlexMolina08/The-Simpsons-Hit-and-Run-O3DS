@@ -74,9 +74,9 @@ void Graphics3DS::UpdateSlider(float slider)
     pending = sliderChange = true;
     remember = failed = false;
 }
-void Graphics3DS::UpdateStereoCamera(StereoDepth::Camera camera, unsigned elapsedMilliseconds, float subjectDistance)
+void Graphics3DS::UpdateStereoCamera(StereoDepth::Camera camera, unsigned elapsedMilliseconds, float subjectDistance, float nearPlane)
 {
-    if(stereo) stereoDepth.Update(camera, elapsedMilliseconds, subjectDistance);
+    if(stereo) stereoDepth.Update(camera, elapsedMilliseconds, subjectDistance, nearPlane);
 }
 float Graphics3DS::StereoShift(float slider) { return stereoDepth.Shift(slider); }
 float Graphics3DS::StereoConvergence() { return stereoDepth.convergence; }

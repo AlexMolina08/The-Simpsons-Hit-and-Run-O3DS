@@ -141,6 +141,9 @@ static void srr2AptHook( APT_HookType hook, void* )
 #ifdef RAD_3DS
 #include <camera/supercammanager.h>
 #include <camera/supercam.h>
+#include <p3d/pointcamera.hpp>
+#include <worldsim/avatarmanager.h>
+#include <worldsim/avatar.h>
 #endif
 #include <debug/profiler.h>
 #include <gameflow/gameflow.h>
@@ -897,6 +900,7 @@ void Game::Run()
                     {
                         StereoDepth::Camera profile = StereoDepth::Default;
                         float subjectDistance = 0.0f;
+                        float nearPlane = 1.0f;
                         if(ctx == CONTEXT_GAMEPLAY || ctx == CONTEXT_PAUSE ||
                            ctx == CONTEXT_DEMO || ctx == CONTEXT_SUPERSPRINT)
                         {
@@ -905,11 +909,6 @@ void Game::Run()
                             SuperCam* camera = central ? central->GetActiveSuperCam() : NULL;
                             if(camera)
                             {
-                                rmt::Vector position, target, distance;
-                                camera->GetPosition(&position);
-                                camera->GetTarget(&target);
-                                distance.Sub(target, position);
-                                subjectDistance = distance.Magnitude();
                                 switch(camera->GetType())
                                 {
                                     case SuperCam::FOLLOW_CAM:
@@ -931,9 +930,27 @@ void Game::Run()
                                     default:
                                         profile = StereoDepth::Cinematic; break;
                                 }
+                                tPointCamera* viewCamera = camera->GetCamera();
+                                if(viewCamera)
+                                {
+                                    nearPlane = viewCamera->GetNearPlane();
+                                    if(profile == StereoDepth::Walking || profile == StereoDepth::Driving)
+                                    {
+                                        Avatar* avatar = GetAvatarManager()->GetAvatarForPlayer(0);
+                                        if(avatar && avatar->GetCharacter())
+                                        {
+                                            rmt::Vector position, eye;
+                                            avatar->GetPosition(position);
+                                            viewCamera->WorldToCamera(position, &eye);
+                                            // Use the rendered camera's forward depth of the player.
+                                            // A look-ahead target or diagonal distance is not clip w.
+                                            subjectDistance = eye.z;
+                                        }
+                                    }
+                                }
                             }
                         }
-                        Graphics3DS::UpdateStereoCamera(profile, elapsed, subjectDistance);
+                        Graphics3DS::UpdateStereoCamera(profile, elapsed, subjectDistance, nearPlane);
                     }
 #endif
                     mpRenderFlow->OnTimerDone(elapsed, NULL);
