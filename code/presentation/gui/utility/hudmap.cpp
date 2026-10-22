@@ -1817,14 +1817,6 @@ namespace
         ClipRegion(enabled?picaBottomFrame::TVGlass:picaBottomFrame::Rect{0,0,320,240});
     }
 
-    float TubeOpacity(CGuiScreen* screen)
-    {
-        static CGuiScreen* owner=NULL;static picaBottomFrame::MenuFade fade;
-        if(owner!=screen){owner=screen;fade=picaBottomFrame::MenuFade();}
-        const unsigned now=static_cast<unsigned>(osGetTime());
-        fade.Set(screen->IsRunning(),now);return fade.Value(now);
-    }
-
     void TVFinish()
     {
         // Stable scan lines, edge falloff and the original glass reflection make
@@ -2555,8 +2547,9 @@ namespace
         p3d::stack->Translate(-0.5f,-0.375f,0.5f);
         if(tutorial)Fill(0,0,320,240,tColour(32,28,50));else Board(tv,!conversation && !startupLoading && id!=CGuiWindow::GUI_SCREEN_ID_LOADING);
         FlushUI();if(tv)TVClip(true);
-        const float tube=tv?TubeOpacity(screen):1;
-        if(tv && tube<=0){} // The old picture fades out while the retail camera changes screens.
+        // Keep the tube illuminated while the camera changes menus. Only the
+        // controls disappear; a rectangular blackout exposes the artwork bounds.
+        if(tv && !screen->IsRunning()){}
         else if(credits)
         {
             Scrooby::Text* text=static_cast<CGuiScreenViewCredits*>(screen)->GetCreditsText3DS(0);
@@ -2892,9 +2885,7 @@ namespace
             else if( resource ) for( int i=0;i<resource->GetNumberOfPages();++i )
                 DisplayBottomDrawable(resource->GetPageByIndex(i));
         }
-        if(tv){if(tube<1){const auto glass=picaBottomFrame::TVGlass;
-            Fill(glass.left,glass.top,glass.right,glass.bottom,tColour(0,0,0,int((1-tube)*255)));}
-            TVFinish();}
+        if(tv)TVFinish();
         FlushUI();nativePass.End();
 
         picaBottomScreenEnd();
