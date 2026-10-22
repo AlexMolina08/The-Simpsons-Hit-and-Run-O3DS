@@ -1,6 +1,7 @@
 #ifdef RAD_3DS
 #include <main/graphics3ds.h>
 #include <presentation/gui/frontend/guiscreencheats.h>
+#include <presentation/gui/ingame/guiscreenmissionload.h>
 #endif
 #include <presentation/gui/frontend/guiscreenviewcredits.h>
 #include <presentation/gui/utility/handheldcredits.h>
@@ -2182,7 +2183,14 @@ namespace
         if(title)BottomLabel(font,title->GetStringBuffer(),12,23,18,Gold,296);
         if(info)Wrapped(font,info->GetStringBuffer(),18,48,284,17,8,White);
         Scrooby::Text* status=FindText(resource,"Loading");
-        if(status && status->IsVisible())BottomLabel(font,status->GetStringBuffer(),12,232,14,White,296);
+        const bool loading = screen->GetWindowID()==CGuiWindow::GUI_SCREEN_ID_MISSION_LOAD ?
+            !static_cast<CGuiScreenMissionLoad*>(screen)->IsLoadDone() : status && status->IsVisible();
+        if(loading)
+        {
+            // Loading artwork blinks. Its visibility does not mean the mission is ready.
+            if(status)BottomLabel(font,status->GetStringBuffer(),12,232,14,White,296);
+            else Ascii(font,"LOADING",12,232,14,White,296);
+        }
         else {
             const bool success=screen->GetWindowID()==CGuiWindow::GUI_SCREEN_ID_MISSION_SUCCESS;
             if(screen->IsButtonVisible(BUTTON_ICON_ACCEPT))FooterAction(font,"A",success?"CONTINUE":"START MISSION",12,218);

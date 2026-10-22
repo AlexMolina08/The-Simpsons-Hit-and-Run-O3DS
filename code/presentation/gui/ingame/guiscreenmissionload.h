@@ -54,6 +54,7 @@ public:
     static  void InitializePermanentVariables();
     virtual void InitIntro();
 	virtual void InitOutro();
+    bool IsLoadDone() const { return m_LoadIsDone; }
 
 protected:
     virtual void AddListeners();
