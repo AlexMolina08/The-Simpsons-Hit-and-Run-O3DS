@@ -34,6 +34,7 @@
 
 class CGuiMenu;
 class Reward;
+class tDrawable;
 
 struct PreviewObject
 {
@@ -81,6 +82,8 @@ public:
 #ifdef RAD_3DS
     virtual CGuiMenu* HasMenu() { return m_pRewardsMenu; }
     CGuiMenu* GetPreviewMenu3DS() const { return m_pRewardsMenu; }
+    tDrawable* GetVehiclePreview3DS() const { return !m_isLoading && !m_isLoadingReward ? m_vehiclePreview3DS : NULL; }
+    bool IsVehiclePreviewLoading3DS() const { return m_isLoading || m_isLoadingReward; }
 #endif
 
 protected:
@@ -105,6 +108,12 @@ protected:
 
     void Load3DModel( const PreviewObject* previewObject );
     void Unload3DModel();
+#ifdef RAD_3DS
+    void SetVehiclePreview3DS(tDrawable* drawable);
+    tDrawable* m_vehiclePreview3DS;
+    const PreviewObject* m_loadingPreview3DS;
+    unsigned m_previewRequest3DS;
+#endif
 
     void SetVehicleStatsVisible( bool isVisible );
     void UpdateVehicleStats();

@@ -16,7 +16,8 @@
 #ifndef GUISCREENPHONEBOOTH_H
 #define GUISCREENPHONEBOOTH_H
 
-#ifndef RAD_E3
+#if !defined(RAD_E3) && !defined(RAD_3DS)
+    // L/R belong to the model preview on 3DS, not the debug vehicle/teleport menu.
     // enable car selection overlay for selecting any car
     //
     #define SRR2_OVERRIDE_CAR_SELECTION
@@ -32,6 +33,7 @@
 //===========================================================================
 
 class CGuiMenu;
+class tDrawable;
 
 //===========================================================================
 // Interface Definitions
@@ -41,6 +43,10 @@ class CGuiScreenPhoneBooth : public IGuiScreenRewards
 public:
     CGuiScreenPhoneBooth( Scrooby::Screen* pScreen, CGuiEntity* pParent );
     virtual ~CGuiScreenPhoneBooth();
+#ifdef RAD_3DS
+    float GetPreviewYaw3DS() const { return m_previewYaw3DS; }
+    float GetPreviewRadius3DS() const { return m_previewRadius3DS; }
+#endif
 
 	virtual void HandleMessage( eGuiMessage message, 
 			                    unsigned int param1 = 0,
@@ -72,6 +78,10 @@ private:
     Scrooby::Text* m_vehicleDamaged;
     Scrooby::Group* m_repairCostInfo;
     Scrooby::Text* m_vehicleRepairCost;
+#ifdef RAD_3DS
+    float m_previewYaw3DS;
+    float m_previewRadius3DS;
+#endif
 
 #ifdef RAD_WIN32
     Scrooby::Sprite* m_leftArrow;

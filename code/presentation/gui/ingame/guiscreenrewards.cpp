@@ -37,6 +37,10 @@
 
 #include <p3d/unicode.hpp>
 #include <p3d/utility.hpp>
+#ifdef RAD_3DS
+#include <p3d/drawable.hpp>
+#include <stdint.h>
+#endif
 #include <raddebug.hpp> // Foundation
 
 #include <string.h>
@@ -116,6 +120,11 @@ IGuiScreenRewards::IGuiScreenRewards( Scrooby::Screen* pScreen,
                                       CGuiEntity* pParent,
                                       eGuiWindowID windowID )
 :   CGuiScreen( pScreen, pParent, windowID ),
+#ifdef RAD_3DS
+    m_vehiclePreview3DS( NULL ),
+    m_loadingPreview3DS( NULL ),
+    m_previewRequest3DS( 0 ),
+#endif
     m_pRewardsMenu( NULL ),
     m_currentState( REWARDS_SCREEN_LIGHT_CLOSED ),
     m_elapsedTime( 0.0f ),
@@ -295,6 +304,9 @@ IGuiScreenRewards::~IGuiScreenRewards()
     //
     p3d::pddi->DrawSync();
 
+#ifdef RAD_3DS
+    SetVehiclePreview3DS(NULL);
+#endif
     p3d::inventory->DeleteSection( REWARDS_INVENTORY_SECTION );
 }
 
@@ -342,6 +354,18 @@ IGuiScreenRewards::HandleMessage( eGuiMessage message,
 void
 IGuiScreenRewards::OnProcessRequestsComplete( void* pUserData )
 {
+#ifdef RAD_3DS
+    if(m_state != GUI_WINDOW_STATE_RUNNING && m_state != GUI_WINDOW_STATE_INTRO)
+    {
+        // A delayed completion must not repopulate a screen that has closed.
+        m_isLoading = false;
+        Unload3DModel();
+        return;
+    }
+    // An old visit's completion must not consume the current visit's request.
+    if(reinterpret_cast<uintptr_t>(pUserData) != m_previewRequest3DS) return;
+    pUserData = const_cast<PreviewObject*>(m_loadingPreview3DS);
+#endif
     m_isLoading = false; // reset loading flag
 
     const PreviewObject* currentPreviewObject = this->GetCurrentPreviewObject();
@@ -529,7 +553,11 @@ IGuiScreenRewards::InsertPreviewObject( PreviewObject* previewObjects,
         strcpy( previewObjects[ newSlot ].nameModel, pReward->GetName() );
 
         sprintf( previewObjects[ newSlot ].filenameModel, "%s%s",
+#ifdef RAD_3DS
+                 PHONE_BOOTH_3DMODEL_CARS_DIR,
+#else
                  PHONE_BOOTH_2DMODEL_CARS_DIR,
+#endif
                  pReward->GetName() );
     }
     else
@@ -769,7 +797,7 @@ IGuiScreenRewards::Load3DModel( const PreviewObject* previewObject )
                                          REWARDS_INVENTORY_SECTION,
                                          REWARDS_INVENTORY_SECTION );
 
-#ifdef LOAD_DAMAGED_VEHICLE_IMAGES
+#if defined(LOAD_DAMAGED_VEHICLE_IMAGES) && !defined(RAD_3DS)
         // load damaged 2D car image
         //
         sprintf( filename, "%sD.p3d", previewObject->filenameModel );
@@ -791,13 +819,32 @@ IGuiScreenRewards::Load3DModel( const PreviewObject* previewObject )
                                          REWARDS_INVENTORY_SECTION );
     }
 
+#ifdef RAD_3DS
+    m_loadingPreview3DS = previewObject;
+    ++m_previewRequest3DS;
+    GetLoadingManager()->AddCallback(this, reinterpret_cast<void*>(static_cast<uintptr_t>(m_previewRequest3DS)));
+#else
     GetLoadingManager()->AddCallback( this, (void*)previewObject );
+#endif
 }
+
+#ifdef RAD_3DS
+void IGuiScreenRewards::SetVehiclePreview3DS(tDrawable* drawable)
+{
+    tRefCounted::Assign(m_vehiclePreview3DS, drawable);
+}
+#endif
 
 void
 IGuiScreenRewards::Unload3DModel()
 {
     p3d::pddi->DrawSync();
+#ifdef RAD_3DS
+    // Retire GPU work before releasing model geometry and its inventory section.
+    ++m_previewRequest3DS;
+    m_loadingPreview3DS = NULL;
+    SetVehiclePreview3DS(NULL);
+#endif
 
     if( m_previewWindow != NULL )
     {

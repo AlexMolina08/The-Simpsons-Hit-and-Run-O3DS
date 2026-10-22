@@ -85,6 +85,9 @@ extern "C" void old3dsTouchActionCancel();
 #include <presentation/gui/ingame/guimanageringame.h>
 #include <presentation/gui/ingame/guiscreenhud.h>
 #include <presentation/gui/ingame/guiscreenrewards.h>
+#include <presentation/gui/ingame/guiscreenphonebooth.h>
+#include <presentation/gui/utility/vehiclepreview.h>
+#include <p3d/drawable.hpp>
 #include <gameflow/gameflow.h>
 #include <App.h>
 #include <Layer.h>
@@ -2216,6 +2219,59 @@ namespace
         ~NativeViewPass(){End();}
     };
 
+    void DrawUpperVehicle(tView* view,CGuiScreenPhoneBooth* screen)
+    {
+        CGuiMenu* menu=screen->GetPreviewMenu3DS();
+        Scrooby::Text* name=menu && menu->GetNumItems()?MenuLabel(menu->GetMenuItem(0)):NULL;
+        tFont* font=name?name->GetFont():NULL;
+        if(!font)return;
+        p3d::pddi->PushState(PDDI_STATE_LIGHTING);
+        NativeViewPass nativePass(view);
+        p3d::pddi->EnableZBuffer(false);p3d::pddi->SetCullMode(PDDI_CULL_NONE);
+        p3d::pddi->SetCamera(0.1f,10,1.5708f,4.0f/3);p3d::pddi->SetProjectionMode(PDDI_PROJECTION_PERSPECTIVE);
+        p3d::stack->LoadIdentity();p3d::stack->Translate(-0.5f,-0.375f,0.5f);
+        BottomLabel(font,name->GetStringBuffer(),24,35,20,Gold,272);
+        tDrawable* model=screen->GetVehiclePreview3DS();
+        if(model){
+            FooterAction(font,"L","ROTATE LEFT",12,156);
+            FooterAction(font,"R","ROTATE RIGHT",164,310);
+            FlushUI();
+            rmt::Sphere sphere;model->GetBoundingSphere(&sphere);
+            if(sphere.radius>0.0001f && sphere.radius<1000){
+                // The preview owns only a retail menu drawable, never vehicle
+                // physics, drivers, or the selected car's gameplay resources.
+                p3d::pddi->Clear(PDDI_BUFFER_DEPTH);
+                p3d::pddi->EnableZBuffer(true);p3d::pddi->SetZWrite(true);
+                p3d::pddi->EnableFog(false);
+                p3d::pddi->SetZCompare(PDDI_COMPARE_LESS);
+                p3d::pddi->SetCullMode(PDDI_CULL_NORMAL);
+                p3d::pddi->SetCamera(.1f,20,1.0f,400.0f/240.0f);
+                for(int light=0;light<p3d::pddi->GetMaxLights();++light)p3d::pddi->EnableLight(light,false);
+                p3d::pddi->SetAmbientLight(tColour(140,140,140));
+                p3d::pddi->SetLightType(0,PDDI_LIGHT_DIRECTIONAL);
+                p3d::pddi->SetLightColour(0,tColour(200,200,200));
+                rmt::Vector direction(-.3f,-.8f,-.5f);direction.Normalize();
+                p3d::pddi->SetLightDirection(0,&direction);p3d::pddi->EnableLight(0,true);
+                p3d::stack->LoadIdentity();p3d::stack->Translate(0,0,VehiclePreview::Distance);
+                p3d::stack->RotateX(VehiclePreview::Pitch);p3d::stack->RotateY(screen->GetPreviewYaw3DS());
+                p3d::stack->Scale(screen->GetPreviewRadius3DS()/sphere.radius);
+                p3d::stack->Translate(-sphere.centre.x,-sphere.centre.y,-sphere.centre.z);
+#ifdef SRR2_OLD_3DS
+                const bool stereoModel=picaStereoObjectBegin(VehiclePreview::ScreenDistance);
+#endif
+                model->Display();
+#ifdef SRR2_OLD_3DS
+                if(stereoModel)picaStereoObjectEnd();
+#endif
+            }
+        }else{
+            const bool loading = screen->IsVehiclePreviewLoading3DS();
+            Ascii(font,loading?"LOADING":"PREVIEW UNAVAILABLE",loading?119:48,136,16,White,224);
+        }
+        FlushUI();nativePass.End();
+        p3d::pddi->PopState(PDDI_STATE_LIGHTING);
+    }
+
     void DrawUpperPreview(tView* view,CGuiScreen* screen)
     {
         if(!view || !screen || !screen->IsRunning() || !screen->HasMenu())return;
@@ -2223,10 +2279,8 @@ namespace
         const int selection=menu->GetSelection();if(selection<0)return;
         Scrooby::Sprite* image=NULL;
         const bool phone=screen->GetWindowID()==CGuiWindow::GUI_SCREEN_ID_PHONE_BOOTH;
-        if(phone){
-            Scrooby::Page* page=screen->GetScroobyScreen()->GetPage("PhoneBooth");
-            if(s_phonePreviewVisible && page)image=page->GetSprite("PreviewImage");
-        }else if(screen->GetWindowID()==CGuiWindow::GUI_SCREEN_ID_SCRAP_BOOK_CONTENTS){
+        if(phone){DrawUpperVehicle(view,static_cast<CGuiScreenPhoneBooth*>(screen));return;}
+        if(screen->GetWindowID()==CGuiWindow::GUI_SCREEN_ID_SCRAP_BOOK_CONTENTS){
             const char* names[]={"StoryMissions","CharacterClothing","Vehicles",NULL,"CollectorCards"};
             Scrooby::Page* page=screen->GetScroobyScreen()->GetPage("ScrapBookContents");
             if(page && selection<5 && names[selection])image=page->GetSprite(names[selection]);
@@ -2236,8 +2290,8 @@ namespace
         }
         tSprite* art=image?const_cast<tSprite*>(image->GetRawSprite()):NULL;
         if(!art || art->GetWidth()<=8 || art->GetHeight()<=8)return;
-        float scale=(phone?194.0f:150.0f)/art->GetHeight();
-        const float maxWidth=phone?336.0f:254.0f;
+        float scale=150.0f/art->GetHeight();
+        const float maxWidth=254.0f;
         if(art->GetWidth()*scale>maxWidth)scale=maxWidth/art->GetWidth();
         // The upper display presents the focused retail artwork. Its source
         // sprite already follows the selected level and unlock state.
@@ -2246,20 +2300,7 @@ namespace
         p3d::pddi->SetCamera(0.1f,10,1.5708f,4.0f/3);p3d::pddi->SetProjectionMode(PDDI_PROJECTION_PERSPECTIVE);
         p3d::stack->LoadIdentity();p3d::stack->Translate(-0.5f,-0.375f,0.5f);
         // 320-wide Scrooby space fills a 400-wide LCD; compensate to retain art proportions.
-        if(phone){
-            Scrooby::Text* name=MenuLabel(menu->GetMenuItem(0));
-            if(name && name->GetFont())BottomLabel(name->GetFont(),name->GetStringBuffer(),24,35,20,Gold,272);
-        }
-#ifdef SRR2_OLD_3DS
-        // The retail car is an image. Float that layer ahead of the screen
-        // while its name and controls remain at the screen plane.
-        const bool stereoPreview = phone && picaStereoObjectBegin(0.66f);
-#endif
-        RetailArt(art,160,133,art->GetWidth()*scale*0.8f,art->GetHeight()*scale,
-            tColour(255,255,255,phone?int(image->GetAlpha()*255):255));
-#ifdef SRR2_OLD_3DS
-        if(stereoPreview) picaStereoObjectEnd();
-#endif
+        RetailArt(art,160,133,art->GetWidth()*scale*0.8f,art->GetHeight()*scale);
         nativePass.End();
     }
 

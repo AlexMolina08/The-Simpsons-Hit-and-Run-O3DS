@@ -18,6 +18,11 @@
 #include <SDL.h>
 
 #include <presentation/gui/ingame/guiscreenphonebooth.h>
+#ifdef RAD_3DS
+#include <presentation/gui/utility/vehiclepreview.h>
+#include <p3d/drawable.hpp>
+#include <3ds.h>
+#endif
 #include <presentation/gui/ingame/guiscreenhud.h>
 #include <presentation/gui/utility/specialfx.h>
 #include <presentation/gui/guimenu.h>
@@ -252,6 +257,10 @@ CGuiScreenPhoneBooth::CGuiScreenPhoneBooth
     m_vehicleDamaged( NULL ),
     m_repairCostInfo( NULL ),
     m_vehicleRepairCost( NULL )
+#ifdef RAD_3DS
+    , m_previewYaw3DS( VehiclePreview::InitialYaw )
+    , m_previewRadius3DS( 1.0f )
+#endif
 {
 MEMTRACK_PUSH_GROUP( "CGUIScreenPhoneBooth" );
     // Retrieve the Scrooby drawing elements.
@@ -368,6 +377,10 @@ MEMTRACK_PUSH_GROUP( "CGUIScreenPhoneBooth" );
     vehicleNames->SetTextMode( Scrooby::TEXT_WRAP );
 
     m_menuTeleport = false;
+#endif
+#ifdef RAD_3DS
+    // The retail debug page is a separate selection state and has no live preview.
+    if(Scrooby::Page* debug = m_pScroobyScreen->GetPage("CarSelect")) debug->SetVisible(false);
 #endif
 MEMTRACK_POP_GROUP("CGUIScreenPhoneBooth");
 }
@@ -773,6 +786,26 @@ void
 CGuiScreenPhoneBooth::On3DModelLoaded( const PreviewObject* previewObject )
 {
     p3d::pddi->DrawSync();
+#ifdef RAD_3DS
+    // Reuse the small retail garage model, never create a gameplay vehicle.
+    SetVehiclePreview3DS(p3d::find<tDrawable>(previewObject->nameModel));
+    m_previewYaw3DS = VehiclePreview::InitialYaw;
+    m_previewRadius3DS = 1.0f;
+    tDrawable* model = GetVehiclePreview3DS();
+    if(model)
+    {
+        rmt::Sphere sphere; rmt::Box3D box;
+        model->GetBoundingSphere(&sphere); model->GetBoundingBox(&box);
+        if(sphere.radius > 0.0001f && sphere.radius < 1000)
+        {
+            const float x = fmaxf(fabsf(box.low.x-sphere.centre.x), fabsf(box.high.x-sphere.centre.x));
+            const float z = fmaxf(fabsf(box.low.z-sphere.centre.z), fabsf(box.high.z-sphere.centre.z));
+            m_previewRadius3DS = VehiclePreview::FitRadius(sqrtf(x*x+z*z)/sphere.radius,
+                (box.low.y-sphere.centre.y)/sphere.radius, (box.high.y-sphere.centre.y)/sphere.radius);
+        }
+    }
+    if(m_previewImage) m_previewImage->SetVisible(false);
+#else
 
     rAssert( m_previewImage != NULL );
     m_previewImage->SetVisible( true );
@@ -837,6 +870,7 @@ CGuiScreenPhoneBooth::On3DModelLoaded( const PreviewObject* previewObject )
             rAssertMsg( false, "*** Can't find 2D vehicle image!!" );
         }
     }
+#endif
 }
 
 const PreviewObject*
@@ -914,6 +948,14 @@ CGuiScreenPhoneBooth::InitMenu()
 void CGuiScreenPhoneBooth::OnUpdate( unsigned int elapsedTime )
 {
     IGuiScreenRewards::OnUpdate( elapsedTime );
+#ifdef RAD_3DS
+    if(IsRunning() && GetVehiclePreview3DS())
+    {
+        const unsigned held = hidKeysHeld();
+        m_previewYaw3DS = VehiclePreview::Rotate(m_previewYaw3DS, elapsedTime,
+            (held & KEY_L) != 0, (held & KEY_R) != 0);
+    }
+#endif
 }
 
 void
