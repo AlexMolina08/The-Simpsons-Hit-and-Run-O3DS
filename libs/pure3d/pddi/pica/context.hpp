@@ -191,6 +191,9 @@ protected:
     DVLB_s*         shaderBinary;
     shaderProgram_s shaderProgram;
     bool stereoOn;
+#ifdef SRR2_OLD_3DS
+    bool stereoWorldPass;
+#endif
 
 public:
 #ifdef SRR2_OLD3DS_UNLIT_PROJECTION

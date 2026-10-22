@@ -156,6 +156,9 @@ static unsigned periodSamples;
 static u64 totalWork,traceTicks,scopeCalibration;
 static unsigned verifyAll,verifyAllFailures;
 static bool hold=false,reload=false,visualCapture=false;
+static float stereoTestSlider=-1.0f;
+bool StereoVisualAudit(){return visualCapture;}
+float StereoSlider(float physical){return stereoTestSlider>=0.0f?stereoTestSlider:physical;}
 // Development-only character inspection. Zero preserves the driving route.
 static unsigned portrait=0;
 static unsigned portraitLevel=2;
@@ -328,6 +331,10 @@ static bool ParseRunArgument(const char* argument)
  else if(!strncmp(argument,"bench_recurring=",16))Old3dsRecurring::requested=atoi(argument+16)!=0;
  else if(!strncmp(argument,"bench_stationary_ms=",20))Old3dsRecurring::stationaryMs=strtoul(argument+20,nullptr,10);
  else if(!strncmp(argument,"bench_service_profile=",22))serviceProfile=atoi(argument+22)!=0;
+ else if(!strncmp(argument,"bench_stereo_slider=",20)){
+  char* end=nullptr;const float value=strtof(argument+20,&end);
+  if(end!=argument+20 && !*end && std::isfinite(value) && value>=0 && value<=1)stereoTestSlider=value;
+ }
  else if(!strncmp(argument,identity,sizeof(identity)-1))snprintf(runIdentity,sizeof(runIdentity),"%s",argument+sizeof(identity)-1);
  else return false;
  return true;
@@ -674,26 +681,31 @@ bool End(u64 work,int context){
 // Development-only native framebuffer readback after the route has stopped.
 // The SDK exposes the renderable back buffer, so its age is deliberately not
 // treated as a displayed frame identity. Never use this capture for FPS proof.
-static void DumpVisual(FILE* f)
+static void DumpVisualEye(FILE* f,gfx3dSide_t eye,const char* tag)
 {
- if(!visualCapture)return;
- C3D_FrameSync();
  u16 width=0,height=0;
  const GSPGPU_FramebufferFormat format=gfxGetScreenFormat(GFX_TOP);
- unsigned char* pixels=gfxGetFramebuffer(GFX_TOP,GFX_LEFT,&width,&height);
+ unsigned char* pixels=gfxGetFramebuffer(GFX_TOP,eye,&width,&height);
  const unsigned bytes=unsigned(width)*height*3;
  const bool valid=pixels && format==GSP_BGR8_OES && width==240 && (height==400 || height==800) &&
      R_SUCCEEDED(GSPGPU_InvalidateDataCache(pixels,bytes));
- fprintf(f,"NATIVE_VISUAL enabled=1 valid=%u screen=top raw_width=%u raw_height=%u format=%u back_buffer=1 age_unknown=1 after_route=1 performance_capture=0\n",valid,width,height,unsigned(format));
+ fprintf(f,"%s enabled=1 valid=%u screen=top raw_width=%u raw_height=%u format=%u back_buffer=1 age_unknown=1 after_route=1 performance_capture=0\n",tag,valid,width,height,unsigned(format));
  if(!valid)return;
  static const char hex[]="0123456789abcdef";
  char line[513];
  for(unsigned offset=0;offset<bytes;offset+=256){
   const unsigned count=bytes-offset<256?bytes-offset:256;
   for(unsigned i=0;i<count;++i){const unsigned value=pixels[offset+i];line[i*2]=hex[value>>4];line[i*2+1]=hex[value&15];}
-  line[count*2]=0;fprintf(f,"NATIVE_VISUAL_BYTES offset=%u data=%s\n",offset,line);
+  line[count*2]=0;fprintf(f,"%s_BYTES offset=%u data=%s\n",tag,offset,line);
  }
- fprintf(f,"NATIVE_VISUAL_END bytes=%u\n",bytes);
+ fprintf(f,"%s_END bytes=%u\n",tag,bytes);
+}
+static void DumpVisual(FILE* f)
+{
+ if(!visualCapture)return;
+ C3D_FrameSync();
+ DumpVisualEye(f,GFX_LEFT,"NATIVE_VISUAL");
+ if(Graphics3DS::Stereo())DumpVisualEye(f,GFX_RIGHT,"NATIVE_VISUAL_RIGHT");
 }
 extern "C" void picaDumpStereoDiagnostics(FILE*);
 void Dump(){if(!enabled)return;
@@ -707,6 +719,7 @@ void Dump(){if(!enabled)return;
 #endif
  Old3dsRecurring::Dump(f);
  picaDumpStereoDiagnostics(f);
+ fprintf(f,"NATIVE_STEREO_TEST slider_override=%.4f command_audit=%u performance_capture=%u\n",stereoTestSlider,visualCapture,!visualCapture && stereoTestSlider<0.0f);
  fprintf(f,"NATIVE_FUSED_TRIG enabled=1 nearest_only=1 bounded_radians=8192 per_call_counters=0 runtime_selector=0\n");
  old3dsDumpAdpcmVerification(f);
  fprintf(f,"NATIVE_ADPCM_FAST enabled=%u calls=%u fallbacks=%u predictor_order_unchanged=%u budget_calls=%u budget_predictors=3 callbacks_deferred=0\n",g_old3dsAdpcmFast,g_old3dsAdpcmFastCalls,g_old3dsAdpcmFastFallbacks,g_old3dsAdpcmBudgetCalls==0,g_old3dsAdpcmBudgetCalls);

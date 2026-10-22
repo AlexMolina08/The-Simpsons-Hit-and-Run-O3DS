@@ -138,6 +138,10 @@ static void srr2AptHook( APT_HookType hook, void* )
 // Project Includes
 //========================================
 #include <contexts/contextenum.h>
+#ifdef RAD_3DS
+#include <camera/supercammanager.h>
+#include <camera/supercam.h>
+#endif
 #include <debug/profiler.h>
 #include <gameflow/gameflow.h>
 #include <presentation/gui/ingame/guiscreenmissionload.h>
@@ -888,6 +892,44 @@ void Game::Run()
                     O3ExperimentTimer causalRender(O3E_RENDER);
 #endif
                     NB_SCOPE(Render); O3_RECUR(Render);
+#ifdef RAD_3DS
+                    if(Graphics3DS::Stereo())
+                    {
+                        StereoDepth::Camera profile = StereoDepth::Default;
+                        if(ctx == CONTEXT_GAMEPLAY || ctx == CONTEXT_PAUSE ||
+                           ctx == CONTEXT_DEMO || ctx == CONTEXT_SUPERSPRINT)
+                        {
+                            SuperCamManager* manager = GetSuperCamManager();
+                            SuperCamCentral* central = manager ? manager->GetSCC(0) : NULL;
+                            SuperCam* camera = central ? central->GetActiveSuperCam() : NULL;
+                            if(camera)
+                            {
+                                switch(camera->GetType())
+                                {
+                                    case SuperCam::FOLLOW_CAM:
+                                    case SuperCam::NEAR_FOLLOW_CAM:
+                                    case SuperCam::FAR_FOLLOW_CAM:
+                                    case SuperCam::CHASE_CAM:
+                                    case SuperCam::REVERSE_CAM:
+                                    case SuperCam::WRECKLESS_CAM:
+                                    case SuperCam::BURNOUT_CAM:
+                                    case SuperCam::SUPER_SPRINT_CAM:
+                                        profile = StereoDepth::Driving; break;
+                                    case SuperCam::WALKER_CAM:
+                                        profile = StereoDepth::Walking; break;
+                                    case SuperCam::BUMPER_CAM:
+                                    case SuperCam::FIRST_PERSON_CAM:
+                                        profile = StereoDepth::Close; break;
+                                    case SuperCam::DEFAULT_CAM:
+                                        break;
+                                    default:
+                                        profile = StereoDepth::Cinematic; break;
+                                }
+                            }
+                        }
+                        Graphics3DS::UpdateStereoCamera(profile, elapsed);
+                    }
+#endif
                     mpRenderFlow->OnTimerDone(elapsed, NULL);
                 }
                 DEMOPROFILE( g_DemoProfiler.Stop(PROFILE_CHANNEL_RENDER); )

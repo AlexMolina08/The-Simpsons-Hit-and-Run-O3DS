@@ -4,7 +4,7 @@ from pathlib import Path
 import re,subprocess,tempfile
 root=Path(__file__).resolve().parents[3]
 source=(root/'code/main/nativebench.cpp').read_text()
-function=source[source.index('static void DumpVisual(FILE* f)'):source.index('void Dump(){if(!enabled)return;')]
+function=source[source.index('static void DumpVisualEye(FILE* f'):source.index('void Dump(){if(!enabled)return;')]
 fixture=r'''
 #include <cstdio>
 #include <cassert>
@@ -12,16 +12,19 @@ fixture=r'''
 using u16=unsigned short;
 #define R_SUCCEEDED(value) ((value)>=0)
 enum GSPGPU_FramebufferFormat { GSP_BGR8_OES=1 };
-enum {GFX_TOP,GFX_LEFT};
+enum {GFX_TOP};
+enum gfx3dSide_t {GFX_LEFT,GFX_RIGHT};
+namespace Graphics3DS {bool stereo=false;bool Stereo(){return stereo;}}
 static bool visualCapture=false;
 static unsigned syncs=0,invalidations=0;
 static int cacheResult=0;
 static unsigned char pixels[240*800*3];
+static unsigned rightRequests=0;
 static u16 rawWidth=240,rawHeight=400;
 static GSPGPU_FramebufferFormat selected=GSP_BGR8_OES;
 void C3D_FrameSync(){++syncs;}
 GSPGPU_FramebufferFormat gfxGetScreenFormat(int){return selected;}
-unsigned char* gfxGetFramebuffer(int,int,u16* w,u16* h){*w=rawWidth;*h=rawHeight;return pixels;}
+unsigned char* gfxGetFramebuffer(int,gfx3dSide_t eye,u16* w,u16* h){if(eye==GFX_RIGHT)++rightRequests;*w=rawWidth;*h=rawHeight;return pixels;}
 int GSPGPU_InvalidateDataCache(void* p,unsigned n){assert(p==pixels && n==unsigned(rawWidth)*rawHeight*3);++invalidations;return cacheResult;}
 '''
 main=r'''
@@ -39,6 +42,11 @@ int main(){
  cacheResult=0;rawHeight=800;f=tmpfile();DumpVisual(f);assert(syncs==3 && invalidations==3);
  assert(ftell(f)>576000);fclose(f);
  rawWidth=239;f=tmpfile();DumpVisual(f);assert(syncs==4 && invalidations==3);fclose(f);
+ assert(rightRequests==0);
+ Graphics3DS::stereo=true;rawWidth=240;rawHeight=400;
+ f=tmpfile();DumpVisual(f);assert(syncs==5 && invalidations==5 && rightRequests==1);
+ rewind(f);bool found=false;while(fgets(buffer,sizeof(buffer),f))if(std::strstr(buffer,"NATIVE_VISUAL_RIGHT_END bytes=288000"))found=true;
+ assert(found);fclose(f);
 }
 '''
 with tempfile.TemporaryDirectory() as d:

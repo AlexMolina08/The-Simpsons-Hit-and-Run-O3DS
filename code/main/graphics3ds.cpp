@@ -9,6 +9,7 @@ namespace
     bool quality = false, requested = false, stereo = false;
     bool pending = false, allowed = true, remember = false, failed = false;
     unsigned fpsOverride = 0;
+    StereoDepth::State stereoDepth;
     unsigned PreferenceGroup()
     {
         return Graphics3DS::IsNew() ? 2 : model == Graphics3DS::Old2DS ? 1 : 0;
@@ -21,6 +22,7 @@ void Graphics3DS::Initialize(int value, int argc, char** argv)
     quality = false;
     requested = model != Unknown && PortSettings::GraphicsQuality(PreferenceGroup(), true);
     stereo = false; fpsOverride = 0; failed = false; remember = false; allowed = true;
+    stereoDepth.Reset();
     // Diagnostic arguments never change the player's saved preference.
     const auto argument = [](const char* value) {
         if(!strcmp(value, "graphics_quality=0")) requested = false;
@@ -55,6 +57,12 @@ bool Graphics3DS::SupportsStereo() { return SupportsWide() && model != New2DSXL;
 bool Graphics3DS::Quality() { return quality; }
 bool Graphics3DS::RequestedQuality() { return requested; }
 bool Graphics3DS::Stereo() { return stereo; }
+void Graphics3DS::UpdateStereoCamera(StereoDepth::Camera camera, unsigned elapsedMilliseconds)
+{
+    if(stereo) stereoDepth.Update(camera, elapsedMilliseconds);
+}
+float Graphics3DS::StereoShift(float slider) { return stereoDepth.Shift(slider); }
+float Graphics3DS::StereoConvergence() { return stereoDepth.convergence; }
 bool Graphics3DS::Pending() { return pending; }
 void Graphics3DS::AllowChanges(bool allow) { allowed = allow; }
 bool Graphics3DS::CanApply() { return pending && allowed; }

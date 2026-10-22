@@ -21,6 +21,8 @@ void SaveFilename(char*,unsigned,unsigned);
 void Init(int argc=0,char** argv=nullptr); unsigned Seed(unsigned); unsigned Begin(unsigned elapsed,int context);
 bool ResidentShaders();
 bool NativeUniforms();
+bool StereoVisualAudit();
+float StereoSlider(float physical);
 bool End(u64 work,int context); void Dump();
 void Add(Counter,unsigned=1);
 }

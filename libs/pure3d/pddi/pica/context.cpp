@@ -222,6 +222,9 @@ picaContext::picaContext(picaDevice* dev, picaDisplay* disp)
 #endif
     device  = dev;
     stereoOn = false;
+#ifdef SRR2_OLD_3DS
+    stereoWorldPass = false;
+#endif
     bottomPass = false;
     s_picaContext = this;
     display = disp;
@@ -754,8 +757,13 @@ void picaContext::SetupHardwareProjection(void)
     wheelLodPixelScale = state.viewState->projectionMode==PDDI_PROJECTION_PERSPECTIVE ?
         fmaxf(fabsf(projection.Row4(0).x)*200.0f,fabsf(projection.Row4(1).y)*120.0f) : 0.0f;
 #endif
-    stereoOn = (state.viewState->projectionMode == PDDI_PROJECTION_PERSPECTIVE) &&
-               (state.viewState->camera.fov < 1.5f);
+    bool depthView = state.viewState->camera.fov < 1.5f;
+#ifdef SRR2_OLD_3DS
+    // World/HUD boundaries identify depth reliably; wide-angle world cameras
+    // must not become flat merely because they reach a 90-degree field of view.
+    if(Graphics3DS::Stereo()) depthView = stereoWorldPass;
+#endif
+    stereoOn = (state.viewState->projectionMode == PDDI_PROJECTION_PERSPECTIVE) && depthView;
 
     ApplyProjection(&projection);
     SetupViewport();
@@ -3146,6 +3154,12 @@ extern "C" void picaBottomScreenEnd(void)
 #ifdef SRR2_OLD_3DS
 void picaContext::BeginWorld(void)
 {
+    if(Graphics3DS::Stereo() && !stereoWorldPass)
+    {
+        FlushStreams();
+        stereoWorldPass = true;
+        SetupHardwareProjection();
+    }
     if(display->BeginWorldTarget())
     {
         // Reserve presentation vertices before world geometry consumes the ring.
@@ -3159,6 +3173,13 @@ void picaContext::BeginWorld(void)
 
 void picaContext::EndWorld(void)
 {
+    if(Graphics3DS::Stereo() && stereoWorldPass)
+    {
+        // Drain world geometry before the first HUD projection disables depth.
+        FlushStreams();
+        stereoWorldPass = false;
+        SetupHardwareProjection();
+    }
     if(!display->IsWorldTarget()) return;
     // FrameSplit may start the queue before EndFrame flushes the streams.
     FlushStreams();
