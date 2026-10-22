@@ -23,8 +23,8 @@ int main(int argc, char** argv) {
         assert(IsNew() == newer);
         assert(SupportsWide() == (m != 3 && m != 6));
         assert(SupportsStereo() == (m != 3 && m != 5 && m != 6));
-        assert(RequestedQuality() == newer); Complete(true);
-        assert(RenderWidth() == (newer ? 800u : 400u));
+        assert(RequestedQuality() == (m != 6)); Complete(true);
+        assert(RenderWidth() == (SupportsWide() ? 800u : 400u));
         assert(TargetFPS() == 30);
     }
     for(int m = 0; m <= 6; ++m) {

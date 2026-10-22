@@ -19,7 +19,7 @@ void Graphics3DS::Initialize(int value, int argc, char** argv)
 {
     model = value >= Old3DS && value <= New2DSXL ? Model(value) : Unknown;
     quality = false;
-    requested = model != Unknown && PortSettings::GraphicsQuality(PreferenceGroup(), IsNew());
+    requested = model != Unknown && PortSettings::GraphicsQuality(PreferenceGroup(), true);
     stereo = false; fpsOverride = 0; failed = false; remember = false; allowed = true;
     // Diagnostic arguments never change the player's saved preference.
     const auto argument = [](const char* value) {

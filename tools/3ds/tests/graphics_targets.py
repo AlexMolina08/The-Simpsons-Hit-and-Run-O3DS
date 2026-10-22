@@ -59,7 +59,8 @@ struct picaContext {
 main = r'''
 int main(){
  using namespace Graphics3DS;
- Initialize(Old3DS);picaDisplay d;assert(d.ApplyGraphicsMode());
+ char app[]="test",normal[]="graphics_quality=0";char* normalArgs[]={app,normal};
+ Initialize(Old3DS,2,normalArgs);picaDisplay d;assert(d.ApplyGraphicsMode());
  assert(allocations==0&&!wide&&!stereo&&d.RenderWidth()==400);
  RequestQuality(true);synced=false;assert(d.ApplyGraphicsMode());
  assert(synced&&wide&&!stereo&&d.target->width==800&&d.RenderWidth()==800);
