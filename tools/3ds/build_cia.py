@@ -10,7 +10,7 @@ import subprocess
 import tempfile
 import sys
 
-from release_version import parse
+from release_version import parse, packed_version, read_cia_version
 from prepare_home_menu import prepare
 
 REPO = Path(__file__).resolve().parents[2]
@@ -29,7 +29,8 @@ def main():
     parser.add_argument('--out', type=Path, default=REPO / 'out/release/Simpsons-Hit-and-Run-3DS.cia')
     args = parser.parse_args()
     try:
-        version, (major, minor, patch) = parse(args.version)
+        version, _ = parse(args.version)
+        title_version = packed_version(version)
     except ValueError as error:
         parser.error(str(error))
     args.out = args.out.resolve()
@@ -95,7 +96,11 @@ def main():
         subprocess.run([str(args.makerom.resolve()), '-f', 'cia', '-o', str(temporary), '-target', 't',
                         '-rsf', str(branding / 'game.rsf'), '-DROMFS_ROOT=' + str(romfs),
                         '-elf', str(args.elf.resolve()), '-icon', str(work / 'icon.smdh'),
-                        '-banner', str(work / 'banner.bnr'), '-major', str(major), '-minor', str(minor), '-micro', str(patch)], check=True)
+                        '-banner', str(work / 'banner.bnr'), '-ver', str(title_version)], check=True)
+        actual_version = read_cia_version(temporary)
+        if actual_version != title_version:
+            raise ValueError(f'Packaged CIA title version {actual_version} does not match {version} ({title_version}); '
+                             'use makerom 0.18.4 to avoid the 0.19.0 minor-version bug')
         os.replace(temporary, args.out)
     with args.out.open('rb') as cia:
         digest = hashlib.file_digest(cia, 'sha256').hexdigest()
@@ -104,7 +109,9 @@ def main():
     home_metadata['banner_bytes'] = (home_menu / 'banner.bnr').stat().st_size
     home_metadata['banner_sha256'] = hashlib.sha256((home_menu / 'banner.bnr').read_bytes()).hexdigest()
     manifest = {'source_commit': source_commit, 'build_profile': 'cmake/old3ds-release.cmake', 'home_menu': home_metadata, 'version': version, 'title_id': '000400000f3a1100', 'model': 'Old and New Nintendo 3DS; 64 MiB mode; New 3DS CPU and L2 acceleration',
-                'cia_bytes': args.out.stat().st_size, 'cia_sha256': digest, 'assets': assets, 'movies': movie_audit,
+                'cia_bytes': args.out.stat().st_size, 'cia_sha256': digest, 'cia_title_version': title_version,
+                'elf_bytes': args.elf.stat().st_size, 'elf_sha256': hashlib.sha256(args.elf.read_bytes()).hexdigest(),
+                'assets': assets, 'movies': movie_audit,
                 'validation': 'Packaging only; installed-console validation required before release'}
     args.out.with_suffix('.manifest.json').write_text(json.dumps(manifest, indent=2) + '\n')
     args.out.with_suffix('.sha256').write_text(digest + '  ' + args.out.name + '\n')

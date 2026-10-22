@@ -1,5 +1,6 @@
 """Version handling shared by CIA packaging and the local release launcher."""
 import re
+import struct
 
 PATTERN = re.compile(r'v?(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)(?:-(rc|beta|alpha)\.(0|[1-9][0-9]*))?\Z')
 
@@ -31,3 +32,30 @@ def next_version(tags):
     if minor > 63:
         minor, major = 0, major + 1
     return parse(f'{major}.{minor}.{patch}-rc.1')[0]
+
+
+def packed_version(value):
+    _, (major, minor, patch) = parse(value)
+    return (major << 10) | (minor << 4) | patch
+
+
+def read_cia_version(path):
+    """Read the actual title version from a makerom CIA's signed TMD."""
+    with path.open('rb') as file:
+        header = file.read(32)
+        if len(header) != 32:
+            raise ValueError('Truncated CIA header')
+        header_size, kind, format_version, certificates, ticket, tmd_size = struct.unpack_from('<IHHIII', header)
+        if header_size < 0x2020 or kind != 0 or format_version != 0:
+            raise ValueError('Unsupported CIA header')
+        # CIA sections align to 64 bytes. The TMD uses an RSA-2048 SHA-256
+        # signature block followed by a big-endian title version at body + 0x9c.
+        align = lambda size: (size + 63) & ~63
+        offset = align(header_size) + align(certificates) + align(ticket)
+        if tmd_size < 0x1de or offset + tmd_size > path.stat().st_size:
+            raise ValueError('Truncated CIA title metadata')
+        file.seek(offset)
+        if file.read(4) != b'\x00\x01\x00\x04':
+            raise ValueError('Unsupported CIA title metadata signature type')
+        file.seek(offset + 0x140 + 0x9c)
+        return struct.unpack('>H', file.read(2))[0]

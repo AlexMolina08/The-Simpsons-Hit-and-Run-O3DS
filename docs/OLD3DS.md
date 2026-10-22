@@ -105,6 +105,8 @@ Use `JOBS=2 python3 tools/3ds/make_cia.py "/path/to/PC game"` to reduce parallel
 
 On macOS (Apple Silicon and Intel), Linux x86-64 and WSL, packaging tools are
 prepared automatically from pinned upstream sources with verified download hashes.
+Packaging uses makerom 0.18.4 because [0.19.0 drops the minor title version](https://github.com/3DSGuy/Project_CTR/issues/169).
+The completed CIA's embedded version is checked before it can be released.
 On other architectures, install [makerom](https://github.com/3DSGuy/Project_CTR/releases)
 and [bannertool](https://github.com/carstene1ns/3ds-bannertool), or pass their paths:
 

@@ -8,10 +8,12 @@ import subprocess
 import urllib.request
 import zipfile
 
+# 0.19.0 drops the title's minor version (Project_CTR issue #169).
+MAKEROM_VERSION = '0.18.4'
 MAKEROM_PACKAGES = {
-    ('Darwin', 'arm64'): ('macos_arm64', 'ea222647bf362d1aa0d8b7570dc65e7968ce6b3d7b103e9cc815a99698d930e0'),
-    ('Darwin', 'x86_64'): ('macos_x86_64', 'a52563e5549cd2dd84e9b8d1cb0d1fdf15ea9bd0f6241e2e178fe4e4bf3a9277'),
-    ('Linux', 'x86_64'): ('ubuntu_x86_64', '287b809dec064e0ad597e3d272c49ecb7eed41693d5ee6fef9d8a8aa24c2497e'),
+    ('Darwin', 'arm64'): ('macos_arm64', '813fd517ec23d54cacee2c9a718a3b5fda7678a541b37d19dab9f8b1de1297a2'),
+    ('Darwin', 'x86_64'): ('macos_x86_64', '0d382da757833e4dc4fa99721f3cf8d9e1967cefb2a979f75d39bc4ee035f65b'),
+    ('Linux', 'x86_64'): ('ubuntu_x86_64', 'dd596854718c195c6e3229286be485b122921715555af8ae5cf8e9a465d9f970'),
 }
 BANNERTOOL_REVISION = '734d33be79fd3f8c29c6296158f06ac7c5ca9dcb'
 
@@ -19,17 +21,18 @@ BANNERTOOL_REVISION = '734d33be79fd3f8c29c6296158f06ac7c5ca9dcb'
 def locate(repo, makerom=None, bannertool=None):
     root = repo / 'out/release-tools'
     root.mkdir(parents=True, exist_ok=True)
-    makerom = makerom or os.environ.get('MAKEROM') or shutil.which('makerom') or root / 'makerom'
+    managed_makerom = root / f'makerom-v{MAKEROM_VERSION}'
+    makerom = makerom or os.environ.get('MAKEROM') or shutil.which('makerom') or managed_makerom
     bannertool = bannertool or os.environ.get('BANNERTOOL') or shutil.which('bannertool') or root / 'bannertool-build/bannertool'
     makerom, bannertool = Path(makerom).resolve(), Path(bannertool).resolve()
     if not makerom.is_file():
         package = MAKEROM_PACKAGES.get((platform.system(), platform.machine()))
-        if makerom != root.resolve() / 'makerom' or package is None:
+        if makerom != managed_makerom.resolve() or package is None:
             raise RuntimeError('Install makerom or pass --makerom /path/to/makerom; automatic download supports macOS and x86-64 Linux/WSL')
-        print('Downloading makerom v0.19.0...', flush=True)
-        archive = root / 'makerom.zip'
+        print(f'Downloading makerom v{MAKEROM_VERSION}...', flush=True)
+        archive = root / f'makerom-v{MAKEROM_VERSION}.zip'
         suffix, expected_hash = package
-        url = f'https://github.com/3DSGuy/Project_CTR/releases/download/makerom-v0.19.0/makerom-v0.19.0-{suffix}.zip'
+        url = f'https://github.com/3DSGuy/Project_CTR/releases/download/makerom-v{MAKEROM_VERSION}/makerom-v{MAKEROM_VERSION}-{suffix}.zip'
         with urllib.request.urlopen(url, timeout=60) as response, archive.open('wb') as output:
             shutil.copyfileobj(response, output)
         if hashlib.sha256(archive.read_bytes()).hexdigest() != expected_hash:

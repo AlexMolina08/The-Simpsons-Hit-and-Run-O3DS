@@ -12,7 +12,7 @@ import sys
 import time
 
 from release_tools import locate
-from release_version import next_version, parse
+from release_version import next_version, parse, packed_version, read_cia_version
 
 REPO = Path(__file__).resolve().parents[2]
 DEFAULT_REPOSITORY = 'AlexMolina08/The-Simpsons-Hit-and-Run-O3DS'
@@ -39,6 +39,8 @@ def verify_artifact(cia, manifest, commit):
         raise RuntimeError('The saved CIA belongs to another source commit; choose a new version and rebuild')
     if metadata['cia_bytes'] != cia.stat().st_size or metadata['cia_sha256'] != digest(cia):
         raise RuntimeError('The saved CIA failed its size/SHA-256 check; do not upload it')
+    if read_cia_version(cia) != packed_version(metadata.get('version', '')):
+        raise RuntimeError('The CIA embedded title version does not match its release manifest')
     return metadata
 
 
