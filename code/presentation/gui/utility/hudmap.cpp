@@ -97,6 +97,10 @@ extern "C" void picaBottomScreenFrame( void );
 extern "C" void picaBottomScreenStatic( void );
 extern "C" void picaBottomScreenPanel( int selection, int count );
 extern "C" bool picaBottomScreenInterfaceBegin( void );
+#ifdef SRR2_OLD_3DS
+extern "C" bool picaStereoObjectBegin(float screenDistance);
+extern "C" void picaStereoObjectEnd(void);
+#endif
 #endif
 
 //===========================================================================
@@ -2254,8 +2258,16 @@ namespace
             Scrooby::Text* name=MenuLabel(menu->GetMenuItem(0));
             if(name && name->GetFont())BottomLabel(name->GetFont(),name->GetStringBuffer(),24,35,20,Gold,272);
         }
+#ifdef SRR2_OLD_3DS
+        // The retail car is an image. Float that layer ahead of the screen
+        // while its name and controls remain at the screen plane.
+        const bool stereoPreview = phone && picaStereoObjectBegin(0.66f);
+#endif
         RetailArt(art,160,133,art->GetWidth()*scale*0.8f,art->GetHeight()*scale,
             tColour(255,255,255,phone?int(image->GetAlpha()*255):255));
+#ifdef SRR2_OLD_3DS
+        if(stereoPreview) picaStereoObjectEnd();
+#endif
         nativePass.End();
     }
 

@@ -278,6 +278,8 @@ picaContext::picaContext(picaDevice* dev, picaDisplay* disp)
     stereoOn = false;
 #ifdef SRR2_OLD_3DS
     stereoWorldPass = false;
+    stereoObjectPass = false;
+    stereoObjectDistance = 0.0f;
 #endif
     bottomPass = false;
     s_picaContext = this;
@@ -641,6 +643,15 @@ void picaContext::ApplyProjection(pddiMatrix* m)
         t[i][3] = m->Row4(i).w;
     }
 
+#ifdef SRR2_OLD_3DS
+    if(stereoOn && stereoObjectPass && !bottomPass)
+    {
+        const float scale = StereoDepth::ProjectionScale(Graphics3DS::StereoConvergence(), stereoObjectDistance);
+        for(int row = 0; row < 4; ++row)
+            for(int column = 0; column < 4; ++column) t[row][column] *= scale;
+    }
+#endif
+
     if(state.viewState->projectionMode == PDDI_PROJECTION_PERSPECTIVE)
     {
         for(int i = 0; i < 4; i++)
@@ -823,7 +834,7 @@ void picaContext::SetupHardwareProjection(void)
 #ifdef SRR2_OLD_3DS
     // World/HUD boundaries identify depth reliably; wide-angle world cameras
     // must not become flat merely because they reach a 90-degree field of view.
-    if(Graphics3DS::Stereo()) depthView = stereoWorldPass;
+    if(Graphics3DS::Stereo()) depthView = !bottomPass && (stereoWorldPass || stereoObjectPass);
 #endif
     stereoOn = (state.viewState->projectionMode == PDDI_PROJECTION_PERSPECTIVE) && depthView;
 
@@ -3214,6 +3225,26 @@ extern "C" void picaBottomScreenEnd(void)
 }
 
 #ifdef SRR2_OLD_3DS
+bool picaContext::BeginStereoObject(float screenDistance)
+{
+    if(!Graphics3DS::Stereo() || bottomPass || stereoWorldPass || stereoObjectPass) return false;
+    FlushStreams();
+    stereoObjectPass = true;
+    stereoObjectDistance = screenDistance;
+    SetupHardwareProjection();
+    return true;
+}
+
+void picaContext::EndStereoObject(void)
+{
+    if(!stereoObjectPass) return;
+    // Submit the model/artwork with depth before restoring the flat HUD.
+    FlushStreams();
+    stereoObjectPass = false;
+    stereoObjectDistance = 0.0f;
+    SetupHardwareProjection();
+}
+
 void picaContext::BeginWorld(void)
 {
     if(Graphics3DS::Stereo() && !stereoWorldPass)
@@ -3312,6 +3343,14 @@ extern "C" void picaWorldBegin(void)
 extern "C" void picaWorldEnd(void)
 {
     if(s_picaContext) s_picaContext->EndWorld();
+}
+extern "C" bool picaStereoObjectBegin(float screenDistance)
+{
+    return s_picaContext && s_picaContext->BeginStereoObject(screenDistance);
+}
+extern "C" void picaStereoObjectEnd(void)
+{
+    if(s_picaContext) s_picaContext->EndStereoObject();
 }
 #endif
 

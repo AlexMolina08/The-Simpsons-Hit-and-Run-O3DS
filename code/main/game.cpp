@@ -896,6 +896,7 @@ void Game::Run()
                     if(Graphics3DS::Stereo())
                     {
                         StereoDepth::Camera profile = StereoDepth::Default;
+                        float subjectDistance = 0.0f;
                         if(ctx == CONTEXT_GAMEPLAY || ctx == CONTEXT_PAUSE ||
                            ctx == CONTEXT_DEMO || ctx == CONTEXT_SUPERSPRINT)
                         {
@@ -904,6 +905,11 @@ void Game::Run()
                             SuperCam* camera = central ? central->GetActiveSuperCam() : NULL;
                             if(camera)
                             {
+                                rmt::Vector position, target, distance;
+                                camera->GetPosition(&position);
+                                camera->GetTarget(&target);
+                                distance.Sub(target, position);
+                                subjectDistance = distance.Magnitude();
                                 switch(camera->GetType())
                                 {
                                     case SuperCam::FOLLOW_CAM:
@@ -927,7 +933,7 @@ void Game::Run()
                                 }
                             }
                         }
-                        Graphics3DS::UpdateStereoCamera(profile, elapsed);
+                        Graphics3DS::UpdateStereoCamera(profile, elapsed, subjectDistance);
                     }
 #endif
                     mpRenderFlow->OnTimerDone(elapsed, NULL);

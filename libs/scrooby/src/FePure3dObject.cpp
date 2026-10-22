@@ -29,6 +29,11 @@
 #include <radmath/radmath.hpp>
 #include "ResourceManager/FeResourceManager.h"
 
+#ifdef SRR2_OLD_3DS
+extern "C" bool picaStereoObjectBegin(float screenDistance);
+extern "C" void picaStereoObjectEnd(void);
+#endif
+
 // TC [HACK]: Override camera settings.
 //
 //#define OVERRIDE_CAMERA_SETTINGS
@@ -506,7 +511,16 @@ void FePure3dObject::Render()
     // draw the damn thing!
     //
     rAssert( m_RuntimeDrawable != NULL );
+#ifdef SRR2_OLD_3DS
+    // Every living-room object shares this camera and screen plane, including
+    // Homer, the TV picture, glow overlays and animated gags.
+    const bool stereoModel = m_Camera && !strcmp(m_Camera->GetName(), "FE_Camera") &&
+        picaStereoObjectBegin(4.5f);
+#endif
     m_RuntimeDrawable->Display();
+#ifdef SRR2_OLD_3DS
+    if(stereoModel) picaStereoObjectEnd();
+#endif
 
     // restore everything we changed
     //

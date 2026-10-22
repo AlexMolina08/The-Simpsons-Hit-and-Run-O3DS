@@ -48,6 +48,8 @@ public:
 #ifdef SRR2_OLD_3DS
     void BeginWorld(void);
     void EndWorld(void);
+    bool BeginStereoObject(float screenDistance);
+    void EndStereoObject(void);
 #endif
 
     void Clear(unsigned bufferMask);
@@ -200,6 +202,8 @@ protected:
     shaderProgram_s* SkinProgram();
 #ifdef SRR2_OLD_3DS
     bool stereoWorldPass;
+    bool stereoObjectPass;
+    float stereoObjectDistance;
 #endif
 
 public:

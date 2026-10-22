@@ -15,7 +15,7 @@ namespace Graphics3DS
     bool RequestedQuality();
     bool Stereo();
     void UpdateSlider(float slider);
-    void UpdateStereoCamera(StereoDepth::Camera camera, unsigned elapsedMilliseconds);
+    void UpdateStereoCamera(StereoDepth::Camera camera, unsigned elapsedMilliseconds, float subjectDistance = 0.0f);
     float StereoShift(float slider);
     float StereoConvergence();
     bool Pending();

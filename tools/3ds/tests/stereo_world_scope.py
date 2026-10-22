@@ -10,6 +10,7 @@ def prefix(name,ending):
  return s[start:s.index(ending,start)]+'}\n'
 begin=prefix('BeginWorld','    if(display->BeginWorldTarget())')
 end=prefix('EndWorld','    if(!display->IsWorldTarget()) return;')
+objects=s[s.index('bool picaContext::BeginStereoObject('):s.index('void picaContext::BeginWorld(void)')]
 fixture=r'''
 #include <cassert>
 #include <vector>
@@ -19,9 +20,11 @@ enum {PDDI_PROJECTION_PERSPECTIVE,PDDI_PROJECTION_ORTHOGRAPHIC};
 struct View {int projectionMode=PDDI_PROJECTION_PERSPECTIVE;struct {float fov=1.57f;} camera;};
 struct picaContext {
  View view;struct {View* viewState;} state{&view};
- bool stereoWorldPass=false,stereoOn=false;unsigned updates=0;std::vector<bool> flushDepth;
+ bool stereoWorldPass=false,stereoObjectPass=false,stereoOn=false,bottomPass=false;
+ float stereoObjectDistance=0;unsigned updates=0;std::vector<bool> flushDepth;
  void SetupHardwareProjection();void FlushStreams(){flushDepth.push_back(stereoOn);}
  void BeginWorld();void EndWorld();
+ bool BeginStereoObject(float);void EndStereoObject();
 };
 void picaContext::SetupHardwareProjection(){++updates;
 '''
@@ -42,10 +45,20 @@ int main(){
  assert(c.flushDepth.size()==2 && c.flushDepth.back()); // Last world geometry drains with depth still enabled.
  c.view.camera.fov=1.0f;c.SetupHardwareProjection();assert(!c.stereoOn);
  c.EndWorld();assert(c.flushDepth.size()==2);
+ assert(c.BeginStereoObject(4.5f));assert(c.stereoOn && c.stereoObjectDistance==4.5f);
+ assert(!c.BeginStereoObject(.66f)); // Nested objects cannot overwrite the scene plane.
+ c.EndStereoObject();assert(!c.stereoOn && c.stereoObjectDistance==0);
+ assert(c.flushDepth.size()==4 && !c.flushDepth[2] && c.flushDepth[3]);
+ c.EndStereoObject();assert(c.flushDepth.size()==4);
+ c.bottomPass=true;assert(!c.BeginStereoObject(.66f));
+ c.BeginWorld();assert(!c.stereoOn); // Lower screen remains flat, including perspective widgets.
+ assert(!c.BeginStereoObject(.66f));c.EndWorld();c.bottomPass=false;
+ c.BeginWorld();assert(!c.BeginStereoObject(.66f));c.EndWorld();
+ Graphics3DS::stereo=false;assert(!c.BeginStereoObject(4.5f));
 }
 '''
 with tempfile.TemporaryDirectory(prefix='srr-world-stereo-') as d:
- p=Path(d);(p/'test.cpp').write_text(fixture+projection+'}\n'+begin+end+main)
+ p=Path(d);(p/'test.cpp').write_text(fixture+projection+'}\n'+begin+end+objects+main)
  subprocess.run(['clang++','-std=c++17','-Wall','-Wextra','-Werror','-fsanitize=address,undefined',str(p/'test.cpp'),'-o',str(p/'test')],check=True)
  subprocess.run([str(p/'test')],check=True)
-print('PASS: 90-degree/wide world depth, flat perspective HUD, orthographic exclusion, drain order and unchanged mono scope.')
+print('PASS: world/menu/artwork depth scopes, nested-scope rejection, flat HUD/lower screen, drain order and unchanged mono scope.')

@@ -34,3 +34,13 @@ Nintendo 2DS and New Nintendo 2DS XL keep stereo disabled.
 
 Stereo can reduce frame-rate headroom. Its target is 30 FPS on original 3DS and
 60 FPS on New 3DS; achieved performance depends on the scene.
+
+The living-room menu uses stereoscopic depth for its models and animated gags.
+The car selector presents the original preview artwork slightly in front of the
+screen, while names and controls stay at screen depth. Driving and walking use
+the camera's subject distance to adjust depth gradually, with bounded foreground
+parallax. The HUD and lower screen remain flat.
+
+Lowering the slider can turn off the original 3DS's 3D indicator when Quality
+restores 800×240 output. The SDK makes wide output and stereoscopic output
+mutually exclusive.
