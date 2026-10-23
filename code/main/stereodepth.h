@@ -7,8 +7,16 @@ namespace StereoDepth
 {
     enum Camera { Default, Driving, Walking, Cinematic, Close, Interior, Paused };
     const float MaximumShift = 0.02f;
+    const float OutdoorMaximumShift = 0.03f;
     const float MaximumForegroundShift = 0.015f;
     const float SliderDeadzone = 0.01f;
+
+    inline float ProfileShift(Camera camera)
+    {
+        // Outdoor gameplay gets a wider depth range. Keep the established
+        // garage, pause-card, interior and cinematic projections unchanged.
+        return camera == Driving || camera == Walking ? OutdoorMaximumShift : MaximumShift;
+    }
 
     inline float SliderStrength(float slider)
     {
@@ -24,12 +32,14 @@ namespace StereoDepth
         return nearPlane >= 0.01f && nearPlane <= 1000.0f ? nearPlane : 1.0f;
     }
 
-    inline float FurthestScreenPlane(float nearPlane)
+    inline float FurthestScreenPlane(float nearPlane, float maximumShift = MaximumShift)
     {
         // The conservative fallback bounds the whole frustum, not vertices. On a
-        // 400-pixel display this permits 8 pixels behind and 6 pixels in front
+        // 400-pixel display the default permits 8 pixels behind and 6 in front
         // at full slider, without breaking contact or triangle interpolation.
-        return ValidNearPlane(nearPlane) * (1.0f + MaximumForegroundShift / MaximumShift);
+        // A stronger outdoor profile retains the same six-pixel foreground
+        // limit whenever camera collision or compression selects this range.
+        return ValidNearPlane(nearPlane) * (1.0f + MaximumForegroundShift / maximumShift);
     }
 
     inline float ScreenDistance(Camera camera, float subjectDistance = 0.0f, float nearPlane = 1.0f)
@@ -46,7 +56,7 @@ namespace StereoDepth
         }
         // Bumper views and authored cinematic cameras can put geometry on the
         // clipping plane. Keep their complete frustum inside the old budget.
-        return FurthestScreenPlane(nearPlane);
+        return FurthestScreenPlane(nearPlane, ProfileShift(camera));
     }
 
     inline float ProjectionScale(float screenDistance, float objectScreenDistance)
@@ -96,7 +106,7 @@ namespace StereoDepth
             {
                 // Reuse the camera's existing collision result. No new rays,
                 // geometry scans or GPU depth reads run for stereo.
-                const float safe = FurthestScreenPlane(nearPlane);
+                const float safe = FurthestScreenPlane(nearPlane, ProfileShift(camera));
                 if(target > safe) target = safe;
                 clearMilliseconds = 0;
                 if(convergence > target) convergence = target;
@@ -112,7 +122,7 @@ namespace StereoDepth
             convergence += (target - convergence) * alpha;
             if(convergence < nearPlane) convergence = nearPlane;
         }
-        float Shift(float slider) const { return MaximumShift * SliderStrength(slider); }
+        float Shift(float slider) const { return ProfileShift(lastCamera) * SliderStrength(slider); }
     };
 }
 #endif

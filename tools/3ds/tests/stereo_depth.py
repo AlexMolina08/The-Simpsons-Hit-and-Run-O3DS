@@ -69,7 +69,21 @@ int main(){
     state.Update(StereoDepth::Walking,0,6.278061f);assert(state.convergence==initial);
     settle(state,StereoDepth::Walking,6.278061f);
     assert(std::fabs(state.convergence-6.278061f*.95f)<.001f);
-    assert(std::fabs(400*state.Shift(1)*(1-state.convergence/6.278061f)-.4f)<.002f);
+    assert(std::fabs(400*state.Shift(1)*(1-state.convergence/6.278061f)-.6f)<.002f);
+    // Increasing outdoor depth must preserve the player plane and projective
+    // ground contact, while leaving dedicated UI and authored cameras alone.
+    assert(std::fabs(400*state.Shift(1)-12.f)<.00001f);
+    for(float z:{4.f,6.278061f,12.f,30.f,120.f}){
+        const float oldPixels=400*.02f*(1-state.convergence/z);
+        const float newPixels=400*state.Shift(1)*(1-state.convergence/z);
+        assert(std::fabs(newPixels-oldPixels*1.5f)<.00001f);
+    }
+    for(auto camera:{StereoDepth::Default,StereoDepth::Paused,StereoDepth::Interior,
+                     StereoDepth::Cinematic,StereoDepth::Close}){
+        StereoDepth::State independent;
+        settle(independent,camera,4);
+        assert(independent.Shift(1)==.02f);
+    }
     const float anchored=state.convergence;
     // Running, jumping and small subject-distance changes cannot chase focus.
     for(unsigned frame=0;frame<2000;++frame)state.Update(StereoDepth::Walking,16,6.278061f+std::sin(float(frame))*.4f);
@@ -88,10 +102,10 @@ int main(){
     for(float nearPlane:{.1f,1.f,2.5f}){
         state.Reset();settle(state,StereoDepth::Walking,6.278061f,nearPlane);
         state.Update(StereoDepth::Walking,16,6.278061f,nearPlane,0,false,true);
-        assert(state.convergence<=StereoDepth::FurthestScreenPlane(nearPlane));
+        assert(state.convergence<=StereoDepth::FurthestScreenPlane(nearPlane,StereoDepth::OutdoorMaximumShift));
         for(float z:{nearPlane,nearPlane*1.01f,nearPlane*2,nearPlane*100000}){
             const float pixels=400*state.Shift(1)*(1-state.convergence/z);
-            assert(pixels>=-6.0001f && pixels<=8.0001f);
+            assert(pixels>=-6.0001f && pixels<=12.0001f);
         }
         const float guarded=state.convergence;
         for(unsigned frame=0;frame<10;++frame)state.Update(StereoDepth::Walking,16,6.278061f,nearPlane);
