@@ -22,8 +22,10 @@ using u8=unsigned char;using u64=unsigned long long;using Result=int;
 namespace Graphics3DS {
  enum Model {Old3DS,Old3DSXL,New3DS,Old2DS,New3DSXL,New2DSXL,Unknown};
  Model model=Old3DS;Model SystemModel(){return model;}
+ bool Stereo();
 }
 bool wide=true,stereo=false,modeSubmitted=false,modeConsumed=false,queueDone=false;
+bool Graphics3DS::Stereo(){return stereo;}
 unsigned initializes=0,closes=0,writes=0,waits=0,lcdOpens=0,lcdCloses=0;
 Result initResult=0,writeResult=0;
 struct SharedConfig {unsigned char led_3d=0;} sharedConfig;
@@ -81,6 +83,24 @@ int main(){
  Graphics3DS::model=Graphics3DS::Old3DSXL;picaRequest3DIndicator();display.Apply();
  assert(writes==5&&closes==5&&wide&&!stereo);
  picaRelease3DIndicator();assert(!sharedConfig.led_3d);
+ writeResult=0;
+ stereo=true;wide=false;
+ const unsigned stereoLcdOpens=lcdOpens;
+ picaRequest3DIndicator();display.Apply();
+ assert(!sharedConfig.led_3d && writes==5 && lcdOpens==stereoLcdOpens);
+ picaAptHook(APTHOOK_ONSUSPEND,nullptr);
+ picaAptHook(APTHOOK_ONRESTORE,nullptr);display.Apply();
+ picaAptHook(APTHOOK_ONWAKEUP,nullptr);display.Apply();
+ assert(!sharedConfig.led_3d && writes==5 && lcdOpens==stereoLcdOpens);
+ stereo=false;wide=true;picaRequest3DIndicator();display.Frame();
+ assert(sharedConfig.led_3d && writes==5);
+ stereo=true;wide=false;picaRequest3DIndicator();
+ assert(!sharedConfig.led_3d && !s_indicatorPending && !s_indicatorOwnsPolicy);
+ display.Apply();assert(writes==5);
+ stereo=false;wide=true;picaRequest3DIndicator();display.Apply();
+ assert(sharedConfig.led_3d && writes==6 && s_indicatorOwnsPolicy);
+ stereo=true;wide=false;picaRequest3DIndicator();display.Apply();
+ assert(!sharedConfig.led_3d && writes==6 && !s_indicatorOwnsPolicy);
  assert(lcdOpens==lcdCloses);
 }
 '''
@@ -96,4 +116,4 @@ rsf = (root / 'tools/3ds/cia/game.rsf').read_text()
 services = [line.strip()[2:] for line in rsf.split('ServiceAccessControl:', 1)[1]
             .split('SystemControlInfo:', 1)[0].splitlines() if line.strip().startswith('- ')]
 assert 'mcu::HWC' in services and 'gsp::Lcd' in services and len(services) <= 32
-print('PASS: LED applies after presentation, 10000 steady frames have no LED IPC/waits, resume and failures preserve wide Quality, unsupported models skip it, CIA permission fits.')
+print('PASS: mono LED applies after presentation, 10000 steady frames have no LED IPC/waits, stereo and HOME/wake restore system control without MCU writes, pending writes cancel on stereo entry, Quality returns, CIA permission fits.')

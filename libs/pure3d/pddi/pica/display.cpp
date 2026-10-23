@@ -25,8 +25,15 @@ static u64 s_indicatorReadyTick = 0;
 static unsigned s_indicatorAttempts = 0, s_indicatorReleases = 0;
 static Result s_indicatorLcdResult = -1, s_indicatorWriteResult = -1;
 #endif
+extern "C" void picaRelease3DIndicator(void);
 extern "C" void picaRequest3DIndicator(void)
 {
+    // Stereo uses the system's LCD policy, without a forced LED override.
+    if(Graphics3DS::Stereo())
+    {
+        picaRelease3DIndicator();
+        return;
+    }
     const Graphics3DS::Model model = Graphics3DS::SystemModel();
     s_indicatorPending = model == Graphics3DS::Old3DS || model == Graphics3DS::Old3DSXL;
 }
@@ -46,6 +53,11 @@ extern "C" void picaRelease3DIndicator(void)
 static void picaUpdate3DIndicator(void)
 {
     if(!s_indicatorPending) return;
+    if(Graphics3DS::Stereo())
+    {
+        picaRelease3DIndicator();
+        return;
+    }
     if(!s_indicatorOwnsPolicy)
     {
         const Result lcdResult = gspLcdInit();
