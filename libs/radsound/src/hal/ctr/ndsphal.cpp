@@ -1117,6 +1117,11 @@ void radSoundHalSystemTerminate( void )
     SafeRelease( g_pSystem );
 }
 
+bool radSoundHal3dsAvailable( void )
+{
+    return g_NdspAvailable;
+}
+
 IRadSoundHalSystem * radSoundHalSystemGet( void )
 {
     rAssert( g_pSystem != NULL );

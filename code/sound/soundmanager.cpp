@@ -1471,6 +1471,10 @@ void SoundManager::ResumeAfterMovie()
 
 bool SoundManager::IsStoppedForMovie()
 {
+#ifdef RAD_3DS
+    // Without DSP, music cannot reach the beat required by its pause transition.
+    if( !radSoundHal3dsAvailable() ) return true;
+#endif
     if( m_isMuted )
     {
         return true;

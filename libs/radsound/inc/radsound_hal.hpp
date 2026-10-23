@@ -609,4 +609,8 @@ struct IRadSoundHalMemoryRegion : public IRefCount
 		bool recurseChildren ) = 0;
 };
 
+#ifdef RAD_3DS
+bool radSoundHal3dsAvailable( void );
+#endif
+
 #endif // RADSOUND_HAL
