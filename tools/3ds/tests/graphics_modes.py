@@ -25,15 +25,23 @@ int main(int argc, char** argv) {
         assert(SupportsStereo() == (m != 3 && m != 5 && m != 6));
         assert(RequestedQuality() == (m != 6)); Complete(true);
         assert(RenderWidth() == (SupportsWide() ? 800u : 400u));
-        assert(TargetFPS() == 30);
+        assert(TargetFPS() == (newer ? 60u : 30u));
+        if(SupportsWide()) assert(!strcmp(Status(), newer ? "800x240 / 60 FPS TARGET" : "800x240 / 30 FPS TARGET"));
     }
     for(int m = 0; m <= 6; ++m) {
         Initialize(m); const bool newer = m == 2 || m == 4 || m == 5;
         RequestQuality(false); Complete(true);
         assert(TargetFPS() == (newer ? 60u : 30u));
         RequestQuality(true); Complete(true);
+        assert(TargetFPS() == (newer ? 60u : 30u));
         assert(RenderWidth() == (SupportsWide() ? 800u : 400u));
         assert(ImprovedLighting() == (m == 3));
+        if(SupportsStereo()) {
+            UpdateSlider(1); Complete(true);
+            assert(Stereo() && RenderWidth() == 400 && TargetFPS() == (newer ? 60u : 30u));
+            UpdateSlider(0); Complete(true);
+            assert(Quality() && RenderWidth() == 800 && TargetFPS() == (newer ? 60u : 30u));
+        }
         RequestQuality(false); Complete(true);
     }
     Initialize(Old3DS); Complete(true); RequestQuality(false); assert(!Pending());

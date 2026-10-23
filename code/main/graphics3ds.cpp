@@ -109,7 +109,8 @@ void Graphics3DS::Complete(bool success)
         unsigned(model), quality, quality && SupportsWide(), stereo, RenderWidth(), TargetFPS(), !success);
 }
 
-unsigned Graphics3DS::TargetFPS() { return fpsOverride ? fpsOverride : IsNew() && !quality ? 60 : 30; }
+// Quality changes resolution, not the New models' refresh-rate target.
+unsigned Graphics3DS::TargetFPS() { return fpsOverride ? fpsOverride : IsNew() ? 60 : 30; }
 unsigned Graphics3DS::RenderWidth() { return quality && SupportsWide() && !stereo ? 800 : 400; }
 bool Graphics3DS::ImprovedLighting() { return quality && model == Old2DS; }
 const char* Graphics3DS::Description()
@@ -124,6 +125,6 @@ const char* Graphics3DS::Status()
     if(failed) return "QUALITY UNAVAILABLE";
     if(pending) return "APPLYING...";
     if(stereo) return "400x240 PER EYE";
-    if(quality && SupportsWide()) return "800x240 / 30 FPS TARGET";
+    if(quality && SupportsWide()) return IsNew() ? "800x240 / 60 FPS TARGET" : "800x240 / 30 FPS TARGET";
     return IsNew() ? "400x240 / 60 FPS TARGET" : "400x240 / 30 FPS TARGET";
 }
