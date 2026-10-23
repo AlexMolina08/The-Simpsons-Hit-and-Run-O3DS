@@ -183,7 +183,8 @@ void CGuiScreenCreditsPostFMV::InitIntro()
 #ifdef RAD_3DS
     m_exitState = 0;
     // Prepare the normal final-save choice before showing the port's farewell.
-    GetMemoryCardManager()->LoadMemcardInfo(dynamic_cast<IMemoryCardInfoLoadCallback*>(m_pParent));
+    // The pause manager may still have an earlier unload request pending.
+    GetMemoryCardManager()->LoadMemcardInfo(NULL);
 #endif
     GetEventManager()->TriggerEvent( EVENT_PLAY_CREDITS );
 

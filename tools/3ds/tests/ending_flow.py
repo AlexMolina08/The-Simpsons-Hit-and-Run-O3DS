@@ -31,9 +31,12 @@ struct CGuiWindow {enum {GUI_SCREEN_ID_VIEW_CREDITS,GUI_SCREEN_ID_MAIN_MENU,GUI_
 struct GuiState {bool thanks=false,splash=false;void HandleMessage(int){}bool IsShowCreditsUponReturnToFE(){return thanks;}bool IsSplashScreenFinished(){return splash;}} guiState;
 auto* GetGuiSystem(){return &guiState;}
 struct FrontEndContext {int selected=-1;void StartFrontEnd(int i){selected=i;}void OnProcessRequestsComplete(void*);};
-struct Parent {unsigned quits=0;virtual ~Parent(){};void HandleMessage(eGuiMessage m,unsigned level,unsigned mission){assert(m==GUI_MSG_QUIT_INGAME_FOR_RELOAD&&level==7&&mission==0);++quits;}};
 struct IMemoryCardInfoLoadCallback {virtual ~IMemoryCardInfoLoadCallback()=default;};
-struct Memory {bool loaded=false;unsigned requests=0;void LoadMemcardInfo(IMemoryCardInfoLoadCallback*){++requests;}bool IsMemcardInfoLoaded(){return loaded;}} memory;
+struct Parent:IMemoryCardInfoLoadCallback {unsigned quits=0;virtual ~Parent(){};void HandleMessage(eGuiMessage m,unsigned level,unsigned mission){assert(m==GUI_MSG_QUIT_INGAME_FOR_RELOAD&&level==7&&mission==0);++quits;}};
+struct Memory {bool loaded=false;unsigned requests=0;IMemoryCardInfoLoadCallback* pending=nullptr;
+ void LoadMemcardInfo(IMemoryCardInfoLoadCallback* callback){++requests;pending=callback;}
+ void Complete(){loaded=true;if(pending)loaded=false;} // A stale pause callback unloads immediately.
+ bool IsMemcardInfoLoaded(){return loaded;}} memory;
 auto* GetMemoryCardManager(){return &memory;}
 struct Gameplay {unsigned GetCurrentLevelIndex(){return 6;}} gameplay;
 auto* GetGameplayManager(){return &gameplay;}
@@ -62,10 +65,10 @@ int main(){
   assert(frontend.selected==(thanks?CGuiWindow::GUI_SCREEN_ID_VIEW_CREDITS:splash?CGuiWindow::GUI_SCREEN_ID_MAIN_MENU:CGuiWindow::GUI_SCREEN_ID_SPLASH));
  }
  Parent parent;CGuiScreenCreditsPostFMV screen;screen.m_pParent=&parent;
- screen.InitIntro();screen.InitRunning();assert(memory.requests==1&&!group.visible);
+ screen.InitIntro();screen.InitRunning();assert(memory.requests==1&&!group.visible&&memory.pending==nullptr);
  screen.HandleMessage(GUI_MSG_CONTROLLER_SELECT);assert(screen.m_exitState==1&&!parent.quits);
  for(unsigned i=0;i<5;++i)screen.HandleMessage(GUI_MSG_UPDATE,33);
- assert(!parent.quits);memory.loaded=true;screen.HandleMessage(GUI_MSG_UPDATE,33);
+ assert(!parent.quits);memory.Complete();screen.HandleMessage(GUI_MSG_UPDATE,33);
  assert(parent.quits==1&&screen.m_exitState==2);
  for(unsigned i=0;i<5;++i)screen.HandleMessage(GUI_MSG_UPDATE,33);
  assert(parent.quits==1); // No repeated quit/save prompts during outro.
@@ -73,7 +76,7 @@ int main(){
  farewell.Update(GUI_MSG_UPDATE,1);assert(farewell.done==1);
  farewell.Update(GUI_MSG_UPDATE,1000);assert(farewell.done==1);
  Farewell normal;normal.m_portThanks=false;normal.Update(GUI_MSG_UPDATE,10000);assert(!normal.done);
- puts("PASS: credits keep native roll; exit waits for save metadata, dispatches once; farewell returns after eighteen seconds; ordinary credits remain unchanged.");
+ puts("PASS: credits keep native roll; credits own save metadata despite stale pause cleanup; exit waits, dispatches once; farewell returns after eighteen seconds; ordinary credits remain unchanged.");
 }
 '''
 with tempfile.TemporaryDirectory(prefix='srr-ending-') as temporary:
