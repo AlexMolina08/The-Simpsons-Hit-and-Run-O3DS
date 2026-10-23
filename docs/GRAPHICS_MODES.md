@@ -8,7 +8,7 @@ while in the menu and are remembered after successful activation.
 | --- | --- | --- | --- |
 | Nintendo 3DS / 3DS XL | Existing 400×240 profile, 30 FPS target | 800×240 wide output, 30 FPS target | On |
 | Nintendo 2DS | Existing 400×240 profile, 30 FPS target | 400×240 with directional lighting, 30 FPS target | On |
-| New Nintendo 3DS / 3DS XL / New 2DS XL | 400×240, 60 FPS target | 800×240 wide output, 30 FPS target | On |
+| New Nintendo 3DS / 3DS XL / New 2DS XL | 400×240, 60 FPS target | 800×240 wide output, 60 FPS target | On |
 
 The lower display remains 320×240. Wide output doubles horizontal samples while
 preserving the screen's physical aspect ratio. It is not an 800p display mode.
@@ -48,6 +48,6 @@ the conservative range. Pausing also uses that range for the world backdrop,
 keeping the objective card in front of every background surface. The lower
 screen remains flat.
 
-Lowering the slider can turn off the original 3DS's 3D indicator when Quality
-restores 800×240 output. The SDK makes wide output and stereoscopic output
-mutually exclusive.
+On stereoscopic 3DS models, the green 3D availability light stays on in menus and
+when the slider is down. The light indicates availability, not active eye separation.
+Quality Mode still restores 800×240 wide output when the slider is fully down.

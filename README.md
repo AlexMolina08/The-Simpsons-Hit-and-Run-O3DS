@@ -1,11 +1,11 @@
 # The Simpsons: Hit & Run for Nintendo 3DS
 
-Version **1.1.0**. A homebrew port for original Nintendo 3DS and 2DS. The same build also runs on
+Version **1.1.1**. A homebrew port for original Nintendo 3DS and 2DS. The same build also runs on
 New 3DS and New 2DS XL, enabling their faster CPU and L2 cache automatically.
 You need your own retail PC copy of the game to build from source.
 Game data and DSP firmware are not distributed in this source repository.
 
-[Install](#install) · [Build from your PC copy](#build-a-cia) · [Controls](#interface-and-controls) · [Release notes](https://github.com/AlexMolina08/The-Simpsons-Hit-and-Run-O3DS/releases/tag/v1.1.0)
+[Install](#install) · [Update](#updating-an-existing-installation) · [Build from your PC copy](docs/INSTALL.md#build-from-your-own-pc-copy) · [Controls](#interface-and-controls) · [Release notes](https://github.com/AlexMolina08/The-Simpsons-Hit-and-Run-O3DS/releases/tag/v1.1.1)
 
 ## Screenshots and menu tour
 
@@ -44,88 +44,56 @@ These are emulator captures, not measurements of console performance.
 
 ## Install
 
-The [complete 1.1.0 CIA](https://github.com/AlexMolina08/The-Simpsons-Hit-and-Run-O3DS/releases/download/v1.1.0/Simpsons-Hit-and-Run-3DS-v1.1.0.cia) includes game data and all 17 cinematics.
-It is **1.92 GB**. A console with custom firmware and FBI is required.
+Download the [complete v1.1.1 CIA](https://github.com/AlexMolina08/The-Simpsons-Hit-and-Run-O3DS/releases/download/v1.1.1/Simpsons-Hit-and-Run-3DS-v1.1.1.cia).
+It includes game data and all 17 cinematics. A console with custom firmware and FBI is required.
 
-### Install from SD — recommended
-
-1. Download the CIA on your computer, or build it from your PC copy below.
-2. Copy it to `sd:/cias/`. Keep at least **4 GB free before copying**, for the CIA and installed game.
+1. Keep at least **4 GB free on the SD card before copying** the CIA.
+2. Download it on your computer and copy it to `sd:/cias/`.
 3. In **FBI → SD → cias**, select the CIA and choose **Install CIA**.
-4. Launch the game from the HOME Menu. After installation, you can remove the CIA file from `cias/`.
+4. Wait for success, then launch the game from the **HOME Menu**.
 
 Sound needs your console's DSP firmware at `sd:/3ds/dspfirm.cdc`, dumped with DSP1.
-Saves and settings live in `sd:/3ds/simpsons/`; keep that folder when updating.
+No separate PC-data copy is needed for the complete CIA.
 
-### Install with a QR code
-
-Open **FBI → Remote Install → Scan QR Code** and scan the image below from another screen.
-The code points directly to the same complete 1.1.0 CIA.
-
-<a href="images/cia-install-qr.png"><img src="images/cia-install-qr.png" width="424" alt="Scan with FBI to install the complete version 1.1.0 CIA"></a>
-
-[Open the QR at full size](images/cia-install-qr.png). Keep its white border visible; if it does not scan, open the full-size image and adjust your screen brightness or camera distance.
-
-If FBI reads the code but the download or installation fails, use the SD method above.
-The complete game is a large download over console Wi-Fi. For a bug report, include your FBI version, exact error code and the percentage reached.
-
-See the [1.1.0 release notes](https://github.com/AlexMolina08/The-Simpsons-Hit-and-Run-O3DS/releases/tag/v1.1.0) for package details.
+**[Full installation guide: release CIA, PC game folder, or PC ISO — Windows, Linux and macOS](docs/INSTALL.md)**
 
 ### Updating an existing installation
 
-Back up `sd:/3ds/simpsons/` first. Install the new CIA with FBI over the existing
-installation; replacing the file on SD alone does not update the installed game.
-The title ID and save format are unchanged, so your progress and settings remain.
-The old map-placement setting is ignored because the map now always uses the
-lower screen. Keep your DSP firmware.
+1. Close the game and turn off the console.
+2. **Back up the entire `sd:/3ds/simpsons/` folder to your computer.** Keep your DSP firmware on SD.
+3. Download the new **v1.1.1 CIA**, copy it to `sd:/cias/`, and install it with
+   **FBI → SD → cias → select the CIA → Install CIA**. Confirm replacement if asked.
+4. Launch the game from the **HOME Menu** and load your existing save.
 
-For a fresh start, back up and rename `sd:/3ds/simpsons/` before launching the new
-version. The game creates a new folder; your backup retains the old saves.
-Uninstalling the existing title is not required.
+**Do not uninstall the old game or delete its save folder.** Copying the CIA to
+SD alone does not update the installed title. The title ID and save format stay
+the same; your saves and settings remain. After checking the update, you can
+delete the installer from `cias/`.
+
+If you used an old `.3dsx`, launch the newly installed HOME Menu icon to use this
+release. [Full update and recovery instructions](docs/INSTALL.md#update-without-losing-your-progress).
+
+### Install with a QR code
+
+Open **FBI → Remote Install → Scan QR Code** and scan this from another screen:
+
+<a href="images/cia-install-qr.png"><img src="images/cia-install-qr.png" width="424" alt="Scan with FBI to install the complete version 1.1.1 CIA"></a>
+
+[Open the QR at full size](images/cia-install-qr.png). Keep its white border visible.
+It points directly to the complete v1.1.1 CIA. For this large download, the computer/SD
+method above is recommended. If FBI fails, report its version, exact error code
+and the percentage reached.
 
 ## Build a CIA
 
-macOS and Linux need Git, Bash, CMake 3.28+, Ninja, GNU Make, host C and C++ compilers,
-Python 3.11+, Pillow and FFmpeg. Install devkitPro's `3ds-dev` package group using its
-[setup guide](https://devkitpro.org/wiki/Getting_Started).
-Windows users use WSL 2 with Ubuntu 24.04. Install its Linux devkitPro toolchain,
-then follow the [Windows setup steps](docs/OLD3DS.md#windows-wsl-2).
+Have an installed **retail PC game folder**, or your **PC disc ISO(s)**?
+Follow the [step-by-step PC-copy installation guide](docs/INSTALL.md#build-from-your-own-pc-copy).
+It explains how to prepare the game files, install the tools and build on
+**Windows through WSL 2, Linux, and macOS**.
 
-On macOS, install the Xcode command-line tools and host dependencies:
-
-```sh
-xcode-select --install
-brew install cmake ninja python ffmpeg
-```
-
-After installing devkitPro, clone the source and build:
-
-```sh
-git clone https://github.com/AlexMolina08/The-Simpsons-Hit-and-Run-O3DS.git
-cd The-Simpsons-Hit-and-Run-O3DS
-python3 -m venv .venv
-source .venv/bin/activate
-python3 -m pip install Pillow
-python3 tools/3ds/make_cia.py "/path/to/PC game"
-```
-
-Point at the PC folder containing `art/`, `scripts/`, `sound/`, `movies/` and the
-`.rcf` archives. The command prepares retail data, converts and fully validates all 17 movies,
-rebuilds the accepted native texture bundle, builds the original-model executable
-and packages **`out/releases/v1.1.0/Simpsons-Hit-and-Run-3DS-v1.1.0.cia`**.
-Its checksum, movie validation report and asset manifest appear alongside it.
-The first build downloads source dependencies and can take several minutes. Later builds reuse them.
-
-On macOS, **Build CIA.command** runs the same local build and asks for the PC
-folder. It does not upload, tag or publish anything.
-macOS (Apple Silicon and Intel), Linux x86-64 and WSL can prepare makerom and bannertool automatically. Other architectures must install them or
-pass `--makerom /path/to/makerom --bannertool /path/to/bannertool`.
-
-Use `--clean` for a fresh dependency and game compilation. It moves previous
-compilation outputs and generated texture cache to the system Trash after checking prerequisites. Retail
-files, saves, screenshots and existing release packages are preserved.
-See the [build guide](docs/OLD3DS.md) for Linux prerequisites, Homebrew Launcher
-builds, controls and publishing a separate release.
+The builder takes the installed game directory, not an ISO or installer CAB.
+The guide covers that preparation step. For build flags, Homebrew Launcher and
+packaging details, see the [technical build guide](docs/OLD3DS.md).
 
 ## Interface and controls
 
