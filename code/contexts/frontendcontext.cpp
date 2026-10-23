@@ -277,6 +277,14 @@ void FrontEndContext::OnProcessRequestsComplete( void* pUserData )
     // tell GUI system to quit backend
     //
     GetGuiSystem()->HandleMessage( GUI_MSG_QUIT_BACKEND );
+#ifdef RAD_3DS
+    // Completion takes precedence even when gameplay bypassed the splash.
+    if(GetGuiSystem()->IsShowCreditsUponReturnToFE())
+    {
+        this->StartFrontEnd(CGuiWindow::GUI_SCREEN_ID_VIEW_CREDITS);
+        return;
+    }
+#endif
 
 #ifndef RAD_DEMO
     if( GetGuiSystem()->IsSplashScreenFinished() )
