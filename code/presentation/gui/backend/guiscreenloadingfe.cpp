@@ -101,6 +101,10 @@ CGuiScreenLoadingFE::CGuiScreenLoadingFE
 
     m_loadingText = foreground->GetText( "Loading" );
     rAssert( m_loadingText != NULL );
+#ifdef RAD_3DS
+    // The native lower panel owns this label; keep the upper animation clear.
+    m_loadingText->SetVisible( false );
+#endif
 
     m_itchyAndScratchy = background->GetPure3dObject( "Loading" );
     if( m_itchyAndScratchy != NULL )

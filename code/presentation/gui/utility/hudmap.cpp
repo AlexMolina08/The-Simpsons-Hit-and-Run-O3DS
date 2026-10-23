@@ -1872,6 +1872,21 @@ namespace
         BottomLabel(font,unicode,x,baseline,height,colour,width);
     }
 
+    void LoadingPanel(Scrooby::Text* label)
+    {
+        if(!label || !label->GetFont())return;
+        tFont* font=label->GetFont();
+        const P3D_UNICODE* text=label->GetStringBuffer();
+        if(!text || font->GetFontHeight()<=0)return;
+        Rounded(24,89,296,153,tColour(207,164,46),tColour(119,84,32));
+        Rounded(26,91,294,150,Paper,tColour(229,211,157));
+        Fill(44,100,276,101,tColour(255,253,235,180));
+        // Reuse the localized retail label and its dot animation at native pixels.
+        const float width=fminf(240,font->GetTextWidth(text)*22/font->GetFontHeight());
+        const float baseline=120-11+22*font->GetFontBaseLine()/font->GetFontHeight();
+        BottomLabel(font,text,(320-width)*0.5f,baseline,22,Ink,240);
+    }
+
     void DirectionIcon(bool right,float x,float y)
     {
         tSprite* sprite=UIAsset(right?"Rarrow.png":"Larrow.png");
@@ -2612,11 +2627,14 @@ namespace
             if( label && label->GetFont() )
             {
                 tFont* font=label->GetFont();
-                P3D_UNICODE loadingText[16];p3d::AsciiToUnicode("LOADING",loadingText,16);
-                const P3D_UNICODE* text=splash ? label->GetStringBuffer() : loadingText;
-                const float width=font->GetFontHeight()>0
-                    ? font->GetTextWidth(text)*16/font->GetFontHeight() : 0;
-                BottomLabel(font,text,(320-width)*0.5f,128,16,White);
+                if(startupLoading)LoadingPanel(label);
+                else
+                {
+                    const P3D_UNICODE* text=label->GetStringBuffer();
+                    const float width=font->GetFontHeight()>0
+                        ? font->GetTextWidth(text)*16/font->GetFontHeight() : 0;
+                    BottomLabel(font,text,(320-width)*0.5f,128,16,White);
+                }
             }
         }
         else if(conversation)ConversationPanel(screen);
