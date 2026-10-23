@@ -6,6 +6,8 @@
 namespace StereoDepth
 {
     enum Camera { Default, Driving, Walking, Cinematic, Close, Interior, Paused };
+    // Native eye-pair disparity: 400 * shift * (1 - convergence / forwardDepth).
+    // Hardware-approved range: 12 px outdoors; authored layers retain 8 px.
     const float MaximumShift = 0.02f;
     const float OutdoorMaximumShift = 0.03f;
     const float MaximumForegroundShift = 0.015f;
@@ -69,7 +71,7 @@ namespace StereoDepth
 
     struct State
     {
-        float convergence;
+        float convergence; // Zero-disparity forward depth, in world units.
         float anchor;
         Camera lastCamera;
         unsigned lastKey, clearMilliseconds;
