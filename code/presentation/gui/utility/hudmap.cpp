@@ -2465,7 +2465,7 @@ namespace
         Scrooby::Text* message=page ? page->GetText("Message") : NULL;
         tFont* font=message ? message->GetFont() : NULL;
         Scrooby::Layer* layer=page?page->GetLayer("Foreground"):NULL;
-        if(!font || (layer && !layer->IsVisible())){
+        if(!font || hud->GetScroobyScreen()->GetAlpha()<=0 || (layer && !layer->IsVisible())){
             if(picaBottomScreenInterfaceBegin())picaBottomScreenEnd();return;
         }
         if(!picaBottomScreenInterfaceBegin())return;

@@ -207,6 +207,9 @@ class PresentationManager : public EventListener,
         PresentationEvent::PresentationEventCallBack* mpPlayCallback;
         bool mInConversation : 1;
         bool mWaitingOnFade  : 1;
+#ifdef SRR2_OLD_3DS
+        bool m_retainedMovieHud = false;
+#endif
         PresentationOverlay* mOverlay;
 };
 

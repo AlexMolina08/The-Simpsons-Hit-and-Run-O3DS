@@ -63,6 +63,10 @@
 #include <mission/gameplaymanager.h>
 #include <mission/objectives/missionobjective.h>
 #include <Screen.h>
+#ifdef SRR2_OLD_3DS
+#include <3ds.h>
+#include <malloc.h>
+#endif
 //******************************************************************************
 //
 // Global Data, Local Data, Local Classes
@@ -498,6 +502,14 @@ void PresentationManager::OnPresentationEventBegin( PresentationEvent* pEvent )
     {
         static_cast<GameplayContext*>( context )->PauseAllButPresentation( true );
     }
+#ifdef SRR2_OLD_3DS
+    CGuiManagerInGame* gui = GetGuiSystem()->GetInGameManager();
+    // Keep the bounded software decoder beside the HUD only with ample reserves.
+    // Tight memory and non-HUD screens retain the original unload/reload path.
+    m_retainedMovieHud = gui && gui->GetCurrentScreen() == CGuiWindow::GUI_SCREEN_ID_HUD &&
+        linearSpaceFree() >= 2 * 1024 * 1024 && mallinfo().uordblks <= 24 * 1024 * 1024;
+    if(!m_retainedMovieHud)
+#endif
     GetGuiSystem()->HandleMessage( GUI_MSG_RELEASE_INGAME );
     if( mpPlayCallback )
     {
@@ -522,10 +534,14 @@ Description:    This is a callback when the event queued by PlayFMV.
 =============================================================================*/
 void PresentationManager::OnPresentationEventEnd( PresentationEvent* pEvent )
 {
-    HeapMgr()->PushHeap (GMA_LEVEL_HUD);
-    GetGuiSystem()->HandleMessage( GUI_MSG_INIT_INGAME );
-    HeapMgr()->PopHeap (GMA_LEVEL_HUD);
-    GetLoadingManager()->AddCallback( this );
+#ifdef SRR2_OLD_3DS
+    if(!m_retainedMovieHud)
+#endif
+    {
+        HeapMgr()->PushHeap (GMA_LEVEL_HUD);
+        GetGuiSystem()->HandleMessage( GUI_MSG_INIT_INGAME );
+        HeapMgr()->PopHeap (GMA_LEVEL_HUD);
+    }
     if( mOverlay )
     {
         mOverlay->SetStart( BLACK_TRANSPARENT );
@@ -536,6 +552,8 @@ void PresentationManager::OnPresentationEventEnd( PresentationEvent* pEvent )
         rAssert( pLayer );
         pLayer->AddGuts( mOverlay );
     }
+    // AddCallback can run immediately when the queue is empty.
+    GetLoadingManager()->AddCallback( this );
 }
 /*=============================================================================
 Description:    
@@ -548,6 +566,15 @@ void PresentationManager::OnProcessRequestsComplete( void* pUserData )
         static_cast<GameplayContext*>( context )->PauseAllButPresentation( false );
     }
     GetRenderManager()->ThawFromPresentation();
+#ifdef SRR2_OLD_3DS
+    if(m_retainedMovieHud)
+    {
+        CGuiScreenHud* hud = GetCurrentHud();
+        if(hud) hud->GetScroobyScreen()->SetAlpha(1.0f);
+        m_retainedMovieHud = false;
+    }
+    else
+#endif
     GetGuiSystem()->HandleMessage( GUI_MSG_RUN_INGAME );
     if( mpPlayCallback )
     {
@@ -691,11 +718,20 @@ void PresentationManager::Update( unsigned int elapsedTime )
 
         if( finished )
         {
+            bool stopped = false;
+#ifdef SRR2_OLD_3DS
+            if(m_retainedMovieHud && mpCurrent->GetPlayer() == mpFMVPlayer)
+            {
+                // Release decoder/input/audio before a synchronous HUD return.
+                mpCurrent->Stop();
+                stopped = true;
+            }
+#endif
             if( mpCurrent->pCallback != NULL )
             {
                 mpCurrent->pCallback->OnPresentationEventEnd( mpCurrent );
             }
-            mpCurrent->Stop();
+            if(!stopped) mpCurrent->Stop();
             mpPlayerDrawable->SetPlayer( NULL );
 
             ReturnToPool( mpCurrent );
@@ -724,12 +760,20 @@ void PresentationManager::ClearQueue()
 
     while ( mpCurrent != NULL )
     {
+        bool stopped = false;
+#ifdef SRR2_OLD_3DS
+        if(m_retainedMovieHud && mpCurrent->GetPlayer() == mpFMVPlayer)
+        {
+            mpCurrent->Stop();
+            stopped = true;
+        }
+#endif
         if( mpCurrent->pCallback != NULL )
         {
             mpCurrent->pCallback->OnPresentationEventEnd( mpCurrent );
         }
 
-		mpCurrent->Stop();
+        if(!stopped) mpCurrent->Stop();
 		
         ReturnToPool( mpCurrent );
 
