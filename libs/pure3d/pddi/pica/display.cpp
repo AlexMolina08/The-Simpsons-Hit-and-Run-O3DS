@@ -472,6 +472,13 @@ void picaDisplay::StartTopSegment(void)
         C3Di_UpdateContext();
         picaWriteEye(-eyeShift);
         C3D_FrameSplit(GX_CMDLIST_FLUSH);
+#ifdef SRR2_OLD3DS_NATIVE_UNIFORMS
+        // The scene must record its first use of each shared uniform even
+        // when it matches the left-eye setup. The right eye starts with the
+        // scene's final state, which can contain a foreground UI projection.
+        // Keep register 95 outside this range: only eye setups may write it.
+        picaNativeUniformInvalidate(GPU_VERTEX_SHADER, 0, 95);
+#endif
     }
     else
     {
