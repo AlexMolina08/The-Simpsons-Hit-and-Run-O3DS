@@ -33,6 +33,7 @@ namespace Scrooby
     class Group;
 }
 
+// 3DS loads the PC prompt catalog, including its six extra entries.
 enum ePromptQuestion
 {
     PROMPT_CONFIRM_QUIT,
@@ -84,7 +85,7 @@ enum ePromptQuestion
 	PROMPT_LOAD_CARD_EMPTY_PS2,
 	PROMPT_LOAD_CARD_EMPTY_XBOX,
 	PROMPT_LOAD_CARD_EMPTY_XBOX_HD,
-#ifdef RAD_PC
+#if defined(RAD_PC) || defined(RAD_3DS)
     PROMPT_LOAD_CARD_EMPTY_PC,
 #endif
 
@@ -99,7 +100,7 @@ enum ePromptQuestion
     PROMPT_LOAD_DELETE_CORRUPT_XBOX_HD,
     
     PROMPT_HD_FULL_XBOX,
-#ifdef RAD_PC
+#if defined(RAD_PC) || defined(RAD_3DS)
     PROMPT_CONFIRM_RESTOREALLDEFAULTS,
     PROMPT_CONFIRM_QUIT_TO_SYSTEM,
     PROMPT_CONFIRM_SAVE_BEFORE_QUITTOSYSTEM,
