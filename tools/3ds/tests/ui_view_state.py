@@ -10,7 +10,7 @@ start = source.index('void CHudMap::DisplayOnBottomScreen( tView* guiView, Scroo
 end = source.index('\n#endif', start)
 production = source[start:end]
 guard_start = source.index('    class NativeViewPass')
-guard_end = source.index('    void DrawUpperPreview', guard_start)
+guard_end = source.index('\n    };', guard_start) + len('\n    };')
 production += '\n' + source[guard_start:guard_end]
 
 fixture = r'''
