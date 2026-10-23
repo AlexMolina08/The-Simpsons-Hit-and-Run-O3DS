@@ -108,6 +108,9 @@ class PresentationManager : public EventListener,
         void Finalize();
         void OnGameplayStart();
         void OnGameplayStop();
+#ifdef SRR2_OLD_3DS
+        bool RetainsMovieHud() const { return m_retainedMovieHud; }
+#endif
 
         void InitializePlayerDrawable();
         void FinalizePlayerDrawable();

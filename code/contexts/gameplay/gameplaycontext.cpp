@@ -588,6 +588,12 @@ void GameplayContext::OnUpdate( unsigned int elapsedTime )
 
     // Common to all playing contexts.
     //
+    #ifdef SRR2_OLD_3DS
+    // Retained movie HUD stays dormant, including timers and touch repeats.
+    if(m_PausedAllButPresentation && GetPresentationManager()->RetainsMovieHud())
+        g_scroobySimulationTime = 0;
+    else
+    #endif
     { O3_RECUR(Playing); PlayingContext::OnUpdate( elapsedTime ); }
 #ifdef DEBUGWATCH
     mDebugOnUpdateDT = radTimeGetMicroseconds()-mDebugOnUpdateDT;

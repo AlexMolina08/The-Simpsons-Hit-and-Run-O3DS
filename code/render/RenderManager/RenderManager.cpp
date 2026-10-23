@@ -1,6 +1,8 @@
 #ifdef SRR2_OLD_3DS
 extern "C" void picaWorldBegin(void);
 extern "C" void picaWorldEnd(void);
+extern "C" bool picaBottomScreenInterfaceBegin(void);
+extern "C" void picaBottomScreenEnd(void);
 #endif
 //=============================================================================
 // Copyright (C) 2002 Radical Entertainment Ltd.  All rights reserved.
@@ -540,9 +542,13 @@ void RenderManager::ContextUpdate( unsigned int iElapsedTime )
     END_PROFILE( "Begin Frame" );
 
 #ifdef RAD_3DS
-    CHudMap::BeforeRenderLayers3DS();
 #ifdef SRR2_OLD_3DS
-    if(!GetPresentationManager()->GetFMVPlayer()->IsPlaying()) picaWorldBegin();
+    const bool moviePlaying = GetPresentationManager()->GetFMVPlayer()->IsPlaying();
+    const bool dormantMovieHud = moviePlaying && GetPresentationManager()->RetainsMovieHud();
+    if(!dormantMovieHud) CHudMap::BeforeRenderLayers3DS();
+    if(!moviePlaying) picaWorldBegin();
+#else
+    CHudMap::BeforeRenderLayers3DS();
 #endif
 #endif
 
@@ -550,7 +556,12 @@ void RenderManager::ContextUpdate( unsigned int iElapsedTime )
     for( int i=RenderEnums::numLayers-1; i>-1; i-- )
     {
 #ifdef SRR2_OLD_3DS
-        if(i == RenderEnums::GUI) picaWorldEnd();
+        if(i == RenderEnums::GUI)
+        {
+            picaWorldEnd();
+            // Keep the retained Scrooby tree out of the movie frame entirely.
+            if(dormantMovieHud) continue;
+        }
 #endif
 #ifdef DEBUGINFO_ENABLED
         // We need to render the debug info just before we render the GUI layer
@@ -569,6 +580,13 @@ void RenderManager::ContextUpdate( unsigned int iElapsedTime )
     }
 
 #ifdef RAD_3DS
+#ifdef SRR2_OLD_3DS
+    if(dormantMovieHud)
+    {
+        if(picaBottomScreenInterfaceBegin()) picaBottomScreenEnd();
+    }
+    else
+#endif
     CHudMap::AfterRenderLayers3DS( mpRenderLayers[ RenderEnums::GUI ]->pView( 0 ) );
 #endif
 
