@@ -73,10 +73,14 @@ void Graphics3DS::UpdateSlider(float slider)
     // A slider change also applies during gameplay and never saves a preference.
     pending = sliderChange = true;
     remember = failed = false;
+    if(enabled) stereoDepth.Reset();
 }
-void Graphics3DS::UpdateStereoCamera(StereoDepth::Camera camera, unsigned elapsedMilliseconds, float subjectDistance, float nearPlane)
+void Graphics3DS::UpdateStereoCamera(StereoDepth::Camera camera, unsigned elapsedMilliseconds,
+                                      float subjectDistance, float nearPlane, unsigned cameraKey,
+                                      bool transitioning, bool obstructed)
 {
-    if(stereo) stereoDepth.Update(camera, elapsedMilliseconds, subjectDistance, nearPlane);
+    if(stereo) stereoDepth.Update(camera, elapsedMilliseconds, subjectDistance, nearPlane,
+                                 cameraKey, transitioning, obstructed);
 }
 float Graphics3DS::StereoShift(float slider) { return stereoDepth.Shift(slider); }
 float Graphics3DS::StereoConvergence() { return stereoDepth.convergence; }

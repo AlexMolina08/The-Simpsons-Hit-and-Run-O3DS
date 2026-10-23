@@ -98,6 +98,9 @@ FollowCam::FollowCam( FollowType type ) :
     mActiveTarget( 0 ),
     mUnstableDelayTimeLeft( 0 ),
     mQuickTurnTimeLeft( 0 ),
+#ifdef RAD_3DS
+    mNumCollisions( 0 ),
+#endif
     mFollowType( type ),
     mXAxis( 0.0f )
 {

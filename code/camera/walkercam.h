@@ -65,6 +65,9 @@ public:
 
     void SetCollisionOffset( const rmt::Vector* offset, unsigned int numCollisions, const rmt::Vector& groundOffset );
     float GetCollisionRadius() const { return GetNearPlane(); };
+#ifdef RAD_3DS
+    bool IsObstructed() const { return mNumCollisions != 0; }
+#endif
 
     virtual float GetIntersectionRadius() const { return mMagnitude; };
 

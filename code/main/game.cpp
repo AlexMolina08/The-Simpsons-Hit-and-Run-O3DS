@@ -44,6 +44,7 @@ unsigned Old3dsPerformance::mode = 7;
 
 #ifdef RAD_3DS
 #include <3ds.h>
+#include <interiors/interiormanager.h>
 #ifdef SRR2_OLD_3DS
 #include <citro3d.h>
 #include <malloc.h>
@@ -901,6 +902,8 @@ void Game::Run()
                         StereoDepth::Camera profile = StereoDepth::Default;
                         float subjectDistance = 0.0f;
                         float nearPlane = 1.0f;
+                        unsigned cameraKey = 0;
+                        bool transitioning = false, obstructed = false;
                         if(ctx == CONTEXT_GAMEPLAY || ctx == CONTEXT_PAUSE ||
                            ctx == CONTEXT_DEMO || ctx == CONTEXT_SUPERSPRINT)
                         {
@@ -909,15 +912,17 @@ void Game::Run()
                             SuperCam* camera = central ? central->GetActiveSuperCam() : NULL;
                             if(camera)
                             {
-                                switch(camera->GetType())
+                                const SuperCam::Type type = camera->GetType();
+                                cameraKey = 1 + unsigned(type);
+                                transitioning = camera->IsTransitioning();
+                                obstructed = camera->IsObstructed();
+                                switch(type)
                                 {
                                     case SuperCam::FOLLOW_CAM:
                                     case SuperCam::NEAR_FOLLOW_CAM:
                                     case SuperCam::FAR_FOLLOW_CAM:
                                     case SuperCam::CHASE_CAM:
                                     case SuperCam::REVERSE_CAM:
-                                    case SuperCam::WRECKLESS_CAM:
-                                    case SuperCam::BURNOUT_CAM:
                                     case SuperCam::SUPER_SPRINT_CAM:
                                         profile = StereoDepth::Driving; break;
                                     case SuperCam::WALKER_CAM:
@@ -934,7 +939,13 @@ void Game::Run()
                                 if(viewCamera)
                                 {
                                     nearPlane = viewCamera->GetNearPlane();
-                                    if(profile == StereoDepth::Walking || profile == StereoDepth::Driving)
+                                    if(profile == StereoDepth::Walking)
+                                    {
+                                        InteriorManager* interior = GetInteriorManager();
+                                        if(interior && interior->IsInside()) profile = StereoDepth::Interior;
+                                    }
+                                    if(profile == StereoDepth::Walking || profile == StereoDepth::Driving ||
+                                       profile == StereoDepth::Interior)
                                     {
                                         Avatar* avatar = GetAvatarManager()->GetAvatarForPlayer(0);
                                         if(avatar && avatar->GetCharacter())
@@ -950,7 +961,13 @@ void Game::Run()
                                 }
                             }
                         }
-                        Graphics3DS::UpdateStereoCamera(profile, elapsed, subjectDistance, nearPlane);
+                        // Shared and scripted views have no single player anchor.
+                        if(ctx == CONTEXT_DEMO || ctx == CONTEXT_SUPERSPRINT)
+                            profile = StereoDepth::Cinematic;
+                        // Foreground cards must occlude every background surface.
+                        if(ctx == CONTEXT_PAUSE) profile = StereoDepth::Paused;
+                        Graphics3DS::UpdateStereoCamera(profile, elapsed, subjectDistance, nearPlane,
+                                                       cameraKey, transitioning, obstructed);
                     }
 #endif
                     mpRenderFlow->OnTimerDone(elapsed, NULL);

@@ -127,6 +127,9 @@ public:
     //Support for colliding with the world.
     void SetCollisionOffset( const rmt::Vector* offset, unsigned int numCollisions, const rmt::Vector& groundOffset );
     float GetCollisionRadius() const { return GetNearPlane() * 2.0f; };
+#ifdef RAD_3DS
+    bool IsObstructed() const { return mNumCollisions != 0; }
+#endif
 
     virtual float GetIntersectionRadius() const { return mData.GetMagnitude(); };
 

@@ -5,7 +5,7 @@
 // screen coordinates for disparity. No SDK, allocation, or scene traversal.
 namespace StereoDepth
 {
-    enum Camera { Default, Driving, Walking, Cinematic, Close };
+    enum Camera { Default, Driving, Walking, Cinematic, Close, Interior, Paused };
     const float MaximumShift = 0.02f;
     const float MaximumForegroundShift = 0.015f;
     const float SliderDeadzone = 0.01f;
@@ -26,7 +26,7 @@ namespace StereoDepth
 
     inline float FurthestScreenPlane(float nearPlane)
     {
-        // Bound the entire projective frustum, not individual vertices. On a
+        // The conservative fallback bounds the whole frustum, not vertices. On a
         // 400-pixel display this permits 8 pixels behind and 6 pixels in front
         // at full slider, without breaking contact or triangle interpolation.
         return ValidNearPlane(nearPlane) * (1.0f + MaximumForegroundShift / MaximumShift);
@@ -35,20 +35,18 @@ namespace StereoDepth
     inline float ScreenDistance(Camera camera, float subjectDistance = 0.0f, float nearPlane = 1.0f)
     {
         nearPlane = ValidNearPlane(nearPlane);
-        float distance;
-        switch(camera)
+        const bool playerView = camera == Driving || camera == Walking || camera == Interior;
+        const float maximumSubject = camera == Driving ? 30.0f : camera == Interior ? 12.0f : 16.0f;
+        if(playerView && subjectDistance >= nearPlane && subjectDistance <= maximumSubject)
         {
-            case Walking: distance = 3.5f; break;
-            case Cinematic: distance = 5.0f; break;
-            case Close: distance = 2.5f; break;
-            default: distance = 7.0f; break;
+            // Place the player's reference point just inside the window.
+            // Clip distance is not the depth of the nearest visible surface.
+            const float distance = subjectDistance * (camera == Interior ? 0.90f : 0.95f);
+            return distance < nearPlane ? nearPlane : distance;
         }
-        if((camera == Driving || camera == Walking) && subjectDistance > 0.0f && subjectDistance < 1000.0f)
-            // Keep the player inside the window; nearby world geometry can
-            // cross it naturally. Never push the whole player forward.
-            distance = subjectDistance * 0.75f;
-        const float maximum = FurthestScreenPlane(nearPlane);
-        return distance < nearPlane ? nearPlane : distance > maximum ? maximum : distance;
+        // Bumper views and authored cinematic cameras can put geometry on the
+        // clipping plane. Keep their complete frustum inside the old budget.
+        return FurthestScreenPlane(nearPlane);
     }
 
     inline float ProjectionScale(float screenDistance, float objectScreenDistance)
@@ -62,21 +60,56 @@ namespace StereoDepth
     struct State
     {
         float convergence;
-        State() : convergence(FurthestScreenPlane(1.0f)) {}
-        void Reset() { convergence = FurthestScreenPlane(1.0f); }
-        void Update(Camera camera, unsigned elapsedMilliseconds, float subjectDistance = 0.0f, float nearPlane = 1.0f)
+        float anchor;
+        Camera lastCamera;
+        unsigned lastKey, clearMilliseconds;
+        bool initialized, wasTransitioning;
+        State() { Reset(); }
+        void Reset()
+        {
+            convergence = anchor = FurthestScreenPlane(1.0f);
+            lastCamera = Default; lastKey = clearMilliseconds = 0;
+            initialized = wasTransitioning = false;
+        }
+        void Update(Camera camera, unsigned elapsedMilliseconds, float subjectDistance = 0.0f,
+                    float nearPlane = 1.0f, unsigned cameraKey = 0,
+                    bool transitioning = false, bool obstructed = false)
         {
             // A slow frame must not cause a sudden depth jump. Profiles change
-            // with the subject distance, never with whatever crosses the view.
+            // with deliberate camera transitions, never with a depth sample or
+            // an object crossing the view. Normal walking and jumps hold focus.
             const unsigned elapsed = elapsedMilliseconds > 50 ? 50 : elapsedMilliseconds;
-            const float alpha = float(elapsed) / (250.0f + float(elapsed));
-            convergence += (ScreenDistance(camera, subjectDistance, nearPlane) - convergence) * alpha;
-            // A camera cut or an interior can change the near plane at once.
-            // Enforce that frustum's budget immediately, while ordinary focus
-            // changes retain the smooth transition above.
             nearPlane = ValidNearPlane(nearPlane);
-            const float maximum = FurthestScreenPlane(nearPlane);
-            if(convergence > maximum) convergence = maximum;
+            const bool playerView = camera == Driving || camera == Walking || camera == Interior;
+            const float maximumSubject = camera == Driving ? 30.0f : camera == Interior ? 12.0f : 16.0f;
+            const bool validSubject = subjectDistance >= nearPlane && subjectDistance <= maximumSubject;
+            const bool changed = !initialized || camera != lastCamera || cameraKey != lastKey;
+            if(changed || transitioning || wasTransitioning || !playerView)
+                anchor = ScreenDistance(camera, subjectDistance, nearPlane);
+            initialized = !playerView || validSubject; lastCamera = camera; lastKey = cameraKey;
+            wasTransitioning = transitioning;
+
+            float target = anchor;
+            const bool compressed = playerView && subjectDistance >= nearPlane &&
+                subjectDistance < anchor * 0.75f;
+            if(obstructed || compressed)
+            {
+                // Reuse the camera's existing collision result. No new rays,
+                // geometry scans or GPU depth reads run for stereo.
+                const float safe = FurthestScreenPlane(nearPlane);
+                if(target > safe) target = safe;
+                clearMilliseconds = 0;
+                if(convergence > target) convergence = target;
+            }
+            else
+            {
+                // Intermittent camera contacts must not pump depth in and out.
+                clearMilliseconds = clearMilliseconds < 250 ? clearMilliseconds + elapsed : 250;
+                if(clearMilliseconds < 250 && !changed && convergence < target) target = convergence;
+            }
+            if((changed || !playerView) && convergence > target) convergence = target;
+            const float alpha = float(elapsed) / (350.0f + float(elapsed));
+            convergence += (target - convergence) * alpha;
             if(convergence < nearPlane) convergence = nearPlane;
         }
         float Shift(float slider) const { return MaximumShift * SliderStrength(slider); }

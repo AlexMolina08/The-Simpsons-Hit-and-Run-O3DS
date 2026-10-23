@@ -181,6 +181,14 @@ public:
 
     bool IsRegistered() const;
 
+#ifdef RAD_3DS
+    bool IsTransitioning() const
+    {
+        return GetFlag( START_TRANSITION ) || GetFlag( TRANSITION ) || GetFlag( END_TRANSITION );
+    }
+    virtual bool IsObstructed() const { return false; }
+#endif
+
     void SetTransitionPositionRate( float rate );
     void SetTransitionTargetRate( float rate );
 

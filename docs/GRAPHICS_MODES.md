@@ -40,7 +40,13 @@ The car selector presents the retail 3D preview model. Hold L/R to rotate it;
 left/right changes vehicles. Names and controls stay at screen depth. Pause
 objective cards put their frame, portrait and text together on a shallow
 foreground layer. Driving, walking and interiors share a projective world with
-restrained foreground depth. The lower screen remains flat.
+restrained foreground depth. Walking and driving anchor the screen plane near
+the player when the camera changes, rather than following every movement.
+Existing camera collisions select a conservative depth range; recovery waits
+for a clear camera before restoring depth. Bumper and cinematic views retain
+the conservative range. Pausing also uses that range for the world backdrop,
+keeping the objective card in front of every background surface. The lower
+screen remains flat.
 
 Lowering the slider can turn off the original 3DS's 3D indicator when Quality
 restores 800×240 output. The SDK makes wide output and stereoscopic output

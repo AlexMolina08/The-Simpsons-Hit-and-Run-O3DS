@@ -65,7 +65,7 @@ extern "C" void picaDumpStereoDiagnostics(FILE* file)
 {
     fprintf(file, "NATIVE_STEREO active_frames=%u replayed_segments=%u minimum_slider=%.4f maximum_slider=%.4f scope=whole_session cpu_scene_traversals_per_segment=1\n",
         stereoFrames, stereoSegments, minimumStereoSlider, maximumStereoSlider);
-    fprintf(file, "NATIVE_STEREO_DEPTH measured_frames=%u stereo_frames=%u slider_min=%.4f slider_max=%.4f convergence_min=%.4f convergence_max=%.4f maximum_background_pair_pixels=8 maximum_foreground_pair_pixels=6 shader_register=95 gpu_bones=25 world_frustum_budget=1 per_vertex_clamp=0\n",
+    fprintf(file, "NATIVE_STEREO_DEPTH measured_frames=%u stereo_frames=%u slider_min=%.4f slider_max=%.4f convergence_min=%.4f convergence_max=%.4f maximum_background_pair_pixels=8 obstruction_foreground_budget_pixels=6 shader_register=95 gpu_bones=25 camera_profiles=1 world_frustum_budget=0 per_vertex_clamp=0\n",
         measuredFrames, measuredStereoFrames, measuredFrames ? measuredSliderMinimum : 0.0f,
         measuredSliderMaximum, measuredFrames ? measuredConvergenceMinimum : 0.0f, measuredConvergenceMaximum);
     fprintf(file,"NATIVE_STEREO_SLIDER shift_min=%.6f shift_max=%.6f bins=16 counts=",measuredFrames?minimumEyeShift:0.0f,maximumEyeShift);
