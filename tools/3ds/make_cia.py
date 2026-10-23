@@ -47,7 +47,7 @@ def retire_builds():
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('game', nargs='?', type=Path, help='Installed retail PC game folder')
-    parser.add_argument('--version', default='1.1.0')
+    parser.add_argument('--version', default='1.1.1')
     parser.add_argument('--clean', action='store_true', help='Move previous compilation outputs to the system Trash before building')
     parser.add_argument('--makerom', type=Path)
     parser.add_argument('--bannertool', type=Path)
