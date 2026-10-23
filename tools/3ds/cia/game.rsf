@@ -148,6 +148,7 @@ AccessControlInfo:
    - cfg:u
    - fs:USER
    - gsp::Gpu
+   - gsp::Lcd
    - hid:USER
    - ndm:u
    - pxi:dev
@@ -166,6 +167,7 @@ AccessControlInfo:
    - ir:rst
    - ldr:ro
    - mic:u
+   - mcu::HWC
    - news:u
    - nfc:u
    - nim:aoc

@@ -17,6 +17,70 @@ extern "C" bool C3Di_SplitFrame(u32** pBuf, u32* pSize);
 extern "C" void picaNativeUniformInvalidate(GPU_SHADER_TYPE type, int first, int count);
 #endif
 
+#ifdef SRR2_OLD_3DS
+static bool s_indicatorPending = false, s_indicatorOwnsPolicy = false;
+static bool s_indicatorPreviousDisable = false;
+static u64 s_indicatorReadyTick = 0;
+#ifdef SRR2_OLD3DS_NATIVE_BENCH
+static unsigned s_indicatorAttempts = 0, s_indicatorReleases = 0;
+static Result s_indicatorLcdResult = -1, s_indicatorWriteResult = -1;
+#endif
+extern "C" void picaRequest3DIndicator(void)
+{
+    const Graphics3DS::Model model = Graphics3DS::SystemModel();
+    s_indicatorPending = model == Graphics3DS::Old3DS || model == Graphics3DS::Old3DSXL;
+}
+
+extern "C" void picaRelease3DIndicator(void)
+{
+    s_indicatorPending = false;
+#ifdef SRR2_OLD3DS_NATIVE_BENCH
+    ++s_indicatorReleases;
+#endif
+    if(!s_indicatorOwnsPolicy || R_FAILED(gspLcdInit())) return;
+    GSPLCD_SetLedForceOff(s_indicatorPreviousDisable);
+    gspLcdExit();
+    s_indicatorOwnsPolicy = false;
+}
+
+static void picaUpdate3DIndicator(void)
+{
+    if(!s_indicatorPending) return;
+    if(!s_indicatorOwnsPolicy)
+    {
+        const Result lcdResult = gspLcdInit();
+#ifdef SRR2_OLD3DS_NATIVE_BENCH
+        ++s_indicatorAttempts;
+        s_indicatorLcdResult = lcdResult;
+#endif
+        if(R_FAILED(lcdResult)) { s_indicatorPending = false; return; }
+        s_indicatorPreviousDisable = OS_SharedConfig->led_3d != 0;
+        const Result policy = GSPLCD_SetLedForceOff(true);
+        gspLcdExit();
+        if(R_FAILED(policy)) { s_indicatorPending = false; return; }
+        s_indicatorOwnsPolicy = true;
+        // LCD applies its final off write asynchronously. Let it settle without
+        // stalling rendering, then control only the independent MCU light.
+        s_indicatorReadyTick = svcGetSystemTick() + SYSCLOCK_ARM11 / 10;
+        return;
+    }
+    if(svcGetSystemTick() < s_indicatorReadyTick) return;
+    s_indicatorPending = false;
+    const Result initialized = mcuHwcInit();
+    Result written = initialized;
+    if(R_SUCCEEDED(initialized))
+    {
+        const u8 enabled = 1;
+        written = MCUHWC_WriteRegister(0x2c, &enabled, sizeof(enabled));
+        mcuHwcExit();
+    }
+#ifdef SRR2_OLD3DS_NATIVE_BENCH
+    s_indicatorWriteResult = written;
+#endif
+    if(R_FAILED(written)) picaRelease3DIndicator();
+}
+#endif
+
 #ifdef SRR2_OLD3DS_NATIVE_BENCH
 static unsigned stereoFrames = 0, stereoSegments = 0;
 static float minimumStereoSlider = 1.0f, maximumStereoSlider = 0.0f;
@@ -63,6 +127,24 @@ static void picaAuditStereoScene(const u32* commands,unsigned words)
 }
 extern "C" void picaDumpStereoDiagnostics(FILE* file)
 {
+#ifdef SRR2_OLD_3DS
+    const Graphics3DS::Model model = Graphics3DS::SystemModel();
+    if(model == Graphics3DS::Old3DS || model == Graphics3DS::Old3DSXL)
+    {
+        u8 led = 0;
+        Result result = mcuHwcInit();
+        if(R_SUCCEEDED(result))
+        {
+            result = MCUHWC_ReadRegister(0x2c, &led, sizeof(led));
+            mcuHwcExit();
+        }
+        fprintf(file, "NATIVE_3D_INDICATOR result=%08lX state=%u width=%u stereo=%u after_route=1\n",
+            (unsigned long)result, led, Graphics3DS::RenderWidth(), Graphics3DS::Stereo());
+        fprintf(file,"NATIVE_3D_INDICATOR_LIFETIME attempts=%u releases=%u owner=%u disable=%u lcd=%08lX write=%08lX\n",
+            s_indicatorAttempts,s_indicatorReleases,s_indicatorOwnsPolicy,OS_SharedConfig->led_3d,
+            (unsigned long)s_indicatorLcdResult,(unsigned long)s_indicatorWriteResult);
+    }
+#endif
     fprintf(file, "NATIVE_STEREO active_frames=%u replayed_segments=%u minimum_slider=%.4f maximum_slider=%.4f scope=whole_session cpu_scene_traversals_per_segment=1\n",
         stereoFrames, stereoSegments, minimumStereoSlider, maximumStereoSlider);
     fprintf(file, "NATIVE_STEREO_DEPTH measured_frames=%u stereo_frames=%u slider_min=%.4f slider_max=%.4f convergence_min=%.4f convergence_max=%.4f maximum_background_pair_pixels=12 authored_background_pair_pixels=8 obstruction_foreground_budget_pixels=6 shader_register=95 gpu_bones=25 camera_profiles=1 world_frustum_budget=0 per_vertex_clamp=0\n",
@@ -153,6 +235,9 @@ picaDisplay::picaDisplay(pddiDisplayInfo* info)
 
 picaDisplay::~picaDisplay()
 {
+#ifdef SRR2_OLD_3DS
+    picaRelease3DIndicator();
+#endif
     if(inFrame)
     {
         C3D_FrameEnd(0);
@@ -354,6 +439,7 @@ bool picaDisplay::ApplyGraphicsMode(void)
         GX_TRANSFER_OUT_FORMAT(GX_TRANSFER_FMT_RGB8) | GX_TRANSFER_SCALING(GX_TRANSFER_SCALE_NO);
     if(target) C3D_RenderTargetSetOutput(target, GFX_TOP, GFX_LEFT, flags);
     if(targetRight) C3D_RenderTargetSetOutput(targetRight, GFX_TOP, GFX_RIGHT, flags);
+    picaRequest3DIndicator();
     reset = true;
     return target != NULL;
 }
@@ -560,6 +646,7 @@ void picaDisplay::EndFrame(void)
         g_picaFrameSubmitMs += (svcGetSystemTick() - submitTick) * 1000.0 / SYSCLOCK_ARM11;
         ++g_picaPresentedFrames;
         ++g_old3dsFramePresented;
+        picaUpdate3DIndicator();
 #endif
     }
 }

@@ -88,6 +88,9 @@ unsigned int sceLibcHeapSize = 16 * 1024 * 1024;
 #include <sys/stat.h>
 
 extern "C" void radSoundHal3dsShutdownForExit( void );
+#ifdef SRR2_OLD_3DS
+extern "C" void picaRelease3DIndicator(void);
+#endif
 
 #define SRR2_3DS_DATA_PATH "sdmc:/3ds/simpsons"
 
@@ -307,6 +310,9 @@ extern "C" int main( int argc, char *argv[] )
     pGame->Run();
 #ifdef SRR2_OLD3DS_NATIVE_BENCH
     NativeBench::Dump();
+#endif
+#ifdef SRR2_OLD_3DS
+    picaRelease3DIndicator();
 #endif
 #if defined(SRR2_OLD_3DS) && defined(SRR2_OLD3DS_COLL_PREP)
     old3dsDumpPairTail();

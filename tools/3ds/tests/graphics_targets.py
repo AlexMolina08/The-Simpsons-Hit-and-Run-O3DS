@@ -40,6 +40,7 @@ void C3D_RenderTargetDelete(C3D_RenderTarget* p){assert(synced);++deleted;delete
 void C3D_RenderTargetSetOutput(C3D_RenderTarget* p,int,int,u32){assert(p);}
 void gfxSet3D(bool on){stereo=on;wide=false;}
 void gfxSetWide(bool on){assert(!stereo);wide=on;}
+void picaRequest3DIndicator(){}
 struct Context {
  bool StereoShadersReady(){return readyStereo;}
  void PrepareFramePrograms(){assert(synced && queueDone);shaderStereo=Graphics3DS::Stereo();}

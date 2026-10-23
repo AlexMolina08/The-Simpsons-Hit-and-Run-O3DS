@@ -14,6 +14,7 @@ const unsigned GX_CMDLIST_FLUSH=1,SYSCLOCK_ARM11=268123480;
 namespace Old3dsCadence {void Submit(unsigned){}}
 u64 svcGetSystemTick(){static u64 n=0;return ++n;}
 void C3D_FrameEnd(unsigned flags){assert(flags==GX_CMDLIST_FLUSH);++submits;}
+void picaUpdate3DIndicator(){}
 struct picaDisplay {bool inFrame=true,stereoThisFrame=true;
  void FinishTopSegment(){assert(inFrame&&g_picaInFrame);++finishes;}
  void EndFrame();};

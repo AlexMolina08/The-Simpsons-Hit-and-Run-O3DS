@@ -191,13 +191,26 @@ protected:
 
 static volatile bool s_picaResumed = false;
 static aptHookCookie s_picaAptCookie;
+#ifdef SRR2_OLD_3DS
+extern "C" void picaRequest3DIndicator(void);
+extern "C" void picaRelease3DIndicator(void);
+#endif
 
 static void picaAptHook(APT_HookType hook, void*)
 {
     if(hook == APTHOOK_ONRESTORE || hook == APTHOOK_ONWAKEUP)
     {
         s_picaResumed = true;
+#ifdef SRR2_OLD_3DS
+        picaRequest3DIndicator();
+#endif
     }
+#ifdef SRR2_OLD_3DS
+    else if(hook == APTHOOK_ONSUSPEND || hook == APTHOOK_ONSLEEP || hook == APTHOOK_ONEXIT)
+    {
+        picaRelease3DIndicator();
+    }
+#endif
 }
 
 static picaContext* s_picaContext = NULL;
