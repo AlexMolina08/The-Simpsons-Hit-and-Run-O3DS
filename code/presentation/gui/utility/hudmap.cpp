@@ -2342,16 +2342,16 @@ namespace
             centered("Thank you so much for playing.",36,16,Gold);
             // Authored lines fit the retail font at native LCD size.
             const char* message[]={
-                "Bringing this game to the Nintendo 3DS has",
-                "been one of the most challenging and",
-                "rewarding experiences I've ever had.",
-                "I hope you enjoy playing it as much as",
-                "I've enjoyed bringing it to life."
+                "Bringing this game to Nintendo 3DS has",
+                "been a challenging and rewarding journey.",
+                "I hope you have enjoyed playing this as",
+                "much as I have enjoyed bringing it to life."
             };
-            for(unsigned row=0;row<5;++row)centered(message[row],72+17*row,12,White);
-            centered("AlexMolina08",172,15,Gold);
-            centered("23 October 2026",190,11,White);
+            for(unsigned row=0;row<4;++row)centered(message[row],75+17*row+(row>=2?7:0),12,White);
+            centered("AlexMolina08",169,15,Gold);
+            centered("23 October 2026",187,11,White);
             centered("\"It always seems impossible until it's done.\"",218,11,White);
+            centered("Nelson Mandela",234,9,White);
             nativePass.End();
             return;
         }
