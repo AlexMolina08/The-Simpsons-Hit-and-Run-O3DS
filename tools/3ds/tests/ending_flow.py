@@ -69,11 +69,11 @@ int main(){
  assert(parent.quits==1&&screen.m_exitState==2);
  for(unsigned i=0;i<5;++i)screen.HandleMessage(GUI_MSG_UPDATE,33);
  assert(parent.quits==1); // No repeated quit/save prompts during outro.
- Farewell farewell;farewell.Update(GUI_MSG_UPDATE,7999);assert(!farewell.done);
+ Farewell farewell;farewell.Update(GUI_MSG_UPDATE,17999);assert(!farewell.done);
  farewell.Update(GUI_MSG_UPDATE,1);assert(farewell.done==1);
  farewell.Update(GUI_MSG_UPDATE,1000);assert(farewell.done==1);
  Farewell normal;normal.m_portThanks=false;normal.Update(GUI_MSG_UPDATE,10000);assert(!normal.done);
- puts("PASS: credits keep native roll; exit waits for save metadata, dispatches once; farewell returns after eight seconds; ordinary credits remain unchanged.");
+ puts("PASS: credits keep native roll; exit waits for save metadata, dispatches once; farewell returns after eighteen seconds; ordinary credits remain unchanged.");
 }
 '''
 with tempfile.TemporaryDirectory(prefix='srr-ending-') as temporary:

@@ -249,7 +249,7 @@ void CGuiScreenViewCredits::HandleMessage
     if(m_state == GUI_WINDOW_STATE_RUNNING && m_portThanks && message == GUI_MSG_UPDATE)
     {
         m_portThanksElapsed += param1;
-        if(m_portThanksElapsed >= 8000) this->OnScrollingDone();
+        if(m_portThanksElapsed >= 18000) this->OnScrollingDone();
         CGuiScreen::HandleMessage(message, param1, param2);
         return;
     }

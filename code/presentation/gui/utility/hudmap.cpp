@@ -2339,11 +2339,19 @@ namespace
                 const float width=fminf(288,font->GetTextWidth(label)*height/font->GetFontHeight());
                 BottomLabel(font,label,(320-width)*0.5f,y,height,colour,288);
             };
-            centered("THANK YOU",65,22,Gold);
-            centered("Thank you for playing this port.",104,15,White);
-            centered("Impossible, until someone does it.",132,14,White);
-            centered("AlexMolina08",179,16,Gold);
-            centered("23 October 2026",205,12,White);
+            centered("Thank you so much for playing.",36,16,Gold);
+            // Authored lines fit the retail font at native LCD size.
+            const char* message[]={
+                "Bringing this game to the Nintendo 3DS has",
+                "been one of the most challenging and",
+                "rewarding experiences I've ever had.",
+                "I hope you enjoy playing it as much as",
+                "I've enjoyed bringing it to life."
+            };
+            for(unsigned row=0;row<5;++row)centered(message[row],72+17*row,12,White);
+            centered("AlexMolina08",172,15,Gold);
+            centered("23 October 2026",190,11,White);
+            centered("\"It always seems impossible until it's done.\"",218,11,White);
             nativePass.End();
             return;
         }
