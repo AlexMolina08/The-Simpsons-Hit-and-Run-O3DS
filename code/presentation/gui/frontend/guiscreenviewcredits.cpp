@@ -245,6 +245,15 @@ void CGuiScreenViewCredits::HandleMessage
         this->SetFadingEnabled( !GetGuiSystem()->IsShowCreditsUponReturnToFE() );
     }
 
+#ifdef RAD_3DS
+    if(m_state == GUI_WINDOW_STATE_RUNNING && m_portThanks && message == GUI_MSG_UPDATE)
+    {
+        m_portThanksElapsed += param1;
+        if(m_portThanksElapsed >= 8000) this->OnScrollingDone();
+        CGuiScreen::HandleMessage(message, param1, param2);
+        return;
+    }
+#endif
     if( m_state == GUI_WINDOW_STATE_RUNNING )
     {
         switch( message )
@@ -359,6 +368,10 @@ void CGuiScreenViewCredits::InitIntro()
                      GetCharacterSheetManager()->QueryMissionStatus( RenderEnums::L7, RenderEnums::M7 )->mCompleted;
 
     this->ResetScrolling();
+#ifdef RAD_3DS
+    m_portThanks = GetGuiSystem()->IsShowCreditsUponReturnToFE();
+    m_portThanksElapsed = 0;
+#endif
 
     // hide back button label
     //

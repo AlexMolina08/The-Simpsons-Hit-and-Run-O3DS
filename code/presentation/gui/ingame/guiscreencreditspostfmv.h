@@ -46,6 +46,9 @@ protected:
 private:
     virtual void OnScrollingDone();
 
+#ifdef RAD_3DS
+    unsigned m_exitState = 0;
+#endif
     Scrooby::Sprite* m_kang;
     Scrooby::Sprite* m_kodos;
 

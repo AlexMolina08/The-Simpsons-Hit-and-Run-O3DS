@@ -574,7 +574,9 @@ void CGuiManagerInGame::HandleMessage
 
                     // tell GUI system to show credits upon returning to FE
                     //
-//                    GetGuiSystem()->ShowCreditsUponReturnToFE( true );
+#ifdef RAD_3DS
+                    GetGuiSystem()->ShowCreditsUponReturnToFE( true );
+#endif
 
                     m_quitAndReload = false;
                 }

@@ -2331,6 +2331,21 @@ namespace
         p3d::pddi->SetCamera(0.1f,10,1.5708f,4.0f/3);p3d::pddi->SetProjectionMode(PDDI_PROJECTION_PERSPECTIVE);
         p3d::stack->LoadIdentity();p3d::stack->Translate(-0.4f,-0.375f,0.5f);
         p3d::stack->Scale(0.8f,1,1); // Square text pixels on the 400-wide LCD.
+        if(credits->IsPortThanks3DS())
+        {
+            Gradient(-40,0,360,240,tColour(49,41,79),tColour(14,15,35));
+            auto centered=[&](const char* text,float y,float height,tColour colour){
+                P3D_UNICODE label[128];p3d::AsciiToUnicode(text,label,128);
+                const float width=fminf(288,font->GetTextWidth(label)*height/font->GetFontHeight());
+                BottomLabel(font,label,(320-width)*0.5f,y,height,colour,288);
+            };
+            centered("THANK YOU",65,22,Gold);
+            centered("Thank you for playing this port.",104,15,White);
+            centered("Impossible, until someone does it.",132,14,White);
+            centered("AlexMolina08",179,16,Gold);
+            nativePass.End();
+            return;
+        }
         const float scroll=credits->GetCreditsScroll3DS();
         auto line=[&](tFont* face,const P3D_UNICODE* label,float baseline,tColour colour){
             const float y=baseline-scroll;
@@ -2610,12 +2625,13 @@ namespace
         {
             Scrooby::Text* text=static_cast<CGuiScreenViewCredits*>(screen)->GetCreditsText3DS(0);
             tFont* font=text?text->GetFont():NULL;
-            Ascii(font,"CREDITS",46,51,16,Gold,228);
+            const bool thanks=static_cast<CGuiScreenViewCredits*>(screen)->IsPortThanks3DS();
+            Ascii(font,thanks?"THE END":"CREDITS",46,51,16,Gold,228);
             const picaBottomFrame::Rect back={44,146,276,178};
             TVRow(back,true,false);
-            Ascii(font,"BACK",126,168,16,Gold,100);
-            Ascii(font,"A BACK",46,201,12,White,100);
-            Ascii(font,"B BACK",224,201,12,White,50);
+            Ascii(font,thanks?"MAIN MENU":"BACK",thanks?103:126,168,16,Gold,140);
+            Ascii(font,thanks?"A CONTINUE":"A BACK",46,201,12,White,120);
+            if(!thanks)Ascii(font,"B BACK",224,201,12,White,50);
         }
         else if( startupLoading || splash )
         {

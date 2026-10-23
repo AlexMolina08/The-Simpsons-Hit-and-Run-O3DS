@@ -20,6 +20,10 @@
 
 #include <events/eventmanager.h>
 #include <sound/soundmanager.h>
+#ifdef RAD_3DS
+#include <data/memcard/memorycardmanager.h>
+#include <mission/gameplaymanager.h>
+#endif
 
 // Scrooby
 #include <Screen.h>
@@ -120,6 +124,19 @@ void CGuiScreenCreditsPostFMV::HandleMessage
 	unsigned int param2 
 )
 {
+#ifdef RAD_3DS
+    if(m_exitState && message == GUI_MSG_UPDATE)
+    {
+        if(m_exitState == 1 && GetMemoryCardManager()->IsMemcardInfoLoaded())
+        {
+            m_exitState = 2;
+            m_pParent->HandleMessage(GUI_MSG_QUIT_INGAME_FOR_RELOAD,
+                GetGameplayManager()->GetCurrentLevelIndex() + 1, 0);
+        }
+        CGuiScreen::HandleMessage(message, param1, param2);
+        return;
+    }
+#endif
     if( m_state == GUI_WINDOW_STATE_RUNNING )
     {
         switch( message )
@@ -128,7 +145,7 @@ void CGuiScreenCreditsPostFMV::HandleMessage
             {
                 this->OnScrollingDone();
 
-                break;
+                return;
             }
             case GUI_MSG_CONTROLLER_BACK:
             {
@@ -163,6 +180,11 @@ void CGuiScreenCreditsPostFMV::HandleMessage
 //===========================================================================
 void CGuiScreenCreditsPostFMV::InitIntro()
 {
+#ifdef RAD_3DS
+    m_exitState = 0;
+    // Prepare the normal final-save choice before showing the port's farewell.
+    GetMemoryCardManager()->LoadMemcardInfo(dynamic_cast<IMemoryCardInfoLoadCallback*>(m_pParent));
+#endif
     GetEventManager()->TriggerEvent( EVENT_PLAY_CREDITS );
 
     m_playKKDialog = true;
@@ -231,7 +253,9 @@ void CGuiScreenCreditsPostFMV::InitIntro()
 void CGuiScreenCreditsPostFMV::InitRunning()
 {
     rAssert( m_creditsGroup != NULL );
+#ifndef SRR2_OLD_3DS
     m_creditsGroup->SetVisible( true );
+#endif
 }
 
 
@@ -260,8 +284,12 @@ void CGuiScreenCreditsPostFMV::InitOutro()
 void
 CGuiScreenCreditsPostFMV::OnScrollingDone()
 {
+#ifdef RAD_3DS
+    m_exitState = 1;
+#else
     m_pParent->HandleMessage( GUI_MSG_GOTO_SCREEN,
                               GUI_SCREEN_ID_LEVEL_END,
                               CLEAR_WINDOW_HISTORY );
+#endif
 }
 

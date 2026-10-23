@@ -39,6 +39,7 @@ public:
 								unsigned int param2 = 0 );
 
 #ifdef RAD_3DS
+    bool IsPortThanks3DS() const { return m_portThanks; }
     Scrooby::Text* GetCreditsText3DS(unsigned index) const;
     unsigned GetNumCreditsTexts3DS() const { return MAX_NUM_CREDITS_PARTITIONS; }
     float GetCreditsScroll3DS() const { return m_currentTranslateY*0.5f; }
@@ -74,6 +75,10 @@ private:
 
     static const unsigned int SCROLL_IDLE_TIME_BEFORE_RESET = 0; // in msec
     unsigned int m_elapsedIdleTime;
+#ifdef RAD_3DS
+    bool m_portThanks = false;
+    unsigned m_portThanksElapsed = 0;
+#endif
 
 };
 
