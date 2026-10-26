@@ -81,6 +81,10 @@ public:
 
 
    bool  mTranslucent;
+#ifdef SRR2_OLD3DS_VISUAL_UPGRADE
+   // Existing alignment padding; collision and gameplay bounds stay unchanged.
+   bool mOld3dsLandmark=false;
+#endif
    tName mShaderName;
    static bool msDeletionsSafe;
 

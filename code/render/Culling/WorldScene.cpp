@@ -1,4 +1,13 @@
 #include <main/old3dsperformance.h>
+#ifdef SRR2_OLD3DS_VISUAL_UPGRADE
+#include <main/landmarkvisibility.h>
+namespace Old3dsLandmark {
+bool enabled=false;
+#ifdef SRR2_OLD3DS_NATIVE_BENCH
+unsigned selected=0,rootPlaced=0,rootFallback=0,visible=0;
+#endif
+}
+#endif
 #include <main/old3dsrecurring.h>
 #include <main/old3dsmainprofile.h>
 #include <render/Culling/WorldScene.h>
@@ -1105,8 +1114,15 @@ BEGIN_PROFILE("list construction")
         {
 #ifdef ZSORT_RENDER
             mStaticTreeWalker.rCurrent().mSEntityElems[i]->GetBoundingSphere(&ObjectSphere);
+#ifdef SRR2_OLD3DS_VISUAL_UPGRADE
+            if(mStaticTreeWalker.rCurrent().mSEntityElems[i]->mOld3dsLandmark)
+                ObjectSphere.radius+=Old3dsLandmark::ExtraDistance;
+#endif
             if(!IsSphereInCone(ObjectSphere.centre, ObjectSphere.radius))
                 continue;
+#if defined(SRR2_OLD3DS_VISUAL_UPGRADE) && defined(SRR2_OLD3DS_NATIVE_BENCH)
+            if(mStaticTreeWalker.rCurrent().mSEntityElems[i]->mOld3dsLandmark) ++Old3dsLandmark::visible;
+#endif
 
             //mStaticTreeWalker.rCurrent().mSEntityElems[i]->SetShader(mpTempShader,0);
             switch(3)//mStaticTreeWalker.rCurrent().mSEntityElems[i]->CastsShadow())
@@ -2011,6 +2027,29 @@ void WorldScene::Place(    StaticEntityDSG*  ipStaticEntity )
 
     SpatialNode* pSpatialNode = &(mStaticTreeWalker.rSeekNode((ISpatialProxyAA&)DrawableSP));
 
+#ifdef SRR2_OLD3DS_VISUAL_UPGRADE
+   // LandmarkRootBegin: use the existing root list and its bounded capacity.
+   // Stream unloads already remove through the entity's mpSpatialNode pointer.
+   if(ipStaticEntity->mOld3dsLandmark)
+   {
+       SpatialNode* root=&mStaticTreeWalker.rIthNode(0);
+       if(root!=pSpatialNode)
+       {
+           if(root->mSEntityElems.Add(ipStaticEntity))
+           {
+               ipStaticEntity->mpSpatialNode=root;
+#ifdef SRR2_OLD3DS_NATIVE_BENCH
+               ++Old3dsLandmark::rootPlaced;
+#endif
+               return;
+           }
+#ifdef SRR2_OLD3DS_NATIVE_BENCH
+           ++Old3dsLandmark::rootFallback;
+#endif
+       }
+   }
+   // LandmarkRootEnd: capacity failure retains the original placement path.
+#endif
    if(! pSpatialNode->mSEntityElems.Add(ipStaticEntity))
    {
        pSpatialNode = &(mStaticTreeWalker.rIthNode(0));

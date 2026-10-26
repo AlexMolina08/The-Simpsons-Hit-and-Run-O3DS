@@ -11,6 +11,11 @@
 //========================================
 // System Includes
 //========================================
+#if defined(SRR2_OLD3DS_NATIVE_BENCH) && defined(SRR2_OLD3DS_VISUAL_UPGRADE)
+#include <main/nativebench.h>
+#include <cstdio>
+#include <cstring>
+#endif
 #include <p3d/chunkfile.hpp>
 #include <p3d/anim/animate.hpp>
 #include <p3d/anim/compositedrawable.hpp>
@@ -121,6 +126,12 @@ tEntity* AnimCollLoader::LoadObject(tChunkFile* f, tEntityStore* store)
 
     AnimCollisionEntityDSG *pAnimCollDSG = new AnimCollisionEntityDSG;
     pAnimCollDSG->SetName(name);
+#if defined(SRR2_OLD3DS_NATIVE_BENCH) && defined(SRR2_OLD3DS_VISUAL_UPGRADE)
+    if(NativeBench::LandmarkDiagnostic() &&
+       (!strncmp(name,"r2_gens39Shape",13) || !strcmp(name,"mrburns") || !strcmp(name,"casino_lights")))
+        printf("NATIVE_LANDMARK_LOAD name=%s loader=pAnimCollDSG loading_only=1\n",name);
+#endif
+
 
     if(HasAlpha)
     {

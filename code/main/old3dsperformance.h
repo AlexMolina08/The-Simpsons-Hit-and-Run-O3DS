@@ -12,7 +12,13 @@ inline float ParticleEmissionScale() { return mode >= 5 ? 0.5f : 1.0f; }
 inline bool DistantPedestrianActions() { return mode >= 6; }
 inline bool FlatLighting() { return mode >= 7 && !Graphics3DS::ImprovedLighting(); }
 inline bool ReducedAudioSearch() { return mode >= 3; }
+#if defined(SRR2_OLD3DS_NATIVE_BENCH) && defined(SRR2_OLD3DS_VISUAL_UPGRADE)
+// Private same-binary visibility control; no other quality policy changes.
+extern float visibilityDistance;
+inline float DrawDistance() { return mode >= 4 ? visibilityDistance : mode >= 2 ? 70.0f : 100.0f; }
+#else
 inline float DrawDistance() { return mode >= 4 ? 120.0f : mode >= 2 ? 70.0f : 100.0f; }
+#endif
 inline bool AggressiveSmallCull() { return mode != 0 && mode < 4; }
 inline unsigned PhysicsStepMilliseconds() { return mode >= 5 ? 50u : mode >= 2 ? 40u : 35u; }
 inline unsigned TrafficLimit() { return mode >= 2 ? 1u : 2u; }

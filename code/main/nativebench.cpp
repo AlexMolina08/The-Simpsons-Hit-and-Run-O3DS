@@ -124,6 +124,9 @@ extern bool g_old3dsAdpcmPrune,g_old3dsAdpcmVerify,g_old3dsAdpcmFast;
 extern void old3dsDumpAdpcmVerification(FILE*);
 extern unsigned g_old3dsAdpcmFastCalls,g_old3dsAdpcmFastFallbacks,g_old3dsAdpcmBudgetCalls;
 extern unsigned g_old3dsAdpcmVerified,g_old3dsAdpcmMismatches,g_old3dsAdpcmVerifyAllocFailures;
+#ifdef SRR2_OLD3DS_VISUAL_UPGRADE
+namespace Old3dsPerformance { float visibilityDistance=120.0f; }
+#endif
 namespace NativeBench {
 bool detail=false,collecting=false,validation=false,serviceProfile=false;
 static bool vehicleProfile=false;

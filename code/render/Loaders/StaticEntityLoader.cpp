@@ -11,7 +11,17 @@
 //========================================
 // System Includes
 //========================================
+#if defined(SRR2_OLD3DS_NATIVE_BENCH) && defined(SRR2_OLD3DS_VISUAL_UPGRADE)
+#include <main/nativebench.h>
+#include <cstdio>
+#include <cstring>
+#endif
 #include <p3d/chunkfile.hpp>
+#ifdef SRR2_OLD3DS_VISUAL_UPGRADE
+#include <main/landmarkvisibility.h>
+#include <pddi/pica/visualstyle.hpp>
+#include <cstring>
+#endif
 #include <p3d/utility.hpp>
 
 //========================================
@@ -81,9 +91,27 @@ tEntity* StaticEntityLoader::LoadObject(tChunkFile* f, tEntityStore* store)
 
     int version = f->GetLong();
     int HasAlpha = f->GetLong();
+#ifdef SRR2_OLD3DS_VISUAL_UPGRADE
+    const bool farBackdrop=!strncmp(name,"srr_far_l",9);
+    if(farBackdrop && (!picaVisual::farBackdrop || !HasAlpha))
+    {
+        // The chunk handler requires a non-null inventory object for success.
+        // Keep only a named placeholder; do not load or register proxy geometry.
+        tEntity* placeholder=new tEntity;
+        placeholder->SetName(name);
+        IEntityDSG::msDeletionsSafe=false;
+        return placeholder;
+    }
+#endif
 
     StaticEntityDSG *pStaticEntityDSG = new StaticEntityDSG;
     pStaticEntityDSG->SetName(name);
+#if defined(SRR2_OLD3DS_NATIVE_BENCH) && defined(SRR2_OLD3DS_VISUAL_UPGRADE)
+    if(NativeBench::LandmarkDiagnostic() &&
+       (!strncmp(name,"r2_gens39Shape",13) || !strcmp(name,"mrburns") || !strcmp(name,"casino_lights")))
+        printf("NATIVE_LANDMARK_LOAD name=%s loader=pStaticEntityDSG loading_only=1\n",name);
+#endif
+
 
     if(HasAlpha)
     {
@@ -110,6 +138,31 @@ tEntity* StaticEntityLoader::LoadObject(tChunkFile* f, tEntityStore* store)
         f->EndChunk();
     } // while
 
+#ifdef SRR2_OLD3DS_VISUAL_UPGRADE
+    if(Old3dsLandmark::enabled && !HasAlpha)
+    {
+        rmt::Sphere sphere;
+        rmt::Box3D box;
+        pStaticEntityDSG->GetBoundingSphere(&sphere);
+        pStaticEntityDSG->GetBoundingBox(&box);
+        const float bounds[]={sphere.centre.x,sphere.centre.y,sphere.centre.z,sphere.radius,
+            box.low.x,box.low.y,box.low.z,box.high.x,box.high.y,box.high.z};
+        pStaticEntityDSG->mOld3dsLandmark=Old3dsLandmark::SelectStatic(f->GetFilename(),name,bounds);
+#ifdef SRR2_OLD3DS_NATIVE_BENCH
+        if(pStaticEntityDSG->mOld3dsLandmark) ++Old3dsLandmark::selected;
+#endif
+    }
+#endif
+
+#ifdef SRR2_OLD3DS_VISUAL_UPGRADE
+    if(farBackdrop)
+    {
+        pStaticEntityDSG->SetFarBackdrop();
+#ifdef SRR2_OLD3DS_NATIVE_BENCH
+        ++picaVisual::farBackdropLoads;
+#endif
+    }
+#endif
     mpListenerCB->OnChunkLoaded( pStaticEntityDSG, mUserData, _id );
     IEntityDSG::msDeletionsSafe=false;
     return pStaticEntityDSG;

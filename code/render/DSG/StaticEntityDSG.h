@@ -39,6 +39,9 @@ public:
 
    void SetGeometry(tGeometry* ipGeo);
    tGeometry* mpGeo();
+#ifdef SRR2_OLD3DS_VISUAL_UPGRADE
+   void SetFarBackdrop() { mIsGeo |= FAR_BACKDROP; }
+#endif
    void SetDrawable(tDrawable* ipDraw);
    tDrawable* mpDraw();
    virtual void SetRank(rmt::Vector& irRefPosn, rmt::Vector& mViewVector);
@@ -86,7 +89,8 @@ protected:
    {
        NOT_GEO      = 0x0,
        GEO          = 0x1,
-       IS_SHADOW    = 0x2
+       IS_SHADOW    = 0x2,
+       FAR_BACKDROP = 0x4
    };
 
    int mIsGeo;
