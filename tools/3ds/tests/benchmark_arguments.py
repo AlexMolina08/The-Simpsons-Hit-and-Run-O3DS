@@ -16,7 +16,7 @@ namespace Old3dsPerformance { unsigned mode=1; }
 namespace radNativeSeek { bool enabled=false,stageInput=false; }
 namespace HandheldHudCadence { bool boostPickupAnimations=true; }
 namespace Old3dsRecurring { bool requested=false,focusDropWindow=false;unsigned stationaryMs=0,windowStartMs=15000,windowEndMs=18000; }
-static unsigned seconds=25,warmup=8,seed=1;static bool hold=false,reload=false,serviceProfile=false,afterRouteCapture=false,vehicleProfile=false,g_picaSkinPrepareYield=false,g_picaNativeContiguous=false,g_old3dsTrafficFacingOnly=false,g_old3dsAdpcmPrune=false,g_old3dsAdpcmVerify=false,g_old3dsAdpcmFast=false;
+static unsigned seconds=25,warmup=8,seed=1;static bool hold=false,reload=false,serviceProfile=false,afterRouteCapture=false,vehicleProfile=false,g_picaSkinPrepareYield=false,g_picaNativeContiguous=false,g_picaParticleTrigCache=false,g_old3dsTrafficFacingOnly=false,g_old3dsAdpcmPrune=false,g_old3dsAdpcmVerify=false,g_old3dsAdpcmFast=false;
 '''+fragment+'''
 int main(){
  assert(ParseRunArgument("bench_quality=0")&&Old3dsPerformance::mode==0);
@@ -55,6 +55,8 @@ int main(){
  assert(ParseRunArgument("bench_after_route_capture=0")&&!afterRouteCapture);
  assert(ParseRunArgument("bench_skin_prepare_yield=1")&&g_picaSkinPrepareYield);
  assert(ParseRunArgument("bench_skin_prepare_yield=0")&&!g_picaSkinPrepareYield);
+ assert(ParseRunArgument("bench_particle_trig_cache=1")&&g_picaParticleTrigCache);
+ assert(ParseRunArgument("bench_particle_trig_cache=0")&&!g_picaParticleTrigCache);
  assert(ParseRunArgument("bench_native_contiguous=1")&&g_picaNativeContiguous);
  assert(ParseRunArgument("bench_native_contiguous=0")&&!g_picaNativeContiguous);
  assert(ParseRunArgument("bench_native_input_stage=1")&&radNativeSeek::stageInput);

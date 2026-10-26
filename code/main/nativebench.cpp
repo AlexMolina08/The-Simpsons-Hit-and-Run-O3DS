@@ -163,6 +163,8 @@ extern unsigned g_old3dsAdpcmVerified,g_old3dsAdpcmMismatches,g_old3dsAdpcmVerif
 #ifdef SRR2_OLD3DS_VISUAL_UPGRADE
 namespace Old3dsPerformance { float visibilityDistance=120.0f; }
 #endif
+extern bool g_picaParticleTrigCache;
+extern "C" void old3dsDumpParticleTrig(FILE*);
 namespace NativeBench {
 bool detail=false,collecting=false,validation=false,serviceProfile=false;
 #ifdef SRR2_OLD3DS_SUBMIT_PROFILE
@@ -487,6 +489,7 @@ static bool ParseRunArgument(const char* argument)
 #ifdef SRR2_OLD3DS_BOTTOM_MAP_15HZ
  else if(!strncmp(argument,"bench_bottom_animation_boost=",sizeof("bench_bottom_animation_boost=")-1))HandheldHudCadence::boostPickupAnimations=atoi(argument+sizeof("bench_bottom_animation_boost=")-1)!=0;
 #endif
+ else if(!strncmp(argument,"bench_particle_trig_cache=",sizeof("bench_particle_trig_cache=")-1))g_picaParticleTrigCache=atoi(argument+sizeof("bench_particle_trig_cache=")-1)!=0;
 #ifdef SRR2_OLD3DS_NATIVE_TEXTURE_BUNDLE
  else if(!strncmp(argument,"bench_native_contiguous=",sizeof("bench_native_contiguous=")-1))g_picaNativeContiguous=atoi(argument+sizeof("bench_native_contiguous=")-1)!=0;
  else if(!strncmp(argument,"bench_native_input_stage=",sizeof("bench_native_input_stage=")-1))radNativeSeek::stageInput=atoi(argument+sizeof("bench_native_input_stage=")-1)!=0;
@@ -1091,6 +1094,7 @@ void Dump(){if(!enabled)return;
  fprintf(f,"NATIVE_STEREO_TEST slider_override=%.4f command_audit=%u after_route_framebuffer=%u performance_capture=%u\n",stereoTestSlider,visualCapture,afterRouteCapture,!visualCapture && stereoTestSlider<0.0f);
  fprintf(f,"NATIVE_FUSED_TRIG enabled=1 nearest_only=1 bounded_radians=8192 per_call_counters=0 runtime_selector=0\n");
  old3dsDumpAdpcmVerification(f);
+ old3dsDumpParticleTrig(f);
  fprintf(f,"NATIVE_ADPCM_FAST enabled=%u calls=%u fallbacks=%u predictor_order_unchanged=%u budget_calls=%u budget_predictors=3 callbacks_deferred=0\n",g_old3dsAdpcmFast,g_old3dsAdpcmFastCalls,g_old3dsAdpcmFastFallbacks,g_old3dsAdpcmBudgetCalls==0,g_old3dsAdpcmBudgetCalls);
  fprintf(f,"NATIVE_ADPCM_VERIFY enabled=%u verified=%u mismatches=%u allocation_failures=%u performance_capture=%u\n",g_old3dsAdpcmVerify,g_old3dsAdpcmVerified,g_old3dsAdpcmMismatches,g_old3dsAdpcmVerifyAllocFailures,!g_old3dsAdpcmVerify);
  fprintf(f,"NATIVE_ADPCM_PRUNE enabled=%u exact_predictor_order=1 callbacks_deferred=0\n",g_old3dsAdpcmPrune);
