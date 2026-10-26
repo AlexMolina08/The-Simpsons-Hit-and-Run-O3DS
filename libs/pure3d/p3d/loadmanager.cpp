@@ -19,6 +19,9 @@ extern "C" unsigned g_p3dMainThreadId = 0;
 #include <constants/chunks.h>
 #include <p3d/queue.hpp>
 #include <string.h>
+#ifdef SRR2_OLD3DS_NATIVE_BENCH
+#include <radloadtiming.hpp>
+#endif
 
 #ifdef P3D_TRACK_LOAD_STATS
 #include <radmemory.hpp>
@@ -196,6 +199,9 @@ tLoadStatus  tP3DFileHandler::Load(tFile* file, tEntityStore* store)
         tChunkHandler* h = static_cast<tChunkHandler*>(radLoad->GetDataLoader(chunkFile->GetCurrentID()));
         if (h != NULL)
         {
+#ifdef SRR2_OLD3DS_NATIVE_BENCH
+            radLoadTiming::StageRegion workerChunk(chunkFile->GetCurrentID());
+#endif
             tLoadStatus status = h->Load(chunkFile, store);
             if(fileStatus == LOAD_ERROR) fileStatus = status;
         }

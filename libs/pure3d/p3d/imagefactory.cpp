@@ -1,3 +1,6 @@
+#ifdef SRR2_OLD3DS_NATIVE_BENCH
+#include <radloadtiming.hpp>
+#endif
 #ifdef SRR2_OLD3DS_NATIVE_TEXTURES
 #include <pddi/pica/texture.hpp>
 #ifdef SRR2_OLD3DS_NATIVE_ETC1
@@ -845,7 +848,14 @@ tTexture* tImageFactory::ParseAsTexture( tFile* file, char* inventoryName, const
                 tTexture* candidate=new tTexture;
                 if(candidate)
                 {
-                    if(candidate->Create(width,height,32,alphaDepthHint,nMipHint,PDDI_TEXTYPE_RGB,usageHint))
+                    bool created;
+                    {
+#ifdef SRR2_OLD3DS_NATIVE_BENCH
+                        radLoadTiming::StageRegion allocation(radLoadTiming::TextureAllocate);
+#endif
+                        created=candidate->Create(width,height,32,alphaDepthHint,nMipHint,PDDI_TEXTYPE_RGB,usageHint);
+                    }
+                    if(created)
                     {
                         builder.SetTexture(candidate);
                         prepared=static_cast<picaTexture*>(candidate->GetTexture())->UploadPreparedPNG(encoded,size
@@ -862,13 +872,21 @@ tTexture* tImageFactory::ParseAsTexture( tFile* file, char* inventoryName, const
         {
             tFileMem memory(encoded,size,false);
             memory.SetFilename(file->GetFullFilename());
+#ifdef SRR2_OLD3DS_NATIVE_BENCH
+            radLoadTiming::StageRegion decode(radLoadTiming::TextureDecode);
+#endif
             handler->CreateImage(&memory,&builder);
         }
         free(encoded);
     }
     else
 #endif
+    {
+#ifdef SRR2_OLD3DS_NATIVE_BENCH
+        radLoadTiming::StageRegion decode(radLoadTiming::TextureDecode);
+#endif
     handler->CreateImage(file, &builder);
+    }
     tTexture* texture = builder.GetTexture();
 
     if(texture)

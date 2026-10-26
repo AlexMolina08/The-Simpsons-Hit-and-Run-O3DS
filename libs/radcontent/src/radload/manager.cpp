@@ -4,6 +4,7 @@
 //=============================================================================
 
 #include <radload/manager.hpp>
+#include <main/nativebench.h>
 #include <string.h>
 #include <radload/utility/hashtable.hpp>
 #include <radload/utility/queue.hpp>
@@ -11,6 +12,59 @@
 
 #ifdef RADLOAD_USE_WATCHER
 #include <raddebugwatch.hpp>
+#endif
+
+#ifdef SRR2_OLD3DS_NATIVE_BENCH
+#include <radload/loadtiming.hpp>
+#include <cstdio>
+namespace {
+radLoadTiming::State workerTiming;
+bool WorkerTimingEnabled(){return NativeBench::serviceProfile && NativeBench::collecting && !NativeBench::OnCaptureThread();}
+struct WorkerRegion {
+    bool active=false;const char* previous=nullptr;char ownedLabel[96];
+    WorkerRegion(const WorkerRegion&)=delete;WorkerRegion& operator=(const WorkerRegion&)=delete;
+    explicit WorkerRegion(const char* label){
+        if(WorkerTimingEnabled()){
+            std::strncpy(ownedLabel,label?label:"unnamed",sizeof(ownedLabel)-1);
+            ownedLabel[sizeof(ownedLabel)-1]=0;
+            previous=workerTiming.Enter(ownedLabel,svcGetSystemTick(),NativeBench::CurrentRouteMs());active=true;
+        }
+    }
+    ~WorkerRegion(){if(active){
+        if(WorkerTimingEnabled())workerTiming.Leave(previous,svcGetSystemTick(),NativeBench::CurrentRouteMs());
+        else workerTiming.Cancel(previous);
+    }}
+};
+void PauseWorkerTiming(){if(WorkerTimingEnabled())workerTiming.Pause(svcGetSystemTick(),NativeBench::CurrentRouteMs());}
+void ResumeWorkerTiming(){if(WorkerTimingEnabled())workerTiming.Resume(svcGetSystemTick());}
+}
+radLoadTiming::StageRegion::StageRegion(unsigned id){
+    if(WorkerTimingEnabled()){
+        previous=workerTiming.EnterStage(id,svcGetSystemTick(),NativeBench::CurrentRouteMs());active=true;
+    }
+}
+radLoadTiming::StageRegion::~StageRegion(){if(active){
+    if(WorkerTimingEnabled())workerTiming.LeaveStage(previous,svcGetSystemTick(),NativeBench::CurrentRouteMs());
+    else workerTiming.CancelStage(previous);
+}}
+extern "C" void radLoadDumpWorkerSlices(FILE* file){
+    fprintf(file,"NATIVE_LOAD_WORKER enabled=%u records=%u samples=%u main_mutex_serialized=1 excludes_yielded_time=1 wall_not_cpu=1 diagnostic_only=1\n",NativeBench::serviceProfile,workerTiming.count,workerTiming.samples);
+    for(unsigned i=0;i<workerTiming.count;++i){const auto& s=workerTiming.longest[i];
+        const char* phase="chunk";
+        switch(s.stage){
+            case radLoadTiming::NativeTexture:phase="native_texture";break;
+            case radLoadTiming::NativeTextureHash:phase="native_hash";break;
+            case radLoadTiming::NativeTextureOpen:phase="native_open_seek";break;
+            case radLoadTiming::NativeTextureRead:phase="native_read_verify";break;
+            case radLoadTiming::TextureAllocate:phase="texture_allocate";break;
+            case radLoadTiming::TextureDecode:phase="texture_decode";break;
+            case radLoadTiming::TextureFlush:phase="texture_flush";break;
+            case radLoadTiming::SkinInput:phase="skin_input";break;
+            case radLoadTiming::SkinPrepare:phase="skin_prepare";break;
+        }
+        fprintf(file,"NATIVE_LOAD_SLICE file=%s chunk=0x%08x phase=%s route_ms=%u start_tick=%llu span_us=%.3f\n",s.label,s.stage,phase,s.routeMs,(unsigned long long)s.start,s.ticks*1000000.0/SYSCLOCK_ARM11);
+    }
+}
 #endif
 
 radLoadManagerWrapper radLoad;
@@ -223,7 +277,12 @@ void radLoadManager::InternalService()
                     }
                     radMemoryAllocator old = ::radMemorySetCurrentAllocator (item->GetOptions()->allocator);
 
+                    {
+#ifdef SRR2_OLD3DS_NATIVE_BENCH
+                    WorkerRegion region(filename);
+#endif
                     loader->LoadFile( item->GetOptions(), static_cast<radLoadUpdatableRequest*>( item ) );
+                    }
                     
                     ::radMemorySetCurrentAllocator (old);
                     if( m_pCurrent->GetState() == LOADING )
@@ -392,6 +451,10 @@ void radLoadManager::Service()
 
     if(!m_pCallbacks->Empty())
     {
+        NB_SCOPE(LoadCallback);
+#ifdef SRR2_OLD3DS_NATIVE_BENCH
+        WorkerRegion region("completion_callback");
+#endif
         radLoadCallback* callback = m_pCallbacks->Pop();
         callback->Done();
         callback->Release();
@@ -407,10 +470,17 @@ void radLoadManager::SetSyncLoading( bool sync )
 
 void radLoadManager::SwitchTasks()
 {
+    NB_SCOPE(LoadHandoff);
     O3_POOL(Streaming,LoadHandoff);
+#ifdef SRR2_OLD3DS_NATIVE_BENCH
+    PauseWorkerTiming();
+#endif
     m_pMutex->Unlock();
-    radThreadSleep(0);
-    m_pMutex->Lock();
+    { NB_SCOPE(LoadYield); radThreadSleep(0); }
+    { NB_SCOPE(LoadLock); m_pMutex->Lock(); }
+#ifdef SRR2_OLD3DS_NATIVE_BENCH
+    ResumeWorkerTiming();
+#endif
 }
 
 void radLoadManager::LendDuringWait()

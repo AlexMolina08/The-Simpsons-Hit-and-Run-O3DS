@@ -2,6 +2,13 @@
 #include <main/old3dsexperiment.h>
 #include <pddi/pica/texture.hpp>
 #include <pddi/pica/context.hpp>
+#include <pddi/pica/gpuuploadguard.hpp>
+#ifdef SRR2_OLD3DS_NATIVE_BENCH
+#include <radloadtiming.hpp>
+#endif
+#if defined(SRR2_OLD3DS_NATIVE_BENCH) && defined(SRR2_OLD3DS_VRAM_TEXTURES)
+#include <main/nativebench.h>
+#endif
 #include <pddi/pica/swizzle.hpp>
 #ifdef SRR2_OLD3DS_TEXTURE_TILES
 #include <pddi/pica/texturetile.hpp>
@@ -21,19 +28,30 @@ extern "C" {
 #include <pddi/pica/nativebundle.hpp>
 #include <bundle_index.hpp>
 bool g_picaNativeBundleEnabled=true;
+#ifdef SRR2_OLD3DS_NATIVE_BENCH
+bool g_picaNativeContiguous=false;
+static unsigned nativeContiguousBlocks=0,nativeContiguousFallbacks=0;
+#endif
 namespace {
 FILE* OpenNativeBundle()
 {
     char bundled[128];
     snprintf(bundled,sizeof(bundled),"romfs:/%s",picaNativeBundle::BundlePath);
     FILE* file=fopen(bundled,"rb");
-    return file ? file : fopen(picaNativeBundle::BundlePath,"rb");
+    if(!file)file=fopen(picaNativeBundle::BundlePath,"rb");
+#ifdef SRR2_OLD3DS_NATIVE_BENCH
+    if(file && g_picaNativeContiguous)setvbuf(file,nullptr,_IONBF,0);
+#endif
+    return file;
 }
 struct NativeBundleSlot {void* owner=nullptr;FILE* file=nullptr;bool active=false;};
 NativeBundleSlot bundleSlots[2];
 struct NativeBundleFile {
     FILE* file=nullptr;NativeBundleSlot* slot=nullptr;
     NativeBundleFile(){
+#ifdef SRR2_OLD3DS_NATIVE_BENCH
+        radLoadTiming::StageRegion open(radLoadTiming::NativeTextureOpen);
+#endif
         void* tls=getThreadLocalStorage();
         for(auto& candidate:bundleSlots){
             void* owner=__atomic_load_n(&candidate.owner,__ATOMIC_ACQUIRE);
@@ -79,6 +97,9 @@ struct NativeTextureCost {
     bool enabled;
     unsigned outcome=2,active=Other;
     u64 last=0,ticks[BucketCount]={};
+#ifdef SRR2_OLD3DS_NATIVE_BENCH
+    radLoadTiming::StageRegion worker{radLoadTiming::NativeTexture};
+#endif
     explicit NativeTextureCost(bool selected):enabled(selected){if(enabled)last=svcGetSystemTick();}
     unsigned Select(unsigned next){
         const unsigned previous=active;
@@ -87,7 +108,14 @@ struct NativeTextureCost {
     }
     struct Phase {
         NativeTextureCost& cost;unsigned previous;
-        Phase(NativeTextureCost& selected,unsigned next):cost(selected),previous(cost.Select(next)){}
+#ifdef SRR2_OLD3DS_NATIVE_BENCH
+        radLoadTiming::StageRegion worker;
+#endif
+        Phase(NativeTextureCost& selected,unsigned next):cost(selected),previous(cost.Select(next))
+#ifdef SRR2_OLD3DS_NATIVE_BENCH
+            ,worker(radLoadTiming::NativeTexture+next)
+#endif
+        {}
         ~Phase(){cost.Select(previous);}
     };
     ~NativeTextureCost(){
@@ -121,6 +149,9 @@ extern "C" void picaDumpNativeTextures(FILE* f)
 #endif
 #ifdef SRR2_OLD3DS_NATIVE_TEXTURE_BUNDLE
     fprintf(f,"NATIVE_TEXTURE_BUNDLE enabled=%u entries=%u index_bytes=%u bundle_bytes=%u sha256=%s source_bound_payload_sha=1 whole_bundle_hash_at_runtime=0\n",g_picaNativeBundleEnabled,picaNativeBundle::EntryCount,unsigned(sizeof(picaNativeBundle::Entries)),picaNativeBundle::BundleBytes,picaNativeBundle::BundleSHA256);
+#ifdef SRR2_OLD3DS_NATIVE_BENCH
+    fprintf(f,"NATIVE_TEXTURE_IO contiguous_requested=%u blocks=%u fallbacks=%u max_temp_per_read_bytes=%u whole_session=1\n",g_picaNativeContiguous,nativeContiguousBlocks,nativeContiguousFallbacks,picaNativeTexture::HeaderBytes+picaNativeTexture::ContiguousLimit);
+#endif
 #endif
     fprintf(f,"NATIVE_TEXTURES enabled=%u hits=%u misses=%u invalid=%u bytes=%u version=%u\n",
         g_picaNativeTexturesEnabled,__atomic_load_n(&nativeTextureHits,__ATOMIC_RELAXED),__atomic_load_n(&nativeTextureMisses,__ATOMIC_RELAXED),__atomic_load_n(&nativeTextureInvalid,__ATOMIC_RELAXED),__atomic_load_n(&nativeTextureBytes,__ATOMIC_RELAXED),preparedVersion);
@@ -151,6 +182,14 @@ struct picaVramAllocation { picaVramAllocation* next; void* data; unsigned bytes
 static picaVramAllocation* retiredVram;
 static unsigned vramTextureBytes, vramTexturePeak, vramTextureCopies;
 static unsigned vramTextureEligible, vramTextureInFrame, vramTextureFailures;
+#ifdef SRR2_OLD3DS_NATIVE_BENCH
+static unsigned vramTextureHandoffSkipped;
+bool g_picaVramCapturePromote=true,g_picaVramCopyDiagnostics=false;
+static unsigned vramCaptureSkipped,vramCaptureCopies,vramCaptureAllocUs,vramCaptureCopyUs,vramCaptureReleaseUs,vramCaptureMaxUs,vramCaptureMaxCopyUs;
+#endif
+#ifdef SRR2_OLD3DS_VISUAL_UPGRADE
+static unsigned vramWorldMapEligible,vramWorldMapCopies;
+#endif
 static void RetireVram(picaVramAllocation* allocation)
 {
     allocation->next=retiredVram;retiredVram=allocation;
@@ -168,6 +207,14 @@ extern "C" void picaDumpVramTextures()
     printf("OLD3DS_VRAM_TEXTURES used=%u peak=%u copies=%u eligible=%u in_frame=%u failures=%u free=%lu\n",
         vramTextureBytes,vramTexturePeak,vramTextureCopies,vramTextureEligible,
         vramTextureInFrame,vramTextureFailures,(unsigned long)vramSpaceFree());
+#ifdef SRR2_OLD3DS_NATIVE_BENCH
+    printf("OLD3DS_VRAM_HANDOFF upload_guard=1 skipped=%u scope=whole_session\n",vramTextureHandoffSkipped);
+    printf("OLD3DS_VRAM_CAPTURE promote=%u diagnostics=%u skipped=%u copies=%u alloc_us=%u copy_us=%u release_us=%u maximum_us=%u maximum_copy_us=%u measured_route_only=1 wall_not_cpu=1\n",g_picaVramCapturePromote,g_picaVramCopyDiagnostics,vramCaptureSkipped,vramCaptureCopies,vramCaptureAllocUs,vramCaptureCopyUs,vramCaptureReleaseUs,vramCaptureMaxUs,vramCaptureMaxCopyUs);
+#endif
+#ifdef SRR2_OLD3DS_VISUAL_UPGRADE
+    printf("OLD3DS_WORLD_VRAM eligible=%u copies=%u scope=whole_session budget_unchanged=1 reserve_unchanged=1\n",
+        vramWorldMapEligible,vramWorldMapCopies);
+#endif
 }
 class picaVramUpload
 {
@@ -194,7 +241,16 @@ void picaTexture::TryPromoteVram()
     ++vramTextureEligible;
     // This API waits for copy completion outside a Citro3D frame. In-frame
     // copies are asynchronous, so retain the original allocation in that case.
+    // The renderer also blocks uploads while lending the loader mutex across
+    // FrameBegin: Citro3D can be in-frame before g_picaInFrame becomes true.
     if(g_picaInFrame){++vramTextureInFrame;return;}
+    if(picaUpload::Blocked()){
+        ++vramTextureInFrame;
+#ifdef SRR2_OLD3DS_NATIVE_BENCH
+        ++vramTextureHandoffSkipped;
+#endif
+        return;
+    }
     const unsigned copyBytes=C3D_TexCalcTotalSize(tex.size,tex.maxLevel);
 #ifdef SRR2_OLD3DS_NATIVE_ETC1
     const unsigned bytes=nativeAllocationBytes?nativeAllocationBytes:copyBytes;
@@ -204,6 +260,12 @@ void picaTexture::TryPromoteVram()
     const unsigned budget=2*1024*1024,reserve=2*1024*1024;
     if(bytes<8192 || bytes>131072 || bytes>budget-vramTextureBytes ||
        vramSpaceFree()<bytes+reserve)return;
+#ifdef SRR2_OLD3DS_NATIVE_BENCH
+    const bool capture=NativeBench::collecting;
+    if(capture && !g_picaVramCapturePromote){++vramCaptureSkipped;return;}
+    const bool timed=capture && g_picaVramCopyDiagnostics;
+    const u64 allocationStart=timed?svcGetSystemTick():0;
+#endif
     picaVramAllocation* node=(picaVramAllocation*)malloc(sizeof(picaVramAllocation));
     if(!node){++vramTextureFailures;return;}
     node->data=vramAlloc(bytes);
@@ -211,8 +273,26 @@ void picaTexture::TryPromoteVram()
     node->bytes=bytes;node->next=NULL;
     // UploadLevel already flushed every mip. This is a raw byte copy, with no
     // display-transfer format conversion, resampling or color quantization.
+#ifdef SRR2_OLD3DS_NATIVE_BENCH
+    const u64 copyStart=timed?svcGetSystemTick():0;
+#endif
     C3D_SyncTextureCopy((u32*)tex.data,0,(u32*)node->data,0,copyBytes,8);
+#ifdef SRR2_OLD3DS_NATIVE_BENCH
+    const u64 releaseStart=timed?svcGetSystemTick():0;
+#endif
     linearFree(tex.data);tex.data=node->data;vramAllocation=node;
+#ifdef SRR2_OLD3DS_NATIVE_BENCH
+    if(timed){
+        const u64 end=svcGetSystemTick();
+        const unsigned allocUs=unsigned((copyStart-allocationStart)*1000000/SYSCLOCK_ARM11);
+        const unsigned copyUs=unsigned((releaseStart-copyStart)*1000000/SYSCLOCK_ARM11);
+        const unsigned releaseUs=unsigned((end-releaseStart)*1000000/SYSCLOCK_ARM11);
+        const unsigned totalUs=allocUs+copyUs+releaseUs;
+        ++vramCaptureCopies;vramCaptureAllocUs+=allocUs;vramCaptureCopyUs+=copyUs;vramCaptureReleaseUs+=releaseUs;
+        if(totalUs>vramCaptureMaxUs)vramCaptureMaxUs=totalUs;
+        if(copyUs>vramCaptureMaxCopyUs)vramCaptureMaxCopyUs=copyUs;
+    }
+#endif
     vramTextureBytes+=bytes;++vramTextureCopies;
     if(vramTextureBytes>vramTexturePeak)vramTexturePeak=vramTextureBytes;
 }
@@ -883,7 +963,12 @@ bool picaTexture::UploadPreparedPNG(const void* encoded,unsigned bytes,bool worl
 {
     if(!created || valid || !nativeEligible || type!=PDDI_TEXTYPE_RGB ||
        !ReadPrepared(encoded,bytes,picaNativeTexture::EncodedPNG,world))return false;
+    {
+#ifdef SRR2_OLD3DS_NATIVE_BENCH
+    radLoadTiming::StageRegion flush(radLoadTiming::TextureFlush);
+#endif
     C3D_TexFlush(&tex);
+    }
 #ifdef SRR2_OLD3DS_VRAM_TEXTURES
     TryPromoteVram();
 #endif
@@ -956,11 +1041,26 @@ bool picaTexture::ReadPrepared(const void* source,unsigned sourceBytes,unsigned 
         if(!entry){cost.outcome=1;NativeTextureMiss(header);return false;}
         const unsigned previous=cost.Select(NativeTextureCost::Open);
         NativeBundleFile input;
-        const bool positioned=input.file && entry->bytes<=picaNativeBundle::BundleBytes && entry->offset<=picaNativeBundle::BundleBytes-entry->bytes && !fseek(input.file,entry->offset,SEEK_SET);
+        bool positioned;
+        {
+#ifdef SRR2_OLD3DS_NATIVE_BENCH
+            radLoadTiming::StageRegion seek(radLoadTiming::NativeTextureOpen);
+#endif
+            positioned=input.file && entry->bytes<=picaNativeBundle::BundleBytes && entry->offset<=picaNativeBundle::BundleBytes-entry->bytes && !fseek(input.file,entry->offset,SEEK_SET);
+        }
         cost.Select(previous);
         bool ok=false;
         {NativeTextureCost::Phase phase(cost,NativeTextureCost::ReadCheck);
-         ok=positioned && picaNativeTexture::Read(input.file,header,bytes,tex.data,hash,g_picaYieldHook,false);}
+         if(positioned){
+#ifdef SRR2_OLD3DS_NATIVE_BENCH
+             if(g_picaNativeContiguous){
+                 bool used=false;
+                 ok=picaNativeTexture::ReadContiguous(input.file,header,bytes,tex.data,hash,g_picaYieldHook,false,&used);
+                 if(used)++nativeContiguousBlocks;else ++nativeContiguousFallbacks;
+             }else
+#endif
+             ok=picaNativeTexture::Read(input.file,header,bytes,tex.data,hash,g_picaYieldHook,false);
+         }}
         cost.outcome=ok?0:2;
         if(ok){__atomic_fetch_add(&nativeTextureHits,1u,__ATOMIC_RELAXED);__atomic_fetch_add(&nativeTextureBytes,bytes,__ATOMIC_RELAXED);}
         else __atomic_fetch_add(&nativeTextureInvalid,1u,__ATOMIC_RELAXED);

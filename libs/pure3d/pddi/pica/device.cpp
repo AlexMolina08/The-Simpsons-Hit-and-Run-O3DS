@@ -144,6 +144,9 @@ pddiTexture* picaDevice::NewTexture(pddiTextureDesc* desc)
 pddiShader* picaDevice::NewShader(const char* name, const char*)
 {
     picaMat* mat = new picaMat((picaContext*)context);
+#ifdef SRR2_OLD3DS_VISUAL_UPGRADE
+    mat->SetVisualType(name);
+#endif
     if(mat->GetLastError() != PDDI_OK)
     {
         delete mat;

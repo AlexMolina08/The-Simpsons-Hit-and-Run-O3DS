@@ -5,6 +5,9 @@
 #include <pddi/pdditype.hpp>
 
 struct picaVramAllocation;
+#if defined(SRR2_OLD3DS_NATIVE_BENCH) && defined(SRR2_OLD3DS_VRAM_TEXTURES)
+extern bool g_picaVramCapturePromote,g_picaVramCopyDiagnostics;
+#endif
 #ifdef SRR2_OLD3DS_NATIVE_TEXTURES
 struct picaNativeTextureStats { unsigned hits,misses,invalid,bytes,cost[3][5]; };
 void picaSnapshotNativeTextures(picaNativeTextureStats&);

@@ -1,6 +1,7 @@
 #include <main/old3dscadence.h>
 #include <pddi/pica/display.hpp>
 #include <pddi/pica/context.hpp>
+#include <pddi/pica/gpuuploadguard.hpp>
 #include <pddi/base/debug.hpp>
 #include <main/old3dsdiag.h>
 #include <stdio.h>
@@ -202,6 +203,7 @@ static void picaWriteEye(float shift)
 #endif
 }
 
+namespace picaUpload { unsigned gpuHandoff=0; }
 extern "C" int      g_picaInFrame        = 0;
 #ifdef SRR2_OLD_3DS
 extern "C" int g_picaWorldScaleAllowed = 0;
@@ -493,27 +495,32 @@ void picaDisplay::BeginFrame(void)
     }
     if(!inFrame && target != NULL)
     {
-        if(g_picaGpuWaitHook) g_picaGpuWaitHook(1);
-
-#ifdef SRR2_OLD_3DS
-        const u64 waitTick = svcGetSystemTick();
-#endif
         bool frameOk;
         {
-#ifdef SRR2_OLD3DS_CAUSAL_DIAG
-            O3ExperimentTimer causalWait(O3E_WAIT);
+#ifdef SRR2_OLD3DS_VRAM_TEXTURES
+            picaUpload::Handoff uploadBlock;
 #endif
-            frameOk = C3D_FrameBegin(0);
-        }
+            if(g_picaGpuWaitHook) g_picaGpuWaitHook(1);
+
 #ifdef SRR2_OLD_3DS
-        g_picaFrameWaitMs += (svcGetSystemTick() - waitTick) * 1000.0 / SYSCLOCK_ARM11;
-        // A failed begin submits no frame at all. The old code discarded this
-        // result, so a busy GPU was invisible in the diagnostics.
-        if(frameOk) ++g_old3dsFrameBeginOk;
-        else        ++g_old3dsFrameBeginBusy;
+            const u64 waitTick = svcGetSystemTick();
+#endif
+            {
+#ifdef SRR2_OLD3DS_CAUSAL_DIAG
+                O3ExperimentTimer causalWait(O3E_WAIT);
+#endif
+                frameOk = C3D_FrameBegin(0);
+            }
+#ifdef SRR2_OLD_3DS
+            g_picaFrameWaitMs += (svcGetSystemTick() - waitTick) * 1000.0 / SYSCLOCK_ARM11;
+            // A failed begin submits no frame at all. The old code discarded this
+            // result, so a busy GPU was invisible in the diagnostics.
+            if(frameOk) ++g_old3dsFrameBeginOk;
+            else        ++g_old3dsFrameBeginBusy;
 #endif
 
-        if(g_picaGpuWaitHook) g_picaGpuWaitHook(0);
+            if(g_picaGpuWaitHook) g_picaGpuWaitHook(0);
+        }
 
         if(!frameOk)
         {

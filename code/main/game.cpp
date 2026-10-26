@@ -798,6 +798,10 @@ void Game::Run()
         // during the newspaper entrance, then restore normal loading throughput.
         g_p3dYieldTimeUs = ( ctx == CONTEXT_GAMEPLAY || ctx == CONTEXT_PAUSE ||
                             (ctx == CONTEXT_LOADING_GAMEPLAY && old3dsNewspaperAnimating()) ) ? 8000u : 52000u;
+#ifdef SRR2_OLD3DS_NATIVE_BENCH
+        if(ctx==CONTEXT_GAMEPLAY && NativeBench::LoaderSliceUs())
+            g_p3dYieldTimeUs=NativeBench::LoaderSliceUs();
+#endif
 #endif
         DEMOPROFILE( g_DemoProfiler.Start(PROFILE_CHANNEL_ALL); )
 

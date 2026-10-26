@@ -80,6 +80,12 @@ extern "C" void radSoundCtrServiceLid(float volume)
     ctrLidGreeting::Service(volume);
 }
 
+#ifdef SRR2_OLD3DS_PREPARED_AUDIO
+#include "preparedaudio.hpp"
+bool g_old3dsPreparedAudio=false;
+static ctrPreparedAudio::Cache s_PreparedAudio;
+#endif
+
 static u16 s_AdpcmCoefs[ 16 ] =
 {
        0,                0,
@@ -271,6 +277,11 @@ static AdpcmVerification s_AdpcmVerification[256];
 static unsigned s_AdpcmVerificationCount=0;
 void old3dsDumpAdpcmVerification(FILE* file)
 {
+#ifdef SRR2_OLD3DS_PREPARED_AUDIO
+    fprintf(file,"NATIVE_PREPARED_AUDIO enabled=%u loaded=%u bytes=%u entries=%u hits=%u misses=%u compared_bytes=%u callback_io=0 exact_pcm_keys=1 predictors=3\n",
+        g_old3dsPreparedAudio,s_PreparedAudio.Bytes()!=0,s_PreparedAudio.Bytes(),s_PreparedAudio.Entries(),
+        s_PreparedAudio.hits,s_PreparedAudio.misses,s_PreparedAudio.comparedBytes);
+#endif
     for(unsigned i=0;i<s_AdpcmVerificationCount;++i)
     {
         const AdpcmVerification& r=s_AdpcmVerification[i];
@@ -327,6 +338,13 @@ static unsigned int AdpcmEncodeInPlace( void * pData, unsigned int numSamples )
 #endif
     const bool reduced = fast && !g_old3dsAdpcmVerify && Old3dsPerformance::ReducedAudioSearch();
     if(reduced) ++g_old3dsAdpcmBudgetCalls;
+#ifdef SRR2_OLD3DS_PREPARED_AUDIO
+    if(reduced && g_old3dsPreparedAudio)
+    {
+        unsigned cachedBytes=0;
+        if(s_PreparedAudio.Copy(pData,numSamples,cachedBytes))return cachedBytes;
+    }
+#endif
     const unsigned int bytes = reduced ? AdpcmEncodeInPlaceKernel<3>(pData,numSamples)
         : fast ? AdpcmEncodeInPlaceKernel<2>(pData,numSamples)
         : g_old3dsAdpcmPrune ? AdpcmEncodeInPlaceKernel<1>(pData,numSamples)
@@ -1103,6 +1121,9 @@ static radSoundHalSystemCtr * g_pSystem = NULL;
 
 void radSoundHalSystemInitialize( radMemoryAllocator allocator )
 {
+#ifdef SRR2_OLD3DS_PREPARED_AUDIO
+    if(g_old3dsPreparedAudio)s_PreparedAudio.Load("romfs:/sound/3ds-dsp-clips.bin");
+#endif
     rAssert( g_pSystem == NULL );
 
     g_pSystem = new( allocator ) radSoundHalSystemCtr( allocator );
@@ -1115,6 +1136,9 @@ void radSoundHalSystemTerminate( void )
 {
     radSoundHalListener::Terminate( );
     SafeRelease( g_pSystem );
+#ifdef SRR2_OLD3DS_PREPARED_AUDIO
+    s_PreparedAudio.Clear();
+#endif
 }
 
 bool radSoundHal3dsAvailable( void )
