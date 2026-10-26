@@ -13,10 +13,9 @@ with tempfile.TemporaryDirectory(prefix='srr-bench-args-') as directory:
 #include <initializer_list>
 static bool portraitActor=false,portraitNPC=false,portraitTraffic=false,portraitPlayerObserver=false,g_old3dsPreparedAudio=false,g_old3dsPreparedAudioShort=false;static char portraitModel[32]={},portraitActorModel[32]="male6";static float stereoTestSlider=-1,portraitDistance=1,portraitBearing=45;
 namespace Old3dsPerformance { unsigned mode=1; }
-namespace radNativeSeek { bool enabled=false,stageInput=false; }
 namespace HandheldHudCadence { bool boostPickupAnimations=true; }
 namespace Old3dsRecurring { bool requested=false,focusDropWindow=false;unsigned stationaryMs=0,windowStartMs=15000,windowEndMs=18000; }
-static unsigned seconds=25,warmup=8,seed=1;static bool hold=false,reload=false,serviceProfile=false,afterRouteCapture=false,vehicleProfile=false,g_picaSkinPrepareYield=false,g_picaNativeContiguous=false,g_picaParticleTrigCache=false,g_old3dsTrafficFacingOnly=false,g_old3dsAdpcmPrune=false,g_old3dsAdpcmVerify=false,g_old3dsAdpcmFast=false;
+static unsigned seconds=25,warmup=8,seed=1;static bool hold=false,reload=false,serviceProfile=false,afterRouteCapture=false,vehicleProfile=false,g_picaSkinPrepareYield=false,g_old3dsTrafficFacingOnly=false,g_old3dsAdpcmPrune=false,g_old3dsAdpcmVerify=false,g_old3dsAdpcmFast=false;
 '''+fragment+'''
 int main(){
  assert(ParseRunArgument("bench_quality=0")&&Old3dsPerformance::mode==0);
@@ -55,14 +54,6 @@ int main(){
  assert(ParseRunArgument("bench_after_route_capture=0")&&!afterRouteCapture);
  assert(ParseRunArgument("bench_skin_prepare_yield=1")&&g_picaSkinPrepareYield);
  assert(ParseRunArgument("bench_skin_prepare_yield=0")&&!g_picaSkinPrepareYield);
- assert(ParseRunArgument("bench_particle_trig_cache=1")&&g_picaParticleTrigCache);
- assert(ParseRunArgument("bench_particle_trig_cache=0")&&!g_picaParticleTrigCache);
- assert(ParseRunArgument("bench_native_contiguous=1")&&g_picaNativeContiguous);
- assert(ParseRunArgument("bench_native_contiguous=0")&&!g_picaNativeContiguous);
- assert(ParseRunArgument("bench_native_input_stage=1")&&radNativeSeek::stageInput);
- assert(ParseRunArgument("bench_native_input_stage=0")&&!radNativeSeek::stageInput);
- assert(ParseRunArgument("bench_native_seek_lend=1")&&radNativeSeek::enabled);
- assert(ParseRunArgument("bench_native_seek_lend=0")&&!radNativeSeek::enabled);
  assert(ParseRunArgument("bench_bottom_animation_boost=0")&&!HandheldHudCadence::boostPickupAnimations);
  assert(ParseRunArgument("bench_bottom_animation_boost=1")&&HandheldHudCadence::boostPickupAnimations);
  assert(ParseRunArgument("bench_portrait_actor=fem1")&&portraitActor&&!strcmp(portraitActorModel,"fem1"));
@@ -87,6 +78,7 @@ int main(){
  assert(ParseRunArgument("bench_vehicle_profile=1")&&vehicleProfile);
  assert(!ParseRunArgument("bench_seconds_wrong=2")&&seconds==60);
  assert(!ParseRunArgument("bench_route=road"));
+ for(const char* removed:{"bench_native_contiguous=1","bench_native_input_stage=1","bench_native_seek_lend=1","bench_particle_trig_cache=1","bench_billboard_batch=1","bench_billboard_compact=1"})assert(!ParseRunArgument(removed));
  assert(!ParseRunArgument("bench_candidate_flip=1"));
  assert(!ParseRunArgument("bench_candidate_ab=1"));
  assert(!ParseRunArgument("bench_candidate_mask=9"));

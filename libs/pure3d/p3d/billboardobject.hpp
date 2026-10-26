@@ -183,9 +183,6 @@ public:
     tBillboardQuadGroup();
 
     virtual void Display();
-#if defined(SRR2_OLD3DS_NATIVE_BENCH) && defined(SRR2_OLD3DS_QUAD_STREAM)
-    static bool DisplayBatch(tBillboardQuadGroup* const*,const rmt::Matrix* const*,unsigned);
-#endif
 
     void SetShader(tShader* mat);
     tShader* GetShader() const                          { return shader; }

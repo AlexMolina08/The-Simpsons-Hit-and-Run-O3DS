@@ -16,7 +16,6 @@
 
 #ifdef SRR2_OLD3DS_NATIVE_BENCH
 #include <radload/loadtiming.hpp>
-#include <radnativeseek.hpp>
 #include <cstdio>
 namespace {
 radLoadTiming::State workerTiming;
@@ -69,16 +68,7 @@ extern "C" void radLoadDumpWorkerSlices(FILE* file){
 }
 #endif
 
-#ifdef SRR2_OLD3DS_NATIVE_BENCH
-namespace radNativeSeek {
-bool enabled=false;
-bool stageInput=false;
-static bool draining=false;
-static void* owner=nullptr;
-static unsigned begun=0,completed=0;
-static u64 started=0,totalOutside=0,maxOutside=0;
-}
-#endif
+
 
 radLoadManagerWrapper radLoad;
 
@@ -112,32 +102,7 @@ ILoadManager* radLoadInstance()
     return ILoadManager::s_instance;
 }
 
-#ifdef SRR2_OLD3DS_NATIVE_BENCH
-namespace radNativeSeek {
-void* Begin()
-{
-    if(!enabled || draining || !NativeBench::collecting)return nullptr;
-    auto* manager=static_cast<radLoadManager*>(radLoadInstance());
-    return manager && manager->BeginNativeSeek()?manager:nullptr;
-}
-void End(void* selected)
-{
-    static_cast<radLoadManager*>(selected)->EndNativeSeek();
-}
-void Drain()
-{
-    if(!owner || !NativeBench::OnCaptureThread())return;
-    // Restore the original paused-worker assumption before benchmark teardown.
-    const bool previous=draining;draining=true;
-    while(owner)static_cast<radLoadManager*>(owner)->SwitchTasks();
-    draining=previous;
-}
-void Dump(FILE* file)
-{
-    fprintf(file,"NATIVE_SEEK_LEND enabled=%u begun=%u completed=%u active=%u total_outside_us=%.3f max_outside_us=%.3f outside_wall_not_cpu=1 scope=whole_session\n",enabled,begun,completed,owner!=nullptr,totalOutside*1000000.0/SYSCLOCK_ARM11,maxOutside*1000000.0/SYSCLOCK_ARM11);
-}
-}
-#endif
+
 
 radLoadManager::radLoadManager( radLoadInit& init )
 :
@@ -412,9 +377,6 @@ void radLoadManager::Load( const char* filename, radLoadRequest** request )
 unsigned int radLoadManager::LoadThreadEntry( void* data )
 {
     radLoadManager* manager = static_cast<radLoadManager*>( data );
-#ifdef SRR2_OLD3DS_NATIVE_BENCH
-    __atomic_store_n(&manager->m_nativeSeekWorker,getThreadLocalStorage(),__ATOMIC_RELEASE);
-#endif
     manager->InternalService();
     return 0;
 }
@@ -526,31 +488,7 @@ void radLoadManager::SwitchTasks()
 #endif
 }
 
-#ifdef SRR2_OLD3DS_NATIVE_BENCH
-bool radLoadManager::BeginNativeSeek()
-{
-    // This worker holds the mutex throughout LoadFile except at explicit yields.
-    // A native FILE seek has no engine callback and touches no published object.
-    if(__atomic_load_n(&m_nativeSeekWorker,__ATOMIC_ACQUIRE)!=getThreadLocalStorage() ||
-       radNativeSeek::owner || !m_pCurrent || m_bDone)return false;
-    radNativeSeek::owner=this;radNativeSeek::started=svcGetSystemTick();
-    ++radNativeSeek::begun;
-    PauseWorkerTiming();
-    m_pMutex->Unlock();
-    return true;
-}
-void radLoadManager::EndNativeSeek()
-{
-    // The current request retains its reference, and this manager outlives its
-    // worker. Reclaim this exact mutex even if another global manager is selected.
-    m_pMutex->Lock();
-    const u64 span=svcGetSystemTick()-radNativeSeek::started;
-    radNativeSeek::totalOutside+=span;
-    if(span>radNativeSeek::maxOutside)radNativeSeek::maxOutside=span;
-    ++radNativeSeek::completed;radNativeSeek::owner=nullptr;
-    ResumeWorkerTiming();
-}
-#endif
+
 
 void radLoadManager::LendDuringWait()
 {

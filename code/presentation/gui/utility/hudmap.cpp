@@ -1795,15 +1795,6 @@ namespace
             Scrooby::Sprite* background=page?page->GetSprite("MapBgd0"):NULL;
             return background?const_cast<tSprite*>(background->GetRawSprite()):NULL;
         };
-#if defined(SRR2_OLD3DS_BOTTOM_MAP_15HZ) && defined(SRR2_OLD3DS_NATIVE_BENCH)
-        // Gameplay owns its background through the current HUD. If that image
-        // is absent, Board's gradient already supplies the background.
-        // No pointer is retained across a screen or level change.
-        if(HandheldHudCadence::directHudBackground && hud){
-            ++HandheldHudCadence::hudBackgroundDirect;return currentBackground();
-        }
-        ++HandheldHudCadence::hudBackgroundLookups;
-#endif
         tSprite* sprite=UIAsset("mapbgd.png");
         return sprite?sprite:currentBackground();
     }

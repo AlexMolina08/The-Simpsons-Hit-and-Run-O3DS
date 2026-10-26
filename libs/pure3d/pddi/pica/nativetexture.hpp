@@ -3,7 +3,6 @@
 #include <cstdint>
 #include <cstdio>
 #include <cstring>
-#include <cstdlib>
 
 // Versioned little-endian file fields, never SDK structures or pointers.
 // Bump Version whenever conversion, filtering, mip rounding or tiling changes.
@@ -70,53 +69,6 @@ template<class Hash> bool Read(FILE* f,const unsigned char* expected,unsigned by
     }
     if((exactFile && fgetc(f)!=EOF) || ferror(f))return false;
     return hash(destination,bytes,digest) && !memcmp(digest,header+76,32);
-}
-const unsigned ContiguousLimit=65536;
-// Only private file input and a private hash context may outlive the lease.
-// Reclaim its owner before publishing verified bytes to GPU texture storage.
-template<class Lease,class Hash> bool ReadStaged(FILE* f,unsigned fileOffset,
-    const unsigned char* expected,unsigned bytes,void* destination,Hash& hash,
-    bool* usedBlock,void* (*allocate)(size_t)=std::malloc)
-{
-    *usedBlock=false;
-    if(!f || !expected || !destination || !bytes || bytes>ContiguousLimit)return false;
-    unsigned char* block=static_cast<unsigned char*>(allocate(HeaderBytes+bytes));
-    if(!block)return false;
-    struct OwnedBlock {unsigned char* data;~OwnedBlock(){std::free(data);}} owned{block};
-    *usedBlock=true;
-    bool valid=false;
-    {
-        Lease privateInput;
-        unsigned char digest[32];
-        valid=!fseek(f,fileOffset,SEEK_SET) &&
-            fread(block,1,HeaderBytes+bytes,f)==HeaderBytes+bytes &&
-            !ferror(f) && !memcmp(block,expected,76);
-        if(valid)valid=hash(block+HeaderBytes,bytes,digest) && !memcmp(digest,block+76,32);
-    }
-    if(valid)std::memcpy(destination,block+HeaderBytes,bytes);
-    return valid;
-}
-// Optional bounded input staging keeps header and body in one read request.
-// Verify the same descriptor and digest before publishing any destination bytes.
-template<class Hash> bool ReadContiguous(FILE* f,const unsigned char* expected,unsigned bytes,
-    void* destination,Hash& hash,void (*yield)()=nullptr,bool exactFile=true,
-    bool* usedBlock=nullptr,void* (*allocate)(size_t)=std::malloc)
-{
-    if(usedBlock)*usedBlock=false;
-    unsigned char* block=bytes<=ContiguousLimit
-        ?static_cast<unsigned char*>(allocate(HeaderBytes+bytes)):nullptr;
-    if(!block)return Read(f,expected,bytes,destination,hash,yield,exactFile);
-    struct OwnedBlock {unsigned char* data;~OwnedBlock(){std::free(data);}} owned{block};
-    if(usedBlock)*usedBlock=true;
-    unsigned char digest[32];
-    bool valid=fread(block,1,HeaderBytes+bytes,f)==HeaderBytes+bytes && !memcmp(block,expected,76);
-    if(valid)valid=(!exactFile || fgetc(f)==EOF) && !ferror(f);
-    if(valid){
-        if(yield)yield();
-        valid=hash(block+HeaderBytes,bytes,digest) && !memcmp(digest,block+76,32);
-        if(valid)std::memcpy(destination,block+HeaderBytes,bytes);
-    }
-    return valid;
 }
 }
 #endif

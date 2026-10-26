@@ -4,15 +4,6 @@
 #include <cmath>
 
 namespace picaVisual {
-#ifdef SRR2_OLD3DS_VISUAL_UPGRADE
-extern bool groundBatch,worldVram,farBackdrop;
-#ifdef SRR2_OLD3DS_NATIVE_BENCH
-extern unsigned groundBatchNames,farBackdropLoads,farBackdropDraws;
-#endif
-inline bool GroundBatch() { return groundBatch; }
-#else
-inline bool GroundBatch() { return false; }
-#endif
 enum Feature { Characters = 1, Vehicles = 2, Atmosphere = 4, Reflections = 8, Occlusion = 16, KeyLighting = 32, ContactShadows = 64, SceneryLighting = 128 };
 #if defined(SRR2_OLD3DS_VISUAL_UPGRADE) && defined(SRR2_OLD3DS_NATIVE_BENCH)
 extern unsigned features;

@@ -88,7 +88,7 @@ END_PROFILE( "StaticEntityDSG Destroy" );
 //========================================================================
 void StaticEntityDSG::SetRank(rmt::Vector& irRefPosn, rmt::Vector& mViewVector)
 {
-    if ( ( mIsGeo & (IS_SHADOW | FAR_BACKDROP) ) == false )
+    if ( ( mIsGeo & IS_SHADOW ) == false )
     {
         IEntityDSG::SetRank( irRefPosn, mViewVector );
     }
@@ -227,16 +227,10 @@ void StaticEntityDSG::Display()
     if(IS_DRAW_LONG) return;
     DSG_BEGIN_PROFILE(profileName)
 
-    if(mIsGeo & (IS_SHADOW | FAR_BACKDROP))
+    if(mIsGeo & IS_SHADOW)
     {
-        // A backdrop draws first after opaque geometry. Its own depth writes
-        // resolve overlapping proxy faces; original opaque surfaces occlude it.
-        const bool backdrop=(mIsGeo & FAR_BACKDROP)!=0;
-        p3d::pddi->SetZWrite(backdrop);
+        p3d::pddi->SetZWrite(false);
         mpDrawstuff->Display();
-#if defined(SRR2_OLD3DS_VISUAL_UPGRADE) && defined(SRR2_OLD3DS_NATIVE_BENCH)
-        if(backdrop)++picaVisual::farBackdropDraws;
-#endif
         p3d::pddi->SetZWrite(true);
     }
     else

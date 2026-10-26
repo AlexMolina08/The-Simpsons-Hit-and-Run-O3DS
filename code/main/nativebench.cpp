@@ -1,4 +1,3 @@
-#include <p3d/billboardbatch.hpp>
 #include <main/graphics3ds.h>
 #ifdef SRR2_OLD3DS_SPRITE_ATLAS
 #include <p3d/spriteatlas.hpp>
@@ -139,13 +138,11 @@ extern bool g_picaNativeEtcEnabled;
 #endif
 #ifdef SRR2_OLD3DS_NATIVE_TEXTURE_BUNDLE
 extern bool g_picaNativeBundleEnabled;
-extern bool g_picaNativeContiguous;
 #endif
 extern bool g_picaNativeTextureDiagnostics;
 #include <pddi/pica/texture.hpp>
 static picaNativeTextureStats nativeTextureCaptureBegin={},nativeTextureCaptureEnd={};
 extern "C" void picaDumpNativeTextures(FILE*);
-#include <radnativeseek.hpp>
 extern "C" void radLoadDumpWorkerSlices(FILE*);
 #endif
 extern "C" unsigned g_picaPresentedFrames;
@@ -163,8 +160,6 @@ extern unsigned g_old3dsAdpcmVerified,g_old3dsAdpcmMismatches,g_old3dsAdpcmVerif
 #ifdef SRR2_OLD3DS_VISUAL_UPGRADE
 namespace Old3dsPerformance { float visibilityDistance=120.0f; }
 #endif
-extern bool g_picaParticleTrigCache;
-extern "C" void old3dsDumpParticleTrig(FILE*);
 namespace NativeBench {
 bool detail=false,collecting=false,validation=false,serviceProfile=false;
 #ifdef SRR2_OLD3DS_SUBMIT_PROFILE
@@ -431,9 +426,6 @@ static bool ParseRunArgument(const char* argument)
   strcpy(portraitModel,name);return true;
  }
 #ifdef SRR2_OLD3DS_VISUAL_UPGRADE
- if(!strncmp(argument,"bench_world_vram=",17)){picaVisual::worldVram=atoi(argument+17)!=0;return true;}
- if(!strncmp(argument,"bench_far_backdrop=",19)){picaVisual::farBackdrop=atoi(argument+19)!=0;return true;}
- if(!strncmp(argument,"bench_ground_batch=",19)){picaVisual::groundBatch=atoi(argument+19)!=0;return true;}
  if(!strncmp(argument,"bench_landmark_visibility=",26)){Old3dsLandmark::enabled=atoi(argument+26)!=0;return true;}
  if(!strcmp(argument,"bench_landmark=casino")){casinoAnchor=true;return true;}
  static const char distanceOption[]="bench_draw_distance=";
@@ -441,9 +433,6 @@ static bool ParseRunArgument(const char* argument)
   const float value=strtof(argument+sizeof(distanceOption)-1,nullptr);
   if(std::isfinite(value) && value>=120 && value<=240)Old3dsPerformance::visibilityDistance=value;
   return true;
- }
- if(!strncmp(argument,"bench_shadow_staged=",20)){
-  picaContact::staged=atoi(argument+20)!=0;return true;
  }
  if(!strncmp(argument,"bench_reflection_outputs=",25)){
   picaNativeEnableSparseReflectionOutputs(atoi(argument+25)!=0);return true;
@@ -489,11 +478,7 @@ static bool ParseRunArgument(const char* argument)
 #ifdef SRR2_OLD3DS_BOTTOM_MAP_15HZ
  else if(!strncmp(argument,"bench_bottom_animation_boost=",sizeof("bench_bottom_animation_boost=")-1))HandheldHudCadence::boostPickupAnimations=atoi(argument+sizeof("bench_bottom_animation_boost=")-1)!=0;
 #endif
- else if(!strncmp(argument,"bench_particle_trig_cache=",sizeof("bench_particle_trig_cache=")-1))g_picaParticleTrigCache=atoi(argument+sizeof("bench_particle_trig_cache=")-1)!=0;
 #ifdef SRR2_OLD3DS_NATIVE_TEXTURE_BUNDLE
- else if(!strncmp(argument,"bench_native_contiguous=",sizeof("bench_native_contiguous=")-1))g_picaNativeContiguous=atoi(argument+sizeof("bench_native_contiguous=")-1)!=0;
- else if(!strncmp(argument,"bench_native_input_stage=",sizeof("bench_native_input_stage=")-1))radNativeSeek::stageInput=atoi(argument+sizeof("bench_native_input_stage=")-1)!=0;
- else if(!strncmp(argument,"bench_native_seek_lend=",sizeof("bench_native_seek_lend=")-1))radNativeSeek::enabled=atoi(argument+sizeof("bench_native_seek_lend=")-1)!=0;
 #endif
 #ifdef SRR2_OLD3DS_GPU_SKIN_SUPPORT
  else if(!strncmp(argument,"bench_skin_prepare_yield=",sizeof("bench_skin_prepare_yield=")-1))g_picaSkinPrepareYield=atoi(argument+sizeof("bench_skin_prepare_yield=")-1)!=0;
@@ -541,7 +526,6 @@ void Init(int argc,char** argv){
  else if(!strcmp(key,"bottom_map"))bottomMapMode=strtoul(value,nullptr,10)%3;
  else if(!strcmp(key,"bottom_cadence"))HandheldHudCadence::cadenceMode=strtoul(value,nullptr,10)%3;
  else if(!strcmp(key,"bottom_minimum_hz"))HandheldHudCadence::minimumHz=strtoul(value,nullptr,10)==8?8:10;
- else if(!strcmp(key,"hud_direct_background"))HandheldHudCadence::directHudBackground=atoi(value)!=0;
  #endif
 #ifdef SRR2_OLD3DS_MEMORY_DIAG
  else if(!strcmp(key,"memory_stride"))Old3dsMemorySetStride(strtoul(value,nullptr,10));
@@ -633,8 +617,6 @@ void Init(int argc,char** argv){
   if(!strncmp(argv[i],bottomMinimumArgument,sizeof(bottomMinimumArgument)-1)){HandheldHudCadence::minimumHz=strtoul(argv[i]+sizeof(bottomMinimumArgument)-1,nullptr,10)==8?8:10;continue;}
   static const char bottomCadenceArgument[]="bench_bottom_cadence=";
   if(!strncmp(argv[i],bottomCadenceArgument,sizeof(bottomCadenceArgument)-1)){HandheldHudCadence::cadenceMode=strtoul(argv[i]+sizeof(bottomCadenceArgument)-1,nullptr,10)%3;continue;}
-  static const char directBackgroundArgument[]="bench_hud_direct_background=";
-  if(!strncmp(argv[i],directBackgroundArgument,sizeof(directBackgroundArgument)-1)){HandheldHudCadence::directHudBackground=atoi(argv[i]+sizeof(directBackgroundArgument)-1)!=0;continue;}
 #endif
   if(!strncmp(argv[i],"bench_route=",12)){roadRoute=!strcmp(argv[i]+12,"road");continue;}
 #ifdef SRR2_OLD3DS_VRAM_TEXTURES
@@ -644,18 +626,9 @@ void Init(int argc,char** argv){
 #endif
   static const char loaderSliceArgument[]="bench_loader_slice_us=";
   if(!strncmp(argv[i],loaderSliceArgument,sizeof(loaderSliceArgument)-1)){unsigned valueUs=strtoul(argv[i]+sizeof(loaderSliceArgument)-1,nullptr,10);loaderSliceUs=valueUs>=1000 && valueUs<=8000?valueUs:0;continue;}
-#ifdef SRR2_OLD3DS_QUAD_STREAM
-  static const char billboardCompactArgument[]="bench_billboard_compact=";
-  if(!strncmp(argv[i],billboardCompactArgument,sizeof(billboardCompactArgument)-1)){p3dBillboardBatch::compact=atoi(argv[i]+sizeof(billboardCompactArgument)-1)!=0;continue;}
-  static const char billboardBatchArgument[]="bench_billboard_batch=";
-  if(!strncmp(argv[i],billboardBatchArgument,sizeof(billboardBatchArgument)-1)){p3dBillboardBatch::enabled=atoi(argv[i]+sizeof(billboardBatchArgument)-1)!=0;continue;}
-#endif
+
   static const char preparedFontArgument[]="bench_prepared_font_glyphs=";
   if(!strncmp(argv[i],preparedFontArgument,sizeof(preparedFontArgument)-1)){p3dFontWork::enabled=atoi(argv[i]+sizeof(preparedFontArgument)-1)!=0;continue;}
-#ifdef SRR2_OLD3DS_QUAD_STREAM
-  static const char fontQuadArgument[]="bench_font_quad_stream=";
-  if(!strncmp(argv[i],fontQuadArgument,sizeof(fontQuadArgument)-1)){p3dFontWork::quadStream=atoi(argv[i]+sizeof(fontQuadArgument)-1)!=0;continue;}
-#endif
 #ifdef SRR2_OLD3DS_NATIVE_TEXTURE_BUNDLE
   if(!strncmp(argv[i],"bench_native_bundle=",20)){g_picaNativeBundleEnabled=atoi(argv[i]+20)!=0;continue;}
 #endif
@@ -1080,7 +1053,6 @@ static void DumpVisual(FILE* f)
 }
 extern "C" void picaDumpStereoDiagnostics(FILE*);
 void Dump(){if(!enabled)return;
- radNativeSeek::Drain();
  FILE*f=fopen("native-" SRR2_OLD3DS_BUILD_ID ".log","w");if(!f)return;
  unsigned optionalDiagnostics=0,memoryDiagnostics=0;
 #ifdef SRR2_OLD3DS_OPTIONAL_DIAG
@@ -1094,7 +1066,6 @@ void Dump(){if(!enabled)return;
  fprintf(f,"NATIVE_STEREO_TEST slider_override=%.4f command_audit=%u after_route_framebuffer=%u performance_capture=%u\n",stereoTestSlider,visualCapture,afterRouteCapture,!visualCapture && stereoTestSlider<0.0f);
  fprintf(f,"NATIVE_FUSED_TRIG enabled=1 nearest_only=1 bounded_radians=8192 per_call_counters=0 runtime_selector=0\n");
  old3dsDumpAdpcmVerification(f);
- old3dsDumpParticleTrig(f);
  fprintf(f,"NATIVE_ADPCM_FAST enabled=%u calls=%u fallbacks=%u predictor_order_unchanged=%u budget_calls=%u budget_predictors=3 callbacks_deferred=0\n",g_old3dsAdpcmFast,g_old3dsAdpcmFastCalls,g_old3dsAdpcmFastFallbacks,g_old3dsAdpcmBudgetCalls==0,g_old3dsAdpcmBudgetCalls);
  fprintf(f,"NATIVE_ADPCM_VERIFY enabled=%u verified=%u mismatches=%u allocation_failures=%u performance_capture=%u\n",g_old3dsAdpcmVerify,g_old3dsAdpcmVerified,g_old3dsAdpcmMismatches,g_old3dsAdpcmVerifyAllocFailures,!g_old3dsAdpcmVerify);
  fprintf(f,"NATIVE_ADPCM_PRUNE enabled=%u exact_predictor_order=1 callbacks_deferred=0\n",g_old3dsAdpcmPrune);
@@ -1104,7 +1075,6 @@ void Dump(){if(!enabled)return;
  fprintf(f,"NATIVE_SKIN_LOAD_SLICES enabled=%u checkpoints=%u vertex_interval=64 whole_session=1 unchanged_vertex_bytes=1\n",g_picaSkinPrepareYield,g_picaSkinPrepareCheckpoints);
 #endif
  radLoadDumpWorkerSlices(f);
- radNativeSeek::Dump(f);
 #ifdef SRR2_OLD3DS_SPRITE_ATLAS
  fprintf(f,"NATIVE_SPRITE_ATLAS enabled=%u loaded=%u applied=%u batched=%u avoided_tile_draws=%u source_geometry_unchanged=1\n",p3dSpriteAtlas::enabled,p3dSpriteAtlas::loaded,p3dSpriteAtlas::applied,p3dSpriteAtlas::batched,p3dSpriteAtlas::avoided);
  fprintf(f,"NATIVE_SPRITE_ATLAS_REJECTIONS textures=%u shape=%u tile=%u format=%u\n",p3dSpriteAtlas::texturesLoaded,p3dSpriteAtlas::rejectShape,p3dSpriteAtlas::rejectTile,p3dSpriteAtlas::rejectFormat);
@@ -1163,11 +1133,7 @@ void Dump(){if(!enabled)return;
  fprintf(f,"NATIVE_AUTOMATION diagnostic=%u resident=%u uniforms=%u context_mode=%u source=automation_only clock_complete=%u validation_instrumented=%u gpu_last_is_unassociated=1\n",diagnostic,residentShaders,nativeUniforms,nativeContextMode,done && !aborted,
  0u
  );
-#ifdef SRR2_OLD3DS_QUAD_STREAM
- fprintf(f,"NATIVE_BILLBOARD_BATCH enabled=%u compact=%u minimum_groups=%u batches=%u groups=%u avoided_draws=%u reservation_failures=%u scope=whole_session sorted_order_retained=1\n",p3dBillboardBatch::enabled,p3dBillboardBatch::compact,p3dBillboardBatch::MinimumGroups(),p3dBillboardBatch::batches,p3dBillboardBatch::groups,p3dBillboardBatch::avoided,p3dBillboardBatch::reservationFailures);
-#endif
  fprintf(f,"NATIVE_FONT_WORK enabled=%u prepared_lines=%u prepared_glyphs=%u long_lines=%u capacity=%u same_vertices=1 same_texture_order=1 same_spacing_pass=1 whole_session=1\n",p3dFontWork::enabled,p3dFontWork::preparedLines,p3dFontWork::preparedGlyphs,p3dFontWork::longLines,p3dFontWork::Capacity);
- fprintf(f,"NATIVE_FONT_QUADS enabled=%u batches=%u quads=%u fallback_reservations=%u same_expanded_triangles=1 whole_session=1\n",p3dFontWork::quadStream,p3dFontWork::quadBatches,p3dFontWork::quadGlyphs,p3dFontWork::quadFallbacks);
  fprintf(f,"NATIVE_LOADER_SLICE override_us=%u gameplay_only=1 loading_policy_unchanged=1 geometry_io_unchanged=1\n",loaderSliceUs);
  fprintf(f,"NATIVE_GRAPHICS model=%u quality=%u stereo=%u width=%u height=240 target_fps=%u\n",unsigned(Graphics3DS::SystemModel()),Graphics3DS::Quality(),Graphics3DS::Stereo(),Graphics3DS::RenderWidth(),Graphics3DS::TargetFPS());
  fprintf(f,"NATIVE_QUALITY mode=%u draw_distance=%.1f ambient_traffic=%u ambient_pedestrians=%u physics_step_ms=%u audio_predictors=%u particle_emission_scale=%.2f distant_pedestrian_actions=%u flat_lighting=%u shadow_distance=%.1f mission_simulation=full\n",Old3dsPerformance::mode,Old3dsPerformance::Enabled()?Old3dsPerformance::DrawDistance():200.0f,Old3dsPerformance::Enabled()?Old3dsPerformance::TrafficLimit():5u,Old3dsPerformance::Enabled()?Old3dsPerformance::PedestrianLimit():7u,Old3dsPerformance::PhysicsStepMilliseconds(),Old3dsPerformance::ReducedAudioSearch()?3u:8u,Old3dsPerformance::ParticleEmissionScale(),Old3dsPerformance::DistantPedestrianActions(),Old3dsPerformance::FlatLighting(),Old3dsPerformance::Enabled()?0.0f:200.0f);
@@ -1225,14 +1191,10 @@ void Dump(){if(!enabled)return;
  fprintf(f,"NATIVE_REFLECTION_ENTRIES enabled=%u ordinary_changes=%u reflective_changes=%u scope=whole_session\n",
      sparseOutputs,ordinaryOutputs,reflectedOutputs);
  fprintf(f,"NATIVE_LANDMARK_POLICY enabled=%u selected=%u root_placed=%u root_fallback=%u visible_entities=%u profile_records=%u scope=whole_session global_distance_unchanged=1 collision_bounds_unchanged=1\n",Old3dsLandmark::enabled,Old3dsLandmark::selected,Old3dsLandmark::rootPlaced,Old3dsLandmark::rootFallback,Old3dsLandmark::visible,Old3dsLandmark::ProfileCache().count);
- fprintf(f,"NATIVE_FAR_BACKDROP enabled=%u loaded=%u drawn=%u scope=whole_session new_textures=0 new_scene_passes=0\n",picaVisual::farBackdrop,picaVisual::farBackdropLoads,picaVisual::farBackdropDraws);
- fprintf(f,"NATIVE_WORLD_MATERIAL_BATCH enabled=%u load_callbacks=%u scope=whole_session extra_scene_passes=0\n",picaVisual::groundBatch,picaVisual::groundBatchNames);
  fprintf(f,"NATIVE_VISUAL_FEATURES mask=%u load_prepared_form=1 reflection_draws_whole_session=%u scenery_draws_whole_session=%u\n",
      picaVisual::features,picaVisual::reflectionDraws,picaVisual::sceneryDraws);
  fprintf(f,"NATIVE_CONTACT_SHADOWS enabled=%u queued=%u batches=%u instances=%u overflow=%u command_skips=%u scope=whole_session cpu_scene_walks=0 new_ground_rays=0\n",
      picaVisual::Enabled(picaVisual::ContactShadows),picaContact::queued,picaContact::batches,picaContact::drawn,picaContact::overflow,picaContact::commandSkips);
- fprintf(f,"NATIVE_CONTACT_STREAM staged=%u vertices=%u fallbacks=%u scope=whole_session\n",
-     picaContact::staged,picaContact::stagedVertices,picaContact::stagedFallbacks);
 #endif
 #ifdef SRR2_OLD3DS_NATIVE_CONTEXT
  fprintf(f,"NATIVE_CONTEXT_CAPTURE fast=%u fallback=%u words=%u measured_route_only=1\n",contextFastEnd-contextFastBegin,contextFallbackEnd-contextFallbackBegin,contextWordsEnd-contextWordsBegin);

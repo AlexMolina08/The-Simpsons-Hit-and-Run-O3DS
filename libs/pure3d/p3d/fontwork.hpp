@@ -3,8 +3,6 @@
 #ifdef SRR2_OLD3DS_NATIVE_BENCH
 namespace p3dFontWork {
 extern bool enabled;
-extern bool quadStream;
-extern unsigned quadBatches,quadGlyphs,quadFallbacks;
 extern unsigned preparedLines,preparedGlyphs,longLines;
 const unsigned Capacity=256;
 // Resolve one bounded line. Longer lines use the original renderer in full.

@@ -15,10 +15,6 @@
 //========================================
 // Project Includes
 //========================================
-#ifdef SRR2_OLD3DS_VISUAL_UPGRADE
-#include <pddi/pica/material.hpp>
-#include <pddi/pica/visualstyle.hpp>
-#endif
 #ifdef WORLD_BUILDER
 #include "IEntityDSG.h"
 #else
@@ -100,22 +96,8 @@ IEntityDSG::IEntityDSG() :
 tShader* IEntityDSG::Process(tShader* pShader)
 {
 #ifndef WORLD_BUILDER
-    tName sortName=pShader->GetNameObject();
-#ifdef SRR2_OLD3DS_VISUAL_UPGRADE
-    if(picaVisual::GroundBatch() && static_cast<picaMat*>(pShader->GetShader())->WorldSurface())
-    {
-        // This field is used only by the existing opaque render sort. Keep
-        // ground in a compact key range, with a material subkey, so shared UV1
-        // draws stay together. Inventory names and actual shader UIDs retain
-        // their original values. No recurring classification or new pass.
-        sortName.SetUID(sortName.GetUID() & tUID(0x00ffffffu));
-#ifdef SRR2_OLD3DS_NATIVE_BENCH
-        ++picaVisual::groundBatchNames;
-#endif
-    }
-#endif
     if( mShaderName != "__none__" && 
-        mShaderName != sortName )
+        mShaderName != pShader->GetNameObject() )
     {
         //more than one shader, can't sort by shader
        // rDebugPrintf("More than one Shader in IEntityDSG %s\n", this->GetName() );
@@ -123,12 +105,7 @@ tShader* IEntityDSG::Process(tShader* pShader)
     }
     else
     {
-#ifdef SRR2_OLD3DS_VISUAL_UPGRADE
-        if(picaVisual::GroundBatch())
-            mShaderName = sortName;
-        else
-#endif
-            mShaderName = pShader->GetName();
+        mShaderName = pShader->GetName();
     }
 #endif
     return pShader;

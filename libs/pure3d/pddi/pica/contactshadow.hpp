@@ -4,37 +4,13 @@
 #include <cstdint>
 
 namespace picaContact {
-extern bool staged;
 #ifdef SRR2_OLD3DS_NATIVE_BENCH
 extern unsigned queued,batches,drawn,overflow,commandSkips;
-extern unsigned stagedVertices,stagedFallbacks;
 #endif
 constexpr unsigned Capacity=12,Vertices=17,Indices=72;
 struct Vertex { float x,y,alpha; unsigned char offset[4]; };
 struct Instance { float center[4],normal[4],facing[4]; };
-struct WorldVertex { float position[3],normal[3],uv[2]; unsigned char colour[4]; };
 static_assert(sizeof(Vertex)==16,"Contact shadow stream");
-static_assert(sizeof(WorldVertex)==36,"Main-program contact shadow stream");
-inline void Expand(WorldVertex* output,const Vertex* corners,const Instance& instance)
-{
-    const float* n=instance.normal;const float* f=instance.facing;
-    float side[]={n[1]*f[2]-n[2]*f[1],n[2]*f[0]-n[0]*f[2],n[0]*f[1]-n[1]*f[0]};
-    const float square=side[0]*side[0]+side[1]*side[1]+side[2]*side[2];
-    const float inverse=1.0f/std::sqrt(square>.000001f?square:.000001f);
-    for(unsigned i=0;i<3;++i)side[i]*=inverse;
-    const float forward[]={side[1]*n[2]-side[2]*n[1],side[2]*n[0]-side[0]*n[2],side[0]*n[1]-side[1]*n[0]};
-    const unsigned char alpha=static_cast<unsigned char>(instance.center[3]*255.0f+.5f);
-    for(unsigned v=0;v<Vertices;++v)
-    {
-        WorldVertex& vertex=output[v];
-        for(unsigned i=0;i<3;++i)
-            vertex.position[i]=instance.center[i]+side[i]*n[3]*corners[v].x+forward[i]*f[3]*corners[v].y;
-        vertex.normal[0]=vertex.normal[2]=0;vertex.normal[1]=1;
-        vertex.uv[0]=vertex.uv[1]=0;
-        vertex.colour[0]=vertex.colour[1]=vertex.colour[2]=0;
-        vertex.colour[3]=corners[v].alpha?alpha:0;
-    }
-}
 inline bool GroundY(float& y,const float* center,const float* point,const float* normal)
 {
     for(unsigned i=0;i<3;++i)

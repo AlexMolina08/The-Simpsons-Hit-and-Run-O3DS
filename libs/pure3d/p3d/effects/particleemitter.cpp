@@ -1,13 +1,3 @@
-#ifdef SRR2_OLD3DS_NATIVE_BENCH
-#include <pddi/pica/particletrigcache.hpp>
-#include <cstdio>
-bool g_picaParticleTrigCache=false;
-static unsigned particleTrigRequests=0,particleTrigEvaluations=0,particleTrigEmitters=0;
-extern "C" void old3dsDumpParticleTrig(FILE* file)
-{
-    fprintf(file,"NATIVE_PARTICLE_TRIG_CACHE enabled=%u requests=%u evaluations=%u hits=%u emitters=%u per_emitter_storage=1 whole_session=1 unchanged_particles=1\n",g_picaParticleTrigCache,particleTrigRequests,particleTrigEvaluations,particleTrigRequests-particleTrigEvaluations,particleTrigEmitters);
-}
-#endif
 #include <main/old3dsrecurring.h>
 #include <main/old3dsperformance.h>
 #ifdef SRR2_OLD3DS_PARTICLE_CLIP
@@ -828,10 +818,6 @@ void tSpriteEmitter::Display()
 #endif
         if(!stream) stream = p3d::pddi->BeginPrims(shader->GetShader(), PDDI_PRIM_TRIANGLES, PDDI_V_CT, 6 * numLiveParticles);
 
-#ifdef SRR2_OLD3DS_NATIVE_BENCH
-        const bool cacheParticleTrig=g_picaParticleTrigCache;
-        picaParticleTrig::Cache particleTrig;
-#endif
         for (int i = 0; i < numLiveParticles; i++)
         {                                              
             tSpriteParticle* current = (tSpriteParticle*)liveParticles[i];
@@ -856,14 +842,6 @@ void tSpriteEmitter::Display()
 #endif
 
             float x, y;
-#ifdef SRR2_OLD3DS_NATIVE_BENCH
-            if(cacheParticleTrig){
-                unsigned control;
-                __asm__ __volatile__("vmrs %0, fpscr":"=r"(control)::"memory");
-                particleTrig.Compute(current->spin+rmt::PI_BY4,control,&y,&x,
-                    [](float angle,float* sine,float* cosine){rmt::SinCos(angle,sine,cosine);});
-            }else
-#endif
             rmt::SinCos(current->spin + rmt::PI_BY4, &y, &x);
 
             x *= current->size;
@@ -911,10 +889,6 @@ void tSpriteEmitter::Display()
             stream->UV(texFrameCoords[current->texFrame], 0.0f);
             stream->Coord(currPos.x-x, currPos.y-y, currPos.z);
         }
-#ifdef SRR2_OLD3DS_NATIVE_BENCH
-        if(cacheParticleTrig){particleTrigRequests+=particleTrig.requests;
-            particleTrigEvaluations+=particleTrig.evaluations;++particleTrigEmitters;}
-#endif
         p3d::pddi->EndPrims(stream);
 
         p3d::stack->Pop();    

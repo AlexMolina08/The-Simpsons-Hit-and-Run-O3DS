@@ -30,37 +30,6 @@ int main(){
    assert(v.offset[0]==3*instance && !v.offset[1] && !v.offset[2] && !v.offset[3]);
    assert(v.x*v.x+v.y*v.y<=1.000001f && v.alpha==(i<=8?1:0));}
  }
- std::mt19937 random(25109);std::uniform_real_distribution<float> value(-1,1);
- for(unsigned trial=0;trial<5000;++trial){
-  Instance instance;
-  for(unsigned i=0;i<3;++i){instance.center[i]=20*value(random);instance.normal[i]=value(random);instance.facing[i]=value(random);}
-  instance.normal[1]=1;
-  if(trial%10==0)for(unsigned i=0;i<3;++i)instance.facing[i]=instance.normal[i];
-  instance.center[3]=.5f*(value(random)+1);instance.normal[3]=1.2f;instance.facing[3]=2.4f;
-  WorldVertex expanded[Vertices+1];memset(expanded,0xa7,sizeof(expanded));
-  Expand(expanded,vertices,instance);
-  const unsigned char* end=reinterpret_cast<const unsigned char*>(expanded+Vertices);
-  for(unsigned i=0;i<sizeof(WorldVertex);++i)assert(end[i]==0xa7);
-  double n[3],f[3],side[3],forward[3];
-  for(unsigned i=0;i<3;++i){n[i]=instance.normal[i];f[i]=instance.facing[i];}
-  for(unsigned i=0;i<3;++i)side[i]=n[(i+1)%3]*f[(i+2)%3]-n[(i+2)%3]*f[(i+1)%3];
-  double square=0;for(double x:side)square+=x*x;
-  const double inverse=1/std::sqrt(square>.000001?square:.000001);
-  for(double& x:side)x*=inverse;
-  for(unsigned i=0;i<3;++i)forward[i]=side[(i+1)%3]*n[(i+2)%3]-side[(i+2)%3]*n[(i+1)%3];
-  for(unsigned v=0;v<Vertices;++v){
-   for(unsigned i=0;i<3;++i){
-    const double expected=instance.center[i]+side[i]*instance.normal[3]*vertices[v].x+forward[i]*instance.facing[3]*vertices[v].y;
-    // Nearly parallel axes amplify floating-point cross-product cancellation.
-    // Bound that degenerate case to half a millimeter, as on the GPU path.
-    assert(std::fabs(expanded[v].position[i]-expected)<(square<.000001?.0005:.00005));
-   }
-   assert(expanded[v].uv[0]==0 && expanded[v].uv[1]==0);
-   assert(expanded[v].normal[0]==0 && expanded[v].normal[1]==1 && expanded[v].normal[2]==0);
-   for(unsigned i=0;i<3;++i)assert(expanded[v].colour[i]==0);
-   assert(std::fabs(expanded[v].colour[3]/255.0-instance.center[3]*vertices[v].alpha)<=.5/255.0+.000001);
-  }
- }
  float c[]={1,2,3},n[]={0,1,0},f[]={0,0,1};Instance out;
  float point[]={4,5,6},slope[]={.2f,1,.3f},height=0;
  assert(GroundY(height,c,point,slope) && std::fabs(height-6.5f)<.00001f);
@@ -137,4 +106,4 @@ for trial in range(5000):
     expected[1]-=stereo*(expected[3]*shift-bias)
     assert max(abs(a-b) for a,b in zip(registers['o_pos'],expected))<1e-10
     assert registers['o_colour']==[0,0,0,alpha*falloff]
-print('PASS: bounded 12-instance mesh, 5000 staged plane expansions, exact colors, invalid ground fallback, 5000 GPU ground-plane/stereo projections and complete outputs. Not hardware timing.')
+print('PASS: bounded 12-instance mesh, invalid ground fallback, 5000 GPU ground-plane/stereo projections and complete outputs. Not hardware timing.')

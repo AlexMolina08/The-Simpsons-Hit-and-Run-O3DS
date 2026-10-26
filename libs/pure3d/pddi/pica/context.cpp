@@ -19,15 +19,9 @@ extern "C" int g_picaWorldScaleAllowed;
 #include <pddi/pica/visualstyle.hpp>
 #if defined(SRR2_OLD3DS_VISUAL_UPGRADE) && defined(SRR2_OLD3DS_NATIVE_BENCH)
 namespace picaVisual { unsigned features = 255, reflectionDraws = 0, sceneryDraws = 0; }
-namespace picaContact { unsigned queued=0,batches=0,drawn=0,overflow=0,commandSkips=0,stagedVertices=0,stagedFallbacks=0; }
+namespace picaContact { unsigned queued=0,batches=0,drawn=0,overflow=0,commandSkips=0; }
 #endif
 #ifdef SRR2_OLD3DS_VISUAL_UPGRADE
-namespace picaContact { bool staged=false; }
-namespace picaVisual { bool groundBatch=false,worldVram=false,farBackdrop=false;
-#ifdef SRR2_OLD3DS_NATIVE_BENCH
-unsigned groundBatchNames=0,farBackdropLoads=0,farBackdropDraws=0;
-#endif
-}
 extern "C" u16 C3D_BoolUnifs[2];
 #endif
 #ifdef SRR2_OLD3DS_CHARACTER_OCCLUSION
@@ -2235,45 +2229,6 @@ void picaContext::DrawContactShadows()
 #endif
         return;
     }
-    picaContact::WorldVertex* worldVertices=nullptr;
-    if(picaContact::staged)
-    {
-        static_assert(sizeof(picaContact::WorldVertex)==PICA_VERTEX_STRIDE,"Shadow stride");
-        static_assert(offsetof(picaContact::WorldVertex,normal)==PICA_VERTEX_OFF_NRM,"Shadow normal");
-        static_assert(offsetof(picaContact::WorldVertex,uv)==PICA_VERTEX_OFF_UV,"Shadow UV");
-        static_assert(offsetof(picaContact::WorldVertex,colour)==PICA_VERTEX_OFF_COL,"Shadow colour");
-        // The existing frame stream keeps each pass alive until GPU retirement.
-        // A full stream retains the immutable GPU-instance path below.
-        worldVertices=reinterpret_cast<picaContact::WorldVertex*>(AllocImmVertices(contactCount*picaContact::Vertices));
-#ifdef SRR2_OLD3DS_NATIVE_BENCH
-        if(!worldVertices)++picaContact::stagedFallbacks;
-#endif
-    }
-    if(worldVertices)
-    {
-        for(unsigned i=0;i<contactCount;++i)
-            picaContact::Expand(worldVertices+i*picaContact::Vertices,contactVertices+i*picaContact::Vertices,contactInstances[i]);
-        const auto mask=static_cast<pddiStateMask>(PDDI_STATE_RENDER|PDDI_STATE_FOG);
-        PushState(mask);EnableFog(false);SetZWrite(false);EnableZBuffer(true);
-        if(skinProgramBound)BindSkinProgram(false);
-        C3D_SetAttrInfo(&attrInfo);
-#ifdef SRR2_OLD3DS_NO_NORMAL_FETCH
-        noNormalLayout=false;
-#endif
-        pddiBaseShader::ClearCurrentShader();
-        contactMaterial->SetMaterial();
-        C3D_BufInfo buffers;BufInfo_Init(&buffers);
-        BufInfo_Add(&buffers,worldVertices,PICA_VERTEX_STRIDE,4,0x3210);
-        C3D_SetBufInfo(&buffers);
-        C3D_DrawElements(GPU_TRIANGLES,contactCount*picaContact::Indices,C3D_UNSIGNED_SHORT,contactIndices);
-        g_picaState.bufInfoSet=false;
-        PopState(mask);pddiBaseShader::ClearCurrentShader();
-#ifdef SRR2_OLD3DS_NATIVE_BENCH
-        picaContact::stagedVertices+=contactCount*picaContact::Vertices;
-#endif
-    }
-    else
-    {
     // All casters arrived through their existing visible-entity draws. One
     // immutable mesh projects every ellipse on GPU; no per-caster draw or rays.
     const auto mask=static_cast<pddiStateMask>(PDDI_STATE_RENDER|PDDI_STATE_FOG);
@@ -2307,7 +2262,6 @@ void picaContext::DrawContactShadows()
     noNormalLayout=false;
 #endif
     picaStateInvalidate();InvalidateUniformCache();PopState(mask);
-    }
 #ifdef SRR2_OLD3DS_NATIVE_BENCH
     ++picaContact::batches;picaContact::drawn+=contactCount;
 #endif

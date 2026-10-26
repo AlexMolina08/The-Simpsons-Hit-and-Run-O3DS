@@ -19,7 +19,6 @@
 #include <p3d/chunkfile.hpp>
 #ifdef SRR2_OLD3DS_VISUAL_UPGRADE
 #include <main/landmarkvisibility.h>
-#include <pddi/pica/visualstyle.hpp>
 #include <cstring>
 #endif
 #include <p3d/utility.hpp>
@@ -91,18 +90,6 @@ tEntity* StaticEntityLoader::LoadObject(tChunkFile* f, tEntityStore* store)
 
     int version = f->GetLong();
     int HasAlpha = f->GetLong();
-#ifdef SRR2_OLD3DS_VISUAL_UPGRADE
-    const bool farBackdrop=!strncmp(name,"srr_far_l",9);
-    if(farBackdrop && (!picaVisual::farBackdrop || !HasAlpha))
-    {
-        // The chunk handler requires a non-null inventory object for success.
-        // Keep only a named placeholder; do not load or register proxy geometry.
-        tEntity* placeholder=new tEntity;
-        placeholder->SetName(name);
-        IEntityDSG::msDeletionsSafe=false;
-        return placeholder;
-    }
-#endif
 
     StaticEntityDSG *pStaticEntityDSG = new StaticEntityDSG;
     pStaticEntityDSG->SetName(name);
@@ -154,15 +141,6 @@ tEntity* StaticEntityLoader::LoadObject(tChunkFile* f, tEntityStore* store)
     }
 #endif
 
-#ifdef SRR2_OLD3DS_VISUAL_UPGRADE
-    if(farBackdrop)
-    {
-        pStaticEntityDSG->SetFarBackdrop();
-#ifdef SRR2_OLD3DS_NATIVE_BENCH
-        ++picaVisual::farBackdropLoads;
-#endif
-    }
-#endif
     mpListenerCB->OnChunkLoaded( pStaticEntityDSG, mUserData, _id );
     IEntityDSG::msDeletionsSafe=false;
     return pStaticEntityDSG;

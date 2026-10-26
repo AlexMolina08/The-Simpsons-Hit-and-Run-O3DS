@@ -47,9 +47,7 @@ void ObserveFrame(unsigned workUs,bool gameplay);
 void ForceUpdate();
 void SetUrgent(bool);
 #ifdef SRR2_OLD3DS_NATIVE_BENCH
-extern bool directHudBackground;
 extern bool boostPickupAnimations;
-extern unsigned hudBackgroundLookups,hudBackgroundDirect;
 #endif
 void Reset();
 bool Due();

@@ -6,11 +6,8 @@
 
 #include <p3d/texturefont.hpp>
 #include <p3d/fontwork.hpp>
-#if defined(SRR2_OLD3DS_QUAD_STREAM) && defined(SRR2_OLD3DS_NATIVE_BENCH)
-#include <pddi/pica/quadstream.hpp>
-#endif
 #ifdef SRR2_OLD3DS_NATIVE_BENCH
-namespace p3dFontWork {bool enabled=false,quadStream=false;unsigned preparedLines=0,preparedGlyphs=0,longLines=0,quadBatches=0,quadGlyphs=0,quadFallbacks=0;}
+namespace p3dFontWork {bool enabled=false;unsigned preparedLines=0,preparedGlyphs=0,longLines=0;}
 #endif
 #include <p3d/utility.hpp>
 #include <p3d/chunkfile.hpp>
@@ -247,14 +244,7 @@ tTextureFont::DisplayLine(const P3D_UNICODE* text, int formatting) const
             currChar = 0;
             x = 0.0f;
             shader->SetTexture(PDDI_SP_BASETEX,textures[currTex]);
-            pddiPrimStream* stream = nullptr;
-#if defined(SRR2_OLD3DS_QUAD_STREAM) && defined(SRR2_OLD3DS_NATIVE_BENCH)
-            if(p3dFontWork::quadStream){
-                stream=picaBeginQuadStream(shader->GetShader(),vertCount/6);
-                if(stream)++p3dFontWork::quadBatches;else ++p3dFontWork::quadFallbacks;
-            }
-#endif
-            if(!stream)stream=p3d::pddi->BeginPrims(shader->GetShader(), PDDI_PRIM_TRIANGLES, PDDI_V_CT, vertCount);
+            pddiPrimStream* stream = p3d::pddi->BeginPrims(shader->GetShader(), PDDI_PRIM_TRIANGLES, PDDI_V_CT, vertCount);
             if (!stream)
             {
                 continue;
@@ -282,14 +272,7 @@ tTextureFont::DisplayLine(const P3D_UNICODE* text, int formatting) const
     currGlyph = 0;
     x = 0.0f;
     shader->SetTexture(PDDI_SP_BASETEX,textures[0]);
-    pddiPrimStream* stream = nullptr;
-#if defined(SRR2_OLD3DS_QUAD_STREAM) && defined(SRR2_OLD3DS_NATIVE_BENCH)
-    if(p3dFontWork::quadStream){
-        stream=picaBeginQuadStream(shader->GetShader(),totalGlyphs/6+1);
-        if(stream)++p3dFontWork::quadBatches;else ++p3dFontWork::quadFallbacks;
-    }
-#endif
-    if(!stream)stream=p3d::pddi->BeginPrims(shader->GetShader(), PDDI_PRIM_TRIANGLES, PDDI_V_CT, totalGlyphs + 6);
+    pddiPrimStream* stream = p3d::pddi->BeginPrims(shader->GetShader(), PDDI_PRIM_TRIANGLES, PDDI_V_CT, totalGlyphs + 6);
 
     if (!stream)
     {
@@ -360,16 +343,6 @@ tTextureFont::DrawGlyph(pddiPrimStream* buffer, unsigned int glyphIndex, float x
 
     tColour c=colour;
 
-#if defined(SRR2_OLD3DS_QUAD_STREAM) && defined(SRR2_OLD3DS_NATIVE_BENCH)
-    if(p3dFontWork::quadStream){
-        const pddiVector positions[4]={{x,0,0},{x,h,0},{x+w,h,0},{x+w,0,0}};
-        const pddiVector2 coordinates[4]={{u0,v0},{u0,v1},{u1,v1},{u1,v0}};
-        // 0,1,2 / 0,2,3 preserves the original font triangle order.
-        if(picaEmitQuad(buffer,positions,coordinates,c,picaQuad::Flipped)){
-            ++p3dFontWork::quadGlyphs;return;
-        }
-    }
-#endif
     // 0
     buffer->Colour(c);
     buffer->UV(u0, v0);
@@ -414,15 +387,6 @@ tTextureFont::DrawBlank(pddiPrimStream* buffer, float x, float width) const
 
     tColour c=colour;
 
-#if defined(SRR2_OLD3DS_QUAD_STREAM) && defined(SRR2_OLD3DS_NATIVE_BENCH)
-    if(p3dFontWork::quadStream){
-        const pddiVector positions[4]={{x,0,0},{x,h,0},{x+w,h,0},{x+w,0,0}};
-        const pddiVector2 coordinates[4]={{u0,v0},{u0,v1},{u1,v1},{u1,v0}};
-        if(picaEmitQuad(buffer,positions,coordinates,c,picaQuad::Flipped)){
-            ++p3dFontWork::quadGlyphs;return;
-        }
-    }
-#endif
     // 0
     buffer->Colour(c);
     buffer->UV(u0, v0);

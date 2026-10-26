@@ -26,25 +26,22 @@ CGuiScreenHud* currentHud=nullptr;
 CGuiScreenHud* GetCurrentHud(){return currentHud;}
 tSprite* globalSprite=nullptr;unsigned globalSearches=0;
 tSprite* UIAsset(const char*){++globalSearches;return globalSprite;}
-namespace HandheldHudCadence{bool directHudBackground=false;unsigned hudBackgroundLookups=0,hudBackgroundDirect=0;}
 METHOD
 int main(){
  tSprite first{1},second{2},global{3};CGuiScreenHud hud;
  Scrooby::Sprite art;art.raw=&first;Scrooby::Page page;page.sprite=&art;
  hud.screen.page=&page;currentHud=&hud;
  assert(BoardBackground()==&first && globalSearches==1);
- HandheldHudCadence::directHudBackground=true;globalSearches=0;
- assert(BoardBackground()==&first && globalSearches==0);
- art.raw=&second;assert(BoardBackground()==&second && globalSearches==0);
- flow.context=CONTEXT_PAUSE;assert(BoardBackground()==&second && globalSearches==0);
- art.raw=nullptr;globalSprite=&global;assert(BoardBackground()==nullptr && globalSearches==0);
+ art.raw=&second;assert(BoardBackground()==&second && globalSearches==2);
+ flow.context=CONTEXT_PAUSE;assert(BoardBackground()==&second && globalSearches==3);
+ art.raw=nullptr;globalSprite=&global;assert(BoardBackground()==&global);
  globalSprite=nullptr;assert(BoardBackground()==nullptr);
  art.raw=&second;flow.context=CONTEXT_FRONTEND;globalSprite=&global;
  assert(BoardBackground()==&global);
  flow.context=CONTEXT_GAMEPLAY;currentHud=nullptr;assert(BoardBackground()==&global);
+ globalSprite=nullptr;assert(BoardBackground()==nullptr);
  currentHud=&hud;hud.screen.page=nullptr;assert(BoardBackground()==nullptr);
- hud.screen.page=&page;HandheldHudCadence::directHudBackground=false;
- assert(BoardBackground()==&global);
+ hud.screen.page=&page;assert(BoardBackground()==&second);
 }
 '''.replace("METHOD", method)
 with tempfile.TemporaryDirectory(prefix="srr-hud-background-") as directory:
@@ -54,4 +51,4 @@ with tempfile.TemporaryDirectory(prefix="srr-hud-background-") as directory:
                     "-fsanitize=address,undefined", "-DSRR2_OLD3DS_BOTTOM_MAP_15HZ",
                     "-DSRR2_OLD3DS_NATIVE_BENCH", str(p / "test.cpp"), "-o", str(p / "test")], check=True)
     subprocess.run([str(p / "test")], check=True)
-print("PASS: production background lookup avoids the missing-name search, observes replaced/late HUD assets, retains menu fallback and the absent-image gradient, and retains the original control path.")
+print("PASS: production background lookup observes late and replaced HUD assets, pause/menu fallback and absent images without retaining stale pointers.")

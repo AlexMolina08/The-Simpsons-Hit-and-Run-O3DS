@@ -1,8 +1,3 @@
-#include <p3d/billboardbatch.hpp>
-#if defined(SRR2_OLD3DS_NATIVE_BENCH) && defined(SRR2_OLD3DS_QUAD_STREAM)
-#include <p3d/billboardobject.hpp>
-#include <typeinfo>
-#endif
 /*===========================================================================
     displaylist.cpp
     20-Jan-01 Created by Liberty 
@@ -54,21 +49,6 @@ void DisplayList::Display(void)
     for(unsigned i = 0; i < nDrawablesEndPos; i++)
     {
         P3DASSERT(toSort[i]);
-#if defined(SRR2_OLD3DS_NATIVE_BENCH) && defined(SRR2_OLD3DS_QUAD_STREAM)
-        if(p3dBillboardBatch::enabled && typeid(*toSort[i]->draw)==typeid(tBillboardQuadGroup)){
-            tBillboardQuadGroup* groups[p3dBillboardBatch::MaxGroups];
-            const rmt::Matrix* matrices[p3dBillboardBatch::MaxGroups];unsigned count=0;
-            tBillboardQuadGroup* first=static_cast<tBillboardQuadGroup*>(toSort[i]->draw);
-            for(unsigned j=i;j<nDrawablesEndPos && count<p3dBillboardBatch::MaxGroups;++j){
-                if(typeid(*toSort[j]->draw)!=typeid(tBillboardQuadGroup))break;
-                auto* group=static_cast<tBillboardQuadGroup*>(toSort[j]->draw);
-                if(group->GetShader()!=first->GetShader() || group->GetZTest()!=first->GetZTest() ||
-                   group->GetZWrite()!=first->GetZWrite() || group->GetOcclusion()!=0)break;
-                groups[count]=group;matrices[count]=&toSort[j]->objectToView;++count;
-            }
-            if(count>=p3dBillboardBatch::MinimumGroups() && tBillboardQuadGroup::DisplayBatch(groups,matrices,count)){i+=count-1;continue;}
-        }
-#endif
         p3d::stack->Load(toSort[i]->objectToView);
         toSort[i]->draw->Display();
     }
