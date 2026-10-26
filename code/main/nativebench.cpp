@@ -1,3 +1,4 @@
+#include <p3d/billboardbatch.hpp>
 #include <main/graphics3ds.h>
 #ifdef SRR2_OLD3DS_SPRITE_ATLAS
 #include <p3d/spriteatlas.hpp>
@@ -622,6 +623,10 @@ void Init(int argc,char** argv){
 #endif
   static const char loaderSliceArgument[]="bench_loader_slice_us=";
   if(!strncmp(argv[i],loaderSliceArgument,sizeof(loaderSliceArgument)-1)){unsigned valueUs=strtoul(argv[i]+sizeof(loaderSliceArgument)-1,nullptr,10);loaderSliceUs=valueUs>=1000 && valueUs<=8000?valueUs:0;continue;}
+#ifdef SRR2_OLD3DS_QUAD_STREAM
+  static const char billboardBatchArgument[]="bench_billboard_batch=";
+  if(!strncmp(argv[i],billboardBatchArgument,sizeof(billboardBatchArgument)-1)){p3dBillboardBatch::enabled=atoi(argv[i]+sizeof(billboardBatchArgument)-1)!=0;continue;}
+#endif
   static const char preparedFontArgument[]="bench_prepared_font_glyphs=";
   if(!strncmp(argv[i],preparedFontArgument,sizeof(preparedFontArgument)-1)){p3dFontWork::enabled=atoi(argv[i]+sizeof(preparedFontArgument)-1)!=0;continue;}
 #ifdef SRR2_OLD3DS_QUAD_STREAM
@@ -1132,6 +1137,9 @@ void Dump(){if(!enabled)return;
  fprintf(f,"NATIVE_AUTOMATION diagnostic=%u resident=%u uniforms=%u context_mode=%u source=automation_only clock_complete=%u validation_instrumented=%u gpu_last_is_unassociated=1\n",diagnostic,residentShaders,nativeUniforms,nativeContextMode,done && !aborted,
  0u
  );
+#ifdef SRR2_OLD3DS_QUAD_STREAM
+ fprintf(f,"NATIVE_BILLBOARD_BATCH enabled=%u batches=%u groups=%u avoided_draws=%u reservation_failures=%u scope=whole_session sorted_order_retained=1\n",p3dBillboardBatch::enabled,p3dBillboardBatch::batches,p3dBillboardBatch::groups,p3dBillboardBatch::avoided,p3dBillboardBatch::reservationFailures);
+#endif
  fprintf(f,"NATIVE_FONT_WORK enabled=%u prepared_lines=%u prepared_glyphs=%u long_lines=%u capacity=%u same_vertices=1 same_texture_order=1 same_spacing_pass=1 whole_session=1\n",p3dFontWork::enabled,p3dFontWork::preparedLines,p3dFontWork::preparedGlyphs,p3dFontWork::longLines,p3dFontWork::Capacity);
  fprintf(f,"NATIVE_FONT_QUADS enabled=%u batches=%u quads=%u fallback_reservations=%u same_expanded_triangles=1 whole_session=1\n",p3dFontWork::quadStream,p3dFontWork::quadBatches,p3dFontWork::quadGlyphs,p3dFontWork::quadFallbacks);
  fprintf(f,"NATIVE_LOADER_SLICE override_us=%u gameplay_only=1 loading_policy_unchanged=1 geometry_io_unchanged=1\n",loaderSliceUs);

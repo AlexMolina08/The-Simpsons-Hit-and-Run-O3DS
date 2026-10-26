@@ -1,3 +1,8 @@
+#include <p3d/billboardbatch.hpp>
+#if defined(SRR2_OLD3DS_NATIVE_BENCH) && defined(SRR2_OLD3DS_QUAD_STREAM)
+#include <typeinfo>
+namespace p3dBillboardBatch {bool enabled=false;unsigned batches=0,groups=0,avoided=0,reservationFailures=0;}
+#endif
 #include <main/old3dsrecurring.h>
 #ifndef RAD_PS2
 
@@ -1522,6 +1527,74 @@ tBillboardQuadGroup::Display()
         }
     }
 }
+
+#if defined(SRR2_OLD3DS_NATIVE_BENCH) && defined(SRR2_OLD3DS_QUAD_STREAM)
+bool tBillboardQuadGroup::DisplayBatch(tBillboardQuadGroup* const* items,
+    const rmt::Matrix* const* matrices,unsigned count)
+{
+    if(!p3dBillboardBatch::enabled || BillboardQuadManager::sEnabled || count<2 ||
+       count>p3dBillboardBatch::MaxGroups || !items[0] || !items[0]->shader)return false;
+    tBillboardQuadGroup* first=items[0];
+    unsigned capacity=0,visibleGroups=0;
+    for(unsigned i=0;i<count;++i){
+        tBillboardQuadGroup* group=items[i];
+        if(!group || !matrices[i] || typeid(*group)!=typeid(tBillboardQuadGroup) ||
+           group->shader!=first->shader || group->zTest!=first->zTest ||
+           group->zWrite!=first->zWrite || group->occlusionMode ||
+           group->numQuads<0 || unsigned(group->numQuads)>p3dBillboardBatch::MaxQuads-capacity)return false;
+        capacity+=unsigned(group->numQuads);
+        bool visible=false;
+        for(int q=0;q<group->numQuads;++q){
+            tBillboardQuad* quad=group->quads[q];
+            // Unknown subclasses retain their own virtual display callbacks.
+            if(!quad || typeid(*quad)!=typeid(tBillboardQuad))return false;
+            const tColour colour=quad->GetColour();
+            visible|=quad->GetVisibility() && colour.Alpha()!=0 &&
+                (colour.Red()!=0 || colour.Green()!=0 || colour.Blue()!=0);
+        }
+        visibleGroups+=visible;
+    }
+    if(!capacity || visibleGroups<2)return false;
+    const bool oldWrite=p3d::pddi->GetZWrite();
+    const pddiCompareMode oldCompare=p3d::pddi->GetZCompare();
+    if(oldWrite!=first->zWrite)p3d::pddi->SetZWrite(first->zWrite);
+    if(!first->zTest && oldCompare!=PDDI_COMPARE_ALWAYS)p3d::pddi->SetZCompare(PDDI_COMPARE_ALWAYS);
+    p3d::stack->PushIdentity();
+    pddiPrimStream* stream=picaBeginQuadStream(first->shader->GetShader(),capacity);
+    if(stream){
+        // Only adjacent, already sorted exact groups participate. Each quad's
+        // original calculation and display run once, with its original matrices.
+        // Their view-space vertices go directly into the existing fenced stream.
+        for(unsigned i=0;i<count;++i){
+            tBillboardQuadGroup* group=items[i];
+            p3d::stack->Load(*matrices[i]);
+            const Matrix world=*(p3d::context->GetWorldMatrix());
+            const Matrix camera=p3d::context->GetView()->GetCamera()->GetCameraToWorldMatrix();
+            const Matrix worldToCamera=p3d::context->GetView()->GetCamera()->GetWorldToCameraMatrix();
+            for(int q=0;q<group->numQuads;++q){
+                tBillboardQuad* quad=group->quads[q];const tColour colour=quad->GetColour();
+                if(quad->GetVisibility() && colour.Alpha()!=0 &&
+                   (colour.Red()!=0 || colour.Green()!=0 || colour.Blue()!=0))quad->Calculate();
+            }
+            p3d::stack->LoadIdentity();
+            for(int q=0;q<group->numQuads;++q){
+                tBillboardQuad* quad=group->quads[q];const tColour colour=quad->GetColour();
+                if(quad->GetVisibility() && colour.Alpha()!=0 &&
+                   (colour.Red()!=0 || colour.Green()!=0 || colour.Blue()!=0))
+                    quad->Display(stream,world,camera,worldToCamera,group->intensityBias);
+            }
+        }
+        p3d::pddi->EndPrims(stream);
+        ++p3dBillboardBatch::batches;p3dBillboardBatch::groups+=count;
+        p3dBillboardBatch::avoided+=visibleGroups-1;
+    }else ++p3dBillboardBatch::reservationFailures;
+    p3d::stack->Pop();
+    if(!first->zTest && oldCompare!=PDDI_COMPARE_ALWAYS)p3d::pddi->SetZCompare(oldCompare);
+    if(oldWrite!=first->zWrite)p3d::pddi->SetZWrite(oldWrite);
+    if(stream)p3d::stack->Load(*matrices[count-1]);
+    return stream!=nullptr;
+}
+#endif
 
 void 
 tBillboardQuadGroup::ProcessShaders(ShaderCallback& callback)
