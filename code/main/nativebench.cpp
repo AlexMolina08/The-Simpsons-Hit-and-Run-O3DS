@@ -817,11 +817,14 @@ unsigned Begin(unsigned elapsed,int context){
  // A level's default car can be parked outside the mission's loaded sectors.
  // Mounting it would teleport the player into an unloaded world (L6 starts the
  // player near the comic shop, but parks bart_v at Krustylu Studios).
- // Keep the established nearby-car routes; relocate only a remote parked car
- // onto the road nearest the already loaded player. This is test setup only.
+ // Start road drives on the road nearest the already loaded player, rather
+ // than steering out of a parked driveway through buildings. Other captures
+ // retain nearby parked cars. This placement happens before warmup/capture;
+ // the measured drive still uses normal inputs, traffic and collision physics.
  Vehicle* setupCar=GetGameplayManager()->GetCurrentVehicle();
  avatar->GetPosition(placementPlayer);placementOriginalCar=setupCar->GetPosition();
- if(!casinoAnchor && (placementOriginalCar-placementPlayer).MagnitudeSqr()>40.0f*40.0f){
+ if(!casinoAnchor && ((roadRoute && !portrait) ||
+    (placementOriginalCar-placementPlayer).MagnitudeSqr()>40.0f*40.0f)){
   RoadSegment* segment=nullptr;float distance=0;
   GetIntersectManager()->FindClosestRoad(placementPlayer,30.0f,segment,distance);
   if(!segment){aborted=done=true;return dt;}
