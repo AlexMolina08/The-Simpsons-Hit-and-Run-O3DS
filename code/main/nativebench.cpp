@@ -472,6 +472,14 @@ static bool ParseRunArgument(const char* argument)
  else if(!strncmp(argument,"bench_vehicle_profile=",22))vehicleProfile=atoi(argument+22)!=0;
  else if(!strncmp(argument,"bench_recurring=",16))Old3dsRecurring::requested=atoi(argument+16)!=0;
 #ifdef SRR2_OLD3DS_RECURRING_PROFILE
+ else if(!strncmp(argument,"bench_recurring_window=",sizeof("bench_recurring_window=")-1)){
+  const char* value=argument+sizeof("bench_recurring_window=")-1;char* end=nullptr;
+  const unsigned long start=strtoul(value,&end,10);
+  if(value==end || *value<'0' || *value>'9' || *end!=',' || start>=60000)return false;
+  value=end+1;const unsigned long finish=strtoul(value,&end,10);
+  if(value==end || *value<'0' || *value>'9' || *end || finish>60000 || start>=finish)return false;
+  Old3dsRecurring::windowStartMs=unsigned(start);Old3dsRecurring::windowEndMs=unsigned(finish);
+ }
  else if(!strncmp(argument,"bench_recurring_drop=",sizeof("bench_recurring_drop=")-1))Old3dsRecurring::focusDropWindow=atoi(argument+sizeof("bench_recurring_drop=")-1)!=0;
 #endif
  else if(!strncmp(argument,"bench_stationary_ms=",20))Old3dsRecurring::stationaryMs=strtoul(argument+20,nullptr,10);

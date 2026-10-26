@@ -9,6 +9,7 @@
 #include <cstring>
 namespace Old3dsRecurring {
 bool active=false,requested=false,focusDropWindow=false;unsigned stationaryMs=0;
+unsigned windowStartMs=15000,windowEndMs=18000;
 namespace {
 // Keep the focused trace inside the shared handheld startup budget. Asset
 // aggregates retain every selected sample even if the frame ring wraps.
@@ -26,7 +27,7 @@ void Scope::Enter(){parent=top;top=this;start=svcGetSystemTick();if(BackendStage
 void Scope::Leave(){const u64 span=svcGetSystemTick()-start;auto& n=current.nodes[stage];n.inclusive+=span;n.exclusive+=span>=children?span-children:0;++n.calls;++current.scopes;if(top!=this)++current.errors;if(parent)parent->children+=span;if(BackendStage(stage) && --backendDepth==0)backendTicks+=span;top=parent;}
 void Begin(unsigned frame,unsigned ms,bool collecting){
     active=requested && collecting && (focusDropWindow
-        ? ms>=15000 && ms<18000 && frame%4==1 : frame%32==17);
+        ? ms>=windowStartMs && ms<windowEndMs && frame%4==1 : frame%32==17);
     if(!active)return;
     if(!calibration){const u64 begin=svcGetSystemTick();for(unsigned i=0;i<1024;++i){Scope s(Update);}calibration=svcGetSystemTick()-begin;}
     current={};current.frame=frame;current.ms=ms;top=nullptr;backendTicks=0;backendDepth=0;
@@ -59,7 +60,7 @@ Entity::Entity(IEntityDSG* entity,unsigned pass){
 }
 Entity::~Entity(){if(!start)return;auto& a=assets[slot];a.ticks+=svcGetSystemTick()-start;a.backend+=backendTicks-backend;a.draws+=g_old3dsDrawCalls-draws;a.vertices+=g_old3dsDrawVerts-vertices;auto& family=families[a.pass][a.category];++family.calls;family.ticks+=svcGetSystemTick()-start;family.backend+=backendTicks-backend;family.draws+=g_old3dsDrawCalls-draws;family.vertices+=g_old3dsDrawVerts-vertices;}
 void Dump(FILE* f){
-    fprintf(f,"NATIVE_RECURRING enabled=%u stride=32 focused_drop=%u window_start_ms=15000 window_end_ms=18000 window_stride=4 records=%u overwritten=%u empty_scope_ns=%.3f asset_overflow=%u animated_asset_reserve=%u stationary_ms=%u diagnostic_only=1 no_frame_io=1 projected_radius_approx=240*r/d material_groups_are_submitted_draws=1\n",requested,focusDropWindow,count<Capacity?count:Capacity,count>Capacity?count-Capacity:0,calibration*1e9/SYSCLOCK_ARM11/1024,overflow,focusDropWindow?Assets/2:0,stationaryMs);
+    fprintf(f,"NATIVE_RECURRING enabled=%u stride=32 focused_drop=%u window_start_ms=%u window_end_ms=%u window_stride=4 records=%u overwritten=%u empty_scope_ns=%.3f asset_overflow=%u animated_asset_reserve=%u stationary_ms=%u diagnostic_only=1 no_frame_io=1 projected_radius_approx=240*r/d material_groups_are_submitted_draws=1\n",requested,focusDropWindow,windowStartMs,windowEndMs,count<Capacity?count:Capacity,count>Capacity?count-Capacity:0,calibration*1e9/SYSCLOCK_ARM11/1024,overflow,focusDropWindow?Assets/2:0,stationaryMs);
     for(unsigned i=count>Capacity?count-Capacity:0;i<count;++i){const auto& r=records[i%Capacity];fprintf(f,"NATIVE_RECURRING_FRAME frame=%u route_ms=%u scopes=%u errors=%u\n",r.frame,r.ms,r.scopes,r.errors);for(unsigned s=0;s<Count;++s){const auto& n=r.nodes[s];if(n.calls)fprintf(f,"NATIVE_RECURRING_NODE frame=%u name=%s calls=%u inclusive_ms=%.6f exclusive_ms=%.6f\n",r.frame,names[s],n.calls,n.inclusive*1000.0/SYSCLOCK_ARM11,n.exclusive*1000.0/SYSCLOCK_ARM11);}}
     for(unsigned pass=0;pass<2;++pass)for(unsigned category=0;category<O3_CATEGORY_COUNT;++category){const auto& a=families[pass][category];if(a.calls)fprintf(f,"NATIVE_RECURRING_FAMILY category=%u pass=%u calls=%u draws=%u vertices=%u inclusive_ms=%.6f backend_ms=%.6f\n",category,pass,a.calls,a.draws,a.vertices,a.ticks*1000.0/SYSCLOCK_ARM11,a.backend*1000.0/SYSCLOCK_ARM11);}
     for(unsigned slot=0;slot<Assets+2*O3_CATEGORY_COUNT;++slot){const auto& a=assets[slot];if(a.calls)fprintf(f,"NATIVE_RECURRING_ASSET slot=%u family_overflow=%u uid=%016llx name=%s category=%u pass=%u calls=%u draws=%u vertices=%u inclusive_ms=%.6f backend_ms=%.6f projected_radius_mean=%.3f\n",slot,slot>=Assets,slot>=Assets?0:a.uid,slot>=Assets?"UNATTRIBUTED_FAMILY":a.name,a.category,a.pass,a.calls,a.draws,a.vertices,a.ticks*1000.0/SYSCLOCK_ARM11,a.backend*1000.0/SYSCLOCK_ARM11,a.pixelSum/a.calls); }
@@ -68,6 +69,7 @@ void Dump(FILE* f){
 #else
 namespace Old3dsRecurring {
 bool active=false,requested=false,focusDropWindow=false;unsigned stationaryMs=0;
+unsigned windowStartMs=15000,windowEndMs=18000;
 void Begin(unsigned,unsigned,bool){}void End(){}
 void Dump(FILE* f){fprintf(f,"NATIVE_RECURRING enabled=0 compiled=0\n");}
 }

@@ -9,6 +9,7 @@ enum Stage { Update,Render,Gameplay,Avatar,Footprint,Garbage,Effects,Physics,Ped
 extern bool active,requested;
 extern bool focusDropWindow;
 extern unsigned stationaryMs;
+extern unsigned windowStartMs,windowEndMs;
 struct Scope {
     Scope* parent=nullptr;u64 start=0,children=0;unsigned stage;
     explicit Scope(unsigned s):stage(s){if(active)Enter();}

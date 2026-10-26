@@ -23,6 +23,7 @@ static u64 tick=100;
 static u64 svcGetSystemTick(){return tick;}
 namespace Old3dsRecurring {
 bool active=true,requested=true,focusDropWindow=false;u64 calibration=1;
+unsigned windowStartMs=15000,windowEndMs=18000;
 struct Node {u64 inclusive=0,exclusive=0;unsigned calls=0;};
 struct {Node nodes[Count];unsigned scopes=0,errors=0,frame=0,ms=0;} current;
 Scope* top=nullptr;unsigned backendDepth=0;u64 backendTicks=0;
@@ -56,6 +57,10 @@ int main(){
  Begin(22,16000,true);assert(!active);
  Begin(25,17999,true);assert(active);
  Begin(29,18000,true);assert(!active);
+ windowStartMs=43000;windowEndMs=47000;
+ Begin(17,42999,true);assert(!active);Begin(21,43000,true);assert(active);
+ Begin(22,44000,true);assert(!active);Begin(25,46999,true);assert(active);
+ Begin(29,47000,true);assert(!active);Begin(33,44000,false);assert(!active);
  focusDropWindow=false;Begin(81,20000,true);assert(active);
  requested=false;Begin(81,20000,true);assert(!active);
  // Fill the nonanimated partition with deliberately colliding keys. Animated
