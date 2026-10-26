@@ -100,17 +100,32 @@ int main(int argc,char** argv){
    case 12:data[Read32(data.data()+40)]=0xff;break;
    case 13:data.resize(31);break;
    case 14:data.resize(Limit+1);break;
-   case 15:put32(data,32,8191);break;
+   case 15:put32(data,32,MinSamples-1);break;
   }
   if(data.size()>=HeaderBytes)put32(data,20,Checksum(data.data()+HeaderBytes,data.size()-HeaderBytes));
   write(argv[2],data);assert(!s_PreparedAudio.Load(argv[2]));assert(!s_PreparedAudio.Bytes());
  }
  auto badChecksum=original;badChecksum.back()^=1;write(argv[2],badChecksum);
  assert(!s_PreparedAudio.Load(argv[2]));
+ // The shortest supported prepared clip retains the same exact-key checks.
+ const unsigned boundaryDsp=((MinSamples+13)/14)*8;
+ std::vector<u8> boundary(HeaderBytes+EntryBytes+MinSamples*2+boundaryDsp,0);
+ std::memcpy(boundary.data(),"SRRDSP1\0",8);
+ put32(boundary,8,1);put32(boundary,12,1);put32(boundary,16,boundary.size());
+ put32(boundary,24,3);put32(boundary,32,MinSamples);
+ put32(boundary,36,HeaderBytes+EntryBytes);
+ put32(boundary,40,HeaderBytes+EntryBytes+MinSamples*2);put32(boundary,44,boundaryDsp);
+ put32(boundary,20,Checksum(boundary.data()+HeaderBytes,boundary.size()-HeaderBytes));
+ write(argv[2],boundary);assert(s_PreparedAudio.Load(argv[2]));
+ std::vector<s16> silence(MinSamples);unsigned cachedBytes=0;
+ assert(s_PreparedAudio.Copy(silence.data(),MinSamples,cachedBytes) && cachedBytes==boundaryDsp);
+ put32(boundary,32,MinSamples-1);
+ put32(boundary,20,Checksum(boundary.data()+HeaderBytes,boundary.size()-HeaderBytes));
+ write(argv[2],boundary);assert(!s_PreparedAudio.Load(argv[2]));
  assert(s_PreparedAudio.Load(argv[1]));
  assert(!s_PreparedAudio.Load("missing-prepared-audio-fixture") && !s_PreparedAudio.Bytes());
  unsigned unchanged=7;assert(!s_PreparedAudio.Copy(nullptr,0,unchanged) && unchanged==7);
- puts("PASS: actual prepared clips match production DSP bytes; exact whole-PCM keys, guard bytes, no callback I/O, mode/coefficient fallback and 17 malformed inputs.");
+ puts("PASS: actual prepared clips match production DSP bytes; exact whole-PCM keys, guard bytes, no callback I/O, mode/coefficient fallback, minimum-length boundary and 18 malformed inputs.");
 }
 '''
 with tempfile.TemporaryDirectory(prefix='srr-prepared-audio-') as directory:

@@ -9,7 +9,8 @@ import subprocess
 import tempfile
 
 ROOT = Path(__file__).resolve().parents[2]
-LIMIT = 2*1024*1024
+LIMIT = 3*1024*1024
+MIN_SAMPLES = 4096
 
 
 def members(path):
@@ -63,7 +64,7 @@ namespace Old3dsPerformance { bool ReducedAudioSearch(){return true;} }
 int main(){
  unsigned samples;
  while(std::fread(&samples,4,1,stdin)==1){
-  if(samples<8192 || samples>441000)return 2;
+  if(samples<4096 || samples>441000)return 2;
   std::vector<s16> pcm(samples);
   if(std::fread(pcm.data(),2,samples,stdin)!=samples)return 3;
   auto expected=pcm;
@@ -80,8 +81,8 @@ int main(){
 def prepare(data, output, samples, archives):
     if output.exists():
         raise ValueError('Output already exists: '+str(output))
-    if any(value < 8192 or value > 441000 for value in samples):
-        raise ValueError('Prepared clips require 8192 to 441000 samples')
+    if any(value < MIN_SAMPLES or value > 441000 for value in samples):
+        raise ValueError('Prepared clips require 4096 to 441000 samples')
     selected = [member for name in archives for member in members(data/name)
                 if member['samples'] in samples]
     selected.sort(key=lambda r: (r['samples'], r['archive'], r['uid']))
@@ -94,7 +95,7 @@ def prepare(data, output, samples, archives):
         size = (size+31)&~31
         size += ((record['samples']+13)//14)*8
     if size > LIMIT:
-        raise ValueError('Selected PCM and DSP data exceed the two-MiB cache bound')
+        raise ValueError('Selected PCM and DSP data exceed the three-MiB cache bound')
     index = bytearray(16*len(selected))
     payload = bytearray()
     with tempfile.TemporaryDirectory(prefix='srr-pc-audio-') as directory:

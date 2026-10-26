@@ -10,7 +10,7 @@
 // requires byte identity, rather than accepting a hash collision. All I/O and
 // validation happens at sound-system initialization, never in a clip callback.
 namespace ctrPreparedAudio {
-constexpr unsigned Limit=2*1024*1024, MaxEntries=256, HeaderBytes=32, EntryBytes=16;
+constexpr unsigned Limit=3*1024*1024, MinSamples=4096, MaxEntries=256, HeaderBytes=32, EntryBytes=16;
 inline unsigned Read32(const unsigned char* p)
 {
     return unsigned(p[0]) | unsigned(p[1])<<8 | unsigned(p[2])<<16 | unsigned(p[3])<<24;
@@ -59,7 +59,7 @@ public:
             const unsigned char* entry=loaded+HeaderBytes+i*EntryBytes;
             const unsigned samples=Read32(entry),pcm=Read32(entry+4),dsp=Read32(entry+8),bytes=Read32(entry+12);
             const unsigned start=HeaderBytes+n*EntryBytes;
-            valid=samples>=8192 && samples<=441000 && samples>=previous &&
+            valid=samples>=MinSamples && samples<=441000 && samples>=previous &&
                 pcm>=start && pcm<=unsigned(length) && samples*2<=unsigned(length)-pcm &&
                 dsp>=start && dsp<=unsigned(length) && bytes<=unsigned(length)-dsp &&
                 bytes==((samples+13)/14)*8;
