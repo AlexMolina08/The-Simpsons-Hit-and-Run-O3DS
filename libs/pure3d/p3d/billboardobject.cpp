@@ -1,3 +1,4 @@
+#include <main/old3dsrecurring.h>
 #ifndef RAD_PS2
 
 //nv:  Send me to hell for this - the ps2 code lies below this big #ifndef
@@ -1257,6 +1258,7 @@ tBillboardQuadGroup::FindQuadByName(const char* name)
 void 
 tBillboardQuadGroup::Display()
 {
+    O3_RECUR(BillboardDisplay);
     if ( !BillboardQuadManager::sEnabled )
     {
         Matrix world = *(p3d::context->GetWorldMatrix());
@@ -2926,6 +2928,7 @@ tBillboardQuad* tBillboardQuadGroup::FindQuadByName(const char* name)
 
 void tBillboardQuadGroup::Display()
 {
+    O3_RECUR(BillboardDisplay);
     if( noAxisFastPath )
     {
         DisplayNoAxisFastpath();

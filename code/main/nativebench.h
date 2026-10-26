@@ -3,10 +3,14 @@
 #ifdef SRR2_OLD3DS_NATIVE_BENCH
 #include <3ds.h>
 namespace NativeBench {
+bool LandmarkDiagnostic();
 // Only the automation's existing whole-update/render/stream clocks are retained.
-enum Stage { Update, Render, Stream, Service, FileService, DebugService, SoundService, FileLock, FileCallback, FileError, FileUserCallback, SoundBufferComplete, SoundEncode, SoundEncodeKernel, Count };
+enum Stage { Update, Render, Stream, Service, FileService, DebugService, SoundService, FileLock, FileCallback, FileError, FileUserCallback, SoundBufferComplete, SoundEncode, SoundEncodeKernel, LoadHandoff, LoadCallback, LoadYield, LoadLock, Count };
 enum Counter { ScopeCalls, AdpcmClips, AdpcmSamples, CountC };
 extern bool detail, collecting,validation,serviceProfile;
+#ifdef SRR2_OLD3DS_SUBMIT_PROFILE
+extern bool submissionProfile;
+#endif
 bool OnCaptureThread();
 void Hash(unsigned);
 void HashFloat(float);
@@ -20,6 +24,8 @@ struct Scope {
 void SaveFilename(char*,unsigned,unsigned);
 void Init(int argc=0,char** argv=nullptr); unsigned Seed(unsigned); unsigned Begin(unsigned elapsed,int context);
 bool ResidentShaders();
+unsigned LoaderSliceUs();
+unsigned CurrentRouteMs();
 bool NativeUniforms();
 bool StereoVisualAudit();
 float StereoSlider(float physical);

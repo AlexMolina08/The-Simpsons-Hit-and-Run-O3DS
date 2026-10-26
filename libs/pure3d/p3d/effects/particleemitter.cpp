@@ -1,3 +1,4 @@
+#include <main/old3dsrecurring.h>
 #include <main/old3dsperformance.h>
 #ifdef SRR2_OLD3DS_PARTICLE_CLIP
 #include <pddi/pica/particleclip.hpp>
@@ -736,6 +737,7 @@ float g_ParticleLODDist = 30.0f;
 
 void tSpriteEmitter::Display()
 {
+    O3_RECUR(ParticleSprites);
     if (!visible)
     {
         return;

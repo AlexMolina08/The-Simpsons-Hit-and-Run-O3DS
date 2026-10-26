@@ -1,6 +1,5 @@
 #include <main/nativebench.h>
 #if defined(SRR2_OLD3DS_NATIVE_BENCH) && defined(SRR2_OLD3DS_SUBMIT_PROFILE)
-#include <main/old3dsexperiment.h>
 #include <main/old3dssampling.h>
 #include <citro3d.h>
 #include <cstdio>
@@ -16,10 +15,10 @@ class Sample {
     u64 start;
 public:
     explicit Sample(unsigned slot):counter(nullptr),start(0) {
-        if(!NativeBench::collecting) return;
+        if(!NativeBench::collecting || !NativeBench::submissionProfile) return;
         counter=&counters[slot];
         const unsigned ordinal=counter->calls++;
-        if(g_o3Detail && Old3dsRotatingSample(ordinal,5)) {
+        if(Old3dsRotatingSample(ordinal,5)) {
             ++counter->samples;start=svcGetSystemTick();
         }
     }
@@ -42,13 +41,14 @@ extern "C" void __wrap_C3D_UpdateUniforms(GPU_SHADER_TYPE type) {
 extern "C" Result __real_shaderProgramConfigure(shaderProgram_s*,bool,bool);
 extern "C" Result __wrap_shaderProgramConfigure(shaderProgram_s* program,bool vertex,bool geometry) {
     Sample sample(3);
-    if(NativeBench::collecting && vertex) {
+    if(NativeBench::collecting && NativeBench::submissionProfile && vertex) {
         ++codeUploads;
         codeWords+=program->vertexShader->dvle->dvlp->codeSize;
     }
     return __real_shaderProgramConfigure(program,vertex,geometry);
 }
 extern "C" void nativeBenchDumpSubmissionProfile(FILE* file) {
+    fprintf(file,"NATIVE_SUBMISSION_PROFILE enabled=%u stride=32 route_only=1 in_memory=1 diagnostic_only=1 sampled_wall_time=1\n",NativeBench::submissionProfile);
     const char* names[]={"context","vertex_uniforms","geometry_uniforms","program_configure"};
     for(unsigned i=0;i<4;++i) {
         const Counter& c=counters[i];

@@ -1,3 +1,4 @@
+#include <main/old3dsrecurring.h>
 /*===========================================================================
     particlesystem.cpp
     28-Feb-2001 Created by Kevin Voon
@@ -318,7 +319,8 @@ void tParticleSystem::Advance(float dTime)
 }
 
 void tParticleSystem::Update(const rmt::Matrix* worldMatrix)
-{       
+{
+    O3_RECUR(ParticleUpdate);
     p3d::stack->Push();
     if (worldMatrix)
     {

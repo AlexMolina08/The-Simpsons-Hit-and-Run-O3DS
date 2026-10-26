@@ -195,6 +195,9 @@ tCompositeDrawable* tCompositeDrawable::Clone(tPose* pose)
 // drawables used to take a "tpose" to draw... 
 //
 #ifdef SRR2_OLD3DS_WHEEL_LOD
+#ifdef SRR2_OLD3DS_NATIVE_BENCH
+bool g_old3dsWheelBatch=true;
+#endif
 static unsigned wheelLodPrepared=0,wheelLodBatches=0,wheelLodRequests=0,wheelLodPoseFallbacks=0;
 static unsigned wheelLodAttempts=0,wheelLodGeometry=0,wheelLodGroups=0,wheelLodBounds=0,wheelLodCompatible=0;
 extern "C" void old3dsDumpWheelLOD()
@@ -268,6 +271,9 @@ void tCompositeDrawable::PrepareWheelLOD()
 }
 bool tCompositeDrawable::DrawWheelLOD(tPose* p)
 {
+#ifdef SRR2_OLD3DS_NATIVE_BENCH
+    if(!g_old3dsWheelBatch)return false;
+#endif
     if(!wheelLodBuffer || !g_picaInFrame || billboard || p->GetNumJoint()!=int(wheelLodJoints) ||
        wheelLodSource->WheelSourceVersion()!=wheelLodVersion || wheelLodVersion==~0u ||
        wheelLodFirst+4>elements.Size()) return false;

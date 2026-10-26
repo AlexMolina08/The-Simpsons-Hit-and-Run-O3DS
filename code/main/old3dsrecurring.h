@@ -5,8 +5,9 @@
 #include <cstdio>
 class IEntityDSG;
 namespace Old3dsRecurring {
-enum Stage { Update,Render,Gameplay,Avatar,Footprint,Garbage,Effects,Physics,Pedestrian,Trigger,Traffic,Actor,Interior,Skidmark,Coin,HitRun,Presentation,Playing,World,Visibility,List,Opaque,Translucent,Shadow,Backend,Material,Submit,Uniforms,PhysicsAreas,PhysicsGround,PhysicsPreSim,PhysicsVehiclePrep,PhysicsCharacterPrep,PhysicsActions,PhysicsDetect,PhysicsSolve,PhysicsVehicles,PhysicsCharacters,PhysicsCamera,PhysicsDynamics,VehiclePreStep,VehicleController,CharacterPreSim,StaticQuery,DynamicQuery,AnimatedQuery,JointTransforms,JointInertia,DetectPrepare,DetectPairs,DetectVolumes,DetectWall,DetectBox,DetectCylinder,DetectSphere,CharacterController,CharacterActions,CharacterPuppet,Count };
+enum Stage { Update,Render,Gameplay,Avatar,Footprint,Garbage,Effects,Physics,Pedestrian,Trigger,Traffic,Actor,Interior,Skidmark,Coin,HitRun,Presentation,Playing,World,Visibility,List,Opaque,Translucent,Shadow,Backend,Material,Submit,Uniforms,PhysicsAreas,PhysicsGround,PhysicsPreSim,PhysicsVehiclePrep,PhysicsCharacterPrep,PhysicsActions,PhysicsDetect,PhysicsSolve,PhysicsVehicles,PhysicsCharacters,PhysicsCamera,PhysicsDynamics,VehiclePreStep,VehicleController,CharacterPreSim,StaticQuery,DynamicQuery,AnimatedQuery,JointTransforms,JointInertia,DetectPrepare,DetectPairs,DetectVolumes,DetectWall,DetectBox,DetectCylinder,DetectSphere,CharacterController,CharacterActions,CharacterPuppet,ParticleUpdate,ParticleSprites,BillboardDisplay,Count };
 extern bool active,requested;
+extern bool focusDropWindow;
 extern unsigned stationaryMs;
 struct Scope {
     Scope* parent=nullptr;u64 start=0,children=0;unsigned stage;

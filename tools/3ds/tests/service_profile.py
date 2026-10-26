@@ -37,7 +37,29 @@ int main(){
  assert(current.exclusive[FileService]==11 && current.exclusive[SoundService]==101 && !top);
  captureThread=false;const auto wrongThreadReads=reads;
  {Scope child(FileLock);tick+=5;}
+ {Scope child(LoadHandoff);tick+=5;}
+ {Scope child(LoadCallback);tick+=5;}
+ {Scope child(LoadYield);tick+=5;}
+ {Scope child(LoadLock);tick+=5;}
  assert(reads==wrongThreadReads);captureThread=true;
+ current={};tick=1;reads=0;
+ {Scope parent(Stream);tick+=1;
+  {Scope handoff(LoadHandoff);tick+=8;}
+  {Scope callback(LoadCallback);tick+=13;}
+  tick+=1;
+ }
+ assert(reads==6 && current.stage[Stream]==23 && current.exclusive[Stream]==2);
+ assert(current.stage[LoadHandoff]==8 && current.stage[LoadCallback]==13 && !top);
+ current={};tick=1;reads=0;
+ {Scope parent(LoadHandoff);tick+=2;
+  {Scope yield(LoadYield);tick+=3;}
+  {Scope lock(LoadLock);tick+=7;}
+ }
+ assert(reads==6 && current.stage[LoadHandoff]==12 && current.exclusive[LoadHandoff]==2);
+ assert(current.stage[LoadYield]==3 && current.stage[LoadLock]==7 && !top);
+ serviceProfile=false;reads=0;
+ {Scope child(LoadHandoff);Scope callback(LoadCallback);Scope yield(LoadYield);Scope lock(LoadLock);}
+ assert(reads==0 && !top);
  collecting=false;const auto before=reads;
  {Scope parent(Service);{Scope child(FileService);}}
  assert(reads==before);

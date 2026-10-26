@@ -2,11 +2,29 @@
 """Summarize bounded native benchmark captures without mixing work and pacing."""
 import argparse,json,math
 from pathlib import Path
-from collections import Counter
+from collections import Counter,deque
 
 def fields(line):return dict(s.split('=',1) for s in line.split()[1:] if '=' in s)
 def percentile(values,p):
  a=sorted(values);return a[min(len(a)-1,max(0,math.ceil(p*len(a))-1))] if a else None
+def worst_frame_window(rows,count=30):
+ window=deque();total=0.0;worst=None;windows=0;previous=None
+ for row in rows:
+  period=float(row.get('period_us',0));frame=int(row['frame'])
+  if period<=0 or not math.isfinite(period):
+   window.clear();total=0.0;previous=None;continue
+  if previous is not None and frame!=previous+1:
+   window.clear();total=0.0
+  previous=frame;window.append((row,period));total+=period
+  if len(window)>count:total-=window.popleft()[1]
+  if len(window)!=count:continue
+  windows+=1
+  if worst is None or total>worst['duration_us']:
+   first=window[0][0]
+   worst=dict(frames=count,fps=count*1e6/total,duration_us=total,
+              start_frame=int(first['frame']),end_frame=frame,
+              start_route_ms=int(first['route_ms']),end_route_ms=int(row['route_ms']))
+ return dict(requested_frames=count,valid_windows=windows,worst=worst)
 def read(path):
  lines=path.read_text().splitlines();header=fields(next(l for l in lines if l.startswith('NATIVE_BUILD ')))
  summary=fields(next(l for l in lines if l.startswith('NATIVE_SUMMARY ')))
@@ -21,19 +39,20 @@ def read(path):
  substeps=dict(Counter(r['substeps'] for r in rows)),contexts=dict(Counter(r['context'] for r in rows)),
  motion=dict(in_car_frames=sum(int(r['incar']) for r in rows),walking_frames=sum(y['incar']=='0' and x['incar']=='0' and sum((float(y[k])-float(x[k]))**2 for k in ['x','z'])**.5 > .5*int(y['elapsed'])/1000 for x,y in zip(rows,rows[1:])),moving_frames=sum(float(r['speed'])>1 for r in rows),streaming_frames=sum(int(r['loading'])>0 for r in rows)),
  loop_period_fps=1e6*len(period)/sum(period) if period else None,
+ sustained_loop_periods=worst_frame_window(rows),
  verification=fields(next((l for l in lines if l.startswith('NATIVE_VERIFY ')),'NATIVE_VERIFY calls=0 failures=0')))
  # Completion and route coverage are separate: button scripts can get stuck.
- driving_window_end=int(header['seconds'])*1000 if header.get('scenario')=='L2-road-v2' else 28000
+ road_route=header.get('scenario') in ('L2-road-v2','loaded-level-road-v3')
+ driving_window_end=int(header['seconds'])*1000 if road_route else 28000
  driving_ms=sum(int(r['elapsed']) for r in rows if int(r['route_ms'])<driving_window_end and r['incar']=='1' and float(r['speed'])>1)
  walking_ms=sum(int(y['elapsed']) for x,y in zip(rows,rows[1:]) if 31000<=int(y['route_ms'])<38000 and y['incar']=='0' and x['incar']=='0' and sum((float(y[k])-float(x[k]))**2 for k in ['x','z'])**.5 > .5*int(y['elapsed'])/1000)
  exited=any(r['incar']=='0' and int(r['route_ms'])>=28000 for r in rows)
  reentered=exited and any(r['incar']=='1' and int(r['route_ms'])>=42000 for r in rows)
- driving_only=header.get('scenario') in ('L2-drive-v1','L2-road-v2')
+ driving_only=road_route or header.get('scenario') in ('L2-drive-v1','loaded-level-drive-v2')
  intact=summary['complete']=='1' and not int(header.get('aborted',0)) and not int(header['overwritten']) and len(rows)==int(summary['frames'])
  minimum_driving_ms=max(4000,int(header['seconds'])*500) if driving_only else 4000
  coverage=intact and driving_ms>=minimum_driving_ms and (all(r['incar']=='1' for r in rows) if driving_only else walking_ms>=2000 and reentered)
  route=fields(next((l for l in lines if l.startswith('NATIVE_ROUTE ')),'NATIVE_ROUTE'))
- road_route=header.get('scenario')=='L2-road-v2'
  if road_route:
   coverage=coverage and driving_ms>=int(header['seconds'])*750 and float(route.get('distance',0))>=int(header['seconds'])*7.5 and int(route.get('recoveries',99))<=1 and int(route.get('point',0))>=3
  result['route_execution']=route

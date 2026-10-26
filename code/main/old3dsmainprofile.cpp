@@ -6,7 +6,7 @@ namespace Old3dsMainProfile {
 void* mainTls=nullptr;bool enabled=false;
 namespace {
 struct Node {u64 inclusive=0,exclusive=0;unsigned calls=0,directChildren=0,descendants=0;};
-struct Record {unsigned frame=0,scopes=0,errors=0;u64 work=0,roots=0;Node nodes[Count];};
+struct Record {unsigned frame=0,routeMs=0,scopes=0,errors=0;u64 work=0,roots=0;Node nodes[Count];};
 constexpr unsigned Capacity=16,Stride=64;
 struct Edge {u64 ticks=0;unsigned calls=0;};
 Edge edges[Count+1][Count];
@@ -14,12 +14,14 @@ struct Site {const void* caller=nullptr;unsigned stage=0,calls=0;u64 ticks=0;};
 Site sites[512];unsigned siteOverflow=0;
 Record records[Capacity],current;
 unsigned count=0,overwritten=0;u64 emptyScopeTicks=0;
-bool requested=false;Scope* active=nullptr;
+bool requested=false,focusDrop=false;Scope* active=nullptr;
 const char* names[]={"game_update","world_layer","world_scene","opaque","translucent","geometry","composite","poly_skin",
     "p3d_pose_evaluate","p3d_pose_joint","matrix_multiply","draw_prim","apply_material","material_protocol","material_pass",
     "material_capture","material_prerender","uniform_capture","light_rebuild","prim_display","geometry_capture",
     "begin_prepared","flush_prepared","frame_begin","viewport","vehicle_update","store_joints","physics_update",
-    "physics_substep","characters_update","poser_assign","poser_fill"};
+    "physics_substep","characters_update","poser_assign","poser_fill",
+    "hud_interface","hud_radar","hud_sprite","hud_font","hud_wrap","hud_art"};
+static_assert(sizeof(names)/sizeof(names[0])==Count,"Every profiler stage needs one label");
 }
 void Configure(bool value)
 {
@@ -32,11 +34,13 @@ void Configure(bool value)
         __atomic_store_n(&enabled,false,__ATOMIC_RELAXED);current={};std::memset(edges,0,sizeof(edges));std::memset(sites,0,sizeof(sites));
     }
 }
-void BeginFrame(unsigned frame,bool collecting)
+void FocusDropWindow(bool value){focusDrop=value;}
+void BeginFrame(unsigned frame,bool collecting,unsigned routeMs)
 {
-    const bool selected=requested && collecting && frame%Stride==17;
+    const bool selected=requested && collecting && (focusDrop
+        ? routeMs>=15000 && routeMs<18000 && frame%4==1 : frame%Stride==17);
     __atomic_store_n(&enabled,selected,__ATOMIC_RELAXED);
-    if(selected){current={};current.frame=frame;active=nullptr;}
+    if(selected){current={};current.frame=frame;current.routeMs=routeMs;active=nullptr;}
 }
 void Scope::Enter()
 {
@@ -65,10 +69,10 @@ void Dump(FILE* file,double tickPairNs)
 {
     fprintf(file,"NATIVE_MAIN_PROFILE_ANCHOR address=%p site_overflow=%u\n",reinterpret_cast<void*>(&Configure),siteOverflow);
     const double emptyNs=emptyScopeTicks*1e9/SYSCLOCK_ARM11/1024;
-    fprintf(file,"NATIVE_MAIN_PROFILE requested=%u stride=%u records=%u overwritten=%u main_tls_only=1 tick_pair_ns=%.3f empty_scope_ns=%.3f diagnostic_only=1 nested_times_not_additive=1 calibrated_body_is_estimate=1\n",requested,Stride,count<Capacity?count:Capacity,overwritten,tickPairNs,emptyNs);
+    fprintf(file,"NATIVE_MAIN_PROFILE requested=%u stride=%u records=%u overwritten=%u focused_drop=%u window_start_ms=15000 window_end_ms=18000 window_stride=4 main_tls_only=1 tick_pair_ns=%.3f empty_scope_ns=%.3f diagnostic_only=1 nested_times_not_additive=1 calibrated_body_is_estimate=1\n",requested,Stride,count<Capacity?count:Capacity,overwritten,focusDrop,tickPairNs,emptyNs);
     for(unsigned i=count>Capacity?count-Capacity:0;i<count;++i){
         const auto& record=records[i%Capacity];
-        fprintf(file,"NATIVE_MAIN_PROFILE_FRAME frame=%u work_ms=%.6f roots_ms=%.6f outside_roots_ms=%.6f scopes=%u errors=%u\n",record.frame,record.work*1000.0/SYSCLOCK_ARM11,record.roots*1000.0/SYSCLOCK_ARM11,(record.work>record.roots?record.work-record.roots:0)*1000.0/SYSCLOCK_ARM11,record.scopes,record.errors);
+        fprintf(file,"NATIVE_MAIN_PROFILE_FRAME frame=%u route_ms=%u work_ms=%.6f roots_ms=%.6f outside_roots_ms=%.6f scopes=%u errors=%u\n",record.frame,record.routeMs,record.work*1000.0/SYSCLOCK_ARM11,record.roots*1000.0/SYSCLOCK_ARM11,(record.work>record.roots?record.work-record.roots:0)*1000.0/SYSCLOCK_ARM11,record.scopes,record.errors);
         for(unsigned stage=0;stage<Count;++stage){const auto& node=record.nodes[stage];if(!node.calls)continue;
             const double inclusiveMs=node.inclusive*1000.0/SYSCLOCK_ARM11,exclusiveMs=node.exclusive*1000.0/SYSCLOCK_ARM11;
             const double estimatedBody=inclusiveMs-(node.descendants*emptyNs+node.calls*tickPairNs/2)/1e6;

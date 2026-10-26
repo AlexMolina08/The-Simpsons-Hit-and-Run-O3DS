@@ -8,7 +8,8 @@ enum Stage { GameUpdate,WorldLayer,WorldScene,Opaque,Translucent,Geometry,Compos
     PoseEvaluate,PoseJoint,MatrixMultiply,DrawPrim,ApplyMaterial,MaterialProtocol,MaterialPass,
     MaterialCapture,MaterialPreRender,UniformCapture,LightRebuild,PrimDisplay,GeometryCapture,
     BeginPrepared,FlushPrepared,FrameBegin,Viewport,VehicleUpdate,StoreJoints,PhysicsUpdate,
-    PhysicsSubstep,CharactersUpdate,PoserAssign,PoserFill,Count };
+    PhysicsSubstep,CharactersUpdate,PoserAssign,PoserFill,
+    HudInterface,HudRadar,HudSprite,HudFont,HudWrap,HudArt,Count };
 extern void* mainTls;
 extern bool enabled;
 struct Scope {
@@ -22,7 +23,7 @@ struct Scope {
     ~Scope(){if(start)Leave();}
     void Enter();void Leave();
 };
-void Configure(bool);void BeginFrame(unsigned,bool);void EndFrame(u64);void Dump(FILE*,double);
+void Configure(bool);void FocusDropWindow(bool);void BeginFrame(unsigned,bool,unsigned routeMs=0);void EndFrame(u64);void Dump(FILE*,double);
 }
 #define O3_MP_JOIN_(a,b) a##b
 #define O3_MP_JOIN(a,b) O3_MP_JOIN_(a,b)

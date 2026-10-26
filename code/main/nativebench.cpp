@@ -127,6 +127,10 @@ extern unsigned g_old3dsAdpcmVerified,g_old3dsAdpcmMismatches,g_old3dsAdpcmVerif
 namespace NativeBench {
 bool detail=false,collecting=false,validation=false,serviceProfile=false;
 static bool vehicleProfile=false;
+static unsigned loaderSliceUs=0;
+#ifdef SRR2_OLD3DS_SUBMIT_PROFILE
+bool submissionProfile=false;
+#endif
 static void* captureTls=nullptr;
 bool OnCaptureThread(){return getThreadLocalStorage()==captureTls;}
 static unsigned behaviorHash=2166136261u;
@@ -185,7 +189,7 @@ static unsigned contextFastBegin=0,contextFallbackBegin=0,contextWordsBegin=0;
 static unsigned contextFastEnd=0,contextFallbackEnd=0,contextWordsEnd=0;
 #endif
 static Scope* top;
-static const char* names[Count]={"update","render","stream","service","file_service","debug_service","sound_service","file_lock","file_callback","file_error","file_user_callback","sound_buffer_complete","sound_encode","sound_encode_kernel"};
+static const char* names[Count]={"update","render","stream","service","file_service","debug_service","sound_service","file_lock","file_callback","file_error","file_user_callback","sound_buffer_complete","sound_encode","sound_encode_kernel","load_handoff","load_callback","load_yield","load_lock"};
 // Sparse development-only SD breadcrumbs survive a forced console restart.
 // Formatting and I/O perturb the route; enabled captures are never FPS evidence.
 static void Checkpoint(const char* boundary,int stage)
@@ -201,6 +205,9 @@ void Scope::BeginScope(Stage s){Checkpoint("enter",s);stage=s;child=0;++counters
 void Scope::EndScope(){if(!start)return;u64 end=svcGetSystemTick(),dt=end-start;
  current.stage[stage]+=(unsigned)dt;current.exclusive[stage]+=(unsigned)(dt-child);
  if(parent)parent->child+=dt;top=parent;Checkpoint("leave",stage);}
+unsigned LoaderSliceUs(){return loaderSliceUs;}
+unsigned CurrentRouteMs(){return elapsedMs;}
+bool LandmarkDiagnostic(){return false;}
 bool ResidentShaders(){return residentShaders;}
 bool NativeUniforms(){return nativeUniforms;}
 // Benchmark-only input driver. Follow immutable road points through the normal
