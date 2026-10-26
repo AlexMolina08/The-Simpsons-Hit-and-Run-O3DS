@@ -145,6 +145,7 @@ extern bool g_picaNativeTextureDiagnostics;
 #include <pddi/pica/texture.hpp>
 static picaNativeTextureStats nativeTextureCaptureBegin={},nativeTextureCaptureEnd={};
 extern "C" void picaDumpNativeTextures(FILE*);
+#include <radnativeseek.hpp>
 extern "C" void radLoadDumpWorkerSlices(FILE*);
 #endif
 extern "C" unsigned g_picaPresentedFrames;
@@ -480,6 +481,7 @@ static bool ParseRunArgument(const char* argument)
 #endif
 #ifdef SRR2_OLD3DS_NATIVE_TEXTURE_BUNDLE
  else if(!strncmp(argument,"bench_native_contiguous=",sizeof("bench_native_contiguous=")-1))g_picaNativeContiguous=atoi(argument+sizeof("bench_native_contiguous=")-1)!=0;
+ else if(!strncmp(argument,"bench_native_seek_lend=",sizeof("bench_native_seek_lend=")-1))radNativeSeek::enabled=atoi(argument+sizeof("bench_native_seek_lend=")-1)!=0;
 #endif
 #ifdef SRR2_OLD3DS_GPU_SKIN_SUPPORT
  else if(!strncmp(argument,"bench_skin_prepare_yield=",sizeof("bench_skin_prepare_yield=")-1))g_picaSkinPrepareYield=atoi(argument+sizeof("bench_skin_prepare_yield=")-1)!=0;
@@ -1066,6 +1068,7 @@ static void DumpVisual(FILE* f)
 }
 extern "C" void picaDumpStereoDiagnostics(FILE*);
 void Dump(){if(!enabled)return;
+ radNativeSeek::Drain();
  FILE*f=fopen("native-" SRR2_OLD3DS_BUILD_ID ".log","w");if(!f)return;
  unsigned optionalDiagnostics=0,memoryDiagnostics=0;
 #ifdef SRR2_OLD3DS_OPTIONAL_DIAG
@@ -1088,6 +1091,7 @@ void Dump(){if(!enabled)return;
  fprintf(f,"NATIVE_SKIN_LOAD_SLICES enabled=%u checkpoints=%u vertex_interval=64 whole_session=1 unchanged_vertex_bytes=1\n",g_picaSkinPrepareYield,g_picaSkinPrepareCheckpoints);
 #endif
  radLoadDumpWorkerSlices(f);
+ radNativeSeek::Dump(f);
 #ifdef SRR2_OLD3DS_SPRITE_ATLAS
  fprintf(f,"NATIVE_SPRITE_ATLAS enabled=%u loaded=%u applied=%u batched=%u avoided_tile_draws=%u source_geometry_unchanged=1\n",p3dSpriteAtlas::enabled,p3dSpriteAtlas::loaded,p3dSpriteAtlas::applied,p3dSpriteAtlas::batched,p3dSpriteAtlas::avoided);
  fprintf(f,"NATIVE_SPRITE_ATLAS_REJECTIONS textures=%u shape=%u tile=%u format=%u\n",p3dSpriteAtlas::texturesLoaded,p3dSpriteAtlas::rejectShape,p3dSpriteAtlas::rejectTile,p3dSpriteAtlas::rejectFormat);

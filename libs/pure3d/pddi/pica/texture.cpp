@@ -6,6 +6,7 @@
 #include <pddi/pica/gpuuploadguard.hpp>
 #ifdef SRR2_OLD3DS_NATIVE_BENCH
 #include <radloadtiming.hpp>
+#include <radnativeseek.hpp>
 #endif
 #if defined(SRR2_OLD3DS_NATIVE_BENCH) && defined(SRR2_OLD3DS_VRAM_TEXTURES)
 #include <main/nativebench.h>
@@ -1113,7 +1114,13 @@ bool picaTexture::ReadPrepared(const void* source,unsigned sourceBytes,unsigned 
 #ifdef SRR2_OLD3DS_NATIVE_BENCH
             radLoadTiming::StageRegion seek(radLoadTiming::NativeTextureSeek);
 #endif
-            positioned=input.file && entry->bytes<=picaNativeBundle::BundleBytes && entry->offset<=picaNativeBundle::BundleBytes-entry->bytes && !fseek(input.file,entry->offset,SEEK_SET);
+            positioned=input.file && entry->bytes<=picaNativeBundle::BundleBytes && entry->offset<=picaNativeBundle::BundleBytes-entry->bytes;
+            if(positioned){
+#ifdef SRR2_OLD3DS_NATIVE_BENCH
+                radNativeSeek::Lease privateFileSeek;
+#endif
+                positioned=!fseek(input.file,entry->offset,SEEK_SET);
+            }
         }
         cost.Select(previous);
         bool ok=false;

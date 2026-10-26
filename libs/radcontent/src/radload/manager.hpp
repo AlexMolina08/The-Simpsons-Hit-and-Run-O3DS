@@ -50,6 +50,10 @@ public:
     void SwitchTasks();
     void LendDuringWait();
     void ReclaimAfterWait();
+#ifdef SRR2_OLD3DS_NATIVE_BENCH
+    bool BeginNativeSeek();
+    void EndNativeSeek();
+#endif
 
     class QueueItem : public radLoadUpdatableRequest
     {
@@ -97,6 +101,9 @@ protected:
     IRadThread* m_pThread;
     IRadThreadSemaphore* m_pSemaphore;
     IRadThreadMutex* m_pMutex;
+#ifdef SRR2_OLD3DS_NATIVE_BENCH
+    void* m_nativeSeekWorker=nullptr;
+#endif
 };
 
 #endif
