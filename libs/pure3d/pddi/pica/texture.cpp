@@ -584,6 +584,30 @@ pddiPixelFormat picaTexture::GetPixelFormat() { return lock.format; }
 int picaTexture::GetWidth()                   { return xSize; }
 int picaTexture::GetHeight()                  { return ySize; }
 int picaTexture::GetDepth()                   { return 32; }
+#ifdef SRR2_OLD3DS_SPRITE_ATLAS
+#include <p3d/spriteatlas.hpp>
+bool picaTexture::PrepareAtlas(picaTexture* atlas,picaTexture* const* originals,unsigned count)
+{
+    if(!atlas || !count || !originals[0])return false;
+    const unsigned level=originals[0]->tex.maxLevel;
+    if(level && !p3dSpriteAtlas::allowMipmaps)return false;
+    if(!atlas->created || !atlas->valid || atlas->tex.maxLevel<level)return false;
+    for(unsigned i=0;i<count;++i){const picaTexture* original=originals[i];
+        if(!original || !original->created || !original->valid || original->tex.maxLevel!=level ||
+           original->hwFormat!=atlas->hwFormat)return false;
+    }
+    // A private mipmapped experiment clamps to the original tiles' common LOD.
+    // Atlas mip border filtering still requires physical pixel comparison.
+    atlas->tex.maxLevel=level;return true;
+}
+extern "C" bool picaSpriteAtlasPrepare(pddiTexture* atlas,pddiTexture* const* originals,unsigned count)
+{
+    if(!count || count>p3dSpriteAtlas::MaxTiles)return false;
+    picaTexture* native[p3dSpriteAtlas::MaxTiles];
+    for(unsigned i=0;i<count;++i)native[i]=dynamic_cast<picaTexture*>(originals[i]);
+    return picaTexture::PrepareAtlas(dynamic_cast<picaTexture*>(atlas),native,count);
+}
+#endif
 int picaTexture::GetNumMipMaps()              { return nMipMap; }
 int picaTexture::GetAlphaDepth()              { return alphaDepth; }
 

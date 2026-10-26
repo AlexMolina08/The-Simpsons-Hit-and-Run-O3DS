@@ -39,6 +39,9 @@ public:
 #endif
 
     void Display();
+#ifdef SRR2_OLD3DS_SPRITE_ATLAS
+    bool ApplyAtlas(tTexture*,const unsigned*,unsigned,unsigned,unsigned);
+#endif
 
     int GetNativeX(void); 
     int GetNativeY(void);

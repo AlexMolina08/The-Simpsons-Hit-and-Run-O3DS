@@ -72,6 +72,7 @@ program = r'''
 #include <vector>
 #include "libs/pure3d/pddi/pica/clipbounds.hpp"
 #include "code/presentation/gui/utility/handheldcredits.h"
+#define O3_MAIN_SCOPE(stage) ((void)0)
 #define SRR2_OLD_3DS 1
 using P3D_UNICODE=char16_t;
 enum {CENTRE_X=1,PDDI_MATRIX_MODELVIEW,PDDI_SP_BASETEX,PDDI_PRIM_TRIANGLES,PDDI_PRIM_TRISTRIP,PDDI_V_CT};

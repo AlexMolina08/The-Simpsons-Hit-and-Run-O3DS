@@ -1,3 +1,4 @@
+#include <main/old3dsmainprofile.h>
 #ifdef RAD_3DS
 #include <main/graphics3ds.h>
 #include <presentation/gui/frontend/guiscreencheats.h>
@@ -6,7 +7,7 @@
 #include <presentation/gui/frontend/guiscreenviewcredits.h>
 #include <presentation/gui/utility/handheldcredits.h>
 #include <presentation/gui/utility/handheldiconbounds.h>
-#include <main/old3dsbottommap.h>
+#include <main/handheldhudcadence.h>
 //===========================================================================
 // Copyright (C) 2000 Radical Entertainment Ltd.  All rights reserved.
 //
@@ -1700,6 +1701,7 @@ namespace
 
     void RetailArt(tSprite* sprite,float x,float y,float w,float h,tColour tint=tColour(255,255,255))
     {
+        O3_MAIN_SCOPE(HudArt);
         FlushUI();
         if(!sprite || sprite->GetWidth()<=0 || sprite->GetHeight()<=0)return;
         const tColour old=sprite->GetColour();sprite->SetColour(tint);
@@ -1784,16 +1786,32 @@ namespace
         return true;
     }
 
+    tSprite* BoardBackground()
+    {
+        const ContextEnum context=GetGameFlow()->GetCurrentContext();
+        CGuiScreenHud* hud=(context==CONTEXT_GAMEPLAY || context==CONTEXT_PAUSE)?GetCurrentHud():NULL;
+        const auto currentBackground=[&]()->tSprite*{
+            Scrooby::Page* page=hud?hud->GetScroobyScreen()->GetPage("HudBgd"):NULL;
+            Scrooby::Sprite* background=page?page->GetSprite("MapBgd0"):NULL;
+            return background?const_cast<tSprite*>(background->GetRawSprite()):NULL;
+        };
+#if defined(SRR2_OLD3DS_BOTTOM_MAP_15HZ) && defined(SRR2_OLD3DS_NATIVE_BENCH)
+        // Gameplay owns its background through the current HUD. If that image
+        // is absent, Board's gradient already supplies the background.
+        // No pointer is retained across a screen or level change.
+        if(HandheldHudCadence::directHudBackground && hud){
+            ++HandheldHudCadence::hudBackgroundDirect;return currentBackground();
+        }
+        ++HandheldHudCadence::hudBackgroundLookups;
+#endif
+        tSprite* sprite=UIAsset("mapbgd.png");
+        return sprite?sprite:currentBackground();
+    }
+
     void Board(bool television=false,bool commands=true)
     {
         Gradient(0,0,320,240,tColour(66,53,101),tColour(22,21,46));
-        tSprite* glass=UIAsset("mapbgd.png");
-        const ContextEnum context=GetGameFlow()->GetCurrentContext();
-        if(!glass && (context==CONTEXT_GAMEPLAY || context==CONTEXT_PAUSE) && GetCurrentHud()){
-            Scrooby::Page* page=GetCurrentHud()->GetScroobyScreen()->GetPage("HudBgd");
-            Scrooby::Sprite* background=page?page->GetSprite("MapBgd0"):NULL;
-            if(background)glass=const_cast<tSprite*>(background->GetRawSprite());
-        }
+        tSprite* glass=BoardBackground();
         RetailArt(glass,160,126,318,236,tColour(125,108,166));
         if(television){
             // Light comes from the picture tube, rather than separate buttons.
@@ -1907,6 +1925,7 @@ namespace
     void Wrapped(tFont* font,const P3D_UNICODE* text,float x,float top,float width,float height,
                  unsigned maxLines,tColour colour,float boxHeight=0,bool centered=false)
     {
+        O3_MAIN_SCOPE(HudWrap);
         if(!font || !text || font->GetFontHeight()<=0)return;
         // Reflow only when content or allotted area changes. HUD is not a text layout engine per frame.
         struct Cache {tFont* font;float width,height,renderHeight;P3D_UNICODE text[512],lines[16][256];unsigned count,maxLines;int offset;};
@@ -2459,6 +2478,7 @@ namespace
 
     void DrawHUD(tView* view)
     {
+        O3_MAIN_SCOPE(HudInterface);
         CGuiScreenHud* hud=GetCurrentHud();
         if(!view || !hud)return;
         Scrooby::Page* page=hud->GetScroobyScreen()->GetPage("Hud");
@@ -3243,7 +3263,7 @@ void CHudMap::AfterRenderLayers3DS( tView* guiView )
     const bool cadenceEligible=context==CONTEXT_GAMEPLAY && map && guiView && s_mapWasVisible &&
         (!map->m_hudLayer || map->m_hudLayer->IsVisible()) && cadenceManager &&
         cadenceManager->GetCurrentScreen()==CGuiWindow::GUI_SCREEN_ID_HUD;
-    if(!cadenceEligible)Old3dsBottomMap::Reset();
+    if(!cadenceEligible)HandheldHudCadence::Reset();
 #endif
     if( context != CONTEXT_GAMEPLAY && context != CONTEXT_PAUSE )
     {
@@ -3256,11 +3276,43 @@ void CHudMap::AfterRenderLayers3DS( tView* guiView )
     }
     const bool shown=map && s_mapWasVisible && (!map->m_hudLayer || map->m_hudLayer->IsVisible());
 #ifdef SRR2_OLD3DS_BOTTOM_MAP_15HZ
-    if(shown && !Old3dsBottomMap::Due())return;
+    if(shown && HandheldHudCadence::cadenceMode && !Graphics3DS::IsNew()){
+        // Critical HUD changes bypass the map deadline. Input dispatch itself
+        // always runs at the game rate, including while the cached LCD is held.
+        CGuiScreenHud* hud=GetCurrentHud();
+        Scrooby::Page* page=hud?hud->GetScroobyScreen()->GetPage("Hud"):NULL;
+        Scrooby::Group* action=page?page->GetGroup("ActionButton"):NULL;
+        Avatar* avatar=GetAvatarManager()->GetAvatarForPlayer(0);
+        Character* character=avatar?avatar->GetCharacter():NULL;
+        ActionButton::ButtonHandler* handler=character?character->GetActionButtonHandler():NULL;
+        Mission* mission=GetGameplayManager()->GetCurrentMission();
+        MissionStage* stage=mission?mission->GetCurrentStage():NULL;
+        const int message=stage?stage->GetStartMessageIndex():-1;
+        const int bank=GetCoinManager()->GetBankValue();
+        const bool actionable=action && action->IsVisible();
+        static CGuiScreenHud* previousHud=NULL;static MissionStage* previousStage=NULL;
+        static ActionButton::ButtonHandler* previousHandler=NULL;
+        static int previousMessage=-1,previousBank=-1;
+        static bool previousAction=false,previousPressed=false;
+        if(!actionable)handler=NULL; // Hidden action handlers do not change the displayed HUD.
+        if(previousHud!=hud || previousStage!=stage || previousHandler!=handler ||
+           previousMessage!=message || previousBank!=bank || previousAction!=actionable ||
+           previousPressed!=s_hudActionPressed)HandheldHudCadence::ForceUpdate();
+        previousHud=hud;previousStage=stage;previousHandler=handler;
+        previousMessage=message;previousBank=bank;previousAction=actionable;
+        previousPressed=s_hudActionPressed;
+        bool animate=false;
+        if(s_pickupTick){const u64 now=svcGetSystemTick();
+            animate=now-s_pickupTick<u64(SYSCLOCK_ARM11*1.2f);
+            for(const auto& pickup:s_pickups)if(pickup.tick && now-pickup.tick<u64(SYSCLOCK_ARM11*0.55f))animate=true;
+        }
+        HandheldHudCadence::SetUrgent(animate);
+    }
+    if(shown && !HandheldHudCadence::Due())return;
 #endif
     DrawHUD(guiView);
 #ifdef SRR2_OLD3DS_BOTTOM_MAP_15HZ
-    if(shown)Old3dsBottomMap::Rendered();
+    if(shown)HandheldHudCadence::Rendered();
 #endif
 
 }
@@ -3299,6 +3351,7 @@ static void DisplayChild( Scrooby::Group* group )
 
 void CHudMap::DisplayOnBottomScreen( tView* guiView, Scrooby::Group* background )
 {
+    O3_MAIN_SCOPE(HudRadar);
     // BeginRender changes both the camera and the current matrix. Preserve the
     // caller before it runs, so subsequent native HUD text is not near-clipped.
     tView* previousView=p3d::context->GetView();

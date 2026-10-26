@@ -1,9 +1,20 @@
+#include <main/old3dsmainprofile.h>
 //=============================================================================
 // Copyright (c) 2002 Radical Games Ltd.  All rights reserved.
 //=============================================================================
 
 
 #include <p3d/sprite.hpp>
+#ifdef SRR2_OLD3DS_SPRITE_ATLAS
+#include <p3d/spriteatlas.hpp>
+#ifdef SRR2_OLD3DS_NATIVE_BENCH
+#include <main/nativebench.h>
+#endif
+#include <cstring>
+#include <cstdio>
+#include <pddi/pica/quadstream.hpp>
+namespace p3dSpriteAtlas { bool enabled=true,allowMipmaps=false,diagnostics=false;unsigned loaded=0,applied=0,batched=0,avoided=0,texturesLoaded=0,rejectShape=0,rejectTile=0,rejectFormat=0; }
+#endif
 #include <p3d/utility.hpp>
 #include <p3d/chunkfile.hpp>
 #include <p3d/image.hpp>
@@ -598,9 +609,70 @@ void tSprite::SetColour(tColour c)
     }
 }
 
+#ifdef SRR2_OLD3DS_SPRITE_ATLAS
+namespace p3dSpriteAtlas {
+namespace { struct SpriteCount {unsigned long long uid;unsigned calls,tiles;};SpriteCount spriteCounts[96]={};unsigned spriteCount=0,overflow=0; }
+static void Observe(unsigned long long uid,unsigned tiles)
+{
+    for(unsigned i=0;i<spriteCount;++i)if(spriteCounts[i].uid==uid){++spriteCounts[i].calls;spriteCounts[i].tiles+=tiles;return;}
+    if(spriteCount==96){++overflow;return;}
+    auto& slot=spriteCounts[spriteCount++];slot.uid=uid;slot.calls=1;slot.tiles=tiles;
+}
+void DumpSprites(FILE* file)
+{
+    fprintf(file,"NATIVE_SPRITE_COUNTS enabled=%u overflow=%u diagnostic_only=1\n",diagnostics,overflow);
+    if(diagnostics)for(unsigned i=0;i<spriteCount;++i){const auto& s=spriteCounts[i];fprintf(file,"NATIVE_SPRITE uid=%016llx calls=%u tile_draws=%u\n",s.uid,s.calls,s.tiles);}
+}
+}
+bool tSprite::ApplyAtlas(tTexture* atlas,const unsigned* words,unsigned count,unsigned aw,unsigned ah)
+{
+    if(!atlas || count!=unsigned(nPolys) || count<2 || count>p3dSpriteAtlas::MaxTiles ||
+       unsigned(atlas->GetWidth())!=aw || unsigned(atlas->GetHeight())!=ah){++p3dSpriteAtlas::rejectShape;return false;}
+    pddiTexture* originals[p3dSpriteAtlas::MaxTiles];
+    for(unsigned i=0;i<count;++i){
+        const p3dSpriteAtlas::Tile t={words[i*4],words[i*4+1],words[i*4+2],words[i*4+3]};
+        if(!p3dSpriteAtlas::Valid(aw,ah,t) || unsigned(textures[i]->GetWidth())!=t.width ||
+           unsigned(textures[i]->GetHeight())!=t.height){++p3dSpriteAtlas::rejectTile;return false;}
+        originals[i]=textures[i]->GetTexture();
+    }
+    if(!picaSpriteAtlasPrepare(atlas->GetTexture(),originals,count)){++p3dSpriteAtlas::rejectFormat;return false;}
+    for(unsigned i=0;i<count;++i){
+        const p3dSpriteAtlas::Tile t={words[i*4],words[i*4+1],words[i*4+2],words[i*4+3]};
+        for(unsigned v=0;v<4;++v){auto& uv=polys[i*4+v].uv0;
+            uv.u=p3dSpriteAtlas::U(uv.u,t,aw);uv.v=p3dSpriteAtlas::V(uv.v,t,ah);
+        }
+        atlas->AddRef();textures[i]->Release();textures[i]=atlas;
+    }
+    ++p3dSpriteAtlas::applied;return true;
+}
+#endif
+
 void tSprite::Display()
 {
-    for(int i = 0; i < nPolys; i++)
+    O3_MAIN_SCOPE(HudSprite);
+    int firstPoly=0;
+#if defined(SRR2_OLD3DS_NATIVE_BENCH) && defined(SRR2_OLD3DS_SPRITE_ATLAS)
+    if(p3dSpriteAtlas::diagnostics && NativeBench::collecting)p3dSpriteAtlas::Observe((unsigned long long)GetUID(),unsigned(nPolys));
+#endif
+#ifdef SRR2_OLD3DS_SPRITE_ATLAS
+    if(p3dSpriteAtlas::enabled && nPolys>1){
+        bool shared=true;for(int i=1;i<nPolys;++i)shared&=textures[i]==textures[0];
+        if(shared){
+            Shader->GetShader()->SetTexture(PDDI_SP_BASETEX,textures[0]->GetTexture());
+            pddiPrimStream* stream=picaBeginQuadStream(Shader->GetShader(),unsigned(nPolys));
+            if(stream){
+                for(;firstPoly<nPolys;++firstPoly){
+                    pddiVector positions[4];pddiVector2 uv[4];pddiColour colours[4];
+                    for(unsigned v=0;v<4;++v){const auto& p=polys[firstPoly*4+v];positions[v]=p.v;uv[v]=p.uv0;colours[v]=p.c;}
+                    if(!picaEmitColourQuad(stream,positions,uv,colours,picaQuad::Sparkle))break;
+                }
+                p3d::pddi->EndPrims(stream);
+                if(firstPoly){++p3dSpriteAtlas::batched;p3dSpriteAtlas::avoided+=unsigned(firstPoly-1);}
+            }
+        }
+    }
+#endif
+    for(int i = firstPoly; i < nPolys; i++)
     {
 //      if(tDrawable2D::RectClip(scratch,uv,colours))
         {
@@ -663,6 +735,10 @@ tEntity* tSpriteLoader::LoadObject(tChunkFile* f, tEntityStore* store)
     imageCount = f->GetLong();
     blitBorder = f->GetLong();
     int count = 0;
+#ifdef SRR2_OLD3DS_SPRITE_ATLAS
+    tTexture* atlas=NULL;unsigned atlasCount=0,atlasWidth=0,atlasHeight=0;
+    unsigned atlasTiles[p3dSpriteAtlas::MaxTiles*4]={};
+#endif
     if ((imageCount>1) || blitBorder)
     {
          images = new tTexture*[imageCount];
@@ -672,6 +748,23 @@ tEntity* tSpriteLoader::LoadObject(tChunkFile* f, tEntityStore* store)
     {
         switch(f->BeginChunk())
         {
+#ifdef SRR2_OLD3DS_SPRITE_ATLAS
+            case p3dSpriteAtlas::Chunk:
+                if(p3dSpriteAtlas::enabled && !atlas){
+                    const unsigned magic=f->GetUInt(),version=f->GetUInt();
+                    atlasCount=f->GetUInt();atlasWidth=f->GetUInt();atlasHeight=f->GetUInt();
+                    if(magic!=p3dSpriteAtlas::Magic || version!=1 || atlasCount!=unsigned(imageCount) ||
+                       atlasCount<2 || atlasCount>p3dSpriteAtlas::MaxTiles){atlasCount=0;break;}
+                    for(unsigned i=0;i<atlasCount*4;++i)atlasTiles[i]=f->GetUInt();
+                    while(f->ChunksRemaining()){
+                        const unsigned kind=f->BeginChunk();
+                        if(kind==Pure3D::Texture::IMAGE && !atlas){atlas=LoadTexture(f,32);if(atlas){atlas->AddRef();++p3dSpriteAtlas::texturesLoaded;}}
+                        f->EndChunk();
+                    }
+                    ++p3dSpriteAtlas::loaded;
+                }
+                break;
+#endif
             case P3D_IMAGE:
                 {
                     image = imageLoader->LoadImage(f, 32);
@@ -702,6 +795,9 @@ tEntity* tSpriteLoader::LoadObject(tChunkFile* f, tEntityStore* store)
         f->EndChunk();
     }
 
+#ifdef SRR2_OLD3DS_SPRITE_ATLAS
+    if(atlas && (!images || image)){atlas->Release();atlas=NULL;}
+#endif
     if(image)
     {
         tShader* mat = p3d::find<tShader>(store, shader);
@@ -716,6 +812,9 @@ tEntity* tSpriteLoader::LoadObject(tChunkFile* f, tEntityStore* store)
          tShader* mat = p3d::find<tShader>(store, shader);
          tSprite* sprite = new tSprite(images, imageWidth, imageHeight, imageCount, mat, 1, nativeX, nativeY, converter);
          sprite->SetName(name);
+#ifdef SRR2_OLD3DS_SPRITE_ATLAS
+         if(atlas){sprite->ApplyAtlas(atlas,atlasTiles,atlasCount,atlasWidth,atlasHeight);atlas->Release();atlas=NULL;}
+#endif
 
          // don't delete the textures any more, cause we use them right off the bat.
          /*for (int i=0; i < imageCount; i++)

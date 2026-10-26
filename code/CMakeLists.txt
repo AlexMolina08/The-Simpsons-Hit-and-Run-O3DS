@@ -161,7 +161,7 @@ set(SRR2_SOURCES
     "main/old3dsexperiment.cpp"
     "main/nativebench.cpp"
     "main/old3dsrecurring.cpp"
-    "main/old3dsbottommap.cpp"
+    "main/handheldhudcadence.cpp"
     "main/old3dscadence.cpp"
     "main/old3dsmemory.cpp"
     "main/old3dsmainprofile.cpp"

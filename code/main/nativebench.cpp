@@ -3,7 +3,7 @@
 #include <main/old3dsrecurring.h>
 #ifdef SRR2_OLD3DS_NATIVE_BENCH
 #endif
-#include <main/old3dsbottommap.h>
+#include <main/handheldhudcadence.h>
 #include <main/old3dscadence.h>
 #include <main/old3dsmemory.h>
 #include <main/old3dspools.h>
@@ -495,7 +495,7 @@ void Init(int argc,char** argv){
  O3ExperimentExternal(diagnostic,false);
 #endif
 #ifdef SRR2_OLD3DS_BOTTOM_MAP_15HZ
- Old3dsBottomMap::enabled=bottomMapMode!=0;
+ HandheldHudCadence::enabled=bottomMapMode!=0;
 #endif
  if(seconds<5||seconds>(roadRoute?60u:25u))seconds=25;if(warmup<3||warmup>60)warmup=8;if(step<1||step>100)step=67;
  // Use the existing normal heap after libctru startup, not additional BSS.
@@ -617,8 +617,8 @@ unsigned Begin(unsigned elapsed,int context){
  memset(&current,0,sizeof(current));memset(counters,0,sizeof(counters));
 #ifdef SRR2_OLD3DS_BOTTOM_MAP_15HZ
  unsigned bottomChoice=((frame/24)^bottomMapSeed)*0x9e3779b9u;bottomChoice^=bottomChoice>>16;bottomChoice*=0x85ebca6bu;bottomChoice^=bottomChoice>>13;
- Old3dsBottomMap::enabled=bottomMapMode==1 || (bottomMapMode==2 && (bottomChoice&1));
- current.bottomMapEnabled=Old3dsBottomMap::enabled;bottomMapStart=Old3dsBottomMap::DrawCount();
+ HandheldHudCadence::enabled=bottomMapMode==1 || (bottomMapMode==2 && (bottomChoice&1));
+ current.bottomMapEnabled=HandheldHudCadence::enabled;bottomMapStart=HandheldHudCadence::DrawCount();
 #endif
 
 #ifdef SRR2_OLD3DS_COARSE_POOLS
@@ -668,7 +668,7 @@ bool End(u64 work,int context){
  current.heapUsed=0;
 #endif
 #ifdef SRR2_OLD3DS_BOTTOM_MAP_15HZ
- current.bottomMapDraws=Old3dsBottomMap::DrawCount()-bottomMapStart;
+ current.bottomMapDraws=HandheldHudCadence::DrawCount()-bottomMapStart;
 #endif
  current.presentEnd=g_picaPresentedFrames;
  current.linear=linearSpaceFree();current.loading=GetLoadingManager()->GetNumCurrentRequests()+pendingAtBegin;current.substeps=g_old3dsPhysicsSubsteps-subStart;
@@ -814,7 +814,7 @@ void Dump(){if(!enabled)return;
  for(unsigned j=0;j<CountC;++j)fprintf(f," count_%u=%u",j,r.count[j]);fprintf(f,"\n");}
  #ifdef SRR2_OLD3DS_BOTTOM_MAP_15HZ
  fprintf(f,"NATIVE_BOTTOM_POLICY mode=%u block_frames=24 randomized=%u policy_seed=%u simulation_rng_unchanged=1\n",bottomMapMode,bottomMapMode==2,bottomMapSeed);
- Old3dsBottomMap::Dump(f);
+ HandheldHudCadence::Dump(f);
  #endif
  Old3dsCadence::Dump(f);Old3dsMemoryDump(f);DumpVisual(f);fprintf(f,"NATIVE_CAPTURE_END frames=%u complete=%u\n",samples,done && !aborted);fclose(f);
 }

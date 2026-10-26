@@ -32,6 +32,9 @@ public:
     int GetHeight();
     int GetDepth();
     int GetNumMipMaps();
+#ifdef SRR2_OLD3DS_SPRITE_ATLAS
+    static bool PrepareAtlas(picaTexture*,picaTexture* const*,unsigned);
+#endif
     int GetAlphaDepth();
 
     int GetNumPaletteEntries(void);

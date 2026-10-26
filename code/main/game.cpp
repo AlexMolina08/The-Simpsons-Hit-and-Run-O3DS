@@ -1,5 +1,6 @@
 #include <main/graphics3ds.h>
 #include <main/old3dsperformance.h>
+#include <main/handheldhudcadence.h>
 #ifdef SRR2_OLD_3DS
 unsigned Old3dsPerformance::mode = 7;
 #endif
@@ -1076,6 +1077,10 @@ void Game::Run()
         const u64 frameBudgetTicks = (u64)SYSCLOCK_ARM11 / Graphics3DS::TargetFPS();
         const u64 frameTicks = svcGetSystemTick() - frameStartTick;
         const double currentWorkMs = frameTicks * 1000.0 / SYSCLOCK_ARM11;
+#ifdef SRR2_OLD3DS_BOTTOM_MAP_15HZ
+        if(HandheldHudCadence::cadenceMode==2)
+            HandheldHudCadence::ObserveFrame(unsigned(currentWorkMs*1000),ctx==CONTEXT_GAMEPLAY && !Graphics3DS::IsNew());
+#endif
 #ifdef SRR2_OLD3DS_CAUSAL_DIAG
         O3ExperimentEnd(frameTicks,elapsed);
 #endif
