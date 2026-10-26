@@ -25,7 +25,7 @@ fixture=r'''
 #include <p3d/billboardbatch.hpp>
 #define O3_RECUR(x) ((void)0)
 #define P3DASSERT assert
-namespace p3dBillboardBatch {bool enabled=true;unsigned batches=0,groups=0,avoided=0,reservationFailures=0;}
+namespace p3dBillboardBatch {bool enabled=true,compact=false;unsigned batches=0,groups=0,avoided=0,reservationFailures=0;}
 struct Matrix{unsigned value=0;bool operator==(const Matrix& b)const{return value==b.value;}};
 namespace rmt{using Matrix=::Matrix;}
 struct Stack{Matrix current;std::vector<Matrix> saved;void Push(){saved.push_back(current);}void PushIdentity(){saved.push_back(current);current={};}void Load(const Matrix& m){current=m;}void LoadIdentity(){current={};}void Pop(){assert(!saved.empty());current=saved.back();saved.pop_back();}};
@@ -65,7 +65,7 @@ DISPLAY
 int main(){
  Stack stack;Device device;Context context{&stack,{}};p3d::stack=&stack;p3d::pddi=&device;p3d::context=&context;Shader shader,other;
  unsigned seed=713,compared=0;
- for(unsigned trial=0;trial<4000;++trial){
+ for(unsigned trial=0;trial<4000;++trial){p3dBillboardBatch::compact=trial%2;
   std::array<tBillboardQuadGroup,16> groups;std::array<std::array<tBillboardQuad,4>,16> quads;
   tBillboardQuadGroup* items[16];Matrix matrices[16];const Matrix* views[16];
   unsigned count=2+trial%15;
@@ -93,7 +93,7 @@ int main(){
   device.rejectQuad=true;reject();device.rejectQuad=false;
   p3dBillboardBatch::enabled=false;reject();p3dBillboardBatch::enabled=true;
  }
- for(unsigned trial=0;trial<100;++trial){
+ for(unsigned trial=0;trial<100;++trial){p3dBillboardBatch::compact=trial%2;
   tBillboardQuadGroup groups[40];tBillboardQuad quads[40];Effect effect;effect.target=&quads[24];effect.id=9999;
   DisplayList list;unsigned at=0;
   for(unsigned i=0;i<40;++i){
@@ -113,4 +113,4 @@ with tempfile.TemporaryDirectory(prefix='srr-billboard-batch-') as directory:
  p=Path(directory);(p/'test.cpp').write_text(fixture)
  subprocess.run(['clang++','-std=c++17','-O2','-Wall','-Wextra','-Werror','-fsanitize=address,undefined','-DSRR2_OLD3DS_NATIVE_BENCH','-DSRR2_OLD3DS_QUAD_STREAM','-I'+str(root/'libs/pure3d'),str(p/'test.cpp'),'-o',str(p/'test')],check=True)
  subprocess.run([str(p/'test')],check=True)
-print('PASS: 4000 ordered production group comparisons and 100 production DisplayList integrations with interleaved effect mutations; exact callback arguments, visibility/color filtering, depth and matrix restoration; foreign groups/quads, mixed state, disabled mode and reservation failure retain original behavior.')
+print('PASS: 4000 ordered production group comparisons and 100 production DisplayList integrations with interleaved effect mutations; both full/visible-only reservations, exact callback arguments, visibility/color filtering, depth and matrix restoration; foreign groups/quads, mixed state, disabled mode and reservation failure retain original behavior.')

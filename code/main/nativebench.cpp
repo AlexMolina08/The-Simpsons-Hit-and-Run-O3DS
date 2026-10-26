@@ -624,6 +624,8 @@ void Init(int argc,char** argv){
   static const char loaderSliceArgument[]="bench_loader_slice_us=";
   if(!strncmp(argv[i],loaderSliceArgument,sizeof(loaderSliceArgument)-1)){unsigned valueUs=strtoul(argv[i]+sizeof(loaderSliceArgument)-1,nullptr,10);loaderSliceUs=valueUs>=1000 && valueUs<=8000?valueUs:0;continue;}
 #ifdef SRR2_OLD3DS_QUAD_STREAM
+  static const char billboardCompactArgument[]="bench_billboard_compact=";
+  if(!strncmp(argv[i],billboardCompactArgument,sizeof(billboardCompactArgument)-1)){p3dBillboardBatch::compact=atoi(argv[i]+sizeof(billboardCompactArgument)-1)!=0;continue;}
   static const char billboardBatchArgument[]="bench_billboard_batch=";
   if(!strncmp(argv[i],billboardBatchArgument,sizeof(billboardBatchArgument)-1)){p3dBillboardBatch::enabled=atoi(argv[i]+sizeof(billboardBatchArgument)-1)!=0;continue;}
 #endif
@@ -1138,7 +1140,7 @@ void Dump(){if(!enabled)return;
  0u
  );
 #ifdef SRR2_OLD3DS_QUAD_STREAM
- fprintf(f,"NATIVE_BILLBOARD_BATCH enabled=%u batches=%u groups=%u avoided_draws=%u reservation_failures=%u scope=whole_session sorted_order_retained=1\n",p3dBillboardBatch::enabled,p3dBillboardBatch::batches,p3dBillboardBatch::groups,p3dBillboardBatch::avoided,p3dBillboardBatch::reservationFailures);
+ fprintf(f,"NATIVE_BILLBOARD_BATCH enabled=%u compact=%u minimum_groups=%u batches=%u groups=%u avoided_draws=%u reservation_failures=%u scope=whole_session sorted_order_retained=1\n",p3dBillboardBatch::enabled,p3dBillboardBatch::compact,p3dBillboardBatch::MinimumGroups(),p3dBillboardBatch::batches,p3dBillboardBatch::groups,p3dBillboardBatch::avoided,p3dBillboardBatch::reservationFailures);
 #endif
  fprintf(f,"NATIVE_FONT_WORK enabled=%u prepared_lines=%u prepared_glyphs=%u long_lines=%u capacity=%u same_vertices=1 same_texture_order=1 same_spacing_pass=1 whole_session=1\n",p3dFontWork::enabled,p3dFontWork::preparedLines,p3dFontWork::preparedGlyphs,p3dFontWork::longLines,p3dFontWork::Capacity);
  fprintf(f,"NATIVE_FONT_QUADS enabled=%u batches=%u quads=%u fallback_reservations=%u same_expanded_triangles=1 whole_session=1\n",p3dFontWork::quadStream,p3dFontWork::quadBatches,p3dFontWork::quadGlyphs,p3dFontWork::quadFallbacks);

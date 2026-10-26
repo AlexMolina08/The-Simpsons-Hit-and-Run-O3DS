@@ -1,7 +1,7 @@
 #include <p3d/billboardbatch.hpp>
 #if defined(SRR2_OLD3DS_NATIVE_BENCH) && defined(SRR2_OLD3DS_QUAD_STREAM)
 #include <typeinfo>
-namespace p3dBillboardBatch {bool enabled=false;unsigned batches=0,groups=0,avoided=0,reservationFailures=0;}
+namespace p3dBillboardBatch {bool enabled=false,compact=false;unsigned batches=0,groups=0,avoided=0,reservationFailures=0;}
 #endif
 #include <main/old3dsrecurring.h>
 #ifndef RAD_PS2
@@ -1532,29 +1532,32 @@ tBillboardQuadGroup::Display()
 bool tBillboardQuadGroup::DisplayBatch(tBillboardQuadGroup* const* items,
     const rmt::Matrix* const* matrices,unsigned count)
 {
-    if(!p3dBillboardBatch::enabled || BillboardQuadManager::sEnabled || count<2 ||
+    if(!p3dBillboardBatch::enabled || BillboardQuadManager::sEnabled || count<p3dBillboardBatch::MinimumGroups() ||
        count>p3dBillboardBatch::MaxGroups || !items[0] || !items[0]->shader)return false;
     tBillboardQuadGroup* first=items[0];
-    unsigned capacity=0,visibleGroups=0;
+    unsigned capacity=0,totalQuads=0,visibleGroups=0;
     for(unsigned i=0;i<count;++i){
         tBillboardQuadGroup* group=items[i];
         if(!group || !matrices[i] || typeid(*group)!=typeid(tBillboardQuadGroup) ||
            group->shader!=first->shader || group->zTest!=first->zTest ||
            group->zWrite!=first->zWrite || group->occlusionMode ||
-           group->numQuads<0 || unsigned(group->numQuads)>p3dBillboardBatch::MaxQuads-capacity)return false;
-        capacity+=unsigned(group->numQuads);
+           group->numQuads<0 || unsigned(group->numQuads)>p3dBillboardBatch::MaxQuads-totalQuads)return false;
+        totalQuads+=unsigned(group->numQuads);
+        if(!p3dBillboardBatch::compact)capacity+=unsigned(group->numQuads);
         bool visible=false;
         for(int q=0;q<group->numQuads;++q){
             tBillboardQuad* quad=group->quads[q];
             // Unknown subclasses retain their own virtual display callbacks.
             if(!quad || typeid(*quad)!=typeid(tBillboardQuad))return false;
             const tColour colour=quad->GetColour();
-            visible|=quad->GetVisibility() && colour.Alpha()!=0 &&
+            const bool renders=quad->GetVisibility() && colour.Alpha()!=0 &&
                 (colour.Red()!=0 || colour.Green()!=0 || colour.Blue()!=0);
+            visible|=renders;
+            if(p3dBillboardBatch::compact && renders)++capacity;
         }
         visibleGroups+=visible;
     }
-    if(!capacity || visibleGroups<2)return false;
+    if(!capacity || visibleGroups<p3dBillboardBatch::MinimumGroups())return false;
     const bool oldWrite=p3d::pddi->GetZWrite();
     const pddiCompareMode oldCompare=p3d::pddi->GetZCompare();
     if(oldWrite!=first->zWrite)p3d::pddi->SetZWrite(first->zWrite);

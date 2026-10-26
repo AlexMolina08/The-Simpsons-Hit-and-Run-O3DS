@@ -66,7 +66,7 @@ void DisplayList::Display(void)
                    group->GetZWrite()!=first->GetZWrite() || group->GetOcclusion()!=0)break;
                 groups[count]=group;matrices[count]=&toSort[j]->objectToView;++count;
             }
-            if(count>1 && tBillboardQuadGroup::DisplayBatch(groups,matrices,count)){i+=count-1;continue;}
+            if(count>=p3dBillboardBatch::MinimumGroups() && tBillboardQuadGroup::DisplayBatch(groups,matrices,count)){i+=count-1;continue;}
         }
 #endif
         p3d::stack->Load(toSort[i]->objectToView);
