@@ -6,6 +6,8 @@ root=Path(__file__).resolve().parents[3]
 source=(root/'code/main/nativebench.cpp').read_text()
 a=source.index('static unsigned SceneAuditIntervalMs()');b=source.index('static void SampleScene(',a)
 function=source[a:b]
+a=source.index('static unsigned RouteRecordCapacity(');b=source.index('\n}',a)+2
+capacity=source[a:b]
 a=source.index('if(sceneAudit && elapsedMs>=sceneNextMs)');b=source.index('\n',a)
 schedule=source[a:b]
 fixture=r'''
@@ -15,10 +17,18 @@ static unsigned seconds=25,elapsedMs=0,sceneNextMs=0;
 static bool sceneAudit=true;
 static std::vector<unsigned> samples;
 void SampleScene(unsigned time){if(samples.size()<64)samples.push_back(time);}
+static const unsigned Capacity=2048;
+CAPACITY
 FUNCTION
 void Tick(){SCHEDULE}
 int main(){
- for(unsigned duration:{5u,25u,60u})for(unsigned rate:{16u,33u,38u,50u,100u}){
+ assert(RouteRecordCapacity(25,30)==2048 && RouteRecordCapacity(60,30)==2048);
+ assert(RouteRecordCapacity(120,30)==3904 && RouteRecordCapacity(120,60)==7504);
+ for(unsigned fps:{30u,60u})for(unsigned duration=5;duration<=120;++duration){
+  const unsigned count=RouteRecordCapacity(duration,fps);
+  assert(count>=duration*(fps+2)+64 && count<=7504);
+ }
+ for(unsigned duration:{5u,25u,60u,120u})for(unsigned rate:{16u,33u,38u,50u,100u}){
   seconds=duration;elapsedMs=sceneNextMs=0;samples.clear();sceneAudit=true;
   while(elapsedMs<duration*1000){Tick();elapsedMs+=rate;}
   assert(!samples.empty()&&samples.size()<=64&&samples.front()==0);
@@ -35,9 +45,9 @@ int main(){
  for(unsigned i=0;i<2000;++i){Tick();elapsedMs+=33;}
  assert(samples.empty()&&sceneNextMs==0);
 }
-'''.replace('FUNCTION',function).replace('SCHEDULE',schedule)
+'''.replace('FUNCTION',function).replace('CAPACITY',capacity).replace('SCHEDULE',schedule)
 with tempfile.TemporaryDirectory(prefix='srr-scene-audit-') as d:
  p=Path(d);(p/'test.cpp').write_text(fixture)
  subprocess.run(['clang++','-std=c++17','-Wall','-Wextra','-Werror','-fsanitize=address,undefined',str(p/'test.cpp'),'-o',str(p/'test')],check=True)
  subprocess.run([str(p/'test')],check=True)
-print('PASS: production audit cadence covers 5/25/60-second routes at 10-60 FPS and irregular stalls within 64 slots; clean timing runs issue no scene query.')
+print('PASS: bounded frame storage and production audit cadence cover 5/25/60/120-second routes at 10-60 FPS and irregular stalls within 64 slots; clean timing runs issue no scene query.')

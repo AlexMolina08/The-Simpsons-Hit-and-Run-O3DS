@@ -173,6 +173,14 @@ void Hash(unsigned v){if(collecting && validation)behaviorHash=(behaviorHash^v)*
 void HashFloat(float f){unsigned v;memcpy(&v,&f,4);Hash(v);}
 unsigned counters[CountC];
 static const unsigned Capacity=2048, Bins=2048;
+static unsigned recordCapacity=Capacity;
+static unsigned RouteRecordCapacity(unsigned duration,unsigned targetFPS)
+{
+ // Keep every frame in long road tests. The extra two slots per second cover
+ // boundary/pacing jitter; the bounded request cannot grow during gameplay.
+ const unsigned required=duration*(targetFPS>30?62u:32u)+64;
+ return required>Capacity?required:Capacity;
+}
 #ifdef SRR2_OLD3DS_BOTTOM_MAP_15HZ
 static unsigned bottomMapMode=1,bottomMapStart=0;
 static unsigned bottomMapSeed=0;
@@ -680,13 +688,14 @@ void Init(int argc,char** argv){
  HandheldHudCadence::enabled=bottomMapMode!=0;
 #endif
  const unsigned minimumSeconds=portrait?1u:5u,minimumWarmup=portrait?0u:3u;
- if(seconds<minimumSeconds||seconds>(roadRoute?60u:25u))seconds=25;
+ if(seconds<minimumSeconds||seconds>(roadRoute?120u:25u))seconds=25;
  if(warmup<minimumWarmup||warmup>60)warmup=8;if(step<1||step>100)step=67;
  // Use the existing normal heap after libctru startup, not additional BSS.
- records=static_cast<Record*>(calloc(Capacity,sizeof(Record)));
+ recordCapacity=RouteRecordCapacity(seconds,Graphics3DS::TargetFPS());
+ records=static_cast<Record*>(calloc(recordCapacity,sizeof(Record)));
  printf("NATIVE_LAUNCH id=%s mode=%s seconds=%u checkpoint_io=%u\n",runIdentity,replay?"replay":"realtime",seconds,checkpointIO);
  if(!records){enabled=false;aborted=true;done=true;
-  printf("NATIVE_AUTOMATION allocation_failed bytes=%u abort=1\n",unsigned(Capacity*sizeof(Record)));return;}
+  printf("NATIVE_AUTOMATION allocation_failed bytes=%u abort=1\n",unsigned(recordCapacity*sizeof(Record)));return;}
  bool savedDetail=detail;detail=true;collecting=true;u64 cal=svcGetSystemTick();for(unsigned i=0;i<4096;++i){Scope test(Update);}scopeCalibration=svcGetSystemTick()-cal;collecting=false;detail=savedDetail;
  char a[]="skipfe",b[]="notutorial",c[]="L2";
  if(portraitLevel>=1 && portraitLevel<=7)c[1]='0'+portraitLevel;
@@ -695,7 +704,7 @@ void Init(int argc,char** argv){
 unsigned Seed(unsigned fallback){return enabled?seed:fallback;}
 unsigned Begin(unsigned elapsed,int context){
  u64 now=svcGetSystemTick();
- if(previousCaptured){unsigned ticks=(unsigned)(now-lastBeginTick);records[(recordCount-1)%Capacity].period=ticks;periodSum+=ticks;++periodSamples;previousCaptured=false;}
+ if(previousCaptured){unsigned ticks=(unsigned)(now-lastBeginTick);records[(recordCount-1)%recordCapacity].period=ticks;periodSum+=ticks;++periodSamples;previousCaptured=false;}
  lastBeginTick=now;
  collecting=false;
 #if defined(SRR2_OLD3DS_VEHICLE_PROFILE) || defined(SRR2_OLD3DS_NATIVE_BENCH)
@@ -1008,7 +1017,7 @@ bool End(u64 work,int context){
  rmt::Vector v;a->GetVelocity(v);unsigned h=2166136261u;h=hashFloat(h,p.x);h=hashFloat(h,p.y);h=hashFloat(h,p.z);h=hashFloat(h,v.x);h=hashFloat(h,v.y);h=hashFloat(h,v.z);current.check=h;}
  current.behavior=behaviorHash;current.gpu=C3D_GetDrawingTime();unsigned us=(unsigned)(work*1000000ULL/SYSCLOCK_ARM11);unsigned bin=us/250;if(bin>=Bins)bin=Bins-1;++hist[bin];
  ++samples;totalWork+=work;if(us>33333)++misses;if(us>maximum)maximum=us;
- records[recordCount++%Capacity]=current;previousCaptured=true;if(recordCount>Capacity)++overwritten;
+ records[recordCount++%recordCapacity]=current;previousCaptured=true;if(recordCount>recordCapacity)++overwritten;
  traceTicks+=svcGetSystemTick()-overhead;
  done=elapsedMs>=seconds*1000;
 #ifdef SRR2_OLD3DS_NATIVE_CONTEXT
@@ -1129,7 +1138,7 @@ void Dump(){if(!enabled)return;
 #else
  0u,
 #endif
-(unsigned)(Capacity*sizeof(Record)),Capacity,overwritten,(double)scopeCalibration*1e9/SYSCLOCK_ARM11/4096);
+(unsigned)(recordCapacity*sizeof(Record)),recordCapacity,overwritten,(double)scopeCalibration*1e9/SYSCLOCK_ARM11/4096);
  fprintf(f,"NATIVE_AUTOMATION diagnostic=%u resident=%u uniforms=%u context_mode=%u source=automation_only clock_complete=%u validation_instrumented=%u gpu_last_is_unassociated=1\n",diagnostic,residentShaders,nativeUniforms,nativeContextMode,done && !aborted,
  0u
  );
@@ -1218,7 +1227,7 @@ void Dump(){if(!enabled)return;
  fprintf(f,"NATIVE_COUNTERS 0=timed_scope_calls 1=adpcm_clips 2=adpcm_pcm_samples\n");
  fprintf(f,"NATIVE_SUMMARY frames=%u mean_us=%.3f max_us=%u deadline_misses=%u bookkeeping_us=%.3f complete=%u\n",samples,samples?(double)totalWork*1000000/SYSCLOCK_ARM11/samples:0,maximum,misses,(double)traceTicks*1000000/SYSCLOCK_ARM11,done && !aborted);
  for(unsigned i=0;i<Bins;++i)if(hist[i])fprintf(f,"NATIVE_HIST low_us=%u count=%u\n",i*250,hist[i]);
- for(unsigned i=recordCount>Capacity?recordCount-Capacity:0;i<recordCount;++i){const Record&r=records[i%Capacity];
+ for(unsigned i=recordCount>recordCapacity?recordCount-recordCapacity:0;i<recordCount;++i){const Record&r=records[i%recordCapacity];
  fprintf(f,"NATIVE_FRAME native_context=%u route_ms=%u pairs=%u areas=%u entities=%u frame=%u context=%u elapsed=%u real_elapsed=%u period_us=%.3f work_us=%.3f substeps=%u draws=%u vertices=%u linear=%u loading=%u x=%.6f y=%.6f z=%.6f speed=%.5f incar=%u check=%08x behavior=%08x gpu_last_ms=%.4f",r.nativeContext,r.route,r.pairs,r.areas,r.entities,r.frame,r.context,r.elapsed,r.realElapsed,(double)r.period*1e6/SYSCLOCK_ARM11,(double)r.work*1000000/SYSCLOCK_ARM11,r.substeps,r.draws,r.vertices,r.linear,r.loading,r.position[0],r.position[1],r.position[2],r.speed,r.incar,r.check,r.behavior,r.gpu);
 #ifdef SRR2_OLD3DS_BOTTOM_MAP_15HZ
  fprintf(f," bottom_map=%u bottom_draws=%u",r.bottomMapEnabled,r.bottomMapDraws);
