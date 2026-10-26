@@ -12,7 +12,7 @@ with tempfile.TemporaryDirectory(prefix='srr-bench-args-') as directory:
 #include <cmath>
 static bool portraitActor=false,portraitNPC=false,portraitTraffic=false,portraitPlayerObserver=false,g_old3dsPreparedAudio=false,g_old3dsPreparedAudioShort=false;static char portraitModel[32]={},portraitActorModel[32]="male6";static float stereoTestSlider=-1,portraitDistance=1,portraitBearing=45;
 namespace Old3dsPerformance { unsigned mode=1; }
-namespace radNativeSeek { bool enabled=false; }
+namespace radNativeSeek { bool enabled=false,stageInput=false; }
 namespace HandheldHudCadence { bool boostPickupAnimations=true; }
 namespace Old3dsRecurring { bool requested=false;unsigned stationaryMs=0; }
 static unsigned seconds=25,warmup=8,seed=1;static bool hold=false,reload=false,serviceProfile=false,afterRouteCapture=false,vehicleProfile=false,g_picaSkinPrepareYield=false,g_picaNativeContiguous=false,g_old3dsTrafficFacingOnly=false,g_old3dsAdpcmPrune=false,g_old3dsAdpcmVerify=false,g_old3dsAdpcmFast=false;
@@ -41,6 +41,8 @@ int main(){
  assert(ParseRunArgument("bench_skin_prepare_yield=0")&&!g_picaSkinPrepareYield);
  assert(ParseRunArgument("bench_native_contiguous=1")&&g_picaNativeContiguous);
  assert(ParseRunArgument("bench_native_contiguous=0")&&!g_picaNativeContiguous);
+ assert(ParseRunArgument("bench_native_input_stage=1")&&radNativeSeek::stageInput);
+ assert(ParseRunArgument("bench_native_input_stage=0")&&!radNativeSeek::stageInput);
  assert(ParseRunArgument("bench_native_seek_lend=1")&&radNativeSeek::enabled);
  assert(ParseRunArgument("bench_native_seek_lend=0")&&!radNativeSeek::enabled);
  assert(ParseRunArgument("bench_bottom_animation_boost=0")&&!HandheldHudCadence::boostPickupAnimations);

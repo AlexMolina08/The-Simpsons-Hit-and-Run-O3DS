@@ -72,6 +72,7 @@ extern "C" void radLoadDumpWorkerSlices(FILE* file){
 #ifdef SRR2_OLD3DS_NATIVE_BENCH
 namespace radNativeSeek {
 bool enabled=false;
+bool stageInput=false;
 static bool draining=false;
 static void* owner=nullptr;
 static unsigned begun=0,completed=0;

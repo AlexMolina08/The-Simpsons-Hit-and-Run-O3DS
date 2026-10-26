@@ -22,9 +22,9 @@ methods='\n'.join(function(manager,s) for s in (
     'bool radLoadManager::BeginNativeSeek()',
     'void radLoadManager::EndNativeSeek()',
     'void radLoadManager::SwitchTasks()'))
-start=texture.index('            positioned=input.file && entry->bytes<=picaNativeBundle::BundleBytes')
-end=texture.index('\n        }',start)
-seek=texture[start:end]
+start=texture.index('positioned=input.file && entry->bytes<=picaNativeBundle::BundleBytes')
+end=texture.index('\n',start)
+seek=texture[start:end]+'\n'+function(texture[end:],'if(positioned)')
 assert '__atomic_store_n(&manager->m_nativeSeekWorker,getThreadLocalStorage(),__ATOMIC_RELEASE)' in manager
 assert 'radNativeSeek::Drain();' in (root/'code/main/nativebench.cpp').read_text()
 fixture=r'''

@@ -481,6 +481,7 @@ static bool ParseRunArgument(const char* argument)
 #endif
 #ifdef SRR2_OLD3DS_NATIVE_TEXTURE_BUNDLE
  else if(!strncmp(argument,"bench_native_contiguous=",sizeof("bench_native_contiguous=")-1))g_picaNativeContiguous=atoi(argument+sizeof("bench_native_contiguous=")-1)!=0;
+ else if(!strncmp(argument,"bench_native_input_stage=",sizeof("bench_native_input_stage=")-1))radNativeSeek::stageInput=atoi(argument+sizeof("bench_native_input_stage=")-1)!=0;
  else if(!strncmp(argument,"bench_native_seek_lend=",sizeof("bench_native_seek_lend=")-1))radNativeSeek::enabled=atoi(argument+sizeof("bench_native_seek_lend=")-1)!=0;
 #endif
 #ifdef SRR2_OLD3DS_GPU_SKIN_SUPPORT

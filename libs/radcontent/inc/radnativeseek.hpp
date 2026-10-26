@@ -5,8 +5,11 @@
 // Private benchmark experiment. Only a loader worker seeking its own native
 // cache FILE may lend the mutex. Parsing, reads into GPU storage and publication
 // remain under the existing loader mutex. The same owner is reclaimed on exit.
+// Optional input staging also lends during private reads and hashing; GPU
+// destination writes still wait until the same owner has been reclaimed.
 namespace radNativeSeek {
 extern bool enabled;
+extern bool stageInput;
 void* Begin();
 void End(void* owner);
 void Drain();
