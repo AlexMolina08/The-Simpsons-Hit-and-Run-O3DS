@@ -5,6 +5,7 @@ import re,subprocess,tempfile
 root=Path(__file__).resolve().parents[3]
 source=(root/'code/main/nativebench.cpp').read_text()
 function=source[source.index('static void DumpVisualEye(FILE* f'):source.index('void Dump(){if(!enabled)return;')]
+audit=source[source.index('bool StereoVisualAudit(){'):source.index('\n',source.index('bool StereoVisualAudit(){'))]
 fixture=r'''
 #include <cstdio>
 #include <cassert>
@@ -12,45 +13,51 @@ fixture=r'''
 using u16=unsigned short;
 #define R_SUCCEEDED(value) ((value)>=0)
 enum GSPGPU_FramebufferFormat { GSP_BGR8_OES=1 };
-enum {GFX_TOP};
+enum gfxScreen_t {GFX_TOP,GFX_BOTTOM};
 enum gfx3dSide_t {GFX_LEFT,GFX_RIGHT};
 namespace Graphics3DS {bool stereo=false;bool Stereo(){return stereo;}}
-static bool visualCapture=false;
+static bool visualCapture=false,afterRouteCapture=false,collecting=false;
 static unsigned syncs=0,invalidations=0;
 static int cacheResult=0;
 static unsigned char pixels[240*800*3];
+static unsigned char bottomPixels[240*320*3];
 static unsigned rightRequests=0;
 static u16 rawWidth=240,rawHeight=400;
 static GSPGPU_FramebufferFormat selected=GSP_BGR8_OES;
 void C3D_FrameSync(){++syncs;}
-GSPGPU_FramebufferFormat gfxGetScreenFormat(int){return selected;}
-unsigned char* gfxGetFramebuffer(int,gfx3dSide_t eye,u16* w,u16* h){if(eye==GFX_RIGHT)++rightRequests;*w=rawWidth;*h=rawHeight;return pixels;}
-int GSPGPU_InvalidateDataCache(void* p,unsigned n){assert(p==pixels && n==unsigned(rawWidth)*rawHeight*3);++invalidations;return cacheResult;}
+GSPGPU_FramebufferFormat gfxGetScreenFormat(gfxScreen_t){return selected;}
+unsigned char* gfxGetFramebuffer(gfxScreen_t screen,gfx3dSide_t eye,u16* w,u16* h){if(screen==GFX_BOTTOM){*w=240;*h=320;return bottomPixels;}if(eye==GFX_RIGHT)++rightRequests;*w=rawWidth;*h=rawHeight;return pixels;}
+int GSPGPU_InvalidateDataCache(void* p,unsigned n){assert((p==pixels && n==unsigned(rawWidth)*rawHeight*3)||(p==bottomPixels && n==sizeof(bottomPixels)));++invalidations;return cacheResult;}
 '''
 main=r'''
 int main(){
  FILE* f=tmpfile();assert(f);DumpVisual(f);assert(ftell(f)==0 && syncs==0 && invalidations==0);fclose(f);
+ afterRouteCapture=true;collecting=true;assert(!StereoVisualAudit());
+ f=tmpfile();DumpVisual(f);assert(ftell(f)==0 && syncs==0 && invalidations==0);fclose(f);
+ collecting=false;f=tmpfile();DumpVisual(f);assert(syncs==1 && invalidations==2);fclose(f);
+ assert(!StereoVisualAudit());afterRouteCapture=false;syncs=invalidations=0;
  visualCapture=true;
+ assert(StereoVisualAudit());
  // Asymmetric source: physical top-left red, top-right green, bottom-left blue.
  for(unsigned x=0;x<400;++x)for(unsigned y=0;y<240;++y){
   unsigned char* p=pixels+(x*240+239-y)*3;p[0]=y==239?255:0;p[1]=x==399?255:0;p[2]=(x==0 && y==0)?255:0;
  }
- f=tmpfile();assert(f);DumpVisual(f);assert(syncs==1 && invalidations==1);rewind(f);
+ f=tmpfile();assert(f);DumpVisual(f);assert(syncs==1 && invalidations==2);rewind(f);
  char buffer[4096];size_t n;while((n=fread(buffer,1,sizeof(buffer),f)))fwrite(buffer,1,n,stdout);fclose(f);
- cacheResult=-1;f=tmpfile();DumpVisual(f);assert(syncs==2 && invalidations==2);rewind(f);
+ cacheResult=-1;f=tmpfile();DumpVisual(f);assert(syncs==2 && invalidations==4);rewind(f);
  char failed[512]={};assert(fread(failed,1,sizeof(failed)-1,f)>0);assert(std::strstr(failed,"valid=0") && !std::strstr(failed,"NATIVE_VISUAL_BYTES"));fclose(f);
- cacheResult=0;rawHeight=800;f=tmpfile();DumpVisual(f);assert(syncs==3 && invalidations==3);
+ cacheResult=0;rawHeight=800;f=tmpfile();DumpVisual(f);assert(syncs==3 && invalidations==6);
  assert(ftell(f)>576000);fclose(f);
- rawWidth=239;f=tmpfile();DumpVisual(f);assert(syncs==4 && invalidations==3);fclose(f);
+ rawWidth=239;f=tmpfile();DumpVisual(f);assert(syncs==4 && invalidations==7);fclose(f);
  assert(rightRequests==0);
  Graphics3DS::stereo=true;rawWidth=240;rawHeight=400;
- f=tmpfile();DumpVisual(f);assert(syncs==5 && invalidations==5 && rightRequests==1);
+ f=tmpfile();DumpVisual(f);assert(syncs==5 && invalidations==10 && rightRequests==1);
  rewind(f);bool found=false;while(fgets(buffer,sizeof(buffer),f))if(std::strstr(buffer,"NATIVE_VISUAL_RIGHT_END bytes=288000"))found=true;
  assert(found);fclose(f);
 }
 '''
 with tempfile.TemporaryDirectory() as d:
- p=Path(d);(p/'test.cpp').write_text(fixture+function+main)
+ p=Path(d);(p/'test.cpp').write_text(fixture+audit+function+main)
  subprocess.run(['c++','-std=c++17','-O2',str(p/'test.cpp'),'-o',str(p/'test')],check=True)
  raw=subprocess.check_output([str(p/'test')],text=True)
  chunks=re.findall(r'^NATIVE_VISUAL_BYTES offset=(\d+) data=([0-9a-f]+)$',raw,re.M)

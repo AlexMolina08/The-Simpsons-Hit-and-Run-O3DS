@@ -1598,6 +1598,20 @@ END_PROFILE( "Cleanup" );
 // Constraints: None.
 //
 //========================================================================
+#ifdef SRR2_OLD3DS_NATIVE_BENCH
+void WorldRenderLayer::GetLoadedWorldCounts(unsigned& sections, unsigned& statics, unsigned& intersects) const
+{
+    sections=statics=intersects=0;
+    for(int i=0;i<mLoadLists.mUseSize;++i)
+    {
+        const DynaLoadListDSG* list=mLoadLists[i];
+        if(list->mSEntityElems.mUseSize || list->mIntersectElems.mUseSize)++sections;
+        statics+=list->mSEntityElems.mUseSize;
+        intersects+=list->mIntersectElems.mUseSize;
+    }
+}
+#endif
+
 bool WorldRenderLayer::DoPreDynaLoad(tName& irGiveItAFuckinName)//tUID iUID)
 {
    int i;

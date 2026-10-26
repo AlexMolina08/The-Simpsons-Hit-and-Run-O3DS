@@ -77,6 +77,9 @@ public:
    WorldScene* pWorldScene();
 
    tName& GetCurSectionName();
+#ifdef SRR2_OLD3DS_NATIVE_BENCH
+   void GetLoadedWorldCounts(unsigned& sections, unsigned& statics, unsigned& intersects) const;
+#endif
 
    enum DynaLoadState
    {

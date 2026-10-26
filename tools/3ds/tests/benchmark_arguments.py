@@ -9,9 +9,12 @@ with tempfile.TemporaryDirectory(prefix='srr-bench-args-') as directory:
 #include <cstring>
 #include <cstdlib>
 #include <cstdio>
+#include <cmath>
+static bool portraitActor=false,portraitNPC=false,portraitTraffic=false,portraitPlayerObserver=false,g_old3dsPreparedAudio=false;static char portraitModel[32]={},portraitActorModel[32]="male6";static float stereoTestSlider=-1,portraitDistance=1,portraitBearing=45;
 namespace Old3dsPerformance { unsigned mode=1; }
+namespace HandheldHudCadence { bool boostPickupAnimations=true; }
 namespace Old3dsRecurring { bool requested=false;unsigned stationaryMs=0; }
-static unsigned seconds=25,warmup=8,seed=1;static bool hold=false,reload=false,serviceProfile=false,vehicleProfile=false,g_old3dsTrafficFacingOnly=false,g_old3dsAdpcmPrune=false,g_old3dsAdpcmVerify=false,g_old3dsAdpcmFast=false;
+static unsigned seconds=25,warmup=8,seed=1;static bool hold=false,reload=false,serviceProfile=false,afterRouteCapture=false,vehicleProfile=false,g_picaSkinPrepareYield=false,g_picaNativeContiguous=false,g_old3dsTrafficFacingOnly=false,g_old3dsAdpcmPrune=false,g_old3dsAdpcmVerify=false,g_old3dsAdpcmFast=false;
 '''+fragment+'''
 int main(){
  assert(ParseRunArgument("bench_quality=0")&&Old3dsPerformance::mode==0);
@@ -31,6 +34,26 @@ int main(){
  assert(ParseRunArgument("bench_trial=physical-test")&&!strcmp(runIdentity,"physical-test"));
  assert(ParseRunArgument("bench_service_profile=1")&&serviceProfile);
  assert(ParseRunArgument("bench_service_profile=0")&&!serviceProfile);
+ assert(ParseRunArgument("bench_after_route_capture=1")&&afterRouteCapture);
+ assert(ParseRunArgument("bench_after_route_capture=0")&&!afterRouteCapture);
+ assert(ParseRunArgument("bench_skin_prepare_yield=1")&&g_picaSkinPrepareYield);
+ assert(ParseRunArgument("bench_skin_prepare_yield=0")&&!g_picaSkinPrepareYield);
+ assert(ParseRunArgument("bench_native_contiguous=1")&&g_picaNativeContiguous);
+ assert(ParseRunArgument("bench_native_contiguous=0")&&!g_picaNativeContiguous);
+ assert(ParseRunArgument("bench_bottom_animation_boost=0")&&!HandheldHudCadence::boostPickupAnimations);
+ assert(ParseRunArgument("bench_bottom_animation_boost=1")&&HandheldHudCadence::boostPickupAnimations);
+ assert(ParseRunArgument("bench_portrait_actor=fem1")&&portraitActor&&!strcmp(portraitActorModel,"fem1"));
+ assert(!ParseRunArgument("bench_portrait_actor=../bad")&&!strcmp(portraitActorModel,"fem1"));
+ assert(ParseRunArgument("bench_portrait_traffic=1")&&portraitTraffic);
+ assert(ParseRunArgument("bench_portrait_model=taxiA")&&!strcmp(portraitModel,"taxiA"));
+ assert(!ParseRunArgument("bench_portrait_model=../bad")&&!strcmp(portraitModel,"taxiA"));
+ assert(ParseRunArgument("bench_portrait_observer=player")&&portraitPlayerObserver);
+ assert(ParseRunArgument("bench_portrait_distance=6")&&portraitDistance==6);
+ assert(ParseRunArgument("bench_portrait_distance=nan")&&portraitDistance==6);
+ assert(ParseRunArgument("bench_portrait_bearing=180")&&portraitBearing==180);
+ assert(ParseRunArgument("bench_portrait_bearing=181")&&portraitBearing==180);
+ assert(ParseRunArgument("bench_prepared_audio=1")&&g_old3dsPreparedAudio);
+ assert(ParseRunArgument("bench_prepared_audio=0")&&!g_old3dsPreparedAudio);
  assert(ParseRunArgument("bench_adpcm_fast=1")&&g_old3dsAdpcmFast);
  assert(ParseRunArgument("bench_adpcm_fast=0")&&!g_old3dsAdpcmFast);
  assert(ParseRunArgument("bench_adpcm_prune=0")&&!g_old3dsAdpcmPrune);
@@ -54,5 +77,5 @@ int main(){
  assert(ParseRunArgument("bench_stationary_ms=6000")&&Old3dsRecurring::stationaryMs==6000);
 }
 ''')
- subprocess.run(['c++','-std=c++17','-fsanitize=address,undefined',str(cpp),'-o',str(p/'test')],check=True);subprocess.run([str(p/'test')],check=True)
+ subprocess.run(['c++','-std=c++17','-DSRR2_OLD3DS_PREPARED_AUDIO','-DSRR2_OLD3DS_GPU_SKIN_SUPPORT','-DSRR2_OLD3DS_NATIVE_TEXTURE_BUNDLE','-DSRR2_OLD3DS_BOTTOM_MAP_15HZ','-fsanitize=address,undefined',str(cpp),'-o',str(p/'test')],check=True);subprocess.run([str(p/'test')],check=True)
 print('PASS: effective duration/warmup/hold/reload/seed/trial identity; unknown options remain unconsumed.')
