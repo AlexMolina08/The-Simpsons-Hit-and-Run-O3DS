@@ -1,8 +1,10 @@
 #ifndef PICA_DISTANCEHAZE_HPP
 #define PICA_DISTANCEHAZE_HPP
 #include <cmath>
+#include <pddi/pica/visualstyle.hpp>
 namespace picaDistanceHaze {
 constexpr float Strength = 0.16f;
+constexpr float ImprovedStrength = 0.28f;
 #ifdef SRR2_OLD3DS_NATIVE_BENCH
 extern bool enabled;
 extern unsigned builds, passes;
@@ -11,13 +13,23 @@ inline bool Enabled() { return enabled; }
 #else
 inline bool Enabled() { return true; }
 #endif
+inline unsigned HorizonColour(unsigned level, unsigned fallback)
+{
+    // Keep the original daytime clear color. Night/sunset bands come from the
+    // authored sky assets, avoiding mountain silhouettes and daytime-blue nights.
+    static const unsigned char colours[7][3]={{154,194,222},{154,194,222},{181,129,66},
+        {93,145,173},{181,139,112},{100,53,62},{42,43,43}};
+    return level<7 ? unsigned(colours[level][0]) | unsigned(colours[level][1])<<8 |
+        unsigned(colours[level][2])<<16 : fallback;
+}
 inline float Visibility(float depth, float nearPlane, float farPlane)
 {
     const float z = farPlane*nearPlane/(depth*(farPlane-nearPlane)+nearPlane);
-    float t = (z-45.0f)/95.0f;
+    const bool improved = picaVisual::Enabled(picaVisual::Atmosphere);
+    float t = improved ? (z-70.0f)/50.0f : (z-45.0f)/95.0f;
     if(t < 0) t = 0;
     if(t > 1) t = 1;
-    return 1.0f - Strength*t*t*(3.0f-2.0f*t);
+    return 1.0f - (improved ? ImprovedStrength : Strength)*t*t*(3.0f-2.0f*t);
 }
 inline bool Build(float* data, float nearPlane, float farPlane)
 {

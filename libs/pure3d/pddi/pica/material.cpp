@@ -9,6 +9,10 @@
 #include <pddi/pica/context.hpp>
 #include <pddi/pica/statecache.hpp>
 #include <pddi/pica/display.hpp>
+#include <pddi/pica/visualstyle.hpp>
+#ifdef SRR2_OLD3DS_VISUAL_UPGRADE
+#include <pddi/pica/nativecontext.h>
+#endif
 
 #include <pddi/base/debug.hpp>
 #include <stdio.h>
@@ -22,12 +26,18 @@ pddiShadeColourTable picaMat::colourTable[] =
     {PDDI_SP_DIFFUSE  , SHADE_COLOUR(&picaMat::SetDiffuse)},
     {PDDI_SP_EMISSIVE , SHADE_COLOUR(&picaMat::SetEmissive)},
     {PDDI_SP_SPECULAR , SHADE_COLOUR(&picaMat::SetSpecular)},
+#ifdef SRR2_OLD3DS_VISUAL_UPGRADE
+    {PDDI_SP_ENVBLEND , SHADE_COLOUR(&picaMat::SetEnvironmentBlend)},
+#endif
     {PDDI_SP_NULL , NULL}
 };
 
 pddiShadeTextureTable picaMat::textureTable[] =
 {
     {PDDI_SP_BASETEX , SHADE_TEXTURE(&picaMat::SetTexture)},
+#ifdef SRR2_OLD3DS_VISUAL_UPGRADE
+    {PDDI_SP_REFLMAP , SHADE_TEXTURE(&picaMat::SetReflectionMap)},
+#endif
     {PDDI_SP_NULL , NULL}
 };
 
@@ -202,10 +212,56 @@ picaMat::picaMat(picaContext* c)
 
 picaMat::~picaMat()
 {
+#ifdef SRR2_OLD3DS_VISUAL_UPGRADE
+    if(reflectionMap) reflectionMap->Release();
+#endif
     for(int i = 0; i < picaMaxPasses; i++)
         if(texEnv[i].texture)
             texEnv[i].texture->Release();
 }
+
+#ifdef SRR2_OLD3DS_VISUAL_UPGRADE
+void picaMat::SetVisualType(const char* name)
+{
+    glassSurface = name && !strcmp(name, "vehicle_glass");
+    worldSurface = name && !strcmp(name, "worldsun");
+    vehicleSurface = glassSurface || (name && (!strcmp(name, "spheremap") || !strcmp(name, "environment")));
+}
+void picaMat::SetReflectionMap(pddiTexture* texture)
+{
+    if(texture == reflectionMap) return;
+    if(texture) texture->AddRef();
+    if(reflectionMap) reflectionMap->Release();
+    reflectionMap = static_cast<picaTexture*>(texture);
+    dirty = true;
+}
+void picaMat::SetEnvironmentBlend(pddiColour colour)
+{
+    if(vehicleSurface && !glassSurface && picaVisual::Enabled(picaVisual::KeyLighting) &&
+       colour.Red()==colour.Green() && colour.Red()==colour.Blue())
+    {
+        const unsigned strength=picaVisual::CoatReflectivity(colour.Red());
+        colour=pddiColour(strength,strength,strength,colour.Alpha());
+    }
+    if(environmentBlend.c == colour.c) return;
+    environmentBlend = colour;
+    dirty = true;
+}
+bool picaMat::WorldLightmapEnabled() const
+{
+    return worldSurface && reflectionMap && reflectionMap->WorldLightmapParameters() &&
+        picaVisual::Enabled(picaVisual::SceneryLighting) && !texEnv[0].lit &&
+        texEnv[0].alphaBlendMode==PDDI_BLEND_NONE && !texEnv[0].alphaTest &&
+        !context->skinProgramBound && context->ReflectionProgram();
+}
+bool picaMat::ReflectionEnabled() const
+{
+    return vehicleSurface && reflectionMap && picaVisual::Enabled(picaVisual::Reflections) &&
+        (texEnv[0].alphaBlendMode == PDDI_BLEND_NONE ||
+         (glassSurface && texEnv[0].alphaBlendMode == PDDI_BLEND_ALPHA)) && !context->skinProgramBound &&
+        context->ReflectionProgram();
+}
+#endif
 
 const char* picaMat::GetType(void)
 {
@@ -483,6 +539,38 @@ void picaMat::SetDevPass(unsigned)
         g_picaState.passStagesSet = true;
     }
 
+#ifdef SRR2_OLD3DS_VISUAL_UPGRADE
+    const bool worldLightmap=worldSurface && WorldLightmapEnabled();
+    C3D_Tex* reflection = (worldLightmap || (vehicleSurface && ReflectionEnabled())) ? reflectionMap->GetC3DTexture() : nullptr;
+    const unsigned colour = environmentBlend.Red() | (environmentBlend.Green()<<8) |
+        (environmentBlend.Blue()<<16) | 0xff000000u;
+    if(!g_picaState.reflectionValid || g_picaState.reflectionTexture != reflection ||
+       (reflection && (g_picaState.reflectionColour != colour || g_picaState.worldLightmapStage!=worldLightmap)))
+    {
+        picaNativeBindTexture1(reflection);
+        C3D_TexEnv* env = C3D_GetTexEnv(1);
+        C3D_TexEnvInit(env);
+        if(reflection)
+        {
+            if(worldLightmap) {
+                C3D_TexEnvSrc(env,C3D_RGB,GPU_PREVIOUS,GPU_TEXTURE1);
+                C3D_TexEnvFunc(env,C3D_RGB,GPU_MODULATE);
+            } else {
+            C3D_TexEnvSrc(env, C3D_RGB, GPU_TEXTURE1, GPU_CONSTANT, GPU_PREVIOUS);
+            C3D_TexEnvFunc(env, C3D_RGB, GPU_MULTIPLY_ADD);
+            C3D_TexEnvColor(env, colour);
+            }
+        }
+        // Preserve stage-zero alpha, including texture cutouts and vehicle fades.
+        C3D_TexEnvSrc(env, C3D_Alpha, GPU_PREVIOUS);
+        C3D_TexEnvFunc(env, C3D_Alpha, GPU_REPLACE);
+        g_picaState.reflectionTexture = reflection;
+        g_picaState.reflectionColour = colour;
+        g_picaState.reflectionValid = true;
+        g_picaState.worldLightmapStage=worldLightmap;
+    }
+#endif
+
 #ifdef SRR2_OLD3DS_DRAW_PREP
     picaAlphaTest(texEnv[i].alphaTest, nativeCompare, nativeAlphaRef);
     picaAlphaBlend(nativeEquation, nativeEquation, nativeSource,
@@ -516,6 +604,21 @@ void picaMat::PreRender(void)
 {
     O3_MAIN_SCOPE(MaterialPreRender);
     const int i = 0;
+#ifdef SRR2_OLD3DS_VISUAL_UPGRADE
+    const bool worldLightmap = worldSurface && WorldLightmapEnabled();
+    const bool reflective = vehicleSurface && ReflectionEnabled();
+    const unsigned char desired=worldLightmap?picaContext::SurfaceWorld:
+        reflective?picaContext::SurfaceReflection:picaContext::SurfaceOrdinary;
+    if(context->reflectionState!=picaContext::SurfaceSkin &&
+       context->reflectionState!=desired)
+        context->BindReflectionProgram(reflective || worldLightmap,worldLightmap);
+#ifdef SRR2_OLD3DS_NATIVE_BENCH
+    if(reflective) ++picaVisual::reflectionDraws;
+    if(worldLightmap) ++picaVisual::sceneryDraws;
+#else
+    (void)reflective;
+#endif
+#endif
 #ifdef SRR2_OLD_3DS
     g_old3dsDrawBlended = texEnv[i].alphaBlendMode != PDDI_BLEND_NONE;
     g_old3dsDrawAlphaTested = texEnv[i].alphaTest;
@@ -535,5 +638,8 @@ void picaMat::PreRender(void)
                                texEnv[i].ambient,
                                texEnv[i].diffuse,
                                texEnv[i].emissive);
+#endif
+#ifdef SRR2_OLD3DS_VISUAL_UPGRADE
+    if(worldLightmap) context->SetWorldLightmapParameters(reflectionMap);
 #endif
 }

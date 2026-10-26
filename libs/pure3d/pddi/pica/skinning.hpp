@@ -25,6 +25,10 @@ struct picaSkinMetrics
 };
 extern picaSkinMetrics g_picaSkinMetrics;
 extern picaSkin::Reason g_picaSkinAllocationReason;
+#ifdef SRR2_OLD3DS_NATIVE_BENCH
+extern unsigned g_picaSkinBudgetFallbackVertices;
+void picaSkinRecordRejection(const char* name, unsigned group, unsigned vertices);
+#endif
 bool picaSkinEnabled();
 void picaSkinBeginFrame();
 void picaSkinEndFrame(u64 work, u64 update, u64 render, bool gameplay);

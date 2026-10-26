@@ -19,6 +19,7 @@ extern void __wrap_C3D_UpdateUniforms(GPU_SHADER_TYPE type);
 #endif
 extern bool g_picaNativeTrackedFlush;
 extern bool picaNativeUniformBatchReady(void);
+extern bool picaNativeUniformsPending(GPU_SHADER_TYPE type);
 picaNativeCommandBlock* g_picaNativeCommandBlock;
 #ifdef SRR2_OLD3DS_NATIVE_BENCH
 bool g_picaNativeContextEnabled;
@@ -28,6 +29,81 @@ bool g_picaNativeContextEnabled=true;
 static unsigned fastCalls,fallbackCalls,compiledWords;
 static const shaderProgram_s* normalProgram;
 static const shaderProgram_s* skinProgram;
+static const shaderProgram_s* reflectionProgram;
+static const shaderProgram_s* contactProgram;
+#ifdef SRR2_OLD3DS_VISUAL_UPGRADE
+static u32 reflectionOutputMap[2],reflectionOutputClock[2];
+static bool reflectionOutputsConfigured,reflectionOutputRequested;
+static bool sparseReflectionOutputs=true,reflectionOutputValid,reflectionOutputApplied;
+static bool reflectionOutputPending=true;
+static const shaderProgram_s* reflectionOutputProgram;
+static const shaderProgram_s* reflectionEntryPrograms[2];
+static unsigned reflectionEntries[2][2];
+static bool reflectionEntriesConfigured,reflectionEntryApplied;
+#ifdef SRR2_OLD3DS_NATIVE_BENCH
+static unsigned reflectionOutputWrites[2];
+static unsigned reflectionEntryWrites[2];
+#endif
+void picaNativeConfigureReflectionEntries(const shaderProgram_s* mono,unsigned monoOrdinary,unsigned monoReflected,
+                                         const shaderProgram_s* stereo,unsigned stereoOrdinary,unsigned stereoReflected)
+{
+    reflectionEntryPrograms[0]=mono;reflectionEntryPrograms[1]=stereo;
+    reflectionEntries[0][0]=monoOrdinary;reflectionEntries[0][1]=monoReflected;
+    reflectionEntries[1][0]=stereoOrdinary;reflectionEntries[1][1]=stereoReflected;
+    reflectionEntriesConfigured=mono!=NULL;reflectionOutputValid=false;reflectionOutputPending=true;
+}
+void picaNativeReflectionEntryStats(unsigned* ordinary,unsigned* reflected,unsigned* enabled)
+{
+    *enabled=reflectionEntriesConfigured;
+#ifdef SRR2_OLD3DS_NATIVE_BENCH
+    *ordinary=reflectionEntryWrites[0];*reflected=reflectionEntryWrites[1];
+#else
+    *ordinary=*reflected=0;
+#endif
+}
+void picaNativeConfigureReflectionOutputs(unsigned ordinaryMap,unsigned ordinaryClock,unsigned reflectedMap,unsigned reflectedClock)
+{
+    reflectionOutputMap[0]=ordinaryMap;reflectionOutputClock[0]=ordinaryClock;
+    reflectionOutputMap[1]=reflectedMap;reflectionOutputClock[1]=reflectedClock;
+    reflectionOutputsConfigured=true;reflectionOutputValid=false;reflectionOutputPending=true;
+}
+void picaNativeSetReflectionOutput(bool reflected)
+{
+    if(reflectionOutputRequested!=reflected)reflectionOutputPending=true;
+    reflectionOutputRequested=reflected;
+}
+void picaNativeInvalidateReflectionOutputs(void){reflectionOutputValid=false;reflectionOutputPending=true;}
+void picaNativeEnableSparseReflectionOutputs(bool enabled)
+{sparseReflectionOutputs=enabled;reflectionOutputValid=false;reflectionOutputPending=true;}
+void picaNativeReflectionOutputStats(unsigned* ordinary,unsigned* reflected,unsigned* enabled)
+{
+    *enabled=reflectionOutputsConfigured && sparseReflectionOutputs;
+#ifdef SRR2_OLD3DS_NATIVE_BENCH
+    *ordinary=reflectionOutputWrites[0];*reflected=reflectionOutputWrites[1];
+#else
+    *ordinary=*reflected=0;
+#endif
+}
+#endif
+void picaNativeRegisterContactProgram(const shaderProgram_s* contact) { contactProgram=contact; }
+void picaNativeRegisterReflectionProgram(const shaderProgram_s* reflection)
+{
+#ifdef SRR2_OLD3DS_VISUAL_UPGRADE
+    if(reflectionProgram!=reflection){reflectionOutputValid=false;reflectionOutputPending=true;}
+#endif
+    reflectionProgram=reflection;
+}
+void picaNativeBindTexture1(C3D_Tex* texture)
+{
+    C3D_Context* ctx=C3Di_GetContext();
+    if(!(ctx->flags&C3DiF_Active))return;
+    // Citro3D 1.7.1 dereferences unit-1 textures before checking for NULL.
+    // Retain its 2D-only validation and dirty-state protocol while allowing
+    // an actual unbind, so ordinary materials do not sample another texture.
+    if(texture && ((texture->param>>28)&7u)!=0)return;
+    ctx->tex[1]=texture;
+    ctx->flags|=C3DiF_Tex(1);
+}
 void picaNativeRegisterPrograms(const shaderProgram_s* normal,const shaderProgram_s* skin)
 {
     normalProgram=normal;skinProgram=skin;
@@ -38,6 +114,49 @@ static inline void writeOne(Packet* p,u32 reg,u32 mask,u32 value)
     p->data[p->count++]=value;
     p->data[p->count++]=GPUCMD_HEADER(0,mask,reg);
 }
+#ifdef SRR2_OLD3DS_VISUAL_UPGRADE
+static __attribute__((cold,noinline)) void reflectionOutputs(Packet* p,const C3D_Context* ctx)
+{
+    reflectionOutputProgram=ctx->program;
+    reflectionOutputPending=false;
+    if(!reflectionOutputsConfigured || ctx->program!=reflectionProgram || !ctx->program || ctx->program->geometryShader)
+    {
+        reflectionOutputValid=false;
+        // A temporarily foreign geometry stage on an owned root remains dirty.
+        reflectionOutputPending=ctx->program && ctx->program==reflectionProgram && ctx->program->geometryShader;
+        return;
+    }
+    if(reflectionEntriesConfigured && ctx->program!=reflectionEntryPrograms[0] && ctx->program!=reflectionEntryPrograms[1])
+    {reflectionOutputValid=false;return;}
+    const bool reflected=!sparseReflectionOutputs || reflectionOutputRequested;
+    if(reflectionEntriesConfigured && (!reflectionOutputValid || reflectionEntryApplied!=reflectionOutputRequested))
+    {
+        const unsigned family=ctx->program==reflectionEntryPrograms[1]?1:0;
+        writeOne(p,GPUREG_VSH_ENTRYPOINT,15,0x7fff0000u|reflectionEntries[family][reflectionOutputRequested]);
+        reflectionEntryApplied=reflectionOutputRequested;
+#ifdef SRR2_OLD3DS_NATIVE_BENCH
+        ++reflectionEntryWrites[reflectionOutputRequested];
+#endif
+    }
+    if(reflectionOutputValid && reflectionOutputApplied==reflected)return;
+    // Use the SDK-derived maps. Both programs keep position/color/UV0 and the
+    // same three output registers; only reflective draws consume UV1 in O2.zw.
+    // Run after SDK program configuration, which otherwise restores its map.
+    writeOne(p,GPUREG_SH_OUTMAP_O2,15,reflectionOutputMap[reflected]);
+    writeOne(p,GPUREG_SH_OUTATTR_CLOCK,15,reflectionOutputClock[reflected]);
+    reflectionOutputApplied=reflected;reflectionOutputValid=true;
+#ifdef SRR2_OLD3DS_NATIVE_BENCH
+    ++reflectionOutputWrites[reflected];
+#endif
+}
+static inline void updateReflectionOutputs(Packet* p,const C3D_Context* ctx)
+{
+    // Most draws retain the same program and material. Avoid revalidating the
+    // immutable entry metadata until a request, program or SDK state changes.
+    if(reflectionOutputPending || reflectionOutputProgram!=ctx->program)
+        reflectionOutputs(p,ctx);
+}
+#endif
 static inline void writeMany(Packet* p,u32 reg,const u32* values,unsigned count)
 {
     picaNativeCommandAdd(p,GPUCMD_HEADER(1,15,reg),values,count);
@@ -130,7 +249,37 @@ static void compileState(Packet* p,C3D_Context* ctx)
         ctx->flags&=~C3DiF_LightEnv;
     }
 }
-bool picaNativeNormalProgramBound(void){return C3Di_GetContext()->program==normalProgram && normalProgram!=NULL;}
+bool picaNativeNormalProgramBound(void)
+{
+    const shaderProgram_s* program=C3Di_GetContext()->program;
+    return program && (program==normalProgram || program==reflectionProgram);
+}
+static __attribute__((cold,noinline)) void fallbackContext(C3D_Context* ctx)
+{
+    (void)ctx;
+    if(g_picaNativeContextEnabled)++fallbackCalls;
+#ifdef SRR2_OLD3DS_VISUAL_UPGRADE
+    const bool programConfigured=(ctx->flags&C3DiF_Program)!=0;
+#endif
+    __real_C3Di_UpdateContext();
+#ifdef SRR2_OLD3DS_VISUAL_UPGRADE
+    if(reflectionEntriesConfigured && ctx->program==reflectionProgram && ctx->program && !ctx->program->geometryShader)
+    {
+        // SDK configuration selects DVLE 0: ordinary entry, UV0 map/clock.
+        // Other SDK state updates leave these registers untouched.
+        if(programConfigured){reflectionOutputValid=true;reflectionOutputApplied=false;reflectionEntryApplied=false;reflectionOutputPending=true;}
+    }
+    else {reflectionOutputValid=false;reflectionOutputPending=true;}
+    if(programConfigured)reflectionOutputPending=true;
+    // Owned draw entrypoints reserve 2,048 words before reaching here.
+    // Foreign or exhausted buffers retain the SDK path without extra writes.
+    if(gpuCmdBuf && gpuCmdBufOffset<=gpuCmdBufSize && gpuCmdBufSize-gpuCmdBufOffset>=6)
+    {
+        Packet outputs={gpuCmdBuf+gpuCmdBufOffset,0};
+        updateReflectionOutputs(&outputs,ctx);gpuCmdBufOffset+=outputs.count;
+    }
+#endif
+}
 void picaNativeUpdateContext(void)
 {
     C3D_Context* ctx=C3Di_GetContext();
@@ -141,7 +290,7 @@ void picaNativeUpdateContext(void)
     // Only backend-owned programs use the tracked float-uniform API. Foreign
     // clients retain the SDK scan even when their state otherwise looks common.
     if(!g_picaNativeContextEnabled || !ctx->program ||
-       (ctx->program!=normalProgram && ctx->program!=skinProgram) ||
+       (ctx->program!=normalProgram && ctx->program!=skinProgram && ctx->program!=reflectionProgram && ctx->program!=contactProgram) ||
        !picaNativeUniformBatchReady() ||
        !gpuCmdBuf || gpuCmdBufOffset>gpuCmdBufSize || gpuCmdBufSize-gpuCmdBufOffset<2048 ||
        !(ctx->flags&C3DiF_Active) ||
@@ -149,8 +298,8 @@ void picaNativeUpdateContext(void)
        (ctx->program && ctx->program->geometryShader) ||
        (ctx->texEnvBuf&7)==GPU_GAS ||
        ((ctx->flags&C3DiF_FogLut) && (ctx->texEnvBuf&7)!=GPU_NO_FOG)) {
-        if(g_picaNativeContextEnabled)++fallbackCalls;
-        __real_C3Di_UpdateContext();return;
+        fallbackContext(ctx);
+        return;
     }
     Packet p; p.count=0;p.data=gpuCmdBuf+gpuCmdBufOffset;
     compileState(&p,ctx);
@@ -159,8 +308,11 @@ void picaNativeUpdateContext(void)
     // state fit inside the 2,048 words reserved before state mutation.
     g_picaNativeCommandBlock=&p;
     g_picaNativeTrackedFlush=true;
-    nativeUpdateUniforms(GPU_VERTEX_SHADER);
-    nativeUpdateUniforms(GPU_GEOMETRY_SHADER);
+    if(picaNativeUniformsPending(GPU_VERTEX_SHADER))nativeUpdateUniforms(GPU_VERTEX_SHADER);
+    if(picaNativeUniformsPending(GPU_GEOMETRY_SHADER))nativeUpdateUniforms(GPU_GEOMETRY_SHADER);
+#ifdef SRR2_OLD3DS_VISUAL_UPGRADE
+    updateReflectionOutputs(&p,ctx);
+#endif
     g_picaNativeTrackedFlush=false;
     g_picaNativeCommandBlock=NULL;
     gpuCmdBufOffset+=p.count;
@@ -169,12 +321,17 @@ void picaNativeUpdateContext(void)
 bool picaNativeCanCaptureContext(void)
 {
     const C3D_Context* ctx=C3Di_GetContext();
+#ifdef SRR2_OLD3DS_VISUAL_UPGRADE
+    // The recorded-draw format predates this live output routing. Keep these
+    // owned draws synchronous rather than retaining borrowed routing state.
+    if(reflectionOutputsConfigured && ctx->program==reflectionProgram)return false;
+#endif
     const u32 common=C3DiF_Active|C3DiF_DrawUsed|C3DiF_AttrInfo|C3DiF_BufInfo|
         C3DiF_Effect|C3DiF_TexAll|C3DiF_TexStatus|C3DiF_TexEnvAll|
         C3DiF_Viewport|C3DiF_Scissor|C3DiF_TexEnvBuf|C3DiF_LightEnv|
         C3DiF_FogLut|C3DiF_Gas|C3DiF_GasLut;
     return g_picaNativeContextEnabled && ctx->program &&
-        (ctx->program==normalProgram || ctx->program==skinProgram) &&
+        (ctx->program==normalProgram || ctx->program==skinProgram || ctx->program==reflectionProgram || ctx->program==contactProgram) &&
         picaNativeUniformBatchReady() && (ctx->flags&C3DiF_Active) &&
         !(ctx->flags&~common) && !ctx->lightEnv && !ctx->fixedAttribDirty &&
         !ctx->program->geometryShader && (ctx->texEnvBuf&7)!=GPU_GAS &&

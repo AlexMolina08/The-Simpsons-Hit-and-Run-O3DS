@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Check packed GPU vertices, bounded error and every available character asset."""
 from pathlib import Path
-import importlib.util,struct,subprocess,tempfile
+import importlib.util,struct,subprocess,tempfile,sys
 root=Path(__file__).resolve().parents[3]
 spec=importlib.util.spec_from_file_location('inventory',root/'tools/3ds/skin_inventory.py');inventory=importlib.util.module_from_spec(spec);spec.loader.exec_module(inventory)
 harness=r'''
@@ -22,7 +22,6 @@ int main(int argc,char** argv){
   picaSkin::PackedVertex decoded{};
   if(rigid){picaSkin::PackedRigidVertex record;memcpy(&record,bytes,sizeof(record));
    memcpy(&decoded,&record,20);memcpy(decoded.offsets,record.offsets,4);
-   for(auto value:record.ignoredWeights)assert(value==0);
   }else{memcpy(&decoded,bytes,sizeof(decoded));assert(!memcmp(decoded.weights,full.weights,16));}
   assert(!memcmp(decoded.offsets,full.offsets,4)&&!memcmp(decoded.colour,full.colour,4));
   for(unsigned i=0;i<3;++i){assert(fabsf(decoded.position[i]/8192.f-full.position[i])<=1/8192.f+1e-7f);
@@ -36,11 +35,11 @@ int main(int argc,char** argv){
  invalid={};invalid.normal[1]=1.001f;assert(!picaSkin::CanPack(invalid));
  invalid={};invalid.uv[1]=8.001f;assert(!picaSkin::CanPack(invalid));
  invalid={};invalid.uv[0]=std::numeric_limits<float>::quiet_NaN();assert(!picaSkin::CanPack(invalid));
- assert(picaSkin::PackedStride(true)==28&&picaSkin::PackedStride(false)==40);
- printf("PASS: %u production source vertices; 28/40-byte layouts, exact weights/colors/indices, bounded position/normal/UV error and safe range rejection\n",count);
+ assert(picaSkin::PackedStride(true)==24&&picaSkin::PackedStride(false)==40);
+ printf("PASS: %u production source vertices; 24/40-byte layouts, exact weights/colors/indices, bounded position/normal/UV error and safe range rejection\n",count);
 }
 '''
-assets=root/'out/whole-frame-1/emulator/sdmc/3ds/simpsons/art/chars'
+assets=Path(sys.argv[1]) if len(sys.argv)>1 else root/'out/whole-frame-1/emulator/sdmc/3ds/simpsons/art/chars'
 assert assets.exists(),'Character assets required for this audit'
 with tempfile.TemporaryDirectory(prefix='srr-packed-skin-')as td:
  p=Path(td);groups=skins=0

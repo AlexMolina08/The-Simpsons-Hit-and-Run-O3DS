@@ -3,6 +3,8 @@
 from pathlib import Path
 import subprocess
 import tempfile,sys
+diagnostics="--diagnostics" in sys.argv
+form="--form" in sys.argv
 stereo="--stereo" in sys.argv
 extra_budget="--extra-budget" in sys.argv
 borrow="--borrow" in sys.argv or extra_budget
@@ -25,8 +27,15 @@ prelude=r'''
 #include <cstring>
 #include <limits>
 #include <set>
+#include <vector>
 #include <pddi/pica/skinning.hpp>
 #include <pddi/pica/skineyecache.hpp>
+#ifdef SRR2_OLD3DS_CHARACTER_FORM
+#include <pddi/pica/characterform.hpp>
+namespace Old3dsPerformance {bool FlatLighting(){return true;}}
+namespace picaCharacterForm {bool enabled=true;unsigned groups=0,vertices=0;}
+const unsigned PICA_VERTEX_STRIDE=36,PICA_VERTEX_OFF_COL=32;
+#endif
 namespace Graphics3DS {bool Stereo(){
 #ifdef SRR2_3DS_STEREO_GPU_SKIN
  return true;
@@ -37,6 +46,10 @@ namespace Graphics3DS {bool Stereo(){
 
 static unsigned freeSpace=8*1024*1024, flushes, draws, materialCalls, frees;
 static bool failAllocation, programSkin;
+static bool g_picaSkinPrepareYield=false;
+static unsigned g_picaSkinPrepareCheckpoints=0,loadHookCalls=0;
+static void LoadHook(){++loadHookCalls;}
+static void (*g_picaYieldHook)()=LoadHook;
 static std::set<void*> allocations;
 void* linearAlloc(unsigned n) {if(failAllocation)return NULL;void* p=malloc(n);allocations.insert(p);return p;}
 void linearFree(void* p) {assert(allocations.erase(p)==1);free(p);++frees;}
@@ -77,16 +90,17 @@ struct picaContext {
  bool skinRigidLayout=false;int skinRigidAttrInfo=3;void SetSkinLayout(bool);
  unsigned skinBatchDepth=0;void BeginSkinBatch();void EndSkinBatch();void SkinBatchBarrier();
  bool BindSkinProgram(bool);
+ int* MainProgram(){return &shaderProgram;}int* SkinProgram(){return &skinProgram;}
  void DrawPrimBuffer(pddiShader*,picaPrimBuffer*);
 };
 struct picaPrimBuffer {
- bool wheelSkinBuffer=false;
+ bool wheelSkinBuffer=false,expandDirty=false;
  picaContext* context;bool transient=false;unsigned char* buffer;unsigned allocated=2;
  int primType=1;unsigned vertexType=16,mem=80;bool validIndices=true;
  bool IndicesInRange(){return validIndices;}
  picaSkinAllocation* skinAllocation=NULL;picaSkin::Reason skinReason=picaSkin::NotSelected;
  unsigned skinBoneCount=0;bool skinDrawing=false;bool skinRigid=false;
- void PrepareGpuSkin(const void*,unsigned,unsigned,bool,bool pedestrian=false,bool named=false);void MutateGpuSkin();
+ void PrepareGpuSkin(const void*,unsigned,unsigned,bool,bool pedestrian=false,bool named=false,const char* name=nullptr,unsigned group=0);void MutateGpuSkin();
  bool TryGpuSkin(pddiShader*,const pddiMatrix* const*,unsigned);bool SubmitGpuSkin(pddiShader*);
 };
 void picaContext::DrawPrimBuffer(pddiShader*,picaPrimBuffer* p){assert(programSkin && p->skinDrawing);
@@ -110,6 +124,14 @@ int main(){
  assert(!unsupported.skinAllocation && unsupported.skinReason!=picaSkin::Ready);
 #endif
  failAllocation=false;
+#if defined(SRR2_OLD3DS_NATIVE_BENCH) && defined(SRR2_OLD3DS_GPU_SKIN)
+ freeSpace=picaSkin::Reserve+55;
+ unsupported=make();unsupported.PrepareGpuSkin(src,2,2,true,false,false,"budget_probe",7);
+ assert(unsupported.skinReason==picaSkin::BudgetLimit && !unsupported.skinAllocation);
+ assert(!unsupported.TryGpuSkin(&material,palette,2));
+ assert(g_picaSkinBudgetFallbackVertices==2);
+ freeSpace=8*1024*1024;
+#endif
  picaPrimBuffer p=make();p.PrepareGpuSkin(src,2,picaSkin::MaxBones,true);assert(p.skinReason==picaSkin::Ready);
  unsigned initialFlushes=flushes;
  for(unsigned pose=0;pose<10;++pose){
@@ -232,6 +254,46 @@ int main(){
 #endif
  assert(allocations.empty());
 #endif
+#ifdef SRR2_OLD3DS_NATIVE_BENCH
+ // Checkpointed preparation must publish exactly the same complete GPU bytes.
+ for(bool weightedSource:{false,true}){
+  const unsigned count=257;
+  std::vector<picaSkin::Source> input(count);
+  std::vector<unsigned char> original(count*36);
+  for(unsigned i=0;i<count;++i){
+   input[i].weights[0]=weightedSource?0.5f:1.0f;
+   input[i].weights[1]=weightedSource?0.25f:0.0f;
+   input[i].weights[2]=weightedSource?0.125f:0.0f;
+   input[i].normal[2]=1;input[i].position[0]=float(i)*0.01f;
+   for(unsigned c=0;c<4;++c)original[36*i+32+c]=static_cast<unsigned char>(i+c*79+50);
+  }
+  auto controlBytes=original,slicedBytes=original;
+  auto control=make();control.allocated=count;control.buffer=controlBytes.data();control.mem=original.size();
+  loadHookCalls=g_picaSkinPrepareCheckpoints=0;g_picaSkinPrepareYield=false;
+  control.PrepareGpuSkin(input.data(),count,2,true);assert(!loadHookCalls);
+  assert(control.skinReason==picaSkin::Ready);
+  auto sliced=make();sliced.allocated=count;sliced.buffer=slicedBytes.data();sliced.mem=original.size();
+  g_picaSkinPrepareYield=true;sliced.PrepareGpuSkin(input.data(),count,2,true);
+  assert(sliced.skinReason==control.skinReason && controlBytes==slicedBytes);
+  unsigned expectedCheckpoints=5;
+#ifdef SRR2_OLD3DS_CHARACTER_FORM
+  expectedCheckpoints+=5;
+  assert(controlBytes!=original); // Exercise real color work, not an all-zero buffer.
+#endif
+#ifdef SRR2_OLD3DS_GPU_SKIN
+  expectedCheckpoints+=5;
+  assert(loadHookCalls==expectedCheckpoints && g_picaSkinPrepareCheckpoints==expectedCheckpoints);
+  assert(control.skinAllocation && sliced.skinAllocation);
+  assert(control.skinAllocation->bytes==sliced.skinAllocation->bytes);
+  assert(!memcmp(control.skinAllocation+1,sliced.skinAllocation+1,control.skinAllocation->bytes-32));
+  picaSkinRetire(control.skinAllocation);picaSkinRetire(sliced.skinAllocation);picaSkinBeginFrame();
+  assert(allocations.empty());
+#else
+  assert(loadHookCalls==expectedCheckpoints && g_picaSkinPrepareCheckpoints==expectedCheckpoints);
+#endif
+  g_picaSkinPrepareYield=false;
+ }
+#endif
  for(unsigned i=0;i<130;++i)picaSkinEndFrame(10,3,5,true);
  picaSkinDump();
  puts("production backend: eligibility, allocation failure, pose uploads, state restoration, mutation, retirement and 1000 reloads passed");
@@ -245,6 +307,8 @@ with tempfile.TemporaryDirectory() as td:
  for enabled,compact,pedestrians,batch,rigid,eye,cast,eye_cache in ((False, False, False, False, False, False, False, False), (True, False, False, False, False, False, False, False), (True, True, False, False, False, False, False, False), (True, True, True, False, False, False, False, False), (True, True, True, True, False, False, False, False), (True, False, False, True, False, False, False, False), (True, True, True, True, True, False, False, False), (True, True, True, True, True, True, False, False), (True, True, True, True, True, True, True, False), (True, True, True, True, True, True, True, True)):
   if packed and not (enabled and compact and pedestrians and batch and rigid and eye and cast and eye_cache):continue
   flags=['-DSRR2_OLD3DS_GPU_SKIN_SUPPORT','-DSRR2_OLD3DS_GPU_SKIN_METRICS']+(['-DSRR2_OLD3DS_GPU_SKIN'] if enabled else [])
+  flags+=(['-DSRR2_OLD3DS_NATIVE_BENCH'] if diagnostics else [])
+  flags+=(['-DSRR2_OLD3DS_CHARACTER_FORM'] if form else [])
   flags+=(['-DSRR2_OLD3DS_GPU_SKIN_BORROW'] if borrow else [])
   flags+=(['-DSRR2_OLD3DS_GPU_SKIN_EXTRA_BUDGET'] if extra_budget else [])
   flags+=(['-DSRR2_OLD3DS_GPU_SKIN_PACKED'] if packed else [])

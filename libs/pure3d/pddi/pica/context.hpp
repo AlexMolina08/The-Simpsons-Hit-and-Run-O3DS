@@ -6,6 +6,9 @@
 #include <pddi/pica/clipbounds.hpp>
 #endif
 #include <pddi/pica/skinning.hpp>
+#ifdef SRR2_OLD3DS_VISUAL_UPGRADE
+#include <pddi/pica/contactshadow.hpp>
+#endif
 #ifdef SRR2_OLD3DS_LIGHT_CAPTURE
 #include <pddi/pica/lightcapture.hpp>
 #endif
@@ -69,6 +72,11 @@ public:
 #ifdef SRR2_OLD3DS_GPU_SKIN
     bool BindSkinProgram(bool enabled);
     bool skinProgramBound = false;
+#ifdef SRR2_OLD3DS_VISUAL_UPGRADE
+    enum SurfaceState { SurfaceUnknown,SurfaceOrdinary,SurfaceReflection,SurfaceSkin,SurfaceWorld };
+    // The legacy skin flag leaves one padding byte before the eye cache.
+    unsigned char reflectionState=SurfaceUnknown;
+#endif
 #ifdef SRR2_OLD3DS_GPU_SKIN_EYE_CACHE
     picaSkin::EyeCache skinEyeCache;
 #endif
@@ -124,6 +132,11 @@ public:
 
     void SetVertexUniforms(bool lit, pddiColour ambient, pddiColour diffuse, pddiColour emissive, const float (*prepared)[4] = NULL);
     void SetMaterialWriteMask(int mask);
+#ifdef SRR2_OLD3DS_VISUAL_UPGRADE
+    shaderProgram_s* ReflectionProgram();
+    bool BindReflectionProgram(bool enabled, bool world=false);
+    void SetWorldLightmapParameters(picaTexture* texture);
+#endif
 
 #ifdef SRR2_OLD3DS_SHADOW_MESH
     bool DrawBlobShadow(pddiShader* shader, const pddiVector* vertices,
@@ -153,6 +166,11 @@ public:
 #ifdef SRR2_OLD3DS_DISTANCE_HAZE
     void BeginDistanceHaze(unsigned level, unsigned colour);
     void EndDistanceHaze();
+#endif
+#ifdef SRR2_OLD3DS_VISUAL_UPGRADE
+    void BeginContactShadows();
+    void QueueContactShadow(const float*,const float*,const float*,float,float,float);
+    void DrawContactShadows();
 #endif
 
     void ApplyViewport(void);
@@ -320,6 +338,24 @@ private:
 #endif
     unsigned short* immIndices;
     unsigned        immIndexUsed;
+#ifdef SRR2_OLD3DS_VISUAL_UPGRADE
+    // Keep the complete legacy context prefix at its original offsets. The
+    // additional visual resources do not belong between hot renderer fields.
+protected:
+    DVLB_s* reflectionBinary = nullptr;
+    DVLB_s* reflectionStereoBinary = nullptr;
+    shaderProgram_s reflectionProgram, reflectionStereoProgram;
+    bool reflectionEntriesReady=false;
+    DVLB_s* contactBinary=nullptr;
+    shaderProgram_s contactProgram;
+    picaMat* contactMaterial=nullptr;
+    picaContact::Vertex* contactVertices=nullptr;
+    unsigned short* contactIndices=nullptr;
+    C3D_AttrInfo contactAttributes;
+    picaContact::Instance contactInstances[picaContact::Capacity];
+    unsigned contactCount=0;
+    bool contactActive=false;
+#endif
 };
 
 class picaPrimBufferStream;
@@ -367,6 +403,9 @@ public:
 #endif
     unsigned GetVertexFormat() { return vertexType; }
     void Display(void);
+#ifdef SRR2_OLD3DS_VISUAL_UPGRADE
+    void PrepareVehicleForm();
+#endif
 #ifdef SRR2_OLD3DS_CAUSAL_DIAG
     unsigned DiagnosticVertexCount() const { return indices?indexCount:allocated; }
 #endif
@@ -377,7 +416,8 @@ public:
     float clipLow[3], clipHigh[3];
 #endif
 #ifdef SRR2_OLD3DS_GPU_SKIN_SUPPORT
-    void PrepareGpuSkin(const void* source, unsigned count, unsigned bones, bool selected, bool pedestrian = false, bool named = false);
+    void PrepareGpuSkin(const void* source, unsigned count, unsigned bones, bool selected, bool pedestrian = false, bool named = false,
+                        const char* name = nullptr, unsigned group = 0);
     bool TryGpuSkin(pddiShader* material, const pddiMatrix* const* matrices, unsigned count);
 #ifdef SRR2_OLD3DS_GPU_SKIN
     bool SubmitGpuSkin(pddiShader*);

@@ -98,12 +98,28 @@ int main(){
  assert(Candidate::g_picaNativeContextEnabled);
 #endif
  unsigned long oldAppends=0,newAppends=0;unsigned fast=0,ownedSnapshots=0;
- C3D_Tex textures[3]={};C3D_TexCube cubes[3]={};shaderProgram_s program={},foreignProgram={};Fog fog={};
+ C3D_Tex textures[3]={};C3D_TexCube cubes[3]={};shaderProgram_s program={},reflection={},contact={},foreignProgram={};Fog fog={};
  Candidate::picaNativeRegisterPrograms(&program,nullptr);
+ Candidate::picaNativeRegisterReflectionProgram(&reflection);
+ Candidate::picaNativeRegisterContactProgram(&contact);
+ Candidate::context={};Candidate::context.flags=C3DiF_Active;
+ Candidate::context.tex[0]=&textures[0];Candidate::context.tex[2]=&textures[2];
+ Candidate::picaNativeBindTexture1(&textures[1]);
+ assert(Candidate::context.tex[1]==&textures[1] && (Candidate::context.flags&C3DiF_Tex(1)));
+ Candidate::context.flags=C3DiF_Active;Candidate::picaNativeBindTexture1(nullptr);
+ assert(!Candidate::context.tex[1] && (Candidate::context.flags&C3DiF_Tex(1)));
+ assert(Candidate::context.tex[0]==&textures[0] && Candidate::context.tex[2]==&textures[2]);
+ textures[1].param=1u<<28;Candidate::context.flags=C3DiF_Active;
+ Candidate::picaNativeBindTexture1(&textures[1]);
+ assert(!Candidate::context.tex[1] && Candidate::context.flags==C3DiF_Active);
+ textures[1].param=0;Candidate::context.flags=0;Candidate::picaNativeBindTexture1(&textures[1]);
+ assert(!Candidate::context.tex[1] && !Candidate::context.flags);
  for(unsigned trial=0;trial<40000;++trial){
   C3D_Context initial={};initial.flags=C3DiF_Active;
   const unsigned common=C3DiF_DrawUsed|C3DiF_AttrInfo|C3DiF_BufInfo|C3DiF_Effect|C3DiF_TexAll|C3DiF_TexStatus|C3DiF_TexEnvAll|C3DiF_Viewport|C3DiF_Scissor|C3DiF_TexEnvBuf|C3DiF_LightEnv|C3DiF_FogLut|C3DiF_Gas|C3DiF_GasLut;
   initial.flags|=randomValue()&common;initial.program=&program;program.geometryShader=trial%41==0?&program:nullptr;
+  reflection.geometryShader=contact.geometryShader=program.geometryShader;
+  if(trial%3==1)initial.program=&reflection;else if(trial%3==2)initial.program=&contact;
   initial.attrInfo.attrCount=1+randomValue()%12;initial.attrInfo.flags[0]=randomValue();initial.attrInfo.flags[1]=randomValue();initial.attrInfo.permutation=(u64(randomValue())<<32)|randomValue();
   initial.bufInfo.base_paddr=0x18000000;initial.bufInfo.bufCount=1+randomValue()%12;
   for(auto& b:initial.bufInfo.buffers){b.offset=randomValue();b.flags[0]=randomValue();b.flags[1]=randomValue();}
@@ -202,13 +218,98 @@ int main(){
 #endif
  assert(fast>9000 && newAppends<oldAppends);
  printf("PASS: 40000 upstream context command/state comparisons; %u common-path reductions, appends %lu -> %lu. Rare state forwards unchanged. Not hardware timing.\n",fast,oldAppends,newAppends);
+#ifdef SRR2_OLD3DS_VISUAL_UPGRADE
+ Candidate::context={};Candidate::context.flags=C3DiF_Active;Candidate::context.program=&reflection;
+ reflection.geometryShader=nullptr;Candidate::g_picaNativeContextEnabled=true;Candidate::uniformFast=true;
+ memset(Candidate::C3Di_ShaderFVecData,0,sizeof(Candidate::C3Di_ShaderFVecData));
+ memset(Candidate::C3D_FVUnifDirty,0,sizeof(Candidate::C3D_FVUnifDirty));
+ memset(Candidate::C3D_IVUnifDirty,0,sizeof(Candidate::C3D_IVUnifDirty));
+ memset(Candidate::C3D_BoolUnifsDirty,0,sizeof(Candidate::C3D_BoolUnifsDirty));
+ memset(Candidate::g_picaNativeUniformMask,0,sizeof(Candidate::g_picaNativeUniformMask));
+ Candidate::gpuCmdBufSize=8192;
+ Candidate::picaNativeConfigureReflectionOutputs(0x1f1f0d0c,0x103,0x0f0e0d0c,0x303);
+ unsigned ordinaryCount=0,reflectionCount=0,sparse=1;
+ Candidate::picaNativeReflectionOutputStats(&ordinaryCount,&reflectionCount,&sparse);assert(sparse);
+ Candidate::picaNativeEnableSparseReflectionOutputs(true);
+ const auto check=[&](bool reflected,bool expectWrites){
+  Candidate::picaNativeSetReflectionOutput(reflected);Candidate::gpuCmdBufOffset=0;
+  Candidate::picaNativeUpdateContext();
+  assert(Candidate::gpuCmdBufOffset==(expectWrites?4:0));
+  if(expectWrites){assert(Candidate::storage[0]==(reflected?0x0f0e0d0cu:0x1f1f0d0cu));
+   assert(Candidate::storage[1]==GPUCMD_HEADER(0,15,GPUREG_SH_OUTMAP_O2));
+   assert(Candidate::storage[2]==(reflected?0x303u:0x103u));
+   assert(Candidate::storage[3]==GPUCMD_HEADER(0,15,GPUREG_SH_OUTATTR_CLOCK));}
+ };
+ check(false,true);check(false,false);check(true,true);check(true,false);
+ Candidate::picaNativeInvalidateReflectionOutputs();check(true,true);
+ Candidate::context.program=&contact;check(true,false);
+ Candidate::context.program=&reflection;check(true,true);
+ Candidate::context.flags|=C3DiF_Program;
+ Candidate::gpuCmdBufOffset=0;Candidate::picaNativeUpdateContext();
+ assert(Candidate::storage[Candidate::gpuCmdBufOffset-4]==0x0f0e0d0c);
+ assert(Candidate::storage[Candidate::gpuCmdBufOffset-2]==0x303);
+ Candidate::picaNativeEnableSparseReflectionOutputs(false);
+ Candidate::picaNativeSetReflectionOutput(false);Candidate::gpuCmdBufOffset=0;
+ Candidate::picaNativeUpdateContext();assert(Candidate::storage[0]==0x0f0e0d0c);
+ Candidate::picaNativeEnableSparseReflectionOutputs(true);check(false,true);
+ assert(!Candidate::picaNativeCanCaptureContext());
+ printf("PASS: SDK-derived UV0/UV1 routing, cache hits, foreign programs, SDK reconfiguration and diagnostic rollback.\n");
+ Candidate::picaNativeConfigureReflectionEntries(&reflection,0,73,&program,0,91);
+ const auto entry=[&](bool reflected,unsigned address,unsigned count,bool full){
+  Candidate::picaNativeSetReflectionOutput(reflected);Candidate::gpuCmdBufOffset=0;
+  Candidate::context.flags=C3DiF_Active;Candidate::picaNativeUpdateContext();
+  assert(Candidate::gpuCmdBufOffset==count);
+  if(count){assert(Candidate::storage[0]==(0x7fff0000u|address));
+   assert(Candidate::storage[1]==GPUCMD_HEADER(0,15,GPUREG_VSH_ENTRYPOINT));}
+  if(count==6){assert(Candidate::storage[2]==(full?0x0f0e0d0cu:0x1f1f0d0cu));
+   assert(Candidate::storage[3]==GPUCMD_HEADER(0,15,GPUREG_SH_OUTMAP_O2));
+   assert(Candidate::storage[4]==(full?0x303u:0x103u));
+   assert(Candidate::storage[5]==GPUCMD_HEADER(0,15,GPUREG_SH_OUTATTR_CLOCK));}
+ };
+ entry(false,0,6,false);entry(false,0,0,false);entry(true,73,6,true);entry(true,73,0,true);
+ Candidate::context.program=&contact;Candidate::gpuCmdBufOffset=0;Candidate::picaNativeUpdateContext();
+ Candidate::context.program=&reflection;entry(false,0,6,false);
+ Candidate::picaNativeRegisterReflectionProgram(&program);Candidate::context.program=&program;
+ entry(true,91,6,true);
+ Candidate::picaNativeRegisterReflectionProgram(&reflection);Candidate::context.program=&reflection;
+ entry(true,73,6,true);
+ Candidate::picaNativeEnableSparseReflectionOutputs(false);
+ entry(false,0,6,true);entry(true,73,2,true);entry(false,0,2,true);
+ Candidate::picaNativeEnableSparseReflectionOutputs(true);entry(false,0,6,false);
+ unsigned entryOrdinary,entryReflected,entriesEnabled;
+ Candidate::picaNativeReflectionEntryStats(&entryOrdinary,&entryReflected,&entriesEnabled);assert(entriesEnabled);
+ Candidate::context.flags|=C3DiF_Program;Candidate::gpuCmdBufOffset=0;Candidate::picaNativeUpdateContext();
+ unsigned afterOrdinary,afterReflected;
+ Candidate::picaNativeReflectionEntryStats(&afterOrdinary,&afterReflected,&entriesEnabled);
+ assert(afterOrdinary==entryOrdinary && afterReflected==entryReflected);
+ Candidate::picaNativeSetReflectionOutput(true);Candidate::context.flags|=C3DiF_Program;
+ Candidate::gpuCmdBufOffset=0;Candidate::picaNativeUpdateContext();
+ assert(Candidate::storage[Candidate::gpuCmdBufOffset-6]==(0x7fff0000u|73));
+ Candidate::picaNativeInvalidateReflectionOutputs();entry(false,0,6,false);
+ // A temporary geometry stage on the same owned object must not leave a clean
+ // routing cache when the ordinary vertex-only program returns.
+ reflection.geometryShader=reinterpret_cast<shaderInstance_s*>(1);
+ Candidate::context.flags=C3DiF_Active;Candidate::gpuCmdBufOffset=0;
+ Candidate::picaNativeUpdateContext();
+ reflection.geometryShader=nullptr;
+ entry(false,0,6,false);
+ // Retain a pending material transition when the SDK fallback has no room for
+ // the entry/map block. The next ordinary-sized buffer must apply it.
+ Candidate::picaNativeSetReflectionOutput(true);Candidate::gpuCmdBufSize=4;
+ Candidate::context.flags=C3DiF_Active;Candidate::gpuCmdBufOffset=0;
+ Candidate::picaNativeUpdateContext();
+ Candidate::gpuCmdBufSize=8192;entry(true,73,6,true);
+ Candidate::picaNativeConfigureReflectionEntries(nullptr,0,0,nullptr,0,0);
+ Candidate::picaNativeReflectionEntryStats(&afterOrdinary,&afterReflected,&entriesEnabled);assert(!entriesEnabled);
+ printf("PASS: shared-code mono/stereo entries, independent UV routing, cache hits, SDK default restoration and explicit invalidation.\n");
+#endif
 }
 '''
 if '--emit-source' in sys.argv:
     Path(sys.argv[sys.argv.index('--emit-source')+1]).write_text(source);sys.exit(0)
 with tempfile.TemporaryDirectory(prefix='srr-native-context-') as directory:
     p=Path(directory);(p/'test.cpp').write_text(source)
-    variants=([['-DTEST_OWNED_SNAPSHOT','-DTEST_CONCURRENT_SNAPSHOT']] if '--tsan' in sys.argv else [['-DSRR2_OLD3DS_SUBMIT_PROFILE'],[],['-DTEST_NO_BENCH'],['-DTEST_OWNED_SNAPSHOT']])
+    variants=([['-DTEST_OWNED_SNAPSHOT','-DTEST_CONCURRENT_SNAPSHOT']] if '--tsan' in sys.argv else [['-DSRR2_OLD3DS_SUBMIT_PROFILE'],[],['-DTEST_NO_BENCH'],['-DTEST_OWNED_SNAPSHOT'],['-DSRR2_OLD3DS_VISUAL_UPGRADE','-DTEST_OWNED_SNAPSHOT']])
     for flags in variants:
         subprocess.run(['clang++','-std=c++17','-O2','-Wall','-Wextra','-Werror','-Wno-sizeof-array-div','-pthread','-fsanitize='+('thread' if '--tsan' in sys.argv else 'address,undefined'),*flags,str(p/'test.cpp'),'-o',str(p/'test')],check=True)
         subprocess.run([str(p/'test')],check=True)

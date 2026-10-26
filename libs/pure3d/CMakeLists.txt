@@ -189,6 +189,24 @@ if(SRR2_P3D_PDDI STREQUAL "PICA")
     if(SRR2_OLD_3DS AND SRR2_OLD3DS_DIRECTIONAL_LIGHT)
         set(PICA_SKIN_SRC "${CMAKE_CURRENT_SOURCE_DIR}/pddi/pica/shaders/skin_eye_directional.v.pica")
     endif()
+    if(SRR2_OLD3DS_VISUAL_UPGRADE)
+        set(contact_base "${CMAKE_CURRENT_BINARY_DIR}/contact_shadow")
+        list(APPEND PDDI_SOURCES "${contact_base}_shbin.c")
+        add_custom_command(OUTPUT "${contact_base}.shbin"
+            COMMAND "${PICASSO_EXE}" -o "${contact_base}.shbin"
+                "${CMAKE_CURRENT_SOURCE_DIR}/pddi/pica/shaders/contact_shadow.v.pica"
+            DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/pddi/pica/shaders/contact_shadow.v.pica" VERBATIM)
+        add_custom_command(OUTPUT "${contact_base}_shbin.c"
+            COMMAND "${CMAKE_COMMAND}" "-DINPUT=${contact_base}.shbin" "-DOUTPUT=${contact_base}_shbin.c"
+                -DSYMBOL=pddi_contact_shadow_shbin -P "${CMAKE_SOURCE_DIR}/cmake/bin2c.cmake"
+            DEPENDS "${contact_base}.shbin" "${CMAKE_SOURCE_DIR}/cmake/bin2c.cmake" VERBATIM)
+        set(prepared_skin_source "${CMAKE_CURRENT_BINARY_DIR}/prepared_skin.v.pica")
+        add_custom_command(OUTPUT "${prepared_skin_source}"
+            COMMAND "${CMAKE_COMMAND}" "-DINPUT=${PICA_SKIN_SRC}" "-DOUTPUT=${prepared_skin_source}"
+                -P "${CMAKE_SOURCE_DIR}/cmake/character_light_shader.cmake"
+            DEPENDS "${PICA_SKIN_SRC}" "${CMAKE_SOURCE_DIR}/cmake/character_light_shader.cmake" VERBATIM)
+        set(PICA_SKIN_SRC "${prepared_skin_source}")
+    endif()
 	if(SRR2_OLD3DS_GPU_SKIN)
         list(APPEND PDDI_SOURCES "${CMAKE_CURRENT_BINARY_DIR}/skin_shbin.c")
         add_custom_command(OUTPUT "${CMAKE_CURRENT_BINARY_DIR}/skin.shbin" "${CMAKE_CURRENT_BINARY_DIR}/skin_shbin.h"
@@ -243,6 +261,39 @@ if(SRR2_P3D_PDDI STREQUAL "PICA")
                 COMMAND "${CMAKE_COMMAND}" "-DINPUT=${stereo_base}.shbin" "-DOUTPUT=${stereo_base}_shbin.c"
                     "-DSYMBOL=${stereo_symbol}" -P "${CMAKE_SOURCE_DIR}/cmake/bin2c.cmake"
                 DEPENDS "${stereo_base}.shbin" "${CMAKE_SOURCE_DIR}/cmake/bin2c.cmake" VERBATIM)
+        endforeach()
+    endif()
+
+    if(SRR2_OLD3DS_VISUAL_UPGRADE)
+        if(SRR2_OLD3DS_CHARACTER_OCCLUSION)
+            set(occlusion_source "${CMAKE_CURRENT_BINARY_DIR}/character_occlusion_data.c")
+            list(APPEND PDDI_SOURCES "${occlusion_source}")
+            add_custom_command(OUTPUT "${occlusion_source}"
+                COMMAND "${CMAKE_COMMAND}" "-DINPUT=${SRR2_OLD3DS_CHARACTER_OCCLUSION}"
+                    "-DOUTPUT=${occlusion_source}" -DSYMBOL=pddi_character_occlusion
+                    -P "${CMAKE_SOURCE_DIR}/cmake/bin2c.cmake"
+                DEPENDS "${SRR2_OLD3DS_CHARACTER_OCCLUSION}" "${CMAKE_SOURCE_DIR}/cmake/bin2c.cmake" VERBATIM)
+        endif()
+        foreach(kind main stereo)
+            if(kind STREQUAL "main")
+                set(reflection_source "${PICA_SHADER_SRC}")
+            else()
+                set(reflection_source "${CMAKE_CURRENT_BINARY_DIR}/stereo_main.v.pica")
+            endif()
+            set(reflection_base "${CMAKE_CURRENT_BINARY_DIR}/reflection_${kind}")
+            list(APPEND PDDI_SOURCES "${reflection_base}_shbin.c")
+            add_custom_command(OUTPUT "${reflection_base}.v.pica" "${reflection_base}.ordinary.v.pica"
+                COMMAND "${CMAKE_COMMAND}" "-DINPUT=${reflection_source}" "-DOUTPUT=${reflection_base}.v.pica"
+                    "-DORDINARY_OUTPUT=${reflection_base}.ordinary.v.pica"
+                    -P "${CMAKE_SOURCE_DIR}/cmake/reflection_shader.cmake"
+                DEPENDS "${reflection_source}" "${CMAKE_SOURCE_DIR}/cmake/reflection_shader.cmake" VERBATIM)
+            add_custom_command(OUTPUT "${reflection_base}.shbin"
+                COMMAND "${PICASSO_EXE}" -o "${reflection_base}.shbin" "${reflection_base}.ordinary.v.pica" "${reflection_base}.v.pica"
+                DEPENDS "${reflection_base}.v.pica" "${reflection_base}.ordinary.v.pica" VERBATIM)
+            add_custom_command(OUTPUT "${reflection_base}_shbin.c"
+                COMMAND "${CMAKE_COMMAND}" "-DINPUT=${reflection_base}.shbin" "-DOUTPUT=${reflection_base}_shbin.c"
+                    "-DSYMBOL=pddi_reflection_${kind}_shbin" -P "${CMAKE_SOURCE_DIR}/cmake/bin2c.cmake"
+                DEPENDS "${reflection_base}.shbin" "${CMAKE_SOURCE_DIR}/cmake/bin2c.cmake" VERBATIM)
         endforeach()
     endif()
 

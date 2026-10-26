@@ -6,6 +6,9 @@
 #include <p3d/primgroup.hpp>
 #include <p3d/utility.hpp>
 #include <p3d/shader.hpp>
+#ifdef SRR2_OLD3DS_VISUAL_UPGRADE
+#include <pddi/pica/material.hpp>
+#endif
 #include <p3d/vertexlist.hpp>
 #include <constants/chunks.h>
 #include <constants/chunkids.hpp>
@@ -544,10 +547,10 @@ bool tPrimGroupSkinnedPC::SetVertices(unsigned start, unsigned count, rmt::Vecto
 }
 
 #ifdef SRR2_OLD3DS_GPU_SKIN_SUPPORT
-void tPrimGroupSkinnedPC::PrepareGpuSkin(bool selected, bool pedestrian, bool named)
+void tPrimGroupSkinnedPC::PrepareGpuSkin(bool selected, bool pedestrian, bool named, const char* name, unsigned group)
 {
     static_assert(sizeof(SkinVertex)==sizeof(picaSkin::Source), "Skin source layout");
-    static_cast<picaPrimBuffer*>(mBuffer)->PrepareGpuSkin(mVertices,mVertexCount,nMatrices,selected,pedestrian,named);
+    static_cast<picaPrimBuffer*>(mBuffer)->PrepareGpuSkin(mVertices,mVertexCount,nMatrices,selected,pedestrian,named,name,group);
 }
 #endif
 
@@ -2228,6 +2231,10 @@ tPrimGroup*  tPrimGroupLoader::Load(tChunkFile *f, tEntityStore *store, rmt::Mat
         primGroup->tempPositions = tmpPositions;
     }
 
+#ifdef SRR2_OLD3DS_VISUAL_UPGRADE
+    if(!bones && !deform && static_cast<picaMat*>(mShader->GetShader())->VehicleSurface())
+        static_cast<picaPrimBuffer*>(primBuffer)->PrepareVehicleForm();
+#endif
     primBuffer->Finalize();  // the PS2 requires this
     
     return primGroup;

@@ -1,3 +1,7 @@
+#ifdef SRR2_OLD3DS_VISUAL_UPGRADE
+#include <pddi/pica/contactshadow.hpp>
+#include <pddi/pica/visualstyle.hpp>
+#endif
 #include <main/old3dsrecurring.h>
 #include <main/old3dspools.h>
 #include <main/old3dsmainprofile.h>
@@ -290,6 +294,9 @@ void WorldRenderLayer::Render()
             // 4 sparkles, 5 guts.
             u64 wrlPhaseTick = svcGetSystemTick();
 #endif
+#ifdef SRR2_OLD3DS_VISUAL_UPGRADE
+            picaContactBegin();
+#endif
             mpWorldScene->Render( view );
 #ifdef SRR2_OLD_3DS
             {
@@ -413,6 +420,9 @@ void WorldRenderLayer::Render()
             END_PROFILE( "Render Vehicle AI Debug" );
     #endif
 
+#ifdef SRR2_OLD3DS_VISUAL_UPGRADE
+            picaContactDraw();
+#endif
 #ifdef SRR2_OLD3DS_DISTANCE_HAZE
             picaDistanceHazeEnd();
 #endif

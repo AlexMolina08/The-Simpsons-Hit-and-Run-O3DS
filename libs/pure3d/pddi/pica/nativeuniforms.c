@@ -73,6 +73,18 @@ bool picaNativeUniformBatchReady(void)
     return nativeUniformsEnabled() &&
         C3Di_ShaderFVecData[0].count<=8 && C3Di_ShaderFVecData[1].count<=8;
 }
+bool picaNativeUniformsPending(GPU_SHADER_TYPE type)
+{
+    // Called only after the owned fast path has validated native uniform mode.
+    // Preserve its first-use cache transition even when the bank is empty.
+    if(!previousFast[type] || C3Di_ShaderFVecData[type].dirty ||
+       g_picaNativeUniformMask[type][0] || g_picaNativeUniformMask[type][1] || g_picaNativeUniformMask[type][2] ||
+       C3D_BoolUnifsDirty[type])return true;
+    _Static_assert(C3D_IVUNIF_COUNT==sizeof(unsigned),"Packed integer dirty flags");
+    unsigned integers;
+    memcpy(&integers,C3D_IVUnifDirty[type],sizeof(integers));
+    return integers!=0;
+}
 static inline void uniformWrite(u32 reg,u32 value)
 {
 #ifdef SRR2_OLD3DS_NATIVE_CONTEXT
@@ -178,6 +190,17 @@ void C3D_UpdateUniforms(GPU_SHADER_TYPE type)
     }
     if(!fast) {ReferenceUpdateUniforms(type);memset(g_picaNativeUniformMask[type],0,sizeof(g_picaNativeUniformMask[type]));return;}
 
+    if(g_picaNativeTrackedFlush && !C3Di_ShaderFVecData[type].dirty &&
+       !(g_picaNativeUniformMask[type][0]|g_picaNativeUniformMask[type][1]|g_picaNativeUniformMask[type][2]) &&
+       !C3D_BoolUnifsDirty[type])
+    {
+        // The owned tracked path records every float write and restore. Empty
+        // banks need no scan or clearing; retain integer and shader constants.
+        _Static_assert(C3D_IVUNIF_COUNT==sizeof(unsigned),"Packed integer dirty flags");
+        unsigned integers;
+        memcpy(&integers,C3D_IVUnifDirty[type],sizeof(integers));
+        if(!integers)return;
+    }
 
 	// Update FVec uniforms that come from shader constants
 	if (C3Di_ShaderFVecData[type].dirty)

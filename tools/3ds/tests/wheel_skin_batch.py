@@ -7,7 +7,7 @@ s=(root/'libs/pure3d/pddi/pica/context.cpp').read_text()
 a=s.index('bool picaContext::DrawWheelSkin(');b=s.index('{',a)+1;end=b;depth=1
 while depth:depth+=(s[end]=='{')-(s[end]=='}');end+=1
 method=s[a:end]
-a=s.index('            picaSkin::Source rigid={};');b=s.index('\n#elif defined(SRR2_OLD3DS_WHEEL_GPU_BATCH)',a)
+a=s.index('            picaSkin::Source rigid={};');b=s.index('\n#else\n            if(!picaWheelLOD::BakeVertex',a)
 pack=s[a:b].replace('{delete result;return nullptr;}','return false;').replace('result->buffer+(copy*allocated+v)*stride','destination')
 code=r'''
 #define SRR2_OLD3DS_GPU_SKIN_PACKED

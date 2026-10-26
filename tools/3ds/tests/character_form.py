@@ -26,7 +26,7 @@ struct picaPrimBuffer {
  unsigned char storage[36],*buffer=storage;
  picaSkin::Reason skinReason=picaSkin::NotSelected;
  bool PrimIsDrawable(unsigned){return true;}bool IndicesInRange(){return true;}
- void PrepareGpuSkin(const void*,unsigned,unsigned,bool,bool,bool);
+ void PrepareGpuSkin(const void*,unsigned,unsigned,bool,bool,bool,const char* name=nullptr,unsigned group=0);
  picaPrimBuffer(){memset(storage,0xa7,sizeof(storage));memset(storage+32,255,4);}
 };
 '''

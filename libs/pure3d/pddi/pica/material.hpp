@@ -83,11 +83,22 @@ public:
     int  CountDevPasses(void);
     void SetDevPass(unsigned);
     void PreRender(void);
+#ifdef SRR2_OLD3DS_VISUAL_UPGRADE
+    void SetVisualType(const char* name);
+    bool VehicleSurface() const { return vehicleSurface; }
+    bool WorldSurface() const { return worldSurface; }
+    void SetReflectionMap(pddiTexture* texture);
+    void SetEnvironmentBlend(pddiColour colour);
+#endif
 #ifdef SRR2_OLD3DS_WHEEL_LOD
     bool WheelLodOpaque() const { return texEnv[0].alphaBlendMode==PDDI_BLEND_NONE && texEnv[0].diffuse.Alpha()==255; }
 #endif
 
 private:
+#ifdef SRR2_OLD3DS_VISUAL_UPGRADE
+    bool ReflectionEnabled() const;
+    bool WorldLightmapEnabled() const;
+#endif
 #ifdef SRR2_OLD3DS_DRAW_PREP
     void PrepareNative();
     void PrepareColours();
@@ -104,6 +115,17 @@ private:
     picaContext* context;
     int pass;
     bool dirty;
+#ifdef SRR2_OLD3DS_VISUAL_UPGRADE
+    // Use the existing padding before texEnv so ordinary material fields keep
+    // their original offsets. Reflection-only data stays after the hot prefix.
+    bool vehicleSurface = false;
+    bool worldSurface = false;
+    bool glassSurface = false;
+#endif
     picaTextureEnv texEnv[picaMaxPasses];
+#ifdef SRR2_OLD3DS_VISUAL_UPGRADE
+    picaTexture* reflectionMap = nullptr;
+    pddiColour environmentBlend = pddiColour(32,32,32);
+#endif
 };
 #endif

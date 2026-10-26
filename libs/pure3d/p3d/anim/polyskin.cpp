@@ -1,3 +1,6 @@
+#ifdef SRR2_OLD3DS_NATIVE_BENCH
+#include <radloadtiming.hpp>
+#endif
 #include <main/old3dspools.h>
 #ifdef SRR2_OLD3DS_MAIN_PROFILE
 #include <main/old3dsmainprofile.h>
@@ -252,7 +255,12 @@ tEntity* tPolySkinLoader::LoadObject(tChunkFile* f, tEntityStore* store)
             {
                 P3DASSERT(index < nPrimGroup);
                 tPrimGroupLoader pgLoader;                
+                {
+#ifdef SRR2_OLD3DS_NATIVE_BENCH
+                    radLoadTiming::StageRegion input(radLoadTiming::SkinInput);
+#endif
                 skin->primGroup[index] = pgLoader.Load(f, store, skin->boneMatrix, optimise, true);
+                }
 #ifdef SRR2_OLD3DS_GPU_SKIN_SUPPORT
                 tPrimGroupSkinnedPC* pcSkin=dynamic_cast<tPrimGroupSkinnedPC*>(skin->primGroup[index]);
                 bool selected=strcmp(name,"homer_h_merged")==0 && strcmp(skelName,"homer")==0;
@@ -278,7 +286,12 @@ tEntity* tPolySkinLoader::LoadObject(tChunkFile* f, tEntityStore* store)
                 selected = selected || picaSkin::SelectPackedPlayer(name, skelName);
                 named = named || picaSkin::SelectPackedNamed(name, skelName);
 #endif
-                if(pcSkin) pcSkin->PrepareGpuSkin(selected || pedestrian || named, pedestrian, named);
+                if(pcSkin){
+#ifdef SRR2_OLD3DS_NATIVE_BENCH
+                    radLoadTiming::StageRegion prepare(radLoadTiming::SkinPrepare);
+#endif
+                    pcSkin->PrepareGpuSkin(selected || pedestrian || named, pedestrian, named, name, index);
+                }
 #endif
                 skin->primGroup[index]->AddRef();
                 index++;

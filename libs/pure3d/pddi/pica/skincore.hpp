@@ -2,6 +2,7 @@
 #define PICA_SKINCORE_HPP
 #include <cmath>
 #include <cstdint>
+#include <cstddef>
 #include <cstring>
 namespace picaSkin
 {
@@ -34,9 +35,9 @@ struct RigidVertex
 {
     float position[3], normal[3], uv[2];
     unsigned char colour[4];
-    signed char ignoredWeights[4], offsets[4];
+    signed char offsets[4];
 };
-static_assert(sizeof(RigidVertex) == 44, "Rigid GPU skin layout");
+static_assert(sizeof(RigidVertex) == 40 && offsetof(RigidVertex,offsets)==36, "Rigid GPU skin layout");
 #ifdef SRR2_OLD3DS_GPU_SKIN_PACKED
 struct PackedVertex
 {
@@ -49,10 +50,11 @@ struct PackedRigidVertex
 {
     std::int16_t position[3], normal[3], uv[2];
     unsigned char colour[4];
-    signed char ignoredWeights[4], offsets[4];
+    signed char offsets[4];
 };
-static_assert(sizeof(PackedVertex) == 40 && sizeof(PackedRigidVertex) == 28,
+static_assert(sizeof(PackedVertex) == 40 && sizeof(PackedRigidVertex) == 24,
               "Packed skin attribute layout");
+static_assert(offsetof(PackedRigidVertex,offsets)==20,"Packed rigid offsets follow color");
 inline bool CanPack(const Vertex& vertex)
 {
     for(unsigned i = 0; i < 3; ++i)
@@ -84,7 +86,6 @@ inline void StorePackedVertex(void* destination, const Vertex& vertex, bool rigi
     {
         PackedRigidVertex result;
         std::memcpy(&result, &packed, 20);
-        std::memset(result.ignoredWeights, 0, 4);
         std::memcpy(result.offsets, vertex.offsets, 4);
         std::memcpy(destination, &result, sizeof(result));
     }
@@ -114,7 +115,6 @@ inline void StoreVertex(void* dst, const Vertex& vertex, bool rigid)
     {
         RigidVertex packed;
         std::memcpy(&packed, &vertex, 36);
-        std::memset(packed.ignoredWeights, 0, sizeof(packed.ignoredWeights));
         std::memcpy(packed.offsets, vertex.offsets, sizeof(packed.offsets));
         std::memcpy(dst, &packed, sizeof(packed));
     }

@@ -5,6 +5,8 @@
 #include <citro3d.h>
 #include <main/old3dsdiag.h>
 
+class picaTexture;
+
 struct picaStateCache
 {
     bool         alphaTestValid;
@@ -33,8 +35,15 @@ struct picaStateCache
 
     int  env0Mode;
     bool passStagesSet;
-
     bool bufInfoSet;
+#ifdef SRR2_OLD3DS_VISUAL_UPGRADE
+    bool reflectionValid;
+    const C3D_Tex* reflectionTexture;
+    unsigned reflectionColour;
+    bool worldLightmapStage;
+    const picaTexture* worldLightmapParameters;
+#endif
+
 };
 
 extern picaStateCache g_picaState;
@@ -48,6 +57,10 @@ static inline void picaStateInvalidate(void)
     g_picaState.texValid       = false;
     g_picaState.env0Mode       = 0;
     g_picaState.passStagesSet  = false;
+#ifdef SRR2_OLD3DS_VISUAL_UPGRADE
+    g_picaState.reflectionValid = false;
+    g_picaState.worldLightmapParameters = nullptr;
+#endif
     g_picaState.bufInfoSet     = false;
 }
 

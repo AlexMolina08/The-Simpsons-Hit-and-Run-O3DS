@@ -1,0 +1,53 @@
+.fvec u_proj[4]
+.fvec u_view[4]
+.fvec u_instances[36]
+.fvec u_constants
+.fvec u_padding[50]
+.fvec u_stereoParams
+.alias ones u_constants.xxxx
+.alias zeros u_constants.yyyy
+.alias epsilon u_constants.zzzz
+.alias in_corner v0
+.alias in_offset v1
+.out o_pos position
+.out o_colour color
+.entry vmain
+.proc vmain
+    mova a0.x, in_offset.x
+    mov r10, u_instances[a0.x+1]
+    mov r11, u_instances[a0.x+2]
+    ; Ground-plane axes come from cached physics normal and entity facing.
+    mul r2.xyz, r10.yzx, r11.zxy
+    mad r2.xyz, -r10.zxy, r11.yzx, r2.xyz
+    dp3 r3.x, r2.xyz, r2.xyz
+    max r3.x, epsilon, r3.x
+    rsq r3.x, r3.x
+    mul r2.xyz, r2.xyz, r3.xxx
+    mul r4.xyz, r2.yzx, r10.zxy
+    mad r4.xyz, -r2.zxy, r10.yzx, r4.xyz
+    mul r3.x, r10.w, in_corner.x
+    mul r3.y, r11.w, in_corner.y
+    mul r0.xyz, r2.xyz, r3.xxx
+    mad r0.xyz, r4.xyz, r3.yyy, r0.xyz
+    mov r5, u_instances[a0.x+0]
+    add r0.xyz, r5.xyz, r0.xyz
+    mov r0.w, ones
+    dp4 r8.x, u_view[0], r0
+    dp4 r8.y, u_view[1], r0
+    dp4 r8.z, u_view[2], r0
+    dp4 r8.w, u_view[3], r0
+    dp4 r1.x, u_proj[0], r8
+    dp4 r1.y, u_proj[1], r8
+    dp4 r1.z, u_proj[2], r8
+    dp4 r1.w, u_proj[3], r8
+    mov r11, u_stereoParams
+    mul r12, r1.wwww, r11.wwww
+    add r12, r12, -r11.zzzz
+    mul r12, u_constants.wwww, r12
+    add r1.y, r1.y, -r12.x
+    mov o_pos, r1
+    mov r0, zeros
+    mul r0.w, r5.w, in_corner.z
+    mov o_colour, r0
+    end
+.end

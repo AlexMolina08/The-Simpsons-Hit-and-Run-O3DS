@@ -23,7 +23,7 @@ prelude = r'''
 #include "libs/pure3d/pddi/pica/texturetile.hpp"
 #include "libs/pure3d/pddi/pica/swizzle.hpp"
 #include "libs/pure3d/pddi/gl/decompress.h"
-enum {GPU_RGBA8, GPU_RGBA5551, GPU_LA8, GPU_RGBA4, GPU_RGB565};
+enum {GPU_RGBA8, GPU_RGBA5551, GPU_LA8, GPU_RGBA4, GPU_RGB565, GPU_L8};
 using pddiTextureType=int;
 enum {PDDI_TEXTYPE_RGB, PDDI_TEXTYPE_DXT1, PDDI_TEXTYPE_DXT2, PDDI_TEXTYPE_DXT3, PDDI_TEXTYPE_DXT4, PDDI_TEXTYPE_DXT5};
 struct Tex {int width,height,maxLevel; void* data;};
@@ -51,12 +51,13 @@ int main(int argc,char** argv){
  std::mt19937 random(492081);
  unsigned cases=0;
  for(int type=PDDI_TEXTYPE_RGB;type<=PDDI_TEXTYPE_DXT5;++type)
- for(int format=GPU_RGBA8;format<=GPU_RGB565;++format)
+ for(int format=GPU_RGBA8;format<=GPU_L8;++format)
  for(int w:{8,16,32,128,256,512,1024})
  for(int shape=0;shape<4;++shape){
   int h=shape==0?w:shape==1?8:32;
   int dw=shape==2&&w>8?w/2:w,dh=h;
-  pixelBytes=format==GPU_RGBA8?4:2;
+  if(format==GPU_L8 && type!=PDDI_TEXTYPE_RGB)continue;
+  pixelBytes=format==GPU_RGBA8?4:format==GPU_L8?1:2;
   int mips=shape==3&&w>=16?1:0;
   unsigned srcBytes=type==PDDI_TEXTYPE_RGB?w*h*4:((w+3)/4)*((h+3)/4)*(type==PDDI_TEXTYPE_DXT1?8:16);
   std::vector<unsigned> src((srcBytes+3)/4);
@@ -77,7 +78,7 @@ with tempfile.TemporaryDirectory(prefix='srr-texture-test-') as td:
     for mode in ['reference','tiles']:
         binary=temp/mode; data=temp/(mode+'.bin'); outputs.append(data)
         flags=[] if mode=='reference' else ['-DSRR2_OLD3DS_TEXTURE_TILES']
-        subprocess.run(['clang++','-std=c++14','-O2','-fsanitize=address,undefined',*flags,'-I',str(ROOT),'-I',str(ROOT/'libs/pure3d'),str(cpp),str(ROOT/'libs/pure3d/pddi/pica/swizzle.cpp'),str(ROOT/'libs/pure3d/pddi/gl/decompress.cpp'),'-o',str(binary)],check=True)
+        subprocess.run(['clang++','-std=c++14','-O2','-fsanitize=address,undefined','-DSRR2_OLD3DS_VISUAL_UPGRADE',*flags,'-I',str(ROOT),'-I',str(ROOT/'libs/pure3d'),str(cpp),str(ROOT/'libs/pure3d/pddi/pica/swizzle.cpp'),str(ROOT/'libs/pure3d/pddi/gl/decompress.cpp'),'-o',str(binary)],check=True)
         subprocess.run([str(binary),str(data)],check=True)
     assert outputs[0].read_bytes()==outputs[1].read_bytes(), 'Texture upload mismatch'
-print('All texels/mips match: five GPU formats, RGB/DXT1/2/3/4/5, flips, scaling, rectangular textures and upload guards.')
+print('All texels/mips match: six GPU formats (L8 accepts RGB only), RGB/DXT1/2/3/4/5, flips, scaling, rectangular textures and upload guards.')

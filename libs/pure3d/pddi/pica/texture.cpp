@@ -1,6 +1,7 @@
 #include <pddi/pica/pica.hpp>
 #include <main/old3dsexperiment.h>
 #include <pddi/pica/texture.hpp>
+#include <pddi/pica/visualstyle.hpp>
 #include <pddi/pica/context.hpp>
 #include <pddi/pica/gpuuploadguard.hpp>
 #ifdef SRR2_OLD3DS_NATIVE_BENCH
@@ -258,7 +259,11 @@ void picaTexture::TryPromoteVram()
     const unsigned bytes=copyBytes;
 #endif
     const unsigned budget=2*1024*1024,reserve=2*1024*1024;
-    if(bytes<8192 || bytes>131072 || bytes>budget-vramTextureBytes ||
+    unsigned maximum=131072;
+#ifdef SRR2_OLD3DS_VISUAL_UPGRADE
+    if(vramEligible==2) { maximum=262144;++vramWorldMapEligible; }
+#endif
+    if(bytes<8192 || bytes>maximum || bytes>budget-vramTextureBytes ||
        vramSpaceFree()<bytes+reserve)return;
 #ifdef SRR2_OLD3DS_NATIVE_BENCH
     const bool capture=NativeBench::collecting;
@@ -294,6 +299,9 @@ void picaTexture::TryPromoteVram()
     }
 #endif
     vramTextureBytes+=bytes;++vramTextureCopies;
+#ifdef SRR2_OLD3DS_VISUAL_UPGRADE
+    if(vramEligible==2) ++vramWorldMapCopies;
+#endif
     if(vramTextureBytes>vramTexturePeak)vramTexturePeak=vramTextureBytes;
 }
 #endif
@@ -395,6 +403,9 @@ picaTexture::picaTexture(picaContext* c)
 picaTexture::~picaTexture()
 {
     FreeStaging();
+#ifdef SRR2_OLD3DS_VISUAL_UPGRADE
+    free(worldLightmapParameters);
+#endif
 
     if(created)
     {
@@ -408,6 +419,16 @@ picaTexture::~picaTexture()
         context->ADD_STAT(PDDI_STAT_TEXTURE_COUNT_32BIT, -1);
     }
 }
+
+#ifdef SRR2_OLD3DS_VISUAL_UPGRADE
+void picaTexture::SetWorldLightmapParameters(const float* parameters)
+{
+    if(!created || hwFormat!=GPU_L8) return;
+    for(unsigned i=0;i<4;++i) if(!std::isfinite(parameters[i])) return;
+    if(!worldLightmapParameters) worldLightmapParameters=static_cast<float*>(malloc(4*sizeof(float)));
+    if(worldLightmapParameters) memcpy(worldLightmapParameters,parameters,4*sizeof(float));
+}
+#endif
 
 void picaTexture::FreeStaging(void)
 {
@@ -426,16 +447,29 @@ void picaTexture::FreeStaging(void)
 bool picaTexture::Create(int x, int y, int bpp, int alpha, int nMip,
                          pddiTextureType textureType, pddiTextureUsageHint usageHint)
 {
+#ifdef SRR2_OLD3DS_VISUAL_UPGRADE
+    const bool worldLightmap=usageHint==PDDI_USAGE_WORLD_LIGHTMAP;
+#else
+    const bool worldLightmap=false;
+#endif
 #ifdef SRR2_OLD3DS_VRAM_TEXTURES
     // Movie construction explicitly sets KeepFullSize, and font pages set
     // FontTexture. Keep both CPU-writable; later ordinary reuploads can demote.
     vramEligible=usageHint==PDDI_USAGE_STATIC && !g_picaKeepFullSize &&
                  !g_picaFontTexture && textureType!=PDDI_TEXTYPE_YUV;
+#ifdef SRR2_OLD3DS_VISUAL_UPGRADE
+    if(worldLightmap && picaVisual::worldVram && !g_picaFontTexture && textureType!=PDDI_TEXTYPE_YUV)
+        vramEligible=2;
+#endif
     vramUploaded=false;
 #endif
 #ifdef SRR2_OLD3DS_NATIVE_TEXTURES
     nativeEligible=usageHint==PDDI_USAGE_STATIC && !g_picaKeepFullSize &&
         !g_picaFontTexture && (IsCompressed(textureType) || textureType==PDDI_TEXTYPE_RGB || textureType==PDDI_TEXTYPE_PALETTIZED);
+#endif
+#ifdef SRR2_OLD3DS_VISUAL_UPGRADE
+    if(worldLightmap && (textureType!=PDDI_TEXTYPE_RGB || bpp!=32 || alpha!=0 || nMip!=0))
+    { lastError=PDDI_TEX_BADFORMAT;return false; }
 #endif
     xSize      = x;
     ySize      = y;
@@ -475,7 +509,7 @@ bool picaTexture::Create(int x, int y, int bpp, int alpha, int nMip,
     if(texW < PICA_MIN_TEXTURE_DIMENSION) texW = PICA_MIN_TEXTURE_DIMENSION;
     if(texH < PICA_MIN_TEXTURE_DIMENSION) texH = PICA_MIN_TEXTURE_DIMENSION;
 
-    if(!g_picaMipmapsAllowed && !g_picaKeepFullSize)
+    if(!g_picaMipmapsAllowed && !g_picaKeepFullSize && !worldLightmap)
     {
         while((texW > 256 || texH > 256) &&
               texW > PICA_MIN_TEXTURE_DIMENSION && texH > PICA_MIN_TEXTURE_DIMENSION)
@@ -496,10 +530,13 @@ bool picaTexture::Create(int x, int y, int bpp, int alpha, int nMip,
     // without increasing the two-byte texel budget used by RGBA4.
     hwFormat = g_picaFontTexture ? GPU_LA8 : PickHardwareFormat(alpha, &bytesPerPixel);
     if(g_picaFontTexture) bytesPerPixel = 2;
+#ifdef SRR2_OLD3DS_VISUAL_UPGRADE
+    if(worldLightmap) { hwFormat=GPU_L8;bytesPerPixel=1; }
+#endif
 
     const unsigned mipExtra = (unsigned)(texW * texH * bytesPerPixel) / 3;
     const bool roomForMips = linearSpaceFree() > (PICA_MIPMAP_LINEAR_RESERVE + mipExtra);
-    const bool wantMips = (g_picaMipmapsAllowed || g_picaFontTexture) && roomForMips &&
+    const bool wantMips = !worldLightmap && (g_picaMipmapsAllowed || g_picaFontTexture) && roomForMips &&
                           (texW >= 2 * PICA_MIN_TEXTURE_DIMENSION) &&
                           (texH >= 2 * PICA_MIN_TEXTURE_DIMENSION);
 
@@ -518,7 +555,7 @@ bool picaTexture::Create(int x, int y, int bpp, int alpha, int nMip,
 #endif
 
     C3D_TexSetFilter(&tex, GPU_LINEAR, GPU_LINEAR);
-    C3D_TexSetWrap(&tex, GPU_REPEAT, GPU_REPEAT);
+    C3D_TexSetWrap(&tex, worldLightmap?GPU_CLAMP_TO_EDGE:GPU_REPEAT, worldLightmap?GPU_CLAMP_TO_EDGE:GPU_REPEAT);
     C3D_TexSetFilterMipmap(&tex, GPU_NEAREST);
 
     lock.depth  = bpp;
@@ -846,6 +883,9 @@ void picaTexture::ConvertAndTile(const unsigned int* rgba, int w, int h, void* d
 #ifdef SRR2_OLD3DS_TEXTURE_TILES
     switch(hwFormat)
     {
+#ifdef SRR2_OLD3DS_VISUAL_UPGRADE
+    case GPU_L8: picaTile::Convert<picaTile::L8>(rgba,w,h,dstData,g_picaYieldHook); break;
+#endif
     case GPU_RGBA8: picaTile::Convert<picaTile::RGBA8>(rgba,w,h,dstData,g_picaYieldHook); break;
     case GPU_RGBA5551: picaTile::Convert<picaTile::RGBA5551>(rgba,w,h,dstData,g_picaYieldHook); break;
     case GPU_LA8: picaTile::Convert<picaTile::LA8>(rgba,w,h,dstData,g_picaYieldHook); break;
@@ -878,6 +918,9 @@ void picaTexture::ConvertAndTile(const unsigned int* rgba, int w, int h, void* d
 
             switch(hwFormat)
             {
+#ifdef SRR2_OLD3DS_VISUAL_UPGRADE
+                case GPU_L8: dst[offset]=r;break;
+#endif
                 case GPU_RGBA8:
                     ((unsigned int*)dst)[offset] =
                         (r << 24) | (g << 16) | (b << 8) | a;

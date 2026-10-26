@@ -10,6 +10,32 @@ picaSkinMetrics g_picaSkinMetrics = {};
 picaSkin::Reason g_picaSkinAllocationReason = picaSkin::Ready;
 static picaSkinAllocation *retired;
 static unsigned liveBytes, pedestrianBytes, namedBytes, peakBytes, frameNumber;
+#ifdef SRR2_OLD3DS_NATIVE_BENCH
+unsigned g_picaSkinBudgetFallbackVertices;
+static unsigned retiredBytes, rejectionCount;
+struct SkinRejection
+{
+    unsigned frame, bytes, pool, live, freeBytes, retired, flags, kind, group, vertices;
+    char name[32];
+};
+static SkinRejection lastRejection, rejections[32];
+static void budgetRejection(unsigned bytes, unsigned pool, unsigned freeBytes,
+                            bool pedestrian, bool named, unsigned flags)
+{
+    lastRejection = {};
+    lastRejection.frame=frameNumber;lastRejection.bytes=bytes;
+    lastRejection.pool=pool;lastRejection.live=liveBytes;lastRejection.freeBytes=freeBytes;
+    lastRejection.retired=retiredBytes;lastRejection.flags=flags;
+    lastRejection.kind=named?2u:pedestrian?1u:0u;
+}
+void picaSkinRecordRejection(const char* name, unsigned group, unsigned vertices)
+{
+    if(g_picaSkinAllocationReason!=picaSkin::BudgetLimit)return;
+    SkinRejection& record=rejections[rejectionCount++%32];record=lastRejection;
+    record.group=group;record.vertices=vertices;
+    if(name)std::snprintf(record.name,sizeof(record.name),"%s",name);
+}
+#endif
 #ifdef SRR2_OLD3DS_GPU_SKIN_METRICS
 static picaSkinMetrics records[256];
 static unsigned recordCount, overwritten;
@@ -37,15 +63,36 @@ picaSkinAllocation *picaSkinAllocate(unsigned bytes, bool pedestrian, bool named
     if(named) return NULL;
 #endif
     if(pedestrian && named) return NULL;
-    if (bytes > picaSkin::Budget - sizeof(picaSkinAllocation))
-        return NULL;
-    bytes += sizeof(picaSkinAllocation);
     const unsigned poolLive = named ? namedBytes : pedestrian ? pedestrianBytes : liveBytes - pedestrianBytes - namedBytes;
-#ifdef SRR2_OLD3DS_GPU_SKIN_BORROW
-    if(!picaSkin::FitsBorrowed(bytes, poolLive, liveBytes, linearSpaceFree())) return NULL;
-#else
-    if(!picaSkin::Fits(bytes, poolLive, linearSpaceFree())) return NULL;
+    const unsigned freeBytes = linearSpaceFree();
+    if (bytes > picaSkin::Budget - sizeof(picaSkinAllocation))
+    {
+#ifdef SRR2_OLD3DS_NATIVE_BENCH
+        budgetRejection(bytes,poolLive,freeBytes,pedestrian,named,1);
 #endif
+        return NULL;
+    }
+    bytes += sizeof(picaSkinAllocation);
+#ifdef SRR2_OLD3DS_GPU_SKIN_BORROW
+    const bool fits=picaSkin::FitsBorrowed(bytes,poolLive,liveBytes,freeBytes);
+#else
+    const bool fits=picaSkin::Fits(bytes,poolLive,freeBytes);
+#endif
+    if(!fits)
+    {
+#ifdef SRR2_OLD3DS_NATIVE_BENCH
+#ifdef SRR2_OLD3DS_GPU_SKIN_BORROW
+        const unsigned poolLimit=picaSkin::BorrowPoolLimit, sharedLimit=picaSkin::SharedBudget;
+#else
+        const unsigned poolLimit=picaSkin::Budget, sharedLimit=~0u;
+#endif
+        const unsigned flags=(poolLive>poolLimit-bytes?2u:0u) |
+            (liveBytes>sharedLimit-bytes?4u:0u) |
+            (freeBytes<bytes || freeBytes-bytes<picaSkin::Reserve?8u:0u);
+        budgetRejection(bytes,poolLive,freeBytes,pedestrian,named,flags);
+#endif
+        return NULL;
+    }
     g_picaSkinAllocationReason = picaSkin::Allocation;
     picaSkinAllocation *p = (picaSkinAllocation *)linearAlloc(bytes);
     if (!p)
@@ -73,6 +120,9 @@ void picaSkinRetire(picaSkinAllocation *p)
     {
         p->next = retired;
         retired = p;
+#ifdef SRR2_OLD3DS_NATIVE_BENCH
+        retiredBytes+=p->bytes;
+#endif
     }
 }
 void picaSkinBeginFrame()
@@ -83,6 +133,9 @@ void picaSkinBeginFrame()
         picaSkinAllocation *p = retired;
         retired = p->next;
         liveBytes -= p->bytes;
+#ifdef SRR2_OLD3DS_NATIVE_BENCH
+        retiredBytes-=p->bytes;
+#endif
         if(p->pedestrian == 1) pedestrianBytes -= p->bytes;
         if(p->pedestrian == 2) namedBytes -= p->bytes;
         if (p->nativeBuffer)
@@ -130,6 +183,16 @@ extern "C" void picaSkinDump()
     std::printf("GPU_SKIN_SUMMARY eligible_groups=%u gpu_groups=%u eligible_vertices=%u gpu_vertices=%u budget_fallbacks=%u alloc_failures=%u live=%u peak=%u pedestrians=%u named=%u minimum_linear_free=%u\n",
         g_picaSkinMetrics.eligibleGroups,g_picaSkinMetrics.gpuGroups,g_picaSkinMetrics.eligibleVertices,g_picaSkinMetrics.gpuVertices,
         g_picaSkinMetrics.fallback[picaSkin::BudgetLimit],g_picaSkinMetrics.failures,liveBytes,peakBytes,pedestrianBytes,namedBytes,g_picaSkinMetrics.minFree);
+#ifdef SRR2_OLD3DS_NATIVE_BENCH
+    std::printf("GPU_SKIN_REJECTIONS count=%u stored=%u flags_group=1 flags_pool=2 flags_shared=4 flags_reserve=8 fallback_vertices=%u\n",
+                rejectionCount,rejectionCount<32?rejectionCount:32,g_picaSkinBudgetFallbackVertices);
+    for(unsigned i=rejectionCount>32?rejectionCount-32:0;i<rejectionCount;++i)
+    {
+        const SkinRejection& r=rejections[i%32];
+        std::printf("GPU_SKIN_REJECTION frame=%u name=%s group=%u vertices=%u kind=%u bytes=%u pool=%u live=%u retired=%u linear=%u flags=%u\n",
+            r.frame,r.name,r.group,r.vertices,r.kind,r.bytes,r.pool,r.live,r.retired,r.freeBytes,r.flags);
+    }
+#endif
 #ifdef SRR2_OLD3DS_GPU_SKIN_METRICS
     if (g_picaSkinMetrics.frames)
         capture();

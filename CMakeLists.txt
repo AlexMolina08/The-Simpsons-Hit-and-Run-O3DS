@@ -123,7 +123,9 @@ elseif(NINTENDO_3DS)
 	option(SRR2_OLD3DS_GPU_SKIN_PACKED "Pack GPU skin attributes with bounded native-resolution error" OFF)
     option(SRR2_OLD3DS_CHARACTER_FORM "Bake character form shading at load without recurring work" OFF)
     option(SRR2_OLD3DS_DISTANCE_HAZE "Subtle cached PICA depth fog for daytime outdoor geometry" OFF)
+    option(SRR2_OLD3DS_VISUAL_UPGRADE "Prepared character and vehicle shading with PICA material effects" OFF)
     option(SRR2_OLD3DS_PREPARED_AUDIO "Use a bounded exact-PCM-keyed prepared DSP clip cache" OFF)
+    set(SRR2_OLD3DS_CHARACTER_OCCLUSION "" CACHE FILEPATH "Local prepared character shade data from prepare_character_occlusion.py")
 	option(SRR2_OLD3DS_GPU_SKIN_COSTUMES "GPU skin audited costumes and remaining eligible cast" OFF)
 	option(SRR2_OLD3DS_GPU_SKIN_CAST "GPU skin the audited five-player cast and named NPCs" OFF)
 	option(SRR2_OLD3DS_GPU_SKIN_EYE_PALETTE "Compose eye-space bones for a 25-bone GPU palette" OFF)
@@ -249,6 +251,21 @@ elseif(NINTENDO_3DS)
     endif()
 	if(SRR2_OLD_3DS)
 		add_definitions(-DSRR2_OLD_3DS)
+        if(SRR2_OLD3DS_VISUAL_UPGRADE)
+            if(NOT SRR2_OLD3DS_CHARACTER_FORM OR NOT SRR2_OLD3DS_DISTANCE_HAZE OR
+               NOT SRR2_OLD3DS_LOAD_UPLOAD OR NOT SRR2_OLD3DS_DEFAULT_CACHE OR
+               NOT SRR2_OLD3DS_DIRECTIONAL_LIGHT OR NOT SRR2_OLD3DS_GPU_SKIN_EYE_PALETTE OR
+               NOT SRR2_OLD3DS_NO_ENV_WORK OR NOT SRR2_OLD3DS_NATIVE_CONTEXT)
+                message(FATAL_ERROR "VISUAL_UPGRADE requires the prepared Old 3DS renderer")
+            endif()
+            add_definitions(-DSRR2_OLD3DS_VISUAL_UPGRADE)
+            if(SRR2_OLD3DS_CHARACTER_OCCLUSION)
+                if(NOT EXISTS "${SRR2_OLD3DS_CHARACTER_OCCLUSION}")
+                    message(FATAL_ERROR "Prepare local character occlusion data before enabling it")
+                endif()
+                add_definitions(-DSRR2_OLD3DS_CHARACTER_OCCLUSION)
+            endif()
+        endif()
         if(SRR2_OLD3DS_DISTANCE_HAZE)
             add_definitions(-DSRR2_OLD3DS_DISTANCE_HAZE)
         endif()
@@ -577,6 +594,7 @@ if(VITA)
 endif()
 
 if(NINTENDO_3DS)
+	set(SRR2_3DS_ROMFS_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/romfs" CACHE PATH "Private ROMFS staging directory for a 3DS build")
 	target_link_options(${PROJECT_NAME} PRIVATE
 		-Wl,--wrap=linearAlloc -Wl,--wrap=linearMemAlign -Wl,--wrap=linearRealloc
 		-Wl,--wrap=linearGetSize -Wl,--wrap=linearFree -Wl,--wrap=linearSpaceFree)
@@ -586,11 +604,11 @@ if(NINTENDO_3DS)
 		DESCRIPTION "Radical Entertainment - v${SRR2_VERSION}"
 		AUTHOR      "Radical Entertainment"
 	)
-	if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/romfs")
+	if(EXISTS "${SRR2_3DS_ROMFS_DIRECTORY}")
 		ctr_create_3dsx(${PROJECT_NAME}
 			OUTPUT ${SRR2_FILENAME}${SRR2_REGION}.3dsx
 			SMDH   ${PROJECT_NAME}.smdh
-			ROMFS  "${CMAKE_CURRENT_SOURCE_DIR}/romfs"
+			ROMFS  "${SRR2_3DS_ROMFS_DIRECTORY}"
 		)
 	else()
 		ctr_create_3dsx(${PROJECT_NAME}

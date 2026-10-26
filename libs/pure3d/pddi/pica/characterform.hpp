@@ -2,6 +2,7 @@
 #define PICA_CHARACTERFORM_HPP
 
 #include <cmath>
+#include <pddi/pica/visualstyle.hpp>
 
 namespace picaCharacterForm {
 #ifdef SRR2_OLD3DS_NATIVE_BENCH
@@ -15,6 +16,8 @@ inline bool Enabled() { return true; }
 // preparation, never a skin/update operation. Keep alpha and source geometry.
 inline bool Bake(const float* normal, unsigned char* colour)
 {
+    if(picaVisual::Enabled(picaVisual::Characters))
+        return picaVisual::Bake(normal, colour, false);
     const float lengthSquared = normal[0]*normal[0] + normal[1]*normal[1] + normal[2]*normal[2];
     if(!std::isfinite(lengthSquared) || lengthSquared < 0.000001f)
         return false;

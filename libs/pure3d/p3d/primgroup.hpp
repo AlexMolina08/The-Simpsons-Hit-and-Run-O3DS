@@ -183,7 +183,7 @@ class tPrimGroupSkinnedPC : public tPrimGroupSkinnedOptimised
 {
 #ifdef SRR2_OLD3DS_GPU_SKIN_SUPPORT
 public:
-    void PrepareGpuSkin(bool selected, bool pedestrian = false, bool named = false);
+    void PrepareGpuSkin(bool selected, bool pedestrian = false, bool named = false, const char* name = NULL, unsigned group = 0);
 #ifdef SRR2_OLD3DS_BONE_USAGE
     bool CollectBoneUsage(p3dSkin::BoneUsage& usage,const rmt::Matrix* base) const;
 #endif

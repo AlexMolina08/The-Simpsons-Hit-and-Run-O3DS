@@ -354,7 +354,10 @@ enum pddiTextureUsageHint
 {
     PDDI_USAGE_STATIC,
     PDDI_USAGE_DYNAMIC,
-    PDDI_USAGE_NOCACHE
+    PDDI_USAGE_NOCACHE,
+#ifdef SRR2_OLD3DS_VISUAL_UPGRADE
+    PDDI_USAGE_WORLD_LIGHTMAP
+#endif
 };
 
 //-------------------------------------------------------------------

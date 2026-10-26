@@ -50,6 +50,10 @@ public:
                         int width, int height, int yPitch, int chromaPitch);
 #endif
 
+#ifdef SRR2_OLD3DS_VISUAL_UPGRADE
+    void SetWorldLightmapParameters(const float* parameters);
+    const float* WorldLightmapParameters() const { return worldLightmapParameters; }
+#endif
     void Prefetch(void);
     void Discard(void);
     void SetPriority(int priority);
@@ -78,7 +82,9 @@ protected:
     void TryPromoteVram();
     picaVramAllocation* vramAllocation;
     void* reuploadLinear;
-    bool vramEligible, vramUploaded;
+    // Same one-byte field: 0 excluded, 1 ordinary, 2 private world lightmap.
+    unsigned char vramEligible;
+    bool vramUploaded;
 #endif
     picaContext* context;
 
@@ -99,6 +105,9 @@ protected:
     unsigned char* staging;
     unsigned       stagingBytes;
     int            stagingLevel;
+#ifdef SRR2_OLD3DS_VISUAL_UPGRADE
+    float* worldLightmapParameters = nullptr;
+#endif
 };
 #ifdef SRR2_OLD3DS_NATIVE_TEXTURES
 bool picaNativeTexturesAvailable();

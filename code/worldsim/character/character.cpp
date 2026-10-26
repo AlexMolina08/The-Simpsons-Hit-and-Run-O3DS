@@ -1,3 +1,7 @@
+#ifdef SRR2_OLD3DS_VISUAL_UPGRADE
+#include <pddi/pica/contactshadow.hpp>
+#include <pddi/pica/visualstyle.hpp>
+#endif
 #include <main/old3dsperformance.h>
 #include <main/old3dsrecurring.h>
 #include <main/old3dshot.h>
@@ -4921,6 +4925,15 @@ void Character::Display(void)
         p3d::pddi->SetZWrite( true );
 	}
 
+#ifdef SRR2_OLD3DS_VISUAL_UPGRADE
+    if(picaVisual::Enabled(picaVisual::ContactShadows) && !IsInCar())
+    {
+        rmt::Vector ground,normal,facing;GetTerrainIntersect(ground,normal);GetFacing(facing);
+        const float height=rmt::Max(0.0f,rPosition().y-ground.y);
+        const float alpha=.38f*rmt::Clamp(1.0f-height*.45f,0.0f,1.0f);
+        picaContactQueue(&ground.x,&normal.x,&facing.x,.42f,.34f,alpha);
+    }
+#endif
     tPose* pose = mpPuppet->GetP3DPose();
 
     mLean = pose->GetJoint(17)->worldMatrix.Row(3);

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Prove vehicle reflection parameters are no-ops in the current PICA backend."""
+"""Check legacy reflection no-ops and the opt-in prepared material contract."""
 from pathlib import Path
 import re, subprocess, tempfile
 root=Path(__file__).resolve().parents[3]
@@ -9,6 +9,9 @@ header=(root/'libs/pure3d/pddi/pica/material.hpp').read_text()
 shade=(root/'libs/pure3d/pddi/pddishade.hpp').read_text()
 constants='\n'.join(line for line in re.findall(r'^const unsigned PDDI_SP_.*?;',shade,re.M) if re.match(r'const unsigned (PDDI_SP_(NULL|AMBIENT|DIFFUSE|EMISSIVE|SPECULAR|ENVBLEND|ROTVEC))\s*=',line))
 colour=re.search(r'pddiShadeColourTable picaMat::colourTable\[\].*?\n};',material,re.S)[0]
+enhanced=subprocess.check_output(['clang++','-E','-P','-x','c++','-DSRR2_OLD3DS_VISUAL_UPGRADE','-'],input=colour,text=True)
+assert 'PDDI_SP_ENVBLEND' in re.findall(r'\{(PDDI_SP_\w+)\s*,',enhanced)
+colour=subprocess.check_output(['clang++','-E','-P','-x','c++','-'],input=colour,text=True)
 params=re.findall(r'\{(PDDI_SP_\w+)\s*,',colour)
 assert 'PDDI_SP_ENVBLEND' not in params
 assert 'GetVectorTable' not in header and 'GetMatrixTable' not in header

@@ -3,7 +3,7 @@
 #include <stdint.h>
 namespace picaTile
 {
-enum Format { RGBA8, RGBA5551, LA8, RGBA4, RGB565 };
+enum Format { RGBA8, RGBA5551, LA8, RGBA4, RGB565, L8 };
 template<Format F> struct Pixel
 {
     typedef unsigned short Type;
@@ -23,6 +23,11 @@ template<> struct Pixel<RGBA8>
     {
         return (p << 24) | ((p & 0xff00) << 8) | ((p >> 8) & 0xff00) | (p >> 24);
     }
+};
+template<> struct Pixel<L8>
+{
+    typedef unsigned char Type;
+    static Type Convert(unsigned int p) { return p & 255; }
 };
 inline unsigned Morton(unsigned x, unsigned y)
 {

@@ -8,7 +8,12 @@ a=source.index('    if(!g_picaState.bufInfoSet)',source.index('void picaPrimBuff
 while depth:
  depth+=(source[e]=='{')-(source[e]=='}');e+=1
 block=source[a:e]
+assert 'AttrInfo_AddFixed(&skinRigidAttrInfo, 4);' in source
+assert 'C3D_FixedAttribSet(4, 0.0f, 0.0f, 0.0f, 0.0f);' in source
+assert 'AttrInfo_AddLoader(&skinRigidAttrInfo, 5, GPU_BYTE, 4);' in source
 harness=r'''
+#define SRR2_OLD3DS_GPU_SKIN_BORROW
+#define SRR2_OLD3DS_GPU_SKIN_EXTRA_BUDGET
 #include <pddi/pica/skincore.hpp>
 #include <cassert>
 #include <cstdio>
@@ -41,16 +46,20 @@ int main(){
   assert(!memcmp(destination,&full,36));
   picaSkin::RigidVertex rigid;memcpy(&rigid,destination,sizeof(rigid));
   assert(!memcmp(rigid.offsets,full.offsets,4)&&rigid.offsets[3]==-1);
-  for(auto v:rigid.ignoredWeights)assert(v==0);
-  for(unsigned i=44;i<64;++i)assert(destination[i]==0x5a);
+  for(unsigned i=40;i<64;++i)assert(destination[i]==0x5a);
   picaSkin::StoreVertex(destination,full,false);assert(!memcmp(destination,&full,56));
  }
- assert(picaSkin::PackedStride(true)==44&&picaSkin::PackedStride(false)==56);
+ assert(picaSkin::PackedStride(true)==40&&picaSkin::PackedStride(false)==56);
  Prim p;
  for(unsigned mode=0;mode<3;++mode){p.skinDrawing=mode!=0;p.skinRigid=mode==1;g_picaState.bufInfoSet=false;p.Display();
-  assert(stride==(mode==0?36:mode==1?44:56));assert(attributes==(mode?6:4));assert(permutation==(mode?0x543210:0x3210));
+  assert(stride==(mode==0?36:mode==1?40:56));assert(attributes==(mode==0?4:mode==1?5:6));assert(permutation==(mode==0?0x3210:mode==1?0x53210:0x543210));
   unsigned before=updates;p.Display();assert(updates==before);}
- puts("PASS: 10,000 lossless rigid vertex records; exact offsets/colors/UVs; production 36/44/56-byte buffer selection");
+ // Exact pressure snapshot from the physical male2_h_merged rejection.
+ const unsigned recordedHeader=14060-501*28;
+ assert(recordedHeader==32);
+ assert(!picaSkin::FitsBorrowed(14060,149876,251152,3308288));
+ assert(picaSkin::FitsBorrowed(501*24+recordedHeader,149876,251152,3308288));
+ puts("PASS: 10,000 lossless rigid vertex records; exact offsets/colors/UVs; production 36/40/56-byte buffer selection");
 }
 '''
 with tempfile.TemporaryDirectory(prefix='srr-rigid-skin-') as td:
@@ -64,7 +73,7 @@ if assets.exists():
   record=next(r for r in m.skins(assets/(name+'_m.p3d')) if r['skin']==name+'_h_merged')
   groups=[g for g in record['groups'] if g['bones']<=24]
   previous=sum(32+g['vertices']*56 for g in groups)
-  packed=sum(32+g['vertices']*(44 if g['rigid_vertices']==g['vertices'] else 56) for g in groups)
+  packed=sum(32+g['vertices']*(40 if g['rigid_vertices']==g['vertices'] else 56) for g in groups)
   assert packed<previous
   if name=='male3':assert 2*packed<=65536<2*previous
   print(f'{name}: eligible GPU data {previous} -> {packed} bytes; asset calculation, not frame timing')

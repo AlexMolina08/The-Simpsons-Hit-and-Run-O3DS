@@ -16,6 +16,30 @@ extern "C" int g_picaWorldScaleAllowed;
 #endif
 #include <main/old3dshot.h>
 #include <pddi/pica/pica.hpp>
+#include <pddi/pica/visualstyle.hpp>
+#if defined(SRR2_OLD3DS_VISUAL_UPGRADE) && defined(SRR2_OLD3DS_NATIVE_BENCH)
+namespace picaVisual { unsigned features = 255, reflectionDraws = 0, sceneryDraws = 0; }
+namespace picaContact { unsigned queued=0,batches=0,drawn=0,overflow=0,commandSkips=0,stagedVertices=0,stagedFallbacks=0; }
+#endif
+#ifdef SRR2_OLD3DS_VISUAL_UPGRADE
+namespace picaContact { bool staged=false; }
+namespace picaVisual { bool groundBatch=false,worldVram=false,farBackdrop=false;
+#ifdef SRR2_OLD3DS_NATIVE_BENCH
+unsigned groundBatchNames=0,farBackdropLoads=0,farBackdropDraws=0;
+#endif
+}
+extern "C" u16 C3D_BoolUnifs[2];
+#endif
+#ifdef SRR2_OLD3DS_CHARACTER_OCCLUSION
+#include <pddi/pica/characterocclusion.hpp>
+extern "C" {
+extern const unsigned char pddi_character_occlusion[];
+extern const size_t pddi_character_occlusion_size;
+}
+#ifdef SRR2_OLD3DS_NATIVE_BENCH
+namespace picaCharacterOcclusion { unsigned groups=0,vertices=0,misses=0; }
+#endif
+#endif
 #include <pddi/pica/context.hpp>
 #ifdef SRR2_OLD3DS_DISTANCE_HAZE
 #include <pddi/pica/distancehaze.hpp>
@@ -114,6 +138,12 @@ extern "C" void C3Di_RenderQueueWaitDone(void);
 
 extern "C" const unsigned char pddi_pica_shbin[];
 extern "C" const unsigned int  pddi_pica_shbin_size;
+#ifdef SRR2_OLD3DS_VISUAL_UPGRADE
+extern "C" const unsigned char pddi_reflection_main_shbin[], pddi_reflection_stereo_shbin[];
+extern "C" const unsigned int pddi_reflection_main_shbin_size, pddi_reflection_stereo_shbin_size;
+extern "C" const unsigned char pddi_contact_shadow_shbin[];
+extern "C" const unsigned int pddi_contact_shadow_shbin_size;
+#endif
 #ifdef SRR2_3DS_STEREO_GPU_SKIN
 extern "C" const unsigned char pddi_stereo_main_shbin[], pddi_stereo_skin_shbin[];
 extern "C" const unsigned int pddi_stereo_main_shbin_size, pddi_stereo_skin_shbin_size;
@@ -231,11 +261,58 @@ static void LoadStereoProgram(DVLB_s*& binary, shaderProgram_s& program, const u
 
 shaderProgram_s* picaContext::MainProgram()
 {
+#ifdef SRR2_OLD3DS_VISUAL_UPGRADE
+    if((picaVisual::Enabled(picaVisual::Reflections) || picaVisual::Enabled(picaVisual::SceneryLighting)) && reflectionEntriesReady)
+    {
+        if(Graphics3DS::Stereo() && reflectionStereoBinary)return &reflectionStereoProgram;
+        if(!Graphics3DS::Stereo() && reflectionBinary)return &reflectionProgram;
+    }
+#endif
 #ifdef SRR2_3DS_STEREO_GPU_SKIN
     if(Graphics3DS::Stereo() && stereoShaderBinary) return &stereoShaderProgram;
 #endif
     return &shaderProgram;
 }
+
+#ifdef SRR2_OLD3DS_VISUAL_UPGRADE
+shaderProgram_s* picaContext::ReflectionProgram()
+{
+    if(!reflectionEntriesReady)return nullptr;
+    if(Graphics3DS::Stereo()) return reflectionStereoBinary ? &reflectionStereoProgram : nullptr;
+    return reflectionBinary ? &reflectionProgram : nullptr;
+}
+bool picaContext::BindReflectionProgram(bool enabled, bool world)
+{
+    if(skinProgramBound) return false;
+    enabled = enabled && ReflectionProgram();
+    const unsigned char desired=enabled?(world?SurfaceWorld:SurfaceReflection):SurfaceOrdinary;
+    if(reflectionState!=desired)
+    {
+        // One resident DVLP contains both entrypoints with identical uniforms.
+        // The native adapter selects entry/map registers after SDK configuration.
+        // Ordinary vertices execute the original instruction stream unchanged.
+        picaNativeSetReflectionOutput(enabled);
+        // b4 has no SDK default and is unused by both skin programs. The alias
+        // preserves every existing shader uniform index and stereo boolean.
+        if(bool(C3D_BoolUnifs[GPU_VERTEX_SHADER] & BIT(4))!=(enabled && world))
+            C3D_BoolUnifSet(GPU_VERTEX_SHADER, 0x6c, enabled && world);
+        reflectionState=desired;
+    }
+    return enabled;
+}
+#endif
+
+#ifdef SRR2_OLD3DS_VISUAL_UPGRADE
+void picaContext::SetWorldLightmapParameters(picaTexture* texture)
+{
+    if(g_picaState.worldLightmapParameters==texture) return;
+    const float* p=texture->WorldLightmapParameters();
+    C3D_FVUnifSet(GPU_VERTEX_SHADER,VSH_FVEC_u_lightPos,p[0],p[1],p[2],p[3]);
+    g_picaState.worldLightmapParameters=texture;
+    // A subsequent lit mesh must restore its original c8 light position.
+    lightsUploaded=false;
+}
+#endif
 
 shaderProgram_s* picaContext::SkinProgram()
 {
@@ -265,6 +342,10 @@ void picaContext::PrepareFramePrograms()
 #endif
 #ifdef SRR2_OLD3DS_NATIVE_CONTEXT
     picaNativeRegisterPrograms(MainProgram(), SkinProgram());
+#endif
+#ifdef SRR2_OLD3DS_VISUAL_UPGRADE
+    reflectionState=skinProgramBound?SurfaceSkin:SurfaceUnknown;
+    picaNativeRegisterReflectionProgram(ReflectionProgram());
 #endif
     C3D_BindProgram(MainProgram());
 }
@@ -381,7 +462,10 @@ picaContext::picaContext(picaDevice* dev, picaDisplay* disp)
 #else
         skinRigidAttrInfo = attrInfo;
 #endif
-        AttrInfo_AddLoader(&skinRigidAttrInfo, 4, GPU_BYTE, 4);
+        // Rigid offsets end with -1, so the shader bypasses all weights. Keep
+        // v4 defined with a fixed zero instead of fetching four ignored bytes.
+        AttrInfo_AddFixed(&skinRigidAttrInfo, 4);
+        C3D_FixedAttribSet(4, 0.0f, 0.0f, 0.0f, 0.0f);
         AttrInfo_AddLoader(&skinRigidAttrInfo, 5, GPU_BYTE, 4);
 #endif
     }
@@ -396,7 +480,68 @@ picaContext::picaContext(picaDevice* dev, picaDisplay* disp)
         LoadStereoProgram(stereoSkinBinary, stereoSkinProgram, pddi_stereo_skin_shbin, pddi_stereo_skin_shbin_size);
     }
     if(Graphics3DS::Stereo() && !StereoShadersReady()) Graphics3DS::Complete(false);
+#ifdef SRR2_OLD3DS_VISUAL_UPGRADE
+    reflectionState=skinProgramBound?SurfaceSkin:SurfaceUnknown;
+    picaNativeRegisterReflectionProgram(ReflectionProgram());
+#endif
     C3D_BindProgram(MainProgram());
+#endif
+#ifdef SRR2_OLD3DS_VISUAL_UPGRADE
+    LoadStereoProgram(reflectionBinary, reflectionProgram, pddi_reflection_main_shbin, pddi_reflection_main_shbin_size);
+    if(Graphics3DS::SupportsStereo())
+        LoadStereoProgram(reflectionStereoBinary, reflectionStereoProgram, pddi_reflection_stereo_shbin, pddi_reflection_stereo_shbin_size);
+    LoadStereoProgram(contactBinary,contactProgram,pddi_contact_shadow_shbin,pddi_contact_shadow_shbin_size);
+    const auto compatibleEntries=[](DVLB_s* binary,const DVLE_s& baseline){
+        if(!binary || binary->numDVLE!=2 || binary->DVLP.codeSize>=512)return false;
+        const DVLE_s& ordinary=binary->DVLE[0];const DVLE_s& reflected=binary->DVLE[1];
+        if(ordinary.dvlp!=reflected.dvlp || ordinary.outmapMask!=7 || reflected.outmapMask!=7 ||
+           memcmp(ordinary.outmapData,baseline.outmapData,sizeof(baseline.outmapData)) ||
+           ordinary.outmapClock!=baseline.outmapClock || ordinary.outmapMode!=baseline.outmapMode ||
+           reflected.outmapData[0]!=3 || reflected.outmapData[1]!=ordinary.outmapData[1] ||
+           reflected.outmapData[2]!=ordinary.outmapData[2] || reflected.outmapData[3]!=0x0f0e0d0c ||
+           reflected.outmapClock!=0x303 || ordinary.outmapData[3]!=0x1f1f0d0c || ordinary.outmapClock!=0x103 ||
+           reflected.outmapMode!=ordinary.outmapMode || ordinary.uniformTableSize!=reflected.uniformTableSize ||
+           ordinary.uniformTableSize!=baseline.uniformTableSize)return false;
+        for(unsigned i=0;i<ordinary.uniformTableSize;++i){
+            const DVLE_uniformEntry_s* entries[]={baseline.uniformTableData+i,ordinary.uniformTableData+i,reflected.uniformTableData+i};
+            const char* names[]={baseline.symbolTableData,ordinary.symbolTableData,reflected.symbolTableData};
+            for(unsigned j=1;j<3;++j)
+                if(entries[j]->startReg!=entries[0]->startReg || entries[j]->endReg!=entries[0]->endReg ||
+                   strcmp(names[j]+entries[j]->symbolOffset,names[0]+entries[0]->symbolOffset))return false;
+        }
+        return true;
+    };
+    reflectionEntriesReady=compatibleEntries(reflectionBinary,shaderBinary->DVLE[0]);
+#ifdef SRR2_3DS_STEREO_GPU_SKIN
+    if(stereoShaderBinary)reflectionEntriesReady=reflectionEntriesReady && compatibleEntries(reflectionStereoBinary,stereoShaderBinary->DVLE[0]);
+#endif
+    if(reflectionEntriesReady){
+        const DVLE_s& ordinary=reflectionBinary->DVLE[0];const DVLE_s& reflected=reflectionBinary->DVLE[1];
+        picaNativeConfigureReflectionOutputs(ordinary.outmapData[3],ordinary.outmapClock,reflected.outmapData[3],reflected.outmapClock);
+        picaNativeConfigureReflectionEntries(&reflectionProgram,ordinary.mainOffset,reflected.mainOffset,
+            reflectionStereoBinary?&reflectionStereoProgram:nullptr,
+            reflectionStereoBinary?reflectionStereoBinary->DVLE[0].mainOffset:0,
+            reflectionStereoBinary?reflectionStereoBinary->DVLE[1].mainOffset:0);
+    }
+    picaNativeRegisterReflectionProgram(ReflectionProgram());
+    if(contactBinary)
+    {
+        contactVertices=static_cast<picaContact::Vertex*>(linearAlloc(sizeof(picaContact::Vertex)*picaContact::Vertices*picaContact::Capacity));
+        contactIndices=static_cast<unsigned short*>(linearAlloc(sizeof(unsigned short)*picaContact::Indices*picaContact::Capacity));
+        if(contactVertices && contactIndices)
+        {
+            picaContact::Mesh(contactVertices,contactIndices);
+            GSPGPU_FlushDataCache(contactVertices,sizeof(picaContact::Vertex)*picaContact::Vertices*picaContact::Capacity);
+            GSPGPU_FlushDataCache(contactIndices,sizeof(unsigned short)*picaContact::Indices*picaContact::Capacity);
+            AttrInfo_Init(&contactAttributes);
+            AttrInfo_AddLoader(&contactAttributes,0,GPU_FLOAT,3);
+            AttrInfo_AddLoader(&contactAttributes,1,GPU_UNSIGNED_BYTE,4);
+            contactMaterial=new picaMat(this);contactMaterial->AddRef();
+            contactMaterial->SetBlendMode(PDDI_BLEND_ALPHA);contactMaterial->SetTwoSided(true);
+            contactMaterial->EnableLighting(false);
+            picaNativeRegisterContactProgram(&contactProgram);
+        }
+    }
 #endif
 #ifdef SRR2_OLD3DS_NATIVE_CONTEXT
     picaNativeRegisterPrograms(shaderBinary ? MainProgram() : NULL,
@@ -469,6 +614,18 @@ picaContext::picaContext(picaDevice* dev, picaDisplay* disp)
 
 picaContext::~picaContext()
 {
+#ifdef SRR2_OLD3DS_VISUAL_UPGRADE
+    // Retire the final submitted frame before releasing its shadow streams or
+    // changing the native program registry used while finishing that frame.
+    FlushStreams();display->EndFrame();C3Di_RenderQueueWaitDone();
+    picaNativeRegisterContactProgram(nullptr);
+    picaNativeConfigureReflectionEntries(nullptr,0,0,nullptr,0,0);
+    if(contactMaterial)contactMaterial->Release();
+    if(contactVertices)linearFree(contactVertices);
+    if(contactIndices)linearFree(contactIndices);
+    if(contactBinary){shaderProgramFree(&contactProgram);DVLB_Free(contactBinary);}
+    picaNativeRegisterReflectionProgram(nullptr);
+#endif
 #ifdef SRR2_OLD3DS_NATIVE_CONTEXT
     picaNativeRegisterPrograms(NULL,NULL);
 #endif
@@ -476,9 +633,11 @@ picaContext::~picaContext()
     DumpUnlitProjectionStats();
 #endif
 #ifdef SRR2_OLD3DS_DRAW_PREP
+#ifndef SRR2_OLD3DS_VISUAL_UPGRADE
     FlushStreams();
     display->EndFrame();
     C3Di_RenderQueueWaitDone();
+#endif
     picaBufferReclaim();
 #ifdef SRR2_OLD3DS_GPU_SKIN_SUPPORT
     picaSkinBeginFrame();
@@ -500,6 +659,10 @@ picaContext::~picaContext()
     immVertices = NULL;
     immIndices  = NULL;
 
+#ifdef SRR2_OLD3DS_VISUAL_UPGRADE
+    if(reflectionBinary) { shaderProgramFree(&reflectionProgram); DVLB_Free(reflectionBinary); }
+    if(reflectionStereoBinary) { shaderProgramFree(&reflectionStereoProgram); DVLB_Free(reflectionStereoBinary); }
+#endif
 #ifdef SRR2_3DS_STEREO_GPU_SKIN
     if(stereoSkinBinary) { shaderProgramFree(&stereoSkinProgram); DVLB_Free(stereoSkinBinary); }
     if(stereoShaderBinary) { shaderProgramFree(&stereoShaderProgram); DVLB_Free(stereoShaderBinary); }
@@ -557,6 +720,10 @@ void picaContext::BeginFrame()
     if(s_picaResumed && !display->HasReset())
     {
         s_picaResumed = false;
+#ifdef SRR2_OLD3DS_VISUAL_UPGRADE
+        reflectionState=skinProgramBound?SurfaceSkin:SurfaceUnknown;
+        picaNativeRegisterReflectionProgram(ReflectionProgram());
+#endif
         C3D_BindProgram(MainProgram());
         C3D_SetAttrInfo(&attrInfo);
 #ifdef SRR2_OLD3DS_NO_NORMAL_FETCH
@@ -577,6 +744,10 @@ void picaContext::BeginFrame()
 
 #ifdef SRR2_OLD3DS_NATIVE_CONTEXT
         picaNativeRegisterPrograms(MainProgram(), SkinProgram());
+#endif
+#ifdef SRR2_OLD3DS_VISUAL_UPGRADE
+        reflectionState=skinProgramBound?SurfaceSkin:SurfaceUnknown;
+        picaNativeRegisterReflectionProgram(ReflectionProgram());
 #endif
         C3D_BindProgram(MainProgram());
         C3D_SetAttrInfo(&attrInfo);
@@ -1332,6 +1503,12 @@ void picaContext::SetAmbientLight(pddiColour col)
 
 void picaContext::InvalidateUniformCache(void)
 {
+#ifdef SRR2_OLD3DS_VISUAL_UPGRADE
+    g_picaState.worldLightmapParameters=nullptr;
+    reflectionState=skinProgramBound?SurfaceSkin:SurfaceUnknown;
+    // Float uniforms do not change the native shader entry or output routing.
+    // SDK program configuration and explicit native invalidation track those.
+#endif
 #ifdef SRR2_OLD_3DS
     modelViewUploaded = false;
 #endif
@@ -1556,7 +1733,18 @@ void picaContext::SetVertexUniforms(bool lit, pddiColour ambient, pddiColour dif
         if(!skinProgramBound)
 #endif
         C3D_FVUnifSet(GPU_VERTEX_SHADER, VSH_FVEC_u_stereoOn,
-                      stereoOn ? 1.0f : 0.0f, 0.0f, 0.0f, 0.0f);
+                      stereoOn ? 1.0f : 0.0f,
+#ifdef SRR2_OLD3DS_VISUAL_UPGRADE
+                      0.5f,
+#else
+                      0.0f,
+#endif
+#ifdef SRR2_OLD3DS_VISUAL_UPGRADE
+                      picaVisual::Enabled(picaVisual::KeyLighting) ? 0.62f : 1.0f,
+                      picaVisual::Enabled(picaVisual::KeyLighting) ? 0.56f : 0.0f);
+#else
+                      0.0f, 0.0f);
+#endif
         C3D_FVUnifMtx4x4(GPU_VERTEX_SHADER, VSH_FVEC_u_proj, &hwProjection);
 #ifdef SRR2_OLD3DS_UNLIT_PROJECTION
 #ifdef SRR2_OLD3DS_GPU_SKIN_SUPPORT
@@ -1633,9 +1821,22 @@ void picaContext::SetVertexUniforms(bool lit, pddiColour ambient, pddiColour dif
             if(!lit)
             {
                 // Unlit draws still need zero, one and the byte-color scale.
-                C3D_FVUnifSet(GPU_VERTEX_SHADER, skin_matAmbient, 0, 0, 0, 1);
-                C3D_FVUnifSet(GPU_VERTEX_SHADER, skin_matEmissive, 0, 0, 0, 0);
-                C3D_FVUnifSet(GPU_VERTEX_SHADER, skin_sceneAmbient, 0, 0, 0, 1.0f / 255.0f);
+#ifdef SRR2_OLD3DS_VISUAL_UPGRADE
+                if(picaVisual::Enabled(picaVisual::KeyLighting))
+                {
+                    // Same three uploads as the unlit path, now carrying a key
+                    // and cool fill. No scene traversal or dynamic-light work.
+                    C3D_FVUnifSet(GPU_VERTEX_SHADER, skin_matAmbient, -.35f,.65f,-.68f,1);
+                    C3D_FVUnifSet(GPU_VERTEX_SHADER, skin_matEmissive, .50f,.44f,.34f,0);
+                    C3D_FVUnifSet(GPU_VERTEX_SHADER, skin_sceneAmbient, .70f,.74f,.82f,1.0f/255.0f);
+                }
+                else
+#endif
+                {
+                    C3D_FVUnifSet(GPU_VERTEX_SHADER, skin_matAmbient, 0,0,0,1);
+                    C3D_FVUnifSet(GPU_VERTEX_SHADER, skin_matEmissive, 0,0,0,0);
+                    C3D_FVUnifSet(GPU_VERTEX_SHADER, skin_sceneAmbient, 1,1,1,1.0f/255.0f);
+                }
                 matUploaded = false;
             }
         }
@@ -1678,6 +1879,9 @@ void picaContext::SetVertexUniforms(bool lit, pddiColour ambient, pddiColour dif
         const int lightCount = nActiveLights;
 #else
         const int lightCount = PDDI_MAX_LIGHTS;
+#endif
+#ifdef SRR2_OLD3DS_VISUAL_UPGRADE
+        g_picaState.worldLightmapParameters=nullptr;
 #endif
         C3D_FVec* pos = C3D_FVUnifWritePtr(GPU_VERTEX_SHADER, skin_lightPos, lightCount);
         C3D_FVec* col = C3D_FVUnifWritePtr(GPU_VERTEX_SHADER, skin_lightColour, lightCount);
@@ -1944,8 +2148,10 @@ void picaContext::EnableFog(bool enable)
 #ifdef SRR2_OLD3DS_DISTANCE_HAZE
 void picaContext::BeginDistanceHaze(unsigned level, unsigned colour)
 {
-    // Daytime L1/L2 only. The caller excludes sky, interiors and overlays.
-    if(!picaDistanceHaze::Enabled() || level>1 || !Old3dsPerformance::Enabled() ||
+    // The legacy profile is daytime L1/L2 only. The prepared palette is sampled
+    // from each original horizon texture; the caller excludes interiors/sky.
+    if(!picaDistanceHaze::Enabled() ||
+       (level>1 && !picaVisual::Enabled(picaVisual::Atmosphere)) || !Old3dsPerformance::Enabled() ||
        !g_picaInFrame || bottomPass ||
        state.viewState->projectionMode!=PDDI_PROJECTION_PERSPECTIVE) return;
     const float n=state.viewState->camera.nearPlane;
@@ -1962,6 +2168,7 @@ void picaContext::BeginDistanceHaze(unsigned level, unsigned colour)
         picaDistanceHaze::nearPlane=n;picaDistanceHaze::farPlane=f;
 #endif
     }
+    if(picaVisual::Enabled(picaVisual::Atmosphere)) colour=picaDistanceHaze::HorizonColour(level,colour);
     hazeColour=colour;
     // Keep the PDDI fog flag authoritative across object state push/pop.
     pddiBaseContext::SetFog(pddiColour(colour&255,(colour>>8)&255,(colour>>16)&255),45.0f,140.0f);
@@ -1985,6 +2192,131 @@ extern "C" void picaDistanceHazeBegin(unsigned level, unsigned colour)
 { if(s_picaContext) s_picaContext->BeginDistanceHaze(level,colour); }
 extern "C" void picaDistanceHazeEnd()
 { if(s_picaContext) s_picaContext->EndDistanceHaze(); }
+#endif
+
+#ifdef SRR2_OLD3DS_VISUAL_UPGRADE
+void picaContext::BeginContactShadows()
+{
+    contactCount=0;
+    contactActive=picaVisual::Enabled(picaVisual::ContactShadows) && Old3dsPerformance::Enabled() &&
+        contactMaterial && g_picaInFrame && !bottomPass;
+}
+void picaContext::QueueContactShadow(const float* center,const float* normal,const float* facing,
+                                    float width,float length,float alpha)
+{
+    if(!contactActive)return;
+    if(contactCount==picaContact::Capacity){
+#ifdef SRR2_OLD3DS_NATIVE_BENCH
+        ++picaContact::overflow;
+#endif
+        return;
+    }
+    const pddiMatrix* view=state.matrixStack[PDDI_MATRIX_MODELVIEW]->Top();
+    static_assert(sizeof(pddiMatrix)==16*sizeof(float),"Shadow view layout");
+    const float depth=picaContact::Depth(reinterpret_cast<const float*>(view),center);
+    if(depth<0 || depth>32)return;
+    if(depth>24)alpha*=((32-depth)*.125f);
+    if(picaContact::Prepare(contactInstances[contactCount],center,normal,facing,width,length,alpha)){
+        ++contactCount;
+#ifdef SRR2_OLD3DS_NATIVE_BENCH
+        ++picaContact::queued;
+#endif
+    }
+}
+void picaContext::DrawContactShadows()
+{
+    contactActive=false;
+    if(!contactCount)return;
+    u32* commands=nullptr;u32 size=0,offset=0;
+    GPUCMD_GetBuffer(&commands,&size,&offset);
+    if(!commands || offset>size || size-offset<2048){
+#ifdef SRR2_OLD3DS_NATIVE_BENCH
+        ++picaContact::commandSkips;
+#endif
+        return;
+    }
+    picaContact::WorldVertex* worldVertices=nullptr;
+    if(picaContact::staged)
+    {
+        static_assert(sizeof(picaContact::WorldVertex)==PICA_VERTEX_STRIDE,"Shadow stride");
+        static_assert(offsetof(picaContact::WorldVertex,normal)==PICA_VERTEX_OFF_NRM,"Shadow normal");
+        static_assert(offsetof(picaContact::WorldVertex,uv)==PICA_VERTEX_OFF_UV,"Shadow UV");
+        static_assert(offsetof(picaContact::WorldVertex,colour)==PICA_VERTEX_OFF_COL,"Shadow colour");
+        // The existing frame stream keeps each pass alive until GPU retirement.
+        // A full stream retains the immutable GPU-instance path below.
+        worldVertices=reinterpret_cast<picaContact::WorldVertex*>(AllocImmVertices(contactCount*picaContact::Vertices));
+#ifdef SRR2_OLD3DS_NATIVE_BENCH
+        if(!worldVertices)++picaContact::stagedFallbacks;
+#endif
+    }
+    if(worldVertices)
+    {
+        for(unsigned i=0;i<contactCount;++i)
+            picaContact::Expand(worldVertices+i*picaContact::Vertices,contactVertices+i*picaContact::Vertices,contactInstances[i]);
+        const auto mask=static_cast<pddiStateMask>(PDDI_STATE_RENDER|PDDI_STATE_FOG);
+        PushState(mask);EnableFog(false);SetZWrite(false);EnableZBuffer(true);
+        if(skinProgramBound)BindSkinProgram(false);
+        C3D_SetAttrInfo(&attrInfo);
+#ifdef SRR2_OLD3DS_NO_NORMAL_FETCH
+        noNormalLayout=false;
+#endif
+        pddiBaseShader::ClearCurrentShader();
+        contactMaterial->SetMaterial();
+        C3D_BufInfo buffers;BufInfo_Init(&buffers);
+        BufInfo_Add(&buffers,worldVertices,PICA_VERTEX_STRIDE,4,0x3210);
+        C3D_SetBufInfo(&buffers);
+        C3D_DrawElements(GPU_TRIANGLES,contactCount*picaContact::Indices,C3D_UNSIGNED_SHORT,contactIndices);
+        g_picaState.bufInfoSet=false;
+        PopState(mask);pddiBaseShader::ClearCurrentShader();
+#ifdef SRR2_OLD3DS_NATIVE_BENCH
+        picaContact::stagedVertices+=contactCount*picaContact::Vertices;
+#endif
+    }
+    else
+    {
+    // All casters arrived through their existing visible-entity draws. One
+    // immutable mesh projects every ellipse on GPU; no per-caster draw or rays.
+    const auto mask=static_cast<pddiStateMask>(PDDI_STATE_RENDER|PDDI_STATE_FOG);
+    PushState(mask);EnableFog(false);SetZWrite(false);EnableZBuffer(true);
+    BindSkinProgram(false);BindReflectionProgram(false);
+    pddiBaseShader::ClearCurrentShader();
+    contactMaterial->SetPass(0);
+    C3D_BindProgram(&contactProgram);C3D_SetAttrInfo(&contactAttributes);
+    C3D_BufInfo buffers;BufInfo_Init(&buffers);
+    BufInfo_Add(&buffers,contactVertices,sizeof(picaContact::Vertex),2,0x10);
+    C3D_SetBufInfo(&buffers);
+    C3D_FVUnifMtx4x4(GPU_VERTEX_SHADER,0,&hwProjection);
+    const pddiMatrix* view=state.matrixStack[PDDI_MATRIX_MODELVIEW]->Top();
+    C3D_Mtx matrix;
+    for(unsigned row=0;row<4;++row)
+    {
+        matrix.r[row].x=view->Row4(0)[row];matrix.r[row].y=view->Row4(1)[row];
+        matrix.r[row].z=view->Row4(2)[row];matrix.r[row].w=view->Row4(3)[row];
+    }
+    C3D_FVUnifMtx4x4(GPU_VERTEX_SHADER,4,&matrix);
+    C3D_FVec* parameters=C3D_FVUnifWritePtr(GPU_VERTEX_SHADER,8,contactCount*3);
+    for(unsigned i=0;i<contactCount;++i)
+    {
+        const float* rows[]={contactInstances[i].center,contactInstances[i].normal,contactInstances[i].facing};
+        for(unsigned row=0;row<3;++row)parameters[3*i+row]=FVec4_New(rows[row][0],rows[row][1],rows[row][2],rows[row][3]);
+    }
+    C3D_FVUnifSet(GPU_VERTEX_SHADER,44,1,0,.000001f,Graphics3DS::Stereo() && stereoWorldPass?1:0);
+    C3D_DrawElements(GPU_TRIANGLES,contactCount*picaContact::Indices,C3D_UNSIGNED_SHORT,contactIndices);
+    C3D_BindProgram(MainProgram());C3D_SetAttrInfo(&attrInfo);
+#ifdef SRR2_OLD3DS_NO_NORMAL_FETCH
+    noNormalLayout=false;
+#endif
+    picaStateInvalidate();InvalidateUniformCache();PopState(mask);
+    }
+#ifdef SRR2_OLD3DS_NATIVE_BENCH
+    ++picaContact::batches;picaContact::drawn+=contactCount;
+#endif
+    ++g_old3dsDrawCalls;g_old3dsDrawVerts+=contactCount*picaContact::Indices;
+}
+extern "C" void picaContactBegin(){if(s_picaContext)s_picaContext->BeginContactShadows();}
+extern "C" void picaContactQueue(const float* c,const float* n,const float* f,float w,float l,float a)
+{if(s_picaContext)s_picaContext->QueueContactShadow(c,n,f,w,l,a);}
+extern "C" void picaContactDraw(){if(s_picaContext)s_picaContext->DrawContactShadows();}
 #endif
 
 void picaContext::SetFog(pddiColour colour, float start, float end)
@@ -2950,7 +3282,11 @@ void picaPrimBuffer::Display(void)
 #else
                                    picaSkin::VertexStride,
 #endif
+#ifdef SRR2_OLD3DS_GPU_SKIN_RIGID_PACK
+                                   skinRigid ? 5 : 6, skinRigid ? 0x53210 : 0x543210);
+#else
                                    6, 0x543210);
+#endif
         else
 #endif
 #ifdef SRR2_OLD3DS_NO_NORMAL_FETCH
@@ -3314,6 +3650,10 @@ void picaContext::EndWorld(void)
         }
         C3D_Mtx identity;
         Mtx_Identity(&identity);
+#ifdef SRR2_OLD3DS_VISUAL_UPGRADE
+        reflectionState=skinProgramBound?SurfaceSkin:SurfaceUnknown;
+        picaNativeRegisterReflectionProgram(ReflectionProgram());
+#endif
         C3D_BindProgram(MainProgram());
         C3D_SetAttrInfo(&attrInfo);
 #ifdef SRR2_OLD3DS_NO_NORMAL_FETCH
@@ -3414,6 +3754,9 @@ bool picaContext::BindSkinProgram(bool enabled)
     noNormalLayout = false;
 #endif
     skinProgramBound = enabled;
+#ifdef SRR2_OLD3DS_VISUAL_UPGRADE
+    reflectionState=skinProgramBound?SurfaceSkin:SurfaceUnknown;
+#endif
     C3D_BindProgram(enabled ? SkinProgram() : MainProgram());
 
 #ifdef SRR2_OLD3DS_GPU_SKIN_COMPACT
@@ -3438,12 +3781,63 @@ bool picaContext::BindSkinProgram(bool enabled)
     return true;
 }
 #endif
+#ifdef SRR2_OLD3DS_VISUAL_UPGRADE
+void picaPrimBuffer::PrepareVehicleForm()
+{
+    if(!picaVisual::Enabled(picaVisual::Vehicles) || !Old3dsPerformance::FlatLighting() ||
+       transient || !buffer || !(vertexType & PDDI_V_NORMAL) || (vertexType & PDDI_V_COLOUR)) return;
+    for(unsigned i = 0; i < allocated; ++i)
+    {
+        unsigned char* vertex = buffer + i*PICA_VERTEX_STRIDE;
+        picaVisual::Bake(reinterpret_cast<const float*>(vertex + PICA_VERTEX_OFF_NRM),
+                         vertex + PICA_VERTEX_OFF_COL, true);
+    }
+    expandDirty = true;
+    // The loader's pending upload publishes these bytes with the original mesh.
+}
+#endif
 #ifdef SRR2_OLD3DS_GPU_SKIN_SUPPORT
+#ifdef SRR2_OLD3DS_NATIVE_BENCH
+// Experimental cooperative checkpoints in unpublished load-time buffers only.
+bool g_picaSkinPrepareYield=false;
+unsigned g_picaSkinPrepareCheckpoints=0;
+#endif
 void picaPrimBuffer::PrepareGpuSkin(const void *source, unsigned count, unsigned bones,
-                                    bool selected, bool pedestrian, bool named)
+                                    bool selected, bool pedestrian, bool named, const char* name, unsigned group)
 {
     if (!selected)
         return;
+#ifdef SRR2_OLD3DS_CHARACTER_OCCLUSION
+    if(picaVisual::Enabled(picaVisual::Occlusion) && Old3dsPerformance::FlatLighting() &&
+       !transient && buffer && source && count==allocated && (vertexType & PDDI_V_NORMAL))
+    {
+        const unsigned char* shades=picaCharacterOcclusion::Find(pddi_character_occlusion,
+            pddi_character_occlusion_size,name,group,source,count);
+        if(shades)
+        {
+            for(unsigned i=0;i<count;++i){
+#ifdef SRR2_OLD3DS_NATIVE_BENCH
+            if(g_picaSkinPrepareYield && !(i&63) && g_picaYieldHook){
+                ++g_picaSkinPrepareCheckpoints;g_picaYieldHook();
+            }
+#endif
+                picaCharacterOcclusion::Apply(buffer+i*PICA_VERTEX_STRIDE+PICA_VERTEX_OFF_COL,shades[i]);
+            }
+            expandDirty=true;
+            // CharacterForm normally publishes both preparations together.
+            // Its diagnostic off-switch must also leave CPU fallbacks coherent.
+            if(!picaCharacterForm::Enabled()) GSPGPU_FlushDataCache(buffer,mem);
+#ifdef SRR2_OLD3DS_NATIVE_BENCH
+            ++picaCharacterOcclusion::groups;picaCharacterOcclusion::vertices+=count;
+#endif
+        }
+#ifdef SRR2_OLD3DS_NATIVE_BENCH
+        else ++picaCharacterOcclusion::misses;
+#endif
+    }
+#else
+    (void)name;(void)group;
+#endif
 #ifdef SRR2_OLD3DS_CHARACTER_FORM
     // All selected character groups retain the color in both the CPU buffer
     // and the GPU copy. Bake before palette/allocation fallbacks, once at load.
@@ -3452,6 +3846,12 @@ void picaPrimBuffer::PrepareGpuSkin(const void *source, unsigned count, unsigned
     {
         for(unsigned i = 0; i < count; ++i)
         {
+#ifdef SRR2_OLD3DS_NATIVE_BENCH
+            if(g_picaSkinPrepareYield && !(i&63) && g_picaYieldHook){
+                ++g_picaSkinPrepareCheckpoints;g_picaYieldHook();
+            }
+#endif
+
             picaSkin::Source vertex;
             memcpy(&vertex, static_cast<const unsigned char*>(source) + i*sizeof(vertex), sizeof(vertex));
             picaCharacterForm::Bake(vertex.normal, buffer + i*PICA_VERTEX_STRIDE + PICA_VERTEX_OFF_COL);
@@ -3482,6 +3882,12 @@ void picaPrimBuffer::PrepareGpuSkin(const void *source, unsigned count, unsigned
 #endif
     for (unsigned i = 0; i < count; ++i)
     {
+#ifdef SRR2_OLD3DS_NATIVE_BENCH
+            if(g_picaSkinPrepareYield && !(i&63) && g_picaYieldHook){
+                ++g_picaSkinPrepareCheckpoints;g_picaYieldHook();
+            }
+#endif
+
         picaSkin::Source vertex;
         memcpy(&vertex, src + i * sizeof(vertex), sizeof(vertex));
         if (!picaSkin::PackVertex(probe, vertex, buffer + 36 * i, bones))
@@ -3510,11 +3916,20 @@ void picaPrimBuffer::PrepareGpuSkin(const void *source, unsigned count, unsigned
     if (!skinAllocation)
     {
         skinReason = g_picaSkinAllocationReason;
+#ifdef SRR2_OLD3DS_NATIVE_BENCH
+        picaSkinRecordRejection(name,group,count);
+#endif
         return;
     }
     unsigned char *dst = (unsigned char *)(skinAllocation + 1);
     for (unsigned i = 0; i < count; ++i)
     {
+#ifdef SRR2_OLD3DS_NATIVE_BENCH
+            if(g_picaSkinPrepareYield && !(i&63) && g_picaYieldHook){
+                ++g_picaSkinPrepareCheckpoints;g_picaYieldHook();
+            }
+#endif
+
         picaSkin::Source vertex;
         memcpy(&vertex, src + i * sizeof(vertex), sizeof(vertex));
         picaSkin::PackVertex(probe, vertex, buffer + 36 * i, bones);
@@ -3652,6 +4067,9 @@ bool picaPrimBuffer::TryGpuSkin(pddiShader *material, const pddiMatrix *const *m
     }
 #endif
     ++g_picaSkinMetrics.fallback[reason];
+#ifdef SRR2_OLD3DS_NATIVE_BENCH
+    if(reason==picaSkin::BudgetLimit)g_picaSkinBudgetFallbackVertices+=allocated;
+#endif
 #ifdef SRR2_OLD3DS_GPU_SKIN_BATCH
     context->SkinBatchBarrier();
 #endif

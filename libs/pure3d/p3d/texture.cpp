@@ -6,6 +6,9 @@
 ===========================================================================*/
 #include <p3d/texture.hpp>
 #include <p3d/image.hpp>
+#ifdef SRR2_OLD3DS_VISUAL_UPGRADE
+#include <pddi/pica/texture.hpp>
+#endif
 #include <p3d/imagefactory.hpp>
 #include <p3d/imageconverter.hpp>
 #include <p3d/utility.hpp>
@@ -181,6 +184,10 @@ tTexture* tTextureLoader::LoadTexture(tChunkFile* f)
 
     tTexture* texture = NULL;
 
+#ifdef SRR2_OLD3DS_VISUAL_UPGRADE
+    float worldLightmapParameters[4]={};
+    bool hasWorldLightmapParameters=false;
+#endif
     int mipmap = 0;
     bool volume = false;
     bool image = false;
@@ -188,6 +195,16 @@ tTexture* tTextureLoader::LoadTexture(tChunkFile* f)
     {           
         switch ( f->BeginChunk() )
         {
+#ifdef SRR2_OLD3DS_VISUAL_UPGRADE
+            case 0x7f53554e: // Private SUN metadata, version one.
+            {
+                if(f->GetLong()==1) {
+                    for(unsigned i=0;i<4;++i) worldLightmapParameters[i]=f->GetFloat();
+                    hasWorldLightmapParameters=true;
+                }
+                break;
+            }
+#endif
             case Pure3D::Texture::IMAGE:
             {
                 if (!volume) 
@@ -219,6 +236,10 @@ tTexture* tTextureLoader::LoadTexture(tChunkFile* f)
     {
         texture->SetName(name);
         texture->SetPriority(priority);
+#ifdef SRR2_OLD3DS_VISUAL_UPGRADE
+        if(hasWorldLightmapParameters && usage==PDDI_USAGE_WORLD_LIGHTMAP && texture->GetTexture())
+            static_cast<picaTexture*>(texture->GetTexture())->SetWorldLightmapParameters(worldLightmapParameters);
+#endif
     }
     return texture;
 }

@@ -1,3 +1,7 @@
+#ifdef SRR2_OLD3DS_VISUAL_UPGRADE
+#include <pddi/pica/contactshadow.hpp>
+#include <pddi/pica/visualstyle.hpp>
+#endif
 #include <main/old3dsmainprofile.h>
 #include <main/old3dshot.h>
 //=============================================================================
@@ -3760,6 +3764,28 @@ void Vehicle::Display()
     DSG_BEGIN_PROFILE("  Vehicle::Display")
     BillboardQuadManager::Enable();
     //DisplaySimpleShadow();
+#ifdef SRR2_OLD3DS_VISUAL_UPGRADE
+    if(picaVisual::Enabled(picaVisual::ContactShadows) && IsSimpleShadow())
+    {
+        rmt::Vector ground=mTransform.Row(3);
+        const bool traffic=GetLocomotionType()==VL_TRAFFIC;
+        const rmt::Vector normal=traffic?mTransform.Row(1):mGroundPlaneWallVolume->mNormal;
+        const float restHeight=GetRestHeightAboveGround();
+        // TrafficSetTransform offsets the road point along mVehicleUp by
+        // restHeight - 0.1m. Undo that same offset, including slopes.
+        if(traffic)ground-=mVehicleUp*(restHeight-.1f);
+        float groundY=ground.y-(traffic?0.0f:restHeight);
+        // GetGroundY can lazily update wheel joints. Shadow placement uses the
+        // existing physics plane directly, without requesting animation work.
+        if(traffic || picaContact::GroundY(groundY,&ground.x,&mGroundPlaneWallVolume->mPosition.x,&normal.x))
+        {
+            const float height=traffic?0.0f:ground.y-groundY-restHeight;ground.y=groundY;
+            const rmt::Vector forward=mTransform.Row(2);
+            const float alpha=.48f*rmt::Clamp(1.0f-rmt::Max(0.0f,height)*.25f,0.0f,1.0f);
+            picaContactQueue(&ground.x,&normal.x,&forward.x,1.15f,2.25f,alpha);
+        }
+    }
+#endif
     // TODO - how to set this up cleaner?
 
     // little debug test
