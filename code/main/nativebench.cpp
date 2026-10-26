@@ -154,7 +154,7 @@ extern bool g_old3dsWheelBatch;
 #endif
 extern bool g_old3dsAdpcmPrune,g_old3dsAdpcmVerify,g_old3dsAdpcmFast;
 #ifdef SRR2_OLD3DS_PREPARED_AUDIO
-extern bool g_old3dsPreparedAudio;
+extern bool g_old3dsPreparedAudio,g_old3dsPreparedAudioShort;
 #endif
 extern void old3dsDumpAdpcmVerification(FILE*);
 extern unsigned g_old3dsAdpcmFastCalls,g_old3dsAdpcmFastFallbacks,g_old3dsAdpcmBudgetCalls;
@@ -459,6 +459,7 @@ static bool ParseRunArgument(const char* argument)
  else if(!strncmp(argument,"bench_quality=",14))Old3dsPerformance::mode=strtoul(argument+14,nullptr,10)%8;
 #ifdef SRR2_OLD3DS_PREPARED_AUDIO
  else if(!strncmp(argument,"bench_prepared_audio=",21))g_old3dsPreparedAudio=atoi(argument+21)!=0;
+ else if(!strncmp(argument,"bench_prepared_audio_short=",sizeof("bench_prepared_audio_short=")-1))g_old3dsPreparedAudioShort=atoi(argument+sizeof("bench_prepared_audio_short=")-1)!=0;
 #endif
 #ifdef SRR2_OLD3DS_WHEEL_LOD
  else if(!strncmp(argument,"bench_wheel_batch=",18))g_old3dsWheelBatch=atoi(argument+18)!=0;

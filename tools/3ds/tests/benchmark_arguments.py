@@ -10,7 +10,7 @@ with tempfile.TemporaryDirectory(prefix='srr-bench-args-') as directory:
 #include <cstdlib>
 #include <cstdio>
 #include <cmath>
-static bool portraitActor=false,portraitNPC=false,portraitTraffic=false,portraitPlayerObserver=false,g_old3dsPreparedAudio=false;static char portraitModel[32]={},portraitActorModel[32]="male6";static float stereoTestSlider=-1,portraitDistance=1,portraitBearing=45;
+static bool portraitActor=false,portraitNPC=false,portraitTraffic=false,portraitPlayerObserver=false,g_old3dsPreparedAudio=false,g_old3dsPreparedAudioShort=false;static char portraitModel[32]={},portraitActorModel[32]="male6";static float stereoTestSlider=-1,portraitDistance=1,portraitBearing=45;
 namespace Old3dsPerformance { unsigned mode=1; }
 namespace HandheldHudCadence { bool boostPickupAnimations=true; }
 namespace Old3dsRecurring { bool requested=false;unsigned stationaryMs=0; }
@@ -54,6 +54,8 @@ int main(){
  assert(ParseRunArgument("bench_portrait_bearing=181")&&portraitBearing==180);
  assert(ParseRunArgument("bench_prepared_audio=1")&&g_old3dsPreparedAudio);
  assert(ParseRunArgument("bench_prepared_audio=0")&&!g_old3dsPreparedAudio);
+ assert(ParseRunArgument("bench_prepared_audio_short=1")&&g_old3dsPreparedAudioShort);
+ assert(ParseRunArgument("bench_prepared_audio_short=0")&&!g_old3dsPreparedAudioShort);
  assert(ParseRunArgument("bench_adpcm_fast=1")&&g_old3dsAdpcmFast);
  assert(ParseRunArgument("bench_adpcm_fast=0")&&!g_old3dsAdpcmFast);
  assert(ParseRunArgument("bench_adpcm_prune=0")&&!g_old3dsAdpcmPrune);

@@ -82,7 +82,8 @@ extern "C" void radSoundCtrServiceLid(float volume)
 
 #ifdef SRR2_OLD3DS_PREPARED_AUDIO
 #include "preparedaudio.hpp"
-bool g_old3dsPreparedAudio=false;
+bool g_old3dsPreparedAudio=false,g_old3dsPreparedAudioShort=false;
+static unsigned s_PreparedAudioShortHits=0;
 static ctrPreparedAudio::Cache s_PreparedAudio;
 #endif
 
@@ -278,9 +279,9 @@ static unsigned s_AdpcmVerificationCount=0;
 void old3dsDumpAdpcmVerification(FILE* file)
 {
 #ifdef SRR2_OLD3DS_PREPARED_AUDIO
-    fprintf(file,"NATIVE_PREPARED_AUDIO enabled=%u loaded=%u bytes=%u entries=%u hits=%u misses=%u compared_bytes=%u callback_io=0 exact_pcm_keys=1 predictors=3\n",
+    fprintf(file,"NATIVE_PREPARED_AUDIO enabled=%u loaded=%u bytes=%u entries=%u hits=%u misses=%u compared_bytes=%u short_enabled=%u short_hits=%u callback_io=0 exact_pcm_keys=1 predictors=3\n",
         g_old3dsPreparedAudio,s_PreparedAudio.Bytes()!=0,s_PreparedAudio.Bytes(),s_PreparedAudio.Entries(),
-        s_PreparedAudio.hits,s_PreparedAudio.misses,s_PreparedAudio.comparedBytes);
+        s_PreparedAudio.hits,s_PreparedAudio.misses,s_PreparedAudio.comparedBytes,g_old3dsPreparedAudioShort,s_PreparedAudioShortHits);
 #endif
     for(unsigned i=0;i<s_AdpcmVerificationCount;++i)
     {
@@ -339,10 +340,14 @@ static unsigned int AdpcmEncodeInPlace( void * pData, unsigned int numSamples )
     const bool reduced = fast && !g_old3dsAdpcmVerify && Old3dsPerformance::ReducedAudioSearch();
     if(reduced) ++g_old3dsAdpcmBudgetCalls;
 #ifdef SRR2_OLD3DS_PREPARED_AUDIO
-    if(reduced && g_old3dsPreparedAudio)
+    // The short-clip experiment preserves the existing long-clip cache control.
+    if(reduced && g_old3dsPreparedAudio && (numSamples>=16384 || g_old3dsPreparedAudioShort))
     {
         unsigned cachedBytes=0;
-        if(s_PreparedAudio.Copy(pData,numSamples,cachedBytes))return cachedBytes;
+        if(s_PreparedAudio.Copy(pData,numSamples,cachedBytes)){
+            if(numSamples<16384)++s_PreparedAudioShortHits;
+            return cachedBytes;
+        }
     }
 #endif
     const unsigned int bytes = reduced ? AdpcmEncodeInPlaceKernel<3>(pData,numSamples)

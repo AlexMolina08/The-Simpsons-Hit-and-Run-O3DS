@@ -24,7 +24,8 @@ prelude = r'''
 using u16=uint16_t;using s16=int16_t;using u8=uint8_t;
 #define NB_SCOPE(s) ((void)0)
 namespace Old3dsPerformance { bool reduced=true;bool ReducedAudioSearch(){return reduced;} }
-bool g_old3dsPreparedAudio=true;
+bool g_old3dsPreparedAudio=true,g_old3dsPreparedAudioShort=true;
+static unsigned s_PreparedAudioShortHits=0;
 static ctrPreparedAudio::Cache s_PreparedAudio;
 '''
 main = r'''
@@ -48,10 +49,22 @@ int main(int argc,char** argv){
   const u8* e=original.data()+HeaderBytes+i*EntryBytes;
   const unsigned samples=Read32(e),pcm=Read32(e+4),dsp=Read32(e+8),bytes=Read32(e+12);
   std::vector<u8> guarded(samples*2+64,0xa5);std::memcpy(guarded.data()+32,original.data()+pcm,samples*2);
+  std::vector<s16> reference(samples);std::memcpy(reference.data(),original.data()+pcm,samples*2);
+  assert(AdpcmEncodeInPlaceKernel<3>(reference.data(),samples)==bytes);
+  assert(!std::memcmp(reference.data(),original.data()+dsp,bytes));
   unsigned hits=s_PreparedAudio.hits;
   assert(AdpcmEncodeInPlace(guarded.data()+32,samples)==bytes);
   assert(s_PreparedAudio.hits==hits+1 && !std::memcmp(guarded.data()+32,original.data()+dsp,bytes));
   for(unsigned j=0;j<32;++j)assert(guarded[j]==0xa5 && guarded[32+samples*2+j]==0xa5);
+  if(samples<16384){
+   // Disabling short clips retains the production encoder and the long cache.
+   std::vector<s16> input(samples);std::memcpy(input.data(),original.data()+pcm,samples*2);
+   auto expected=input;const unsigned encoded=AdpcmEncodeInPlaceKernel<3>(expected.data(),samples);
+   g_old3dsPreparedAudioShort=false;const unsigned beforeHits=s_PreparedAudio.hits;
+   assert(AdpcmEncodeInPlace(input.data(),samples)==encoded);
+   assert(s_PreparedAudio.hits==beforeHits && !std::memcmp(input.data(),expected.data(),encoded));
+   g_old3dsPreparedAudioShort=true;
+  }
   std::vector<u8> mismatch(original.begin()+pcm,original.begin()+pcm+samples*2);
   mismatch[samples]^=1;const auto before=mismatch;unsigned unchanged=123;
   assert(!s_PreparedAudio.Copy(mismatch.data(),samples,unchanged));
@@ -69,7 +82,7 @@ int main(int argc,char** argv){
   assert(AdpcmEncodeInPlace(input.data(),samples)==full && s_PreparedAudio.hits==hits);
   assert(!std::memcmp(input.data(),expected.data(),full));s_AdpcmCoefs[2]=2048;
  }
- for(unsigned bad=0;bad<15;++bad){
+ for(unsigned bad=0;bad<16;++bad){
   auto data=original;
   switch(bad){
    case 0:data[0]^=1;break;
@@ -87,6 +100,7 @@ int main(int argc,char** argv){
    case 12:data[Read32(data.data()+40)]=0xff;break;
    case 13:data.resize(31);break;
    case 14:data.resize(Limit+1);break;
+   case 15:put32(data,32,8191);break;
   }
   if(data.size()>=HeaderBytes)put32(data,20,Checksum(data.data()+HeaderBytes,data.size()-HeaderBytes));
   write(argv[2],data);assert(!s_PreparedAudio.Load(argv[2]));assert(!s_PreparedAudio.Bytes());
@@ -96,7 +110,7 @@ int main(int argc,char** argv){
  assert(s_PreparedAudio.Load(argv[1]));
  assert(!s_PreparedAudio.Load("missing-prepared-audio-fixture") && !s_PreparedAudio.Bytes());
  unsigned unchanged=7;assert(!s_PreparedAudio.Copy(nullptr,0,unchanged) && unchanged==7);
- puts("PASS: actual prepared clips match production DSP bytes; exact whole-PCM keys, guard bytes, no callback I/O, mode/coefficient fallback and 16 malformed inputs.");
+ puts("PASS: actual prepared clips match production DSP bytes; exact whole-PCM keys, guard bytes, no callback I/O, mode/coefficient fallback and 17 malformed inputs.");
 }
 '''
 with tempfile.TemporaryDirectory(prefix='srr-prepared-audio-') as directory:

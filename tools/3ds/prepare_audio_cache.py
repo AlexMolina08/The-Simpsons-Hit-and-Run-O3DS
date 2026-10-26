@@ -63,7 +63,7 @@ namespace Old3dsPerformance { bool ReducedAudioSearch(){return true;} }
 int main(){
  unsigned samples;
  while(std::fread(&samples,4,1,stdin)==1){
-  if(samples<16384 || samples>441000)return 2;
+  if(samples<8192 || samples>441000)return 2;
   std::vector<s16> pcm(samples);
   if(std::fread(pcm.data(),2,samples,stdin)!=samples)return 3;
   auto expected=pcm;
@@ -80,6 +80,8 @@ int main(){
 def prepare(data, output, samples, archives):
     if output.exists():
         raise ValueError('Output already exists: '+str(output))
+    if any(value < 8192 or value > 441000 for value in samples):
+        raise ValueError('Prepared clips require 8192 to 441000 samples')
     selected = [member for name in archives for member in members(data/name)
                 if member['samples'] in samples]
     selected.sort(key=lambda r: (r['samples'], r['archive'], r['uid']))

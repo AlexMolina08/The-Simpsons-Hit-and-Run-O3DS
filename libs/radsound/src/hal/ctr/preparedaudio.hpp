@@ -59,7 +59,7 @@ public:
             const unsigned char* entry=loaded+HeaderBytes+i*EntryBytes;
             const unsigned samples=Read32(entry),pcm=Read32(entry+4),dsp=Read32(entry+8),bytes=Read32(entry+12);
             const unsigned start=HeaderBytes+n*EntryBytes;
-            valid=samples>=16384 && samples<=441000 && samples>=previous &&
+            valid=samples>=8192 && samples<=441000 && samples>=previous &&
                 pcm>=start && pcm<=unsigned(length) && samples*2<=unsigned(length)-pcm &&
                 dsp>=start && dsp<=unsigned(length) && bytes<=unsigned(length)-dsp &&
                 bytes==((samples+13)/14)*8;
