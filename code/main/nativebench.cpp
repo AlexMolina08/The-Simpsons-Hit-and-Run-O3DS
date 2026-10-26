@@ -32,6 +32,7 @@
 #include <loading/loadingmanager.h>
 #include <worldsim/avatarmanager.h>
 #include <worldsim/vehiclecentral.h>
+#include <events/eventmanager.h>
 #include <poser/poseengine.hpp>
 #include <worldsim/character/character.h>
 #include <worldsim/character/charactermanager.h>
@@ -846,6 +847,9 @@ unsigned Begin(unsigned elapsed,int context){
  GetIntersectManager()->FindIntersection(groundProbe,placementGround,groundNormal,groundPosition);
  if(!placementGround){aborted=done=true;return dt;}
  GetAvatarManager()->PutCharacterInCar(avatar->GetCharacter(),GetGameplayManager()->GetCurrentVehicle());
+ // Match the game's normal instantaneous-entry path: placement alone does not
+ // notify SoundAvatar or release the on-foot sound ducking policy.
+ if(!portrait)GetEventManager()->TriggerEvent(EVENT_GETINTOVEHICLE_END,avatar->GetCharacter());
  avatar->SetCameraTargetToVehicle(true);
  GetSuperCamManager()->GetSCC(0)->SelectSuperCam(SuperCam::FAR_FOLLOW_CAM,SuperCamCentral::CUT|SuperCamCentral::FORCE);
  if(portrait){
