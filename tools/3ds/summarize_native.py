@@ -54,7 +54,7 @@ def read(path):
  coverage=intact and driving_ms>=minimum_driving_ms and (all(r['incar']=='1' for r in rows) if driving_only else walking_ms>=2000 and reentered)
  route=fields(next((l for l in lines if l.startswith('NATIVE_ROUTE ')),'NATIVE_ROUTE'))
  if road_route:
-  coverage=coverage and driving_ms>=int(header['seconds'])*750 and float(route.get('distance',0))>=int(header['seconds'])*7.5 and int(route.get('recoveries',99))<=1 and int(route.get('point',0))>=3
+  coverage=coverage and driving_ms>=int(header['seconds'])*750 and float(route.get('distance',0))>=int(header['seconds'])*7.5 and int(route.get('recoveries',99))<=1 and int(route.get('point',0))>=3 and not int(route.get('path_exhausted',0))
  result['route_execution']=route
  result['streaming_window_observed']=any(int(r['loading'])>0 for r in rows)
  result['route_health']=dict(scenario=header.get('scenario'),driving_only=driving_only,driving_moving_ms=driving_ms,walking_moving_ms=walking_ms,observed_exit=exited,observed_late_in_car=reentered,clock_complete=summary['complete']=='1',coverage_pass=coverage)

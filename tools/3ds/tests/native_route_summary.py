@@ -7,7 +7,7 @@ import tempfile
 
 root = Path(__file__).resolve().parents[3]
 
-def capture(scenario, *, moving=True, aborted=0, recoveries=0, point=4):
+def capture(scenario, *, moving=True, aborted=0, recoveries=0, point=4, exhausted=0):
     header = (f"NATIVE_BUILD scenario={scenario} seconds=25 overwritten=0 "
               f"aborted={aborted} mode=realtime")
     rows = []
@@ -19,7 +19,7 @@ def capture(scenario, *, moving=True, aborted=0, recoveries=0, point=4):
             "entities=30 period_us=1000000 work_us=30000")
     return "\n".join([header, *rows,
         "NATIVE_SUMMARY complete=1 frames=25",
-        f"NATIVE_ROUTE road=1 points=256 point={point} distance=250 recoveries={recoveries}"])
+        f"NATIVE_ROUTE road=1 points=256 point={point} distance=250 recoveries={recoveries} path_exhausted={exhausted}"])
 
 with tempfile.TemporaryDirectory(prefix="srr-route-summary-") as directory:
     log = Path(directory) / "capture.log"
@@ -35,6 +35,7 @@ with tempfile.TemporaryDirectory(prefix="srr-route-summary-") as directory:
         check(scenario, False, aborted=1)
         check(scenario, False, recoveries=2)
         check(scenario, False, point=1)
+        check(scenario, False, exhausted=1)
     for scenario in ("L2-drive-v1", "loaded-level-drive-v2"):
         check(scenario, True)
         check(scenario, False, moving=False)

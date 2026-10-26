@@ -5,8 +5,6 @@
 #include <main/old3dsperformance.h>
 #include <main/landmarkvisibility.h>
 #include <main/old3dsrecurring.h>
-#ifdef SRR2_OLD3DS_NATIVE_BENCH
-#endif
 #include <main/handheldhudcadence.h>
 #include <p3d/fontwork.hpp>
 #include <main/old3dscadence.h>
@@ -296,9 +294,11 @@ bool NativeUniforms(){return nativeUniforms;}
 // Benchmark-only input driver. Follow immutable road points through the normal
 // controller; never move world objects or change simulation/traffic state.
 static bool roadRoute=false;
-static rmt::Vector roadPoints[256],roadLastPosition;
+static rmt::Vector roadPoints[512],roadLastPosition;
 static unsigned roadPointCount=0,roadPoint=0,roadStalledMs=0,roadReverseMs=0,roadRecoveries=0;
-static float roadDistance=0;
+static float roadDistance=0,roadPlannedDistance=0;
+static unsigned roadBuiltCount=0;
+static bool roadPathExhausted=false;
 static int roadSteer=0,roadGas=0,roadBrake=0;
 static bool BuildRoadRoute(Vehicle* vehicle)
 {
@@ -311,12 +311,15 @@ static bool BuildRoadRoute(Vehicle* vehicle)
  bool forward=(b.x-a.x)*facing.x+(b.z-a.z)*facing.z>=0;
  roadPoints[roadPointCount++]=forward?a:b;roadPoint=1;
  roadLastPosition=vehicle->GetPosition();
- for(unsigned roads=0;roads<32 && roadPointCount<256;++roads){
-  while(index>=0 && index<(int)road->GetNumRoadSegments() && roadPointCount<256){
+ for(unsigned roads=0;roads<128 && roadPointCount<512;++roads){
+  ++roadBuiltCount;
+  while(index>=0 && index<(int)road->GetNumRoadSegments() && roadPointCount<512){
    segment=road->GetRoadSegment(index);
    segment->GetPosition(forward?1.f:0.f,.5f,&b);
-   if(!roadPointCount || (b-roadPoints[roadPointCount-1]).MagnitudeSqr()>4)
+   if(!roadPointCount || (b-roadPoints[roadPointCount-1]).MagnitudeSqr()>4){
+    if(roadPointCount)roadPlannedDistance+=std::sqrt((b-roadPoints[roadPointCount-1]).MagnitudeSqr());
     roadPoints[roadPointCount++]=b;
+   }
    index+=forward?1:-1;
   }
   if(roadPointCount<2)return false;
@@ -326,24 +329,25 @@ static bool BuildRoadRoute(Vehicle* vehicle)
   heading.x/=length;heading.z/=length;
   const Intersection* intersection=forward?road->GetDestinationIntersection():road->GetSourceIntersection();
   if(!intersection)break;
-  const Road* next=nullptr;bool nextForward=true;float best=-2;
+  const Road* next=nullptr;bool nextForward=true;float best=-5;
   for(unsigned group=0;group<2;++group){
    const unsigned count=group?intersection->GetNumRoadsIn():intersection->GetNumRoadsOut();
    for(unsigned i=0;i<count;++i){
     const Road* candidate=group?intersection->GetRoadIn(i):intersection->GetRoadOut(i);
-    if(candidate==road || candidate->GetShortCut() || !candidate->GetNumRoadSegments())continue;
+    if(candidate->GetShortCut() || !candidate->GetNumRoadSegments())continue;
     RoadSegment* entry=candidate->GetRoadSegment(group?candidate->GetNumRoadSegments()-1:0);
     entry->GetPosition(group?1.f:0.f,.5f,&a);entry->GetPosition(group?0.f:1.f,.5f,&b);
     const float dx=b.x-a.x,dz=b.z-a.z,n=std::sqrt(dx*dx+dz*dz);
     if(n<.01f)continue;
-    const float alignment=(dx*heading.x+dz*heading.z)/n;
+    // A dead end needs a U-turn. Prefer every ordinary continuation first.
+    const float alignment=(dx*heading.x+dz*heading.z)/n-(candidate==road?3.0f:0.0f);
     if(alignment>best){best=alignment;next=candidate;nextForward=!group;}
    }
   }
   if(!next)break;
   road=next;forward=nextForward;index=forward?0:road->GetNumRoadSegments()-1;
  }
- return roadPointCount>=8;
+ return roadPointCount>=8 && roadPlannedDistance>=seconds*18.0f+200.0f;
 }
 static void UpdateRoadInput(Vehicle* vehicle,unsigned elapsed)
 {
@@ -355,6 +359,9 @@ static void UpdateRoadInput(Vehicle* vehicle,unsigned elapsed)
   ++roadPoint;
  }
  const rmt::Vector target=roadPoints[roadPoint]-position;
+ if(roadPoint+1==roadPointCount && target.x*target.x+target.z*target.z<=100){
+  roadPathExhausted=true;roadGas=roadSteer=0;roadBrake=1;aborted=done=true;return;
+ }
  const float angle=std::atan2(facing.z*target.x-facing.x*target.z,facing.x*target.x+facing.z*target.z);
  float steering=angle/.6f;if(steering>1)steering=1;if(steering<-1)steering=-1;
  roadSteer=int(steering*26000);
@@ -945,6 +952,7 @@ unsigned Begin(unsigned elapsed,int context){
  if(!frame)picaSnapshotNativeTextures(nativeTextureCaptureBegin);
 #endif
  if(roadRoute && !portrait){if(elapsedMs<Old3dsRecurring::stationaryMs){roadGas=0;roadBrake=0;roadSteer=0;}else UpdateRoadInput(GetGameplayManager()->GetCurrentVehicle(),dt);}
+ if(aborted)return dt;
  memset(&current,0,sizeof(current));memset(counters,0,sizeof(counters));
 #ifdef SRR2_OLD3DS_BOTTOM_MAP_15HZ
  unsigned bottomChoice=((frame/24)^bottomMapSeed)*0x9e3779b9u;bottomChoice^=bottomChoice>>16;bottomChoice*=0x85ebca6bu;bottomChoice^=bottomChoice>>13;
@@ -1221,7 +1229,7 @@ void Dump(){if(!enabled)return;
  fprintf(f,"NATIVE_PERIOD samples=%u mean_us=%.3f fps=%.6f\n",periodSamples,periodSamples?(double)periodSum*1e6/SYSCLOCK_ARM11/periodSamples:0,periodSum?(double)periodSamples*SYSCLOCK_ARM11/periodSum:0);
  fprintf(f,"NATIVE_LOAD_WINDOW placement_valid=%u boot_to_placement_us=%.3f includes_initialization_and_loading=1 includes_realtime_stability_ms=%u excludes_netloader_transfer=1\n",
      placementTick!=0,placementTick?(placementTick-initializationTick)*1000000.0/SYSCLOCK_ARM11:0,replay?0u:3000u);
- fprintf(f,"NATIVE_ROUTE road=%u points=%u point=%u distance=%.3f recoveries=%u input_only=1\n",roadRoute,roadPointCount,roadPoint,roadDistance,roadRecoveries);
+ fprintf(f,"NATIVE_ROUTE road=%u points=%u point=%u distance=%.3f recoveries=%u planned_distance=%.3f built_roads=%u path_exhausted=%u input_only=1\n",roadRoute,roadPointCount,roadPoint,roadDistance,roadRecoveries,roadPlannedDistance,roadBuiltCount,roadPathExhausted);
  fprintf(f,"NATIVE_REPLAY drains=%u timeouts=%u reload=%u reload_phase=%u reload_dispatches=%u reload_observed_levels=%u\n",replayDrains,drainTimeouts,reload,reloadPhase,reloadDispatches,reloadObservedLevels);
  fprintf(f,"NATIVE_VERIFY calls=%u failures=%u\n",verifyAll,verifyAllFailures);
  fprintf(f,"NATIVE_COUNTERS 0=timed_scope_calls 1=adpcm_clips 2=adpcm_pcm_samples\n");
