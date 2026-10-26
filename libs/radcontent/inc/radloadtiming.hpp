@@ -3,7 +3,7 @@
 namespace radLoadTiming {
 enum WorkerStage {
     NativeTexture=0x7f4c0000, NativeTextureHash, NativeTextureOpen, NativeTextureRead,
-    TextureAllocate, TextureDecode, TextureFlush, SkinInput, SkinPrepare
+    TextureAllocate, TextureDecode, TextureFlush, SkinInput, SkinPrepare, NativeTextureSeek
 };
 // Tags the existing worker interval; it never changes scheduling or file reads.
 class StageRegion {

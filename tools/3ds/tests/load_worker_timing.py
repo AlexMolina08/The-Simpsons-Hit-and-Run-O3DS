@@ -9,10 +9,16 @@ source=(root/'libs/radcontent/src/radload/manager.cpp').read_text()
 a=source.index('namespace {\nradLoadTiming::State workerTiming;')
 b=source.index('extern "C" void radLoadDumpWorkerSlices',a)
 production=source[a:b]
+a=b;b=source.index('{',a);end=b+1;depth=1
+while depth:
+ depth+=(source[end]=='{')-(source[end]=='}');end+=1
+production+='\n'+source[a:end]
 code=r'''
 #define SRR2_OLD3DS_NATIVE_BENCH
 #include <cassert>
 #include <cstring>
+#include <cstdio>
+constexpr double SYSCLOCK_ARM11=268000000.0;
 #include <radload/loadtiming.hpp>
 static uint64_t now=10;static unsigned reads=0;
 uint64_t svcGetSystemTick(){++reads;return now;}
@@ -49,6 +55,13 @@ int main(){
  assert(workerTiming.longest[1].ticks==200 && workerTiming.longest[1].stage==0x10000);
  assert(workerTiming.longest[2].ticks==150 && workerTiming.longest[2].stage==0x19000);
  assert(!strcmp(workerTiming.longest[0].label,"chunked_file"));
+ {WorkerRegion file("texture_file");
+  {radLoadTiming::StageRegion open(radLoadTiming::NativeTextureOpen);now+=5000;}
+  {radLoadTiming::StageRegion seek(radLoadTiming::NativeTextureSeek);now+=6000;}
+ }
+ FILE* report=tmpfile();assert(report);radLoadDumpWorkerSlices(report);rewind(report);
+ char dump[16384]={};assert(fread(dump,1,sizeof(dump)-1,report)>0);fclose(report);
+ assert(strstr(dump,"phase=native_open ")&&strstr(dump,"phase=native_seek "));
  auto before=reads;NativeBench::serviceProfile=false;
  {WorkerRegion disabled("disabled");radLoadTiming::StageRegion chunk(1);PauseWorkerTiming();ResumeWorkerTiming();}
  assert(reads==before);
@@ -68,4 +81,4 @@ with tempfile.TemporaryDirectory(prefix='srr-load-worker-') as directory:
  p=Path(directory);(p/'test.cpp').write_text(code)
  subprocess.run(['clang++','-std=c++14','-O2','-Wall','-Wextra','-Werror','-fsanitize=address,undefined','-I'+str(root/'libs/radcontent/src'),'-I'+str(root/'libs/radcontent/inc'),str(p/'test.cpp'),'-o',str(p/'test')],check=True)
  subprocess.run([str(p/'test')],check=True)
-print('PASS: actual worker observer excludes yielded time, restores nested file/callback labels, ignores main/disabled scopes and bounds its longest-slice records.')
+print('PASS: actual worker observer excludes yielded time, restores nested file/callback labels, ignores main/disabled scopes and bounds its longest-slice records; production dump distinguishes file opens from seeks.')

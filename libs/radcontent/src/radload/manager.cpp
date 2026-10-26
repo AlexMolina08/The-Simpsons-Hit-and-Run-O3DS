@@ -54,7 +54,8 @@ extern "C" void radLoadDumpWorkerSlices(FILE* file){
         switch(s.stage){
             case radLoadTiming::NativeTexture:phase="native_texture";break;
             case radLoadTiming::NativeTextureHash:phase="native_hash";break;
-            case radLoadTiming::NativeTextureOpen:phase="native_open_seek";break;
+            case radLoadTiming::NativeTextureOpen:phase="native_open";break;
+            case radLoadTiming::NativeTextureSeek:phase="native_seek";break;
             case radLoadTiming::NativeTextureRead:phase="native_read_verify";break;
             case radLoadTiming::TextureAllocate:phase="texture_allocate";break;
             case radLoadTiming::TextureDecode:phase="texture_decode";break;

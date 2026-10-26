@@ -1111,7 +1111,7 @@ bool picaTexture::ReadPrepared(const void* source,unsigned sourceBytes,unsigned 
         bool positioned;
         {
 #ifdef SRR2_OLD3DS_NATIVE_BENCH
-            radLoadTiming::StageRegion seek(radLoadTiming::NativeTextureOpen);
+            radLoadTiming::StageRegion seek(radLoadTiming::NativeTextureSeek);
 #endif
             positioned=input.file && entry->bytes<=picaNativeBundle::BundleBytes && entry->offset<=picaNativeBundle::BundleBytes-entry->bytes && !fseek(input.file,entry->offset,SEEK_SET);
         }
