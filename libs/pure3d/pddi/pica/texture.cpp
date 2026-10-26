@@ -37,6 +37,9 @@ FILE* OpenNativeBundle()
     snprintf(bundled,sizeof(bundled),"romfs:/%s",picaNativeBundle::BundlePath);
     FILE* file=fopen(bundled,"rb");
     if(!file)file=fopen(picaNativeBundle::BundlePath,"rb");
+    // Configure each owned cursor once, matching the bounded body-read size.
+    // Descriptor validation, payload hashing and cooperative yields stay intact.
+    if(file)(void)setvbuf(file,nullptr,_IOFBF,32768);
     return file;
 }
 struct NativeBundleSlot {void* owner=nullptr;FILE* file=nullptr;bool active=false;};
