@@ -204,6 +204,12 @@ static rmt::Vector placementPlayer,placementOriginalCar,placementCar;
 struct SceneSample { unsigned route,sections,statics,intersects,pending,ground; float x,y,z; };
 static SceneSample sceneSamples[64];
 static unsigned sceneSampleCount=0,sceneNextMs=0,sceneMissingGround=0;
+static unsigned SceneAuditIntervalMs()
+{
+ // Spread the fixed 64 checks across the requested route, including long runs.
+ const unsigned interval=(seconds*1000+63)/64;
+ return interval>500?interval:500;
+}
 static void SampleScene(unsigned route)
 {
  if(sceneSampleCount>=64)return;
@@ -962,7 +968,7 @@ unsigned Begin(unsigned elapsed,int context){
  }
  current.nativeContext=g_picaNativeContextEnabled;
 #endif
- if(sceneAudit && elapsedMs>=sceneNextMs){SampleScene(elapsedMs);sceneNextMs=elapsedMs+500;}
+ if(sceneAudit && elapsedMs>=sceneNextMs){SampleScene(elapsedMs);sceneNextMs=elapsedMs+SceneAuditIntervalMs();}
  routeMs=elapsedMs;elapsedMs+=dt;collecting=true;top=0;behaviorHash=2166136261u;
  Checkpoint("enter",-1);
  pairStart=g_old3dsCollisionPairs;areaStart=g_old3dsPhysicsAreas;entityStart=entityCalls();
@@ -1089,7 +1095,7 @@ void Dump(){if(!enabled)return;
 #endif
  fprintf(f,"NATIVE_RUN id=%s warmup_seconds=%u\n",runIdentity,warmup);
  fprintf(f,"NATIVE_PLACEMENT level=%u mission=%u relocated=%u ground=%u player_x=%.5f player_y=%.5f player_z=%.5f original_car_x=%.5f original_car_y=%.5f original_car_z=%.5f car_x=%.5f car_y=%.5f car_z=%.5f\n",unsigned(GetGameplayManager()->GetCurrentLevelIndex())+1,unsigned(GetGameplayManager()->GetCurrentMissionIndex()),placementRelocated,placementGround,placementPlayer.x,placementPlayer.y,placementPlayer.z,placementOriginalCar.x,placementOriginalCar.y,placementOriginalCar.z,placementCar.x,placementCar.y,placementCar.z);
- fprintf(f,"NATIVE_SCENE_AUDIT enabled=%u samples=%u missing_ground=%u performance_capture=%u\n",sceneAudit,sceneSampleCount,sceneMissingGround,!sceneAudit);
+ fprintf(f,"NATIVE_SCENE_AUDIT enabled=%u samples=%u missing_ground=%u performance_capture=%u interval_ms=%u first_route_ms=%u last_route_ms=%u requested_ms=%u\n",sceneAudit,sceneSampleCount,sceneMissingGround,!sceneAudit,SceneAuditIntervalMs(),sceneSampleCount?sceneSamples[0].route:0,sceneSampleCount?sceneSamples[sceneSampleCount-1].route:0,seconds*1000);
  for(unsigned i=0;i<sceneSampleCount;++i){const SceneSample& s=sceneSamples[i];
   fprintf(f,"NATIVE_SCENE route_ms=%u sections=%u statics=%u intersects=%u pending=%u ground=%u x=%.5f y=%.5f z=%.5f\n",s.route,s.sections,s.statics,s.intersects,s.pending,s.ground,s.x,s.y,s.z);
  }
