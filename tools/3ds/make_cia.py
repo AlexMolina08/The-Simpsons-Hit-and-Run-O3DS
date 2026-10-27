@@ -17,6 +17,7 @@ from release_version import parse
 from setup_sd import check_game, find_ffmpeg
 from prepare_home_menu import archive_member, TRACK
 from prepare_lid_audio import MEMBERS
+from movie_names import select_movies
 
 ROOT = Path(__file__).resolve().parents[2]
 
@@ -67,8 +68,12 @@ def main():
     game = args.game.expanduser().resolve()
     check_game(game, False)
     version, _ = parse(args.version)
-    if not (game / 'art/frontend/scrooby/bootup.p3d').is_file() or len(list((game / 'movies').glob('*.rmv'))) < 17:
-        parser.error('The retail installation must include boot artwork and all 17 movies')
+    if not (game / 'art/frontend/scrooby/bootup.p3d').is_file():
+        parser.error('The retail installation must include boot artwork')
+    try:
+        select_movies(game / 'movies', '.rmv')
+    except ValueError as error:
+        parser.error(str(error))
     archive_member(game / 'music02.rcf', TRACK)
     for member in MEMBERS:
         archive_member(game / 'dialog.rcf', member)

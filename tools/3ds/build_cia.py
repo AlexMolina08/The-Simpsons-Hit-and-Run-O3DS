@@ -13,6 +13,7 @@ import sys
 from release_version import parse, packed_version, read_cia_version
 from prepare_home_menu import prepare
 from prepare_home_artwork import prepare as prepare_artwork
+from movie_names import select_movies
 
 REPO = Path(__file__).resolve().parents[2]
 
@@ -40,8 +41,10 @@ def main():
     for path in (args.elf, args.makerom, args.bannertool):
         if not path.is_file():
             parser.error(f'Missing build prerequisite: {path}')
-    if len(list(movies.glob('*.3dm'))) < 17:
-        parser.error('All 17 converted movies are required for a complete package')
+    try:
+        selected_movies = select_movies(movies, '.3dm')
+    except ValueError as error:
+        parser.error(str(error))
     movie_audit = json.loads(args.movie_validation.read_text()) if args.movie_validation else None
     subprocess.run([sys.executable, str(REPO / 'tools/3ds/check_old3ds_memory.py'), str(args.elf)], check=True)
     home_menu = args.out.with_suffix('.home-menu')
@@ -68,12 +71,12 @@ def main():
         if not (romfs / 'scripts.rcf').is_file():
             parser.error('Prepared data is missing scripts.rcf')
         (romfs / 'movies').mkdir()
-        for source in movies.glob('*.3dm'):
+        for name, source in selected_movies:
             with source.open('rb') as movie:
                 header = movie.read(12)
             if header != b'SRR3DSMV\x02\0\0\0':
                 parser.error(f'Movie must use original-model format version 2: {source}')
-            copy_asset(source, romfs / 'movies' / source.name)
+            copy_asset(source, romfs / 'movies' / (name + '.3dm'))
         assets = []
         for path in sorted(romfs.rglob('*')):
             if path.is_file():

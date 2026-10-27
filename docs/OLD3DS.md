@@ -14,8 +14,10 @@ inside it. The original `build.bat` follows the separate New 3DS build path.
   On Debian/Ubuntu: `sudo apt install git build-essential cmake ninja-build python3 ffmpeg`.
   Check `cmake --version` and `python3 --version`; older distributions need newer packages.
 - Install FFmpeg, or use `python3 -m pip install imageio-ffmpeg` in a Python virtual environment.
-- Use your installed retail PC game, including all 17 `.rmv` movies. Earlier
+- Use your installed retail PC game, including all its `.rmv` movies. Earlier
   development/leaked data is not supported.
+  English PC data has 16 movies; the optional German `gvuglogo.rmv` logo is also
+  preserved and validated when present.
 
 ## macOS
 
@@ -81,7 +83,7 @@ python3 tools/3ds/make_cia.py "/path/to/PC game"
 ```
 
 The command validates prerequisites, prepares game data, converts the movies,
-fully decodes all 17 conversions, compares frame counts and complete PCM against
+fully decodes all game cinematics, compares frame counts and complete PCM against
 the originals, preserves video proportions with letterboxing where needed, rebuilds the accepted native texture bundle, compiles dependencies
 and the game, checks ARMv6K/VFPv2 and the fixed 64 MiB startup
 budget, then packages a complete CIA. Normal play is enabled. The release profile preserves the accepted v104 rendering

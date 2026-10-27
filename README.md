@@ -53,7 +53,7 @@ The browser-only builder is not published yet. Until it is available, follow the
 [local source-build guide](docs/INSTALL.md#build-from-your-own-pc-copy) for Windows
 through WSL 2, Linux, or macOS. It includes PC-folder and disc-image preparation.
 
-The source builder checks the installation, converts and validates all 17 movies,
+The source builder checks the installation, converts and validates all game cinematics,
 compiles the port, and writes:
 
 ```text
@@ -70,7 +70,7 @@ A console with custom firmware and FBI is required.
 4. In **FBI → SD → cias**, select it and choose **Install CIA**.
 5. Wait for success, then launch the game from the **HOME Menu**.
 
-Your locally created CIA includes its prepared game data and all 17 cinematics.
+Your locally created CIA includes its prepared game data and all cinematics from your PC copy.
 Sound needs your console's DSP firmware at `sd:/3ds/dspfirm.cdc`, dumped with DSP1.
 No separate PC-data copy is needed on the SD card after creating the complete CIA.
 

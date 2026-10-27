@@ -10,6 +10,7 @@ import subprocess
 import tempfile
 
 from setup_sd import MOVIE_HEADER, MOVIE_MAGIC, find_ffmpeg
+from movie_names import select_movies
 
 
 def header(path):
@@ -107,13 +108,18 @@ def main():
     parser.add_argument('--out', type=Path, required=True)
     parser.add_argument('--ffmpeg')
     args = parser.parse_args()
-    sources = sorted((args.game / 'movies').glob('*.rmv'))
-    if len(sources) != 17:
-        parser.error('Exactly 17 retail movies are required')
+    try:
+        sources = select_movies(args.game / 'movies', '.rmv')
+        movies = dict(select_movies(args.movies, '.3dm'))
+    except ValueError as error:
+        parser.error(str(error))
+    if {name for name, _ in sources} != set(movies):
+        parser.error('Converted movies must match the retail movie set, including gvuglogo when present')
     ffmpeg = find_ffmpeg(args.ffmpeg)
     results = []
-    for source in sources:
-        result = validate(ffmpeg, source, args.movies / (source.stem + '.3dm'))
+    for name, source in sources:
+        result = validate(ffmpeg, source, movies[name])
+        result['file'] = name + '.3dm'
         results.append(result)
         print(f'Checked {source.name}: {result["decoded_frames"]} frames; complete PCM matches', flush=True)
     args.out.parent.mkdir(parents=True, exist_ok=True)

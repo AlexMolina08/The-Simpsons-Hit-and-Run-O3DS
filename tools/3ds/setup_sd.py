@@ -262,7 +262,8 @@ def main():
 
     if not args.no_movies:
         ffmpeg = find_ffmpeg(args.ffmpeg)
-        movies_in = sorted((game / "movies").glob("*.rmv"))
+        movies_in = sorted(path for path in (game / "movies").glob('*')
+                           if path.is_file() and path.suffix.lower() == '.rmv')
         movies_out = sd / "movies"
         movies_out.mkdir(exist_ok=True)
         todo = [(m, movies_out / (m.stem + ".3dm")) for m in movies_in]

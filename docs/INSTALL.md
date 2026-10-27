@@ -26,7 +26,7 @@ builder is being prepared; this guide does not claim that it is available yet.
 7. After checking the game works, you may delete the installer from `sd:/cias/`.
    Keep the installed title and the `sd:/3ds/simpsons/` folder.
 
-Your locally created CIA includes the prepared game data and all 17 cinematics.
+Your locally created CIA includes the prepared game data and all game cinematics.
 It needs no separate PC-data copy on the SD card.
 
 **Sound:** use DSP1 on your console to dump its DSP firmware. The resulting file
@@ -85,7 +85,7 @@ Hit and Run/
   art/frontend/scrooby/bootup.p3d
   scripts/
   sound/
-  movies/                  (all 17 .rmv files)
+  movies/                  (all game .rmv files)
   scripts.rcf
   dialog.rcf
   music00.rcf
@@ -94,6 +94,9 @@ Hit and Run/
   music03.rcf
   ...other retail .rcf archives
 ```
+
+The English PC copy contains 16 movies. Some regional copies also include the
+German `gvuglogo.rmv` logo; the builder preserves and validates it when present.
 
 **If you have PC disc ISOs on Windows:**
 
@@ -237,8 +240,8 @@ python3 tools/3ds/make_cia.py "$HOME/Games/Hit and Run" --version 1.1.1
 python3 tools/3ds/make_cia.py "$HOME/Games/Hit and Run" --version 1.1.1
 ```
 
-The tool checks the installation, copies assets, converts and validates all 17
-movies, compiles the game and creates the CIA. Keep the terminal open until it
+The tool checks the installation, copies assets, converts and validates all game
+cinematics, compiles the game and creates the CIA. Keep the terminal open until it
 prints **Ready to install**. It does not upload or publish your files.
 
 Your installer is:
