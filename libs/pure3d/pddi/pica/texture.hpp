@@ -5,6 +5,7 @@
 #include <pddi/pdditype.hpp>
 
 struct picaVramAllocation;
+struct picaLinearTextureRetirement;
 #if defined(SRR2_OLD3DS_NATIVE_BENCH) && defined(SRR2_OLD3DS_VRAM_TEXTURES)
 extern bool g_picaVramCapturePromote,g_picaVramCopyDiagnostics;
 #endif
@@ -99,6 +100,9 @@ protected:
     int priority;
 
     C3D_Tex  tex;
+#ifdef SRR2_OLD3DS_DRAW_PREP
+    picaLinearTextureRetirement* linearRetirement;
+#endif
     bool    created;
     bool    valid;
     GPU_TEXCOLOR hwFormat;

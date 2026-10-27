@@ -16,6 +16,7 @@ harness=r'''
 #include <cstdint>
 bool g_picaInFrame=true;
 unsigned vramReclaims=0;extern "C" void picaReclaimVramTextures(){++vramReclaims;}
+extern "C" void picaReclaimLinearTextures(){}
 bool fail=false;unsigned allocations=0,frees=0,fences=0;
 extern "C" void C3Di_RenderQueueWaitDone(){++fences;fail=false;}
 void* linearAlloc(unsigned n){if(fail)return nullptr;++allocations;return malloc(n);}

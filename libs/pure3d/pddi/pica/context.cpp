@@ -75,6 +75,7 @@ static const u32 PICA_BUFINFO_BASE = 0x18000000;
 struct alignas(16) picaBufferAllocation { picaBufferAllocation* next; };
 static picaBufferAllocation* retiredBuffers;
 static void picaBufferReclaim();
+extern "C" void picaReclaimLinearTextures();
 #ifdef SRR2_OLD3DS_VRAM_TEXTURES
 extern "C" void picaReclaimVramTextures();
 #endif
@@ -102,6 +103,7 @@ static void picaBufferRetire(void* data)
 }
 static void picaBufferReclaim()
 {
+    picaReclaimLinearTextures();
 #ifdef SRR2_OLD3DS_VRAM_TEXTURES
     picaReclaimVramTextures();
 #endif
@@ -674,6 +676,10 @@ picaContext::~picaContext()
         shaderBinary = NULL;
     }
 
+#ifdef SRR2_OLD3DS_DRAW_PREP
+    // Releasing the context's final materials may retire their textures too.
+    picaBufferReclaim();
+#endif
     display->SetContext(NULL);
     display->Release();
     device->Release();

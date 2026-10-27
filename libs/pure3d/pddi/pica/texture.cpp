@@ -171,6 +171,47 @@ extern "C" void picaDumpNativeTextures(FILE* f)
 #include <stdlib.h>
 #include <stdio.h>
 
+#ifdef SRR2_OLD3DS_DRAW_PREP
+// Reserve the ownership node before creating GPU storage. Destruction can then
+// defer the SDK free without allocating or changing any queued texture bytes.
+struct picaLinearTextureRetirement {
+    picaLinearTextureRetirement* next;
+    C3D_Tex texture;
+};
+static picaLinearTextureRetirement* retiredLinearTextures;
+#ifdef SRR2_OLD3DS_NATIVE_BENCH
+static unsigned linearTextureRetired,linearTextureReclaimed,linearTexturePending,linearTexturePeak;
+#endif
+static picaLinearTextureRetirement* PrepareLinearTextureRetirement()
+{
+    return static_cast<picaLinearTextureRetirement*>(malloc(sizeof(picaLinearTextureRetirement)));
+}
+static void RetireLinearTexture(picaLinearTextureRetirement* node,const C3D_Tex& texture)
+{
+    node->texture=texture;
+    node->next=retiredLinearTextures;
+    retiredLinearTextures=node;
+#ifdef SRR2_OLD3DS_NATIVE_BENCH
+    ++linearTextureRetired;
+    if(++linearTexturePending>linearTexturePeak)linearTexturePeak=linearTexturePending;
+#endif
+}
+extern "C" void picaReclaimLinearTextures()
+{
+    // The caller has completed the same GPU fence used for retired geometry.
+    while(retiredLinearTextures) {
+        picaLinearTextureRetirement* node=retiredLinearTextures;
+        retiredLinearTextures=node->next;
+        C3D_TexDelete(&node->texture);
+        free(node);
+#ifdef SRR2_OLD3DS_NATIVE_BENCH
+        ++linearTextureReclaimed;--linearTexturePending;
+#endif
+    }
+}
+extern "C" void C3Di_RenderQueueWaitDone(void);
+#endif
+
 #ifdef SRR2_OLD3DS_VRAM_TEXTURES
 // Ownership nodes are allocated before GPU submission. Retirement never allocates
 // or overwrites GPU-visible bytes; context's completed-frame fence reclaims them.
@@ -197,6 +238,10 @@ extern "C" void picaReclaimVramTextures()
 }
 extern "C" void picaDumpVramTextures()
 {
+#if defined(SRR2_OLD3DS_DRAW_PREP) && defined(SRR2_OLD3DS_NATIVE_BENCH)
+    printf("OLD3DS_LINEAR_TEXTURE_RETIRE retired=%u reclaimed=%u pending=%u peak_pending=%u fenced=1\n",
+        linearTextureRetired,linearTextureReclaimed,linearTexturePending,linearTexturePeak);
+#endif
     printf("OLD3DS_VRAM_TEXTURES used=%u peak=%u copies=%u eligible=%u in_frame=%u failures=%u free=%lu\n",
         vramTextureBytes,vramTexturePeak,vramTextureCopies,vramTextureEligible,
         vramTextureInFrame,vramTextureFailures,(unsigned long)vramSpaceFree());
@@ -374,6 +419,9 @@ picaTexture::picaTexture(picaContext* c)
     vramAllocation=NULL;reuploadLinear=NULL;vramEligible=vramUploaded=false;
 #endif
     created      = false;
+#ifdef SRR2_OLD3DS_DRAW_PREP
+    linearRetirement = NULL;
+#endif
     valid        = false;
     hwFormat     = GPU_RGBA8;
     staging      = NULL;
@@ -395,11 +443,21 @@ picaTexture::~picaTexture()
         if(vramAllocation){RetireVram(vramAllocation);vramAllocation=NULL;}
         else
 #endif
+#ifdef SRR2_OLD3DS_DRAW_PREP
+        {
+            RetireLinearTexture(linearRetirement,tex);
+            linearRetirement=NULL;
+        }
+#else
         C3D_TexDelete(&tex);
+#endif
         created = false;
 
         context->ADD_STAT(PDDI_STAT_TEXTURE_COUNT_32BIT, -1);
     }
+#ifdef SRR2_OLD3DS_DRAW_PREP
+    free(linearRetirement);
+#endif
 }
 
 #ifdef SRR2_OLD3DS_VISUAL_UPGRADE
@@ -519,11 +577,29 @@ bool picaTexture::Create(int x, int y, int bpp, int alpha, int nMip,
                           (texH >= 2 * PICA_MIN_TEXTURE_DIMENSION);
 
     const C3D_TexInitParams fontParams={(u16)texW,(u16)texH,1,hwFormat,GPU_TEX_2D,false};
-    const bool initialized=g_picaFontTexture && wantMips ? C3D_TexInitWithParams(&tex,NULL,fontParams) :
-        wantMips ? C3D_TexInitMipmap(&tex,(u16)texW,(u16)texH,hwFormat) :
-        C3D_TexInit(&tex,(u16)texW,(u16)texH,hwFormat);
+#ifdef SRR2_OLD3DS_DRAW_PREP
+    linearRetirement=PrepareLinearTextureRetirement();
+    if(!linearRetirement) {lastError=PDDI_ERR;return false;}
+#endif
+    const auto initialize=[&]() {
+        return g_picaFontTexture && wantMips ? C3D_TexInitWithParams(&tex,NULL,fontParams) :
+            wantMips ? C3D_TexInitMipmap(&tex,(u16)texW,(u16)texH,hwFormat) :
+            C3D_TexInit(&tex,(u16)texW,(u16)texH,hwFormat);
+    };
+    bool initialized=initialize();
+#ifdef SRR2_OLD3DS_DRAW_PREP
+    if(!initialized && retiredLinearTextures && !g_picaInFrame && !picaUpload::Blocked()) {
+        // Reclaim completed storage under pressure without ending an active frame.
+        C3Di_RenderQueueWaitDone();
+        picaReclaimLinearTextures();
+        initialized=initialize();
+    }
+#endif
     if(!initialized)
     {
+#ifdef SRR2_OLD3DS_DRAW_PREP
+        free(linearRetirement);linearRetirement=NULL;
+#endif
         lastError = PDDI_ERR;
         return false;
     }
