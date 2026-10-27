@@ -264,15 +264,7 @@ if(SRR2_P3D_PDDI STREQUAL "PICA")
     endif()
 
     if(SRR2_OLD3DS_VISUAL_UPGRADE)
-        if(SRR2_OLD3DS_CHARACTER_OCCLUSION)
-            set(occlusion_source "${CMAKE_CURRENT_BINARY_DIR}/character_occlusion_data.c")
-            list(APPEND PDDI_SOURCES "${occlusion_source}")
-            add_custom_command(OUTPUT "${occlusion_source}"
-                COMMAND "${CMAKE_COMMAND}" "-DINPUT=${SRR2_OLD3DS_CHARACTER_OCCLUSION}"
-                    "-DOUTPUT=${occlusion_source}" -DSYMBOL=pddi_character_occlusion
-                    -P "${CMAKE_SOURCE_DIR}/cmake/bin2c.cmake"
-                DEPENDS "${SRR2_OLD3DS_CHARACTER_OCCLUSION}" "${CMAKE_SOURCE_DIR}/cmake/bin2c.cmake" VERBATIM)
-        endif()
+        list(APPEND PDDI_SOURCES "pddi/pica/characterocclusiondata.cpp")
         foreach(kind main stereo)
             if(kind STREQUAL "main")
                 set(reflection_source "${PICA_SHADER_SRC}")

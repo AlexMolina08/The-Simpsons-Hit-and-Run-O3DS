@@ -59,7 +59,7 @@
 #ifdef SRR2_OLD3DS_CHARACTER_FORM
 #include <pddi/pica/characterform.hpp>
 #endif
-#ifdef SRR2_OLD3DS_CHARACTER_OCCLUSION
+#ifdef SRR2_OLD3DS_VISUAL_UPGRADE
 namespace picaCharacterOcclusion { extern unsigned groups,vertices,misses; }
 #endif
 #include <presentation/gui/guisystem.h>
@@ -1229,7 +1229,7 @@ void Dump(){if(!enabled)return;
 #ifdef SRR2_OLD3DS_CHARACTER_FORM
  fprintf(f,"NATIVE_CHARACTER_FORM enabled=%u groups=%u vertices=%u load_only=1 shader_unchanged=1\n",picaCharacterForm::enabled,picaCharacterForm::groups,picaCharacterForm::vertices);
 #endif
-#ifdef SRR2_OLD3DS_CHARACTER_OCCLUSION
+#ifdef SRR2_OLD3DS_VISUAL_UPGRADE
  fprintf(f,"NATIVE_CHARACTER_OCCLUSION enabled=%u groups=%u vertices=%u misses=%u load_only=1\n",
   picaVisual::Enabled(picaVisual::Occlusion),picaCharacterOcclusion::groups,picaCharacterOcclusion::vertices,picaCharacterOcclusion::misses);
 #endif

@@ -24,12 +24,9 @@ namespace picaContact { unsigned queued=0,batches=0,drawn=0,overflow=0,commandSk
 #ifdef SRR2_OLD3DS_VISUAL_UPGRADE
 extern "C" u16 C3D_BoolUnifs[2];
 #endif
-#ifdef SRR2_OLD3DS_CHARACTER_OCCLUSION
+#ifdef SRR2_OLD3DS_VISUAL_UPGRADE
 #include <pddi/pica/characterocclusion.hpp>
-extern "C" {
-extern const unsigned char pddi_character_occlusion[];
-extern const size_t pddi_character_occlusion_size;
-}
+#include <pddi/pica/characterocclusiondata.hpp>
 #ifdef SRR2_OLD3DS_NATIVE_BENCH
 namespace picaCharacterOcclusion { unsigned groups=0,vertices=0,misses=0; }
 #endif
@@ -3767,12 +3764,14 @@ void picaPrimBuffer::PrepareGpuSkin(const void *source, unsigned count, unsigned
 {
     if (!selected)
         return;
-#ifdef SRR2_OLD3DS_CHARACTER_OCCLUSION
+#ifdef SRR2_OLD3DS_VISUAL_UPGRADE
     if(picaVisual::Enabled(picaVisual::Occlusion) && Old3dsPerformance::FlatLighting() &&
        !transient && buffer && source && count==allocated && (vertexType & PDDI_V_NORMAL))
     {
-        const unsigned char* shades=picaCharacterOcclusion::Find(pddi_character_occlusion,
-            pddi_character_occlusion_size,name,group,source,count);
+        unsigned occlusionSize=0;
+        const unsigned char* occlusion=picaCharacterOcclusion::Data(occlusionSize);
+        const unsigned char* shades=picaCharacterOcclusion::Find(occlusion,
+            occlusionSize,name,group,source,count);
         if(shades)
         {
             for(unsigned i=0;i<count;++i){

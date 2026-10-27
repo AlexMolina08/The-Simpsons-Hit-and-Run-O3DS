@@ -29,7 +29,7 @@ def main():
     parser.add_argument('--out', type=Path, default=REPO / 'out/release/Simpsons-Hit-and-Run-3DS.cia')
     args = parser.parse_args()
     try:
-        version, _ = parse(args.version)
+        version, version_fields = parse(args.version)
         title_version = packed_version(version)
     except ValueError as error:
         parser.error(str(error))
@@ -63,6 +63,13 @@ def main():
         if not bundle.is_file():
             parser.error('Missing prepared native146.bundle; run build_old3ds.sh first')
         copy_asset(bundle, romfs / bundle.name)
+        for name in ('landmark-visibility.bin', 'character-occlusion.bin'):
+            source = args.data / name
+            if not source.is_file():
+                if version_fields >= (1, 2, 0):
+                    parser.error(f'Missing v1.2 prepared asset: {name}')
+                continue
+            copy_asset(source, romfs / name)
         if not (romfs / 'scripts.rcf').is_file():
             parser.error('Prepared data is missing scripts.rcf')
         (romfs / 'movies').mkdir()
