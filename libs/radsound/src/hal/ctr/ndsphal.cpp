@@ -82,7 +82,7 @@ extern "C" void radSoundCtrServiceLid(float volume)
 
 #ifdef SRR2_OLD3DS_PREPARED_AUDIO
 #include "preparedaudio.hpp"
-bool g_old3dsPreparedAudio=false,g_old3dsPreparedAudioShort=false;
+bool g_old3dsPreparedAudio=true,g_old3dsPreparedAudioShort=true;
 static unsigned s_PreparedAudioShortHits=0;
 static ctrPreparedAudio::Cache s_PreparedAudio;
 #endif

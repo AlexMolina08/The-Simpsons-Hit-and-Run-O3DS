@@ -6,8 +6,8 @@
 
 #include <p3d/texturefont.hpp>
 #include <p3d/fontwork.hpp>
-#ifdef SRR2_OLD3DS_NATIVE_BENCH
-namespace p3dFontWork {bool enabled=false;unsigned preparedLines=0,preparedGlyphs=0,longLines=0;}
+#if defined(SRR2_OLD_3DS) || defined(SRR2_OLD3DS_NATIVE_BENCH)
+namespace p3dFontWork {bool enabled=true;unsigned preparedLines=0,preparedGlyphs=0,longLines=0;}
 #endif
 #include <p3d/utility.hpp>
 #include <p3d/chunkfile.hpp>
@@ -208,7 +208,7 @@ tTextureFont::DisplayLine(const P3D_UNICODE* text, int formatting) const
     }
 #endif
        
-#ifdef SRR2_OLD3DS_NATIVE_BENCH
+#if defined(SRR2_OLD_3DS) || defined(SRR2_OLD3DS_NATIVE_BENCH)
     int preparedGlyphs[p3dFontWork::Capacity];unsigned preparedCount=0;
     const bool prepared=p3dFontWork::enabled && p3dFontWork::Prepare(text,preparedGlyphs,preparedCount,
         [&](P3D_UNICODE code){return FindGlyph(code);});

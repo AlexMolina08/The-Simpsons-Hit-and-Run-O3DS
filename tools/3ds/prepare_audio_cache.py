@@ -86,6 +86,19 @@ def prepare(data, output, samples, archives):
     selected = [member for name in archives for member in members(data/name)
                 if member['samples'] in samples]
     selected.sort(key=lambda r: (r['samples'], r['archive'], r['uid']))
+    unique = []
+    seen = set()
+    for record in selected:
+        with (data/record['archive']).open('rb') as original:
+            original.seek(record['offset']+2048)
+            pcm = original.read(record['samples']*2)
+        if len(pcm) != record['samples']*2:
+            raise ValueError('Truncated original PCM')
+        key = hashlib.sha256(pcm).digest()
+        if key not in seen:
+            seen.add(key)
+            unique.append(record)
+    selected = unique
     if not selected or len(selected) > 256:
         raise ValueError('Select between 1 and 256 clips')
     size = 32+16*len(selected)

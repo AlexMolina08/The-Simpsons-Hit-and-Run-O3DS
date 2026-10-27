@@ -13,7 +13,7 @@
 #include <cstring>
 #include <cstdio>
 #include <pddi/pica/quadstream.hpp>
-namespace p3dSpriteAtlas { bool enabled=true,allowMipmaps=false,diagnostics=false;unsigned loaded=0,applied=0,batched=0,avoided=0,texturesLoaded=0,rejectShape=0,rejectTile=0,rejectFormat=0; }
+namespace p3dSpriteAtlas { bool enabled=true,allowMipmaps=true,diagnostics=false;unsigned loaded=0,applied=0,batched=0,avoided=0,texturesLoaded=0,rejectShape=0,rejectTile=0,rejectFormat=0; }
 #endif
 #include <p3d/utility.hpp>
 #include <p3d/chunkfile.hpp>

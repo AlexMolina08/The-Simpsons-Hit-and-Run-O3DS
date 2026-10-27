@@ -1,6 +1,6 @@
 #ifndef P3D_FONT_WORK_HPP
 #define P3D_FONT_WORK_HPP
-#ifdef SRR2_OLD3DS_NATIVE_BENCH
+#if defined(SRR2_OLD_3DS) || defined(SRR2_OLD3DS_NATIVE_BENCH)
 namespace p3dFontWork {
 extern bool enabled;
 extern unsigned preparedLines,preparedGlyphs,longLines;

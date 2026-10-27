@@ -2,7 +2,7 @@
 #ifdef SRR2_OLD3DS_VISUAL_UPGRADE
 #include <main/landmarkvisibility.h>
 namespace Old3dsLandmark {
-bool enabled=false;
+bool enabled=true;
 #ifdef SRR2_OLD3DS_NATIVE_BENCH
 unsigned selected=0,rootPlaced=0,rootFallback=0,visible=0;
 #endif
