@@ -71,4 +71,22 @@ int main(){using namespace HandheldHudCadence;
 ''')
  subprocess.run(['c++','-std=c++17','-DSRR2_OLD3DS_NATIVE_BENCH','-DSRR2_OLD3DS_BOTTOM_MAP_15HZ','-I'+str(p),'-I'+str(root/'code'),str(p/'test.cpp'),str(root/'code/main/handheldhudcadence.cpp'),'-o',str(p/'test')],check=True)
  subprocess.run([str(p/'test')],check=True)
-print('PASS: production 10/15Hz policy, immediate priority redraws, urgent-animation cadence, New3DS protection and adaptive lifecycle reset.')
+print('PASS: diagnostic 10/15Hz control, immediate priority redraws, urgent-animation cadence, New3DS protection and adaptive lifecycle reset.')
+
+with tempfile.TemporaryDirectory(prefix='srr-bottom-map-release-') as directory:
+ p=Path(directory);(p/'main').mkdir()
+ (p/'3ds.h').write_text('#pragma once\n#include <cstdint>\nextern uint64_t now;constexpr unsigned SYSCLOCK_ARM11=1000000;inline uint64_t svcGetSystemTick(){return now;}\n')
+ (p/'main/graphics3ds.h').write_text('#pragma once\nnamespace Graphics3DS{extern bool newModel;inline bool IsNew(){return newModel;}}\n')
+ (p/'test.cpp').write_text('''#include <main/handheldhudcadence.h>
+#include <cassert>
+uint64_t now=0;namespace Graphics3DS{bool newModel=false;}
+int main(){using namespace HandheldHudCadence;
+ assert(cadenceMode==2 && minimumHz==8);
+ for(unsigned i=0;i<8;++i)ObserveFrame(42000,true);
+ Reset();assert(Due());Rendered();now=124999;assert(!Due());++now;assert(Due());
+ Graphics3DS::newModel=true;Reset();assert(Due());Rendered();now+=66666;assert(Due());
+}
+''')
+ subprocess.run(['c++','-std=c++17','-DSRR2_OLD3DS_BOTTOM_MAP_15HZ','-I'+str(p),'-I'+str(root/'code'),str(p/'test.cpp'),str(root/'code/main/handheldhudcadence.cpp'),'-o',str(p/'test')],check=True)
+ subprocess.run([str(p/'test')],check=True)
+print('PASS: ordinary Old 3DS defaults to adaptive 8/15Hz; New 3DS retains 15Hz.')

@@ -16,7 +16,8 @@ def extract(signature):
     while depth:
         depth+=(source[e]=='{')-(source[e]=='}');e+=1
     return source[a:e]
-methods='\n'.join(extract(s) for s in ['bool picaContext::BindSkinProgram(bool enabled)',
+methods=extract('static inline void picaSkinPrepareCheckpoint(')+'\n'
+methods+='\n'.join(extract(s) for s in ['bool picaContext::BindSkinProgram(bool enabled)',
  'void picaPrimBuffer::PrepareGpuSkin(', 'void picaPrimBuffer::MutateGpuSkin()', 'bool picaPrimBuffer::TryGpuSkin(', 'bool picaPrimBuffer::SubmitGpuSkin('])
 methods += '\n#ifdef SRR2_OLD3DS_GPU_SKIN_BATCH\n'+'\n'.join(extract(s) for s in ['void picaContext::BeginSkinBatch()', 'void picaContext::EndSkinBatch()', 'void picaContext::SkinBatchBarrier()'])+'\n#endif\n'
 methods += '\n#ifdef SRR2_OLD3DS_GPU_SKIN_RIGID_PACK\n'+extract('void picaContext::SetSkinLayout(')+'\n#endif\n'

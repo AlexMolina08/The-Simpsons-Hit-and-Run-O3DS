@@ -795,10 +795,11 @@ void Game::Run()
             ( ctx == CONTEXT_LOADING_GAMEPLAY || ctx == CONTEXT_GAMEPLAY || ctx == CONTEXT_PAUSE ||
               ctx == CONTEXT_LOADING_SUPERSPRINT || ctx == CONTEXT_SUPERSPRINT ||
               ctx == CONTEXT_LOADING_DEMO || ctx == CONTEXT_DEMO ) ? 1 : 0;
-        // A 52 ms slice exceeds the 33 ms animation budget. Yield more often
-        // during the newspaper entrance, then restore normal loading throughput.
-        g_p3dYieldTimeUs = ( ctx == CONTEXT_GAMEPLAY || ctx == CONTEXT_PAUSE ||
-                            (ctx == CONTEXT_LOADING_GAMEPLAY && old3dsNewspaperAnimating()) ) ? 8000u : 52000u;
+        // Keep gameplay streaming cooperative without slowing initial level loads.
+        // The pause screen and newspaper entrance retain the less frequent yield.
+        g_p3dYieldTimeUs = ctx == CONTEXT_GAMEPLAY ? 2000u :
+            (ctx == CONTEXT_PAUSE ||
+             (ctx == CONTEXT_LOADING_GAMEPLAY && old3dsNewspaperAnimating())) ? 8000u : 52000u;
 #ifdef SRR2_OLD3DS_NATIVE_BENCH
         if(ctx==CONTEXT_GAMEPLAY && NativeBench::LoaderSliceUs())
             g_p3dYieldTimeUs=NativeBench::LoaderSliceUs();

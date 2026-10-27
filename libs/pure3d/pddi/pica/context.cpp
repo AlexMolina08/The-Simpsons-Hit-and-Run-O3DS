@@ -3755,10 +3755,19 @@ void picaPrimBuffer::PrepareVehicleForm()
 #endif
 #ifdef SRR2_OLD3DS_GPU_SKIN_SUPPORT
 #ifdef SRR2_OLD3DS_NATIVE_BENCH
-// Experimental cooperative checkpoints in unpublished load-time buffers only.
 bool g_picaSkinPrepareYield=false;
 unsigned g_picaSkinPrepareCheckpoints=0;
 #endif
+static inline void picaSkinPrepareCheckpoint(unsigned index)
+{
+    if((index&63) || !g_picaYieldHook)return;
+#ifdef SRR2_OLD3DS_NATIVE_BENCH
+    if(!g_picaSkinPrepareYield)return;
+    ++g_picaSkinPrepareCheckpoints;
+#endif
+    // Only load-time buffers reach this point; no prepared vertex is published yet.
+    g_picaYieldHook();
+}
 void picaPrimBuffer::PrepareGpuSkin(const void *source, unsigned count, unsigned bones,
                                     bool selected, bool pedestrian, bool named, const char* name, unsigned group)
 {
@@ -3775,11 +3784,7 @@ void picaPrimBuffer::PrepareGpuSkin(const void *source, unsigned count, unsigned
         if(shades)
         {
             for(unsigned i=0;i<count;++i){
-#ifdef SRR2_OLD3DS_NATIVE_BENCH
-            if(g_picaSkinPrepareYield && !(i&63) && g_picaYieldHook){
-                ++g_picaSkinPrepareCheckpoints;g_picaYieldHook();
-            }
-#endif
+                picaSkinPrepareCheckpoint(i);
                 picaCharacterOcclusion::Apply(buffer+i*PICA_VERTEX_STRIDE+PICA_VERTEX_OFF_COL,shades[i]);
             }
             expandDirty=true;
@@ -3805,11 +3810,7 @@ void picaPrimBuffer::PrepareGpuSkin(const void *source, unsigned count, unsigned
     {
         for(unsigned i = 0; i < count; ++i)
         {
-#ifdef SRR2_OLD3DS_NATIVE_BENCH
-            if(g_picaSkinPrepareYield && !(i&63) && g_picaYieldHook){
-                ++g_picaSkinPrepareCheckpoints;g_picaYieldHook();
-            }
-#endif
+            picaSkinPrepareCheckpoint(i);
 
             picaSkin::Source vertex;
             memcpy(&vertex, static_cast<const unsigned char*>(source) + i*sizeof(vertex), sizeof(vertex));
@@ -3841,11 +3842,7 @@ void picaPrimBuffer::PrepareGpuSkin(const void *source, unsigned count, unsigned
 #endif
     for (unsigned i = 0; i < count; ++i)
     {
-#ifdef SRR2_OLD3DS_NATIVE_BENCH
-            if(g_picaSkinPrepareYield && !(i&63) && g_picaYieldHook){
-                ++g_picaSkinPrepareCheckpoints;g_picaYieldHook();
-            }
-#endif
+        picaSkinPrepareCheckpoint(i);
 
         picaSkin::Source vertex;
         memcpy(&vertex, src + i * sizeof(vertex), sizeof(vertex));
@@ -3883,11 +3880,7 @@ void picaPrimBuffer::PrepareGpuSkin(const void *source, unsigned count, unsigned
     unsigned char *dst = (unsigned char *)(skinAllocation + 1);
     for (unsigned i = 0; i < count; ++i)
     {
-#ifdef SRR2_OLD3DS_NATIVE_BENCH
-            if(g_picaSkinPrepareYield && !(i&63) && g_picaYieldHook){
-                ++g_picaSkinPrepareCheckpoints;g_picaYieldHook();
-            }
-#endif
+        picaSkinPrepareCheckpoint(i);
 
         picaSkin::Source vertex;
         memcpy(&vertex, src + i * sizeof(vertex), sizeof(vertex));

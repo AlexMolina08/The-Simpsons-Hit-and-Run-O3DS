@@ -4,8 +4,13 @@
 #include <main/graphics3ds.h>
 namespace HandheldHudCadence {
 bool enabled=true;
+#ifdef SRR2_OLD3DS_NATIVE_BENCH
 unsigned cadenceMode=0;
 unsigned minimumHz=10;
+#else
+unsigned cadenceMode=2;
+unsigned minimumHz=8;
+#endif
 static HandheldHudAdaptive adaptive;
 static bool urgent=false;
 static unsigned forced=0,drawn8=0,drawn10=0,drawn15=0;
