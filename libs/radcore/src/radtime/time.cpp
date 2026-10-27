@@ -51,7 +51,8 @@ static unsigned int s_InitializedCount = 0;
 //
 static unsigned int MonthToDay[] = { 0, 31, 59, 90, 120, 151, 181, 212, 243, 273, 304, 334 };
 
-static std::chrono::time_point<std::chrono::high_resolution_clock> s_StartTime;
+// Elapsed game time must not follow wall-clock corrections.
+static std::chrono::time_point<std::chrono::steady_clock> s_StartTime;
 
 //=============================================================================
 // Public Functions
@@ -77,7 +78,7 @@ void radTimeInitialize(  )
 
     if( s_InitializedCount == 1 )
     {
-        s_StartTime = std::chrono::high_resolution_clock::now();
+        s_StartTime = std::chrono::steady_clock::now();
     }
 }
 
@@ -116,7 +117,7 @@ void radTimeTerminate(  )
 unsigned int radTimeGetMicroseconds( void )
 {
     rAssert( s_InitializedCount != 0 );
-    auto duration = std::chrono::high_resolution_clock::now() - s_StartTime;
+    auto duration = std::chrono::steady_clock::now() - s_StartTime;
     return (unsigned int)std::chrono::duration_cast<std::chrono::microseconds>(duration).count();
 }
 
@@ -135,7 +136,7 @@ unsigned int radTimeGetMicroseconds( void )
 radTime64 radTimeGetMicroseconds64( void )
 {
     rAssert( s_InitializedCount != 0 );
-    auto duration = std::chrono::high_resolution_clock::now() - s_StartTime;
+    auto duration = std::chrono::steady_clock::now() - s_StartTime;
     return std::chrono::duration_cast<std::chrono::microseconds>(duration).count();
 }
 
@@ -154,7 +155,7 @@ radTime64 radTimeGetMicroseconds64( void )
 unsigned int radTimeGetMilliseconds( void )
 {
     rAssert( s_InitializedCount != 0 );
-    auto duration = std::chrono::high_resolution_clock::now() - s_StartTime;
+    auto duration = std::chrono::steady_clock::now() - s_StartTime;
     return (unsigned int)std::chrono::duration_cast<std::chrono::milliseconds>(duration).count();
 }
 
@@ -172,7 +173,7 @@ unsigned int radTimeGetMilliseconds( void )
 unsigned int radTimeGetSeconds( void )
 {
     rAssert( s_InitializedCount != 0 );
-    auto duration = std::chrono::high_resolution_clock::now() - s_StartTime;
+    auto duration = std::chrono::steady_clock::now() - s_StartTime;
     return (unsigned int)std::chrono::duration_cast<std::chrono::seconds>(duration).count();
 }
 

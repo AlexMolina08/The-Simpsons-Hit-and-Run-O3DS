@@ -813,6 +813,10 @@ void Game::Run()
         unsigned newTime =  radTimeGetMilliseconds();
         unsigned elapsed = newTime - time;
         time = newTime;
+#ifdef RAD_3DS
+        // Ignore a clock anomaly or long suspension before it reaches animations.
+        if (elapsed > 1000u) elapsed = 20u;
+#endif
 #ifdef SRR2_OLD3DS_NATIVE_BENCH
         elapsed=NativeBench::Begin(elapsed,ctx);
 #ifdef SRR2_OLD3DS_CAUSAL_DIAG
