@@ -61,27 +61,11 @@ int main(){
   auto big=makeTexture(262144);big.vramEligible=mode;void*old=big.tex.data;
   std::vector<unsigned char> expected((unsigned char*)old,(unsigned char*)old+262144);
   big.TryPromoteVram();
-#ifdef SRR2_OLD3DS_VISUAL_UPGRADE
-  const bool promoted=mode==2;
-#else
-  const bool promoted=false;
-#endif
-  assert(bool(big.vramAllocation)==promoted);
+  // The retained policy caps every individual promotion at 128 KiB.
+  assert(!big.vramAllocation && big.tex.data==old);
   assert(!memcmp(big.tex.data,expected.data(),262144));
   dispose(big);picaReclaimVramTextures();assert(vramTextureBytes==0);freeVram=6*1024*1024;
  }
-#ifdef SRR2_OLD3DS_VISUAL_UPGRADE
- for(unsigned failure=0;failure<4;++failure){
-  auto big=makeTexture(262144);big.vramEligible=2;void*old=big.tex.data;unsigned copies=copyCount;
-  failNode=failure==0;failVram=failure==1;g_picaInFrame=failure==2;
-  if(failure==3)freeVram=2*1024*1024+262144-1;
-  big.TryPromoteVram();assert(big.tex.data==old&&!big.vramAllocation&&copyCount==copies);
-  dispose(big);picaReclaimVramTextures();failNode=failVram=false;g_picaInFrame=0;freeVram=6*1024*1024;
- }
- {std::vector<picaTexture> occupied;for(unsigned i=0;i<15;++i){occupied.push_back(makeTexture(131072));occupied.back().TryPromoteVram();}
-  auto big=makeTexture(262144);big.vramEligible=2;void*old=big.tex.data;big.TryPromoteVram();assert(!big.vramAllocation&&big.tex.data==old);
-  dispose(big);for(auto&texture:occupied)dispose(texture);picaReclaimVramTextures();assert(vramTextureBytes==0);freeVram=6*1024*1024;}
-#endif
  auto t=makeTexture();t.TryPromoteVram();void*previous=t.tex.data;auto*owner=t.vramAllocation;unsigned bytes=vramTextureBytes;
  failLinear=true;assert(t.Lock(0,nullptr)==nullptr&&t.tex.data==previous&&t.vramAllocation==owner&&!t.reuploadLinear);failLinear=false;
  assert(t.Lock(0,nullptr)&&t.reuploadLinear&&t.tex.data==previous);{picaVramUpload upload(t.tex,t.vramAllocation,t.reuploadLinear,t.valid);assert(t.tex.data!=previous);t.valid=false;}

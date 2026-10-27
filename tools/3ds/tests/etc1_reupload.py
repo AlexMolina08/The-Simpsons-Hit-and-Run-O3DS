@@ -8,7 +8,8 @@ root = Path(__file__).resolve().parents[3]
 namespace = {'__file__': str(Path(__file__).with_name('texture_upload.py'))}
 exec(Path(__file__).with_name('texture_upload.py').read_text().split('with tempfile.TemporaryDirectory')[0], namespace)
 source, extract, prelude = (namespace[key] for key in ('source', 'extract', 'prelude'))
-prelude = prelude.replace('GPU_RGB565};', 'GPU_RGB565, GPU_ETC1=12};using GPU_TEXCOLOR=int;')
+prelude = prelude.replace('GPU_RGB565, GPU_L8};', 'GPU_RGB565, GPU_L8, GPU_ETC1=12};using GPU_TEXCOLOR=int;')
+prelude += '\n#include <pddi/pica/gpuuploadguard.hpp>\nnamespace picaUpload { unsigned gpuHandoff=0; }\n'
 prelude = prelude.replace('struct Tex {int width,height,maxLevel; void* data;};',
     'struct Tex {int width,height,maxLevel; void* data;unsigned size=0,fmt=0,param=0;};using C3D_Tex=Tex;using u32=unsigned;')
 prelude = prelude.replace('struct picaTexture {', '''
