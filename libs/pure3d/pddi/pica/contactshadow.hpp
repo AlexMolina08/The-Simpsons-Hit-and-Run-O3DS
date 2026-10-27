@@ -5,7 +5,7 @@
 
 namespace picaContact {
 #ifdef SRR2_OLD3DS_NATIVE_BENCH
-extern unsigned queued,batches,drawn,overflow,commandSkips;
+extern unsigned queued,batches,drawn,overflow,commandSkips,peakInstances;
 #endif
 constexpr unsigned Capacity=12,Vertices=17,Indices=72;
 struct Vertex { float x,y,alpha; unsigned char offset[4]; };

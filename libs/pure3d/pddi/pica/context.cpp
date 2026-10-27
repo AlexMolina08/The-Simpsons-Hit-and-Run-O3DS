@@ -19,7 +19,7 @@ extern "C" int g_picaWorldScaleAllowed;
 #include <pddi/pica/visualstyle.hpp>
 #if defined(SRR2_OLD3DS_VISUAL_UPGRADE) && defined(SRR2_OLD3DS_NATIVE_BENCH)
 namespace picaVisual { unsigned features = 255, reflectionDraws = 0, sceneryDraws = 0; }
-namespace picaContact { unsigned queued=0,batches=0,drawn=0,overflow=0,commandSkips=0; }
+namespace picaContact { unsigned queued=0,batches=0,drawn=0,overflow=0,commandSkips=0,peakInstances=0; }
 #endif
 #ifdef SRR2_OLD3DS_VISUAL_UPGRADE
 extern "C" u16 C3D_BoolUnifs[2];
@@ -2263,13 +2263,13 @@ void picaContext::DrawContactShadows()
     }
     C3D_FVUnifSet(GPU_VERTEX_SHADER,44,1,0,.000001f,Graphics3DS::Stereo() && stereoWorldPass?1:0);
     C3D_DrawElements(GPU_TRIANGLES,contactCount*picaContact::Indices,C3D_UNSIGNED_SHORT,contactIndices);
-    C3D_BindProgram(MainProgram());C3D_SetAttrInfo(&attrInfo);
-#ifdef SRR2_OLD3DS_NO_NORMAL_FETCH
-    noNormalLayout=false;
-#endif
-    picaStateInvalidate();InvalidateUniformCache();PopState(mask);
+    // Six shadow instances reach c25, the normal program's eye offset. Restore
+    // that register as well as the program, layout and cached float uniforms.
+    BindSkinProgram(false);
+    picaStateInvalidate();PopState(mask);
 #ifdef SRR2_OLD3DS_NATIVE_BENCH
     ++picaContact::batches;picaContact::drawn+=contactCount;
+    if(contactCount>picaContact::peakInstances)picaContact::peakInstances=contactCount;
 #endif
     ++g_old3dsDrawCalls;g_old3dsDrawVerts+=contactCount*picaContact::Indices;
 }

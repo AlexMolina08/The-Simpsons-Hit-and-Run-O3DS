@@ -1217,8 +1217,8 @@ void Dump(){if(!enabled)return;
  fprintf(f,"NATIVE_LANDMARK_POLICY enabled=%u selected=%u root_placed=%u root_fallback=%u visible_entities=%u profile_records=%u scope=whole_session global_distance_unchanged=1 collision_bounds_unchanged=1\n",Old3dsLandmark::enabled,Old3dsLandmark::selected,Old3dsLandmark::rootPlaced,Old3dsLandmark::rootFallback,Old3dsLandmark::visible,Old3dsLandmark::ProfileCache().count);
  fprintf(f,"NATIVE_VISUAL_FEATURES mask=%u load_prepared_form=1 reflection_draws_whole_session=%u scenery_draws_whole_session=%u\n",
      picaVisual::features,picaVisual::reflectionDraws,picaVisual::sceneryDraws);
- fprintf(f,"NATIVE_CONTACT_SHADOWS enabled=%u queued=%u batches=%u instances=%u overflow=%u command_skips=%u scope=whole_session cpu_scene_walks=0 new_ground_rays=0\n",
-     picaVisual::Enabled(picaVisual::ContactShadows),picaContact::queued,picaContact::batches,picaContact::drawn,picaContact::overflow,picaContact::commandSkips);
+ fprintf(f,"NATIVE_CONTACT_SHADOWS enabled=%u queued=%u batches=%u instances=%u overflow=%u command_skips=%u peak_instances=%u scope=whole_session cpu_scene_walks=0 new_ground_rays=0\n",
+     picaVisual::Enabled(picaVisual::ContactShadows),picaContact::queued,picaContact::batches,picaContact::drawn,picaContact::overflow,picaContact::commandSkips,picaContact::peakInstances);
 #endif
 #ifdef SRR2_OLD3DS_NATIVE_CONTEXT
  fprintf(f,"NATIVE_CONTEXT_CAPTURE fast=%u fallback=%u words=%u measured_route_only=1\n",contextFastEnd-contextFastBegin,contextFallbackEnd-contextFallbackBegin,contextWordsEnd-contextWordsBegin);
