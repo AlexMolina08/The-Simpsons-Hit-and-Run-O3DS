@@ -12,6 +12,7 @@ import sys
 
 from release_version import parse, packed_version, read_cia_version
 from prepare_home_menu import prepare
+from prepare_home_artwork import prepare as prepare_artwork
 
 REPO = Path(__file__).resolve().parents[2]
 
@@ -44,6 +45,7 @@ def main():
     movie_audit = json.loads(args.movie_validation.read_text()) if args.movie_validation else None
     subprocess.run([sys.executable, str(REPO / 'tools/3ds/check_old3ds_memory.py'), str(args.elf)], check=True)
     home_menu = args.out.with_suffix('.home-menu')
+    artwork_metadata = prepare_artwork(args.data, home_menu)
     cue = prepare(args.data, home_menu, args.ffmpeg)
     with tempfile.TemporaryDirectory(prefix='srr2-cia-', dir=args.out.parent) as work:
         work = Path(work)
@@ -84,11 +86,11 @@ def main():
             if packaged != checked:
                 raise ValueError('Packaged movies differ from the validated conversion set')
         branding = REPO / 'tools/3ds/cia'
-        subprocess.run([str(args.bannertool.resolve()), 'makebanner', '-i', str(branding / 'banner.png'),
+        subprocess.run([str(args.bannertool.resolve()), 'makebanner', '-i', str(home_menu / 'banner.png'),
                         '-a', str(cue), '-o', str(work / 'banner.bnr')], check=True)
         subprocess.run([str(args.bannertool.resolve()), 'makesmdh', '-s', 'The Simpsons: Hit & Run',
                         '-l', 'The Simpsons: Hit & Run — Nintendo 3DS', '-p', 'Hit & Run 3DS contributors',
-                        '-i', str(branding / 'icon.png'), '-r', 'regionfree', '-f', 'visible,recordusage',
+                        '-i', str(home_menu / 'icon.png'), '-r', 'regionfree', '-f', 'visible,recordusage',
                         '-o', str(work / 'icon.smdh')], check=True)
         shutil.copy2(work / 'banner.bnr', home_menu / 'banner.bnr')
         shutil.copy2(work / 'icon.smdh', home_menu / 'icon.smdh')
@@ -106,6 +108,7 @@ def main():
         digest = hashlib.file_digest(cia, 'sha256').hexdigest()
     source_commit = subprocess.run(['git', 'rev-parse', 'HEAD'], cwd=REPO, capture_output=True, text=True).stdout.strip() or None
     home_metadata = json.loads((home_menu / 'audio-source.json').read_text())
+    home_metadata['artwork'] = artwork_metadata
     home_metadata['banner_bytes'] = (home_menu / 'banner.bnr').stat().st_size
     home_metadata['banner_sha256'] = hashlib.sha256((home_menu / 'banner.bnr').read_bytes()).hexdigest()
     manifest = {'source_commit': source_commit, 'build_profile': 'cmake/old3ds-release.cmake', 'home_menu': home_metadata, 'version': version, 'title_id': '000400000f3a1100', 'model': 'Old and New Nintendo 3DS; 64 MiB mode; New 3DS CPU and L2 acceleration',

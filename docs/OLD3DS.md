@@ -205,20 +205,19 @@ unavailable. It does not change music playback positions or game settings. This
 feature runs while the game is active; it cannot add sounds to the system HOME
 Menu or other applications. Actual sleep/wake audio needs a physical console check.
 
-## Publish a release
+## Keep complete game-data installers local
 
-Publishing is separate from local building. **Release CIA.command** invokes the
-versioned release launcher. Commit source changes on `main` first. Install GitHub
-CLI and sign in using `gh auth login`. The launcher prepares packaging tools,
-rebuilds, packages, tags and uploads a test release. It verifies server checksums
-before publishing and does not overwrite an existing public version.
+Use **Build CIA.command** or `tools/3ds/make_cia.py` with your retail PC game
+folder. This creates a private installer without a GitHub login or publication.
+See the [own-copy build guide](INSTALL.md#build-from-your-own-pc-copy).
+
+The legacy **Release CIA.command** launcher no longer publishes complete game-data
+CIAs. It requires `--no-upload`; upload and resume flags do not bypass this check.
+It can still create or verify a versioned private build from a clean source tree:
 
 ```sh
 python3 tools/3ds/release_cia.py --version 1.1.1 --stable --no-upload
-python3 tools/3ds/release_cia.py --version 1.1.1 --stable --resume
 ```
 
-The first command builds a versioned local package. The second resumes an
-interrupted upload after verifying source/tag/artifact integrity. Use `--dry-run`
-to inspect the plan. Use `--stable` only after the intended hardware validation.
-Builds live under `out/releases/vVERSION/`; this workflow preserves earlier packages.
+Builds live under `out/releases/vVERSION/`; this workflow preserves earlier local
+packages. Build and packaging checks do not establish installed-console behavior.

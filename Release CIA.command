@@ -1,5 +1,5 @@
 #!/bin/bash
-# Double-click to build a versioned CIA and publish a GitHub test release.
+# Legacy launcher; public uploads of complete game-data CIAs are disabled.
 set -uo pipefail
 cd "$(dirname "$0")"
 export PATH="/opt/homebrew/bin:/usr/local/bin:/opt/devkitpro/tools/bin:$PATH"
