@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Build a versioned complete CIA and publish it to GitHub Releases."""
+"""Build a versioned complete CIA privately; public game-data uploads are disabled."""
 import argparse
 import hashlib
 import json
@@ -90,10 +90,12 @@ def main():
     parser.add_argument('--bannertool', type=Path)
     parser.add_argument('--notes-file', type=Path)
     parser.add_argument('--stable', action='store_true', help='Publish a stable release instead of a test release')
-    parser.add_argument('--no-upload', action='store_true', help='Build and verify locally without pushing or publishing')
+    parser.add_argument('--no-upload', action='store_true', help='Required: build and verify privately without pushing or publishing')
     parser.add_argument('--resume', action='store_true', help='Resume upload of this version without rebuilding its CIA')
     parser.add_argument('--dry-run', action='store_true', help='Show the release plan without changing files or GitHub')
     args = parser.parse_args()
+    if not args.no_upload:
+        parser.error('Public uploads of complete game-data CIAs are disabled. Use Build CIA.command or tools/3ds/make_cia.py to build from your own PC copy; --no-upload keeps this legacy launcher local.')
     if sys.version_info < (3, 11):
         raise RuntimeError('Python 3.11 or later is required')
     if not re.fullmatch(r'[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+', args.repo):
@@ -132,7 +134,7 @@ def main():
         movies = REPO / 'out/old3ds-movies'
     print(f'\nVersion: {tag}\nCheckout: {commit}\nOutput:  {cia}\nGitHub:  {args.repo}\nMode:    {"stable" if args.stable else "test release"}\n', flush=True)
     if args.dry_run:
-        print('Plan: check clean main; prepare tools; build; package; verify; tag; push; upload; verify GitHub hashes; publish.')
+        print('Plan: check clean main; prepare tools; build; package and verify privately. Public uploads are disabled.')
         if dirty:
             print('Source changes must be committed before the real run.')
         return
@@ -153,7 +155,7 @@ def main():
         ancestor = run(['git', 'merge-base', '--is-ancestor', commit, head], capture=True, check=False)
         if ancestor.returncode:
             raise RuntimeError('The saved release source is not part of main; refusing to resume')
-        # Resume uploads the exact original artifact. Later tooling fixes on main
+        # Resume reuses the exact original local artifact. Later tooling fixes on main
         # do not change its recorded source revision or move the release tag.
         metadata = verify_artifact(cia, manifest, commit)
         print(f"Resuming the saved CIA from source {commit}", flush=True)
