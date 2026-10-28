@@ -78,7 +78,8 @@ def main():
     parser.add_argument("--jobs", type=int, default=2)
     parser.add_argument("--ffmpeg")
     args = parser.parse_args()
-    movies = sorted((args.game / "movies").glob("*.rmv"))
+    movies = sorted(path for path in (args.game / "movies").glob('*')
+                    if path.is_file() and path.suffix.lower() == '.rmv')
     if args.only:
         movies = [movie for movie in movies if movie.stem.lower() in {name.lower() for name in args.only}]
     if not movies:
