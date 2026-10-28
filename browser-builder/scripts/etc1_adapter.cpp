@@ -4,8 +4,49 @@
 #include <cstdint>
 #include <cstdio>
 #include <cstdlib>
+#include <cstring>
 #include <vector>
 #include "rg_etc1.h"
+
+namespace {
+// Every call uses the same high-quality parameters. Reusing an exact 4x4
+// pixel block therefore reuses the encoder's exact result, not an approximation.
+// Direct mapping bounds storage to 2.5 MiB per worker. Hash collisions can only
+// replace a cache entry: all 64 pixel bytes must match before accepting a hit.
+struct CachedBlock {
+    uint32_t pixels[16];
+    unsigned char encoded[8];
+    uint32_t hash;
+    bool valid;
+};
+#ifndef ETC1_DISABLE_CACHE
+CachedBlock blockCache[32768]{};
+#endif
+
+void packBlock(unsigned char* encoded, const uint32_t* pixels, rg_etc1::etc1_pack_params& params) {
+#ifndef ETC1_DISABLE_CACHE
+    uint32_t hash = 2166136261u;
+    for (unsigned i = 0; i < 16; ++i) hash = (hash ^ pixels[i]) * 16777619u;
+    hash ^= hash >> 16;
+    hash *= 0x7feb352du;
+    hash ^= hash >> 15;
+    hash *= 0x846ca68bu;
+    hash ^= hash >> 16;
+    CachedBlock& entry = blockCache[hash & 32767u];
+    if (entry.valid && entry.hash == hash && std::memcmp(entry.pixels, pixels, sizeof(entry.pixels)) == 0) {
+        std::memcpy(encoded, entry.encoded, sizeof(entry.encoded));
+        return;
+    }
+#endif
+    rg_etc1::pack_etc1_block(encoded, pixels, params);
+#ifndef ETC1_DISABLE_CACHE
+    std::memcpy(entry.pixels, pixels, sizeof(entry.pixels));
+    std::memcpy(entry.encoded, encoded, sizeof(entry.encoded));
+    entry.hash = hash;
+    entry.valid = true;
+#endif
+}
+}
 
 extern "C" int encodeEtc1(const unsigned char* rgb, unsigned width, unsigned height, unsigned char* output) {
     if (!rgb || !output || width < 8 || height < 8 || width > 1024 || height > 1024 || width % 8 || height % 8) return -1;
@@ -27,7 +68,7 @@ extern "C" int encodeEtc1(const unsigned char* rgb, unsigned width, unsigned hei
                             pixels[y * 4 + x] = uint32_t(source[0]) | (uint32_t(source[1]) << 8) | (uint32_t(source[2]) << 16) | 0xff000000u;
                         }
                     }
-                    rg_etc1::pack_etc1_block(encoded, pixels, params);
+                    packBlock(encoded, pixels, params);
                     for (unsigned i = 0; i < 8; ++i) output[offset++] = encoded[7 - i];
                 }
             }

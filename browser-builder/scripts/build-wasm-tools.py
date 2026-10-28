@@ -186,12 +186,14 @@ def main():
               '-o', OUTPUT / 'bannertool.mjs'])
     if 'makerom' in chosen:
         folder = upstream['Project_CTR'] / 'makerom'
+        import runpy
+        runpy.run_path(str(SCRIPTS / 'makerom-streaming.py'))['patch'](folder / 'src')
         dependencies = [folder / 'deps' / name for name in ('libblz', 'libmbedtls', 'libyaml')]
-        build(em / 'emcc', [*common, *filesystem, '-std=c11', '-D_GNU_SOURCE',
+        build(em / 'emcc', [*common, *filesystem, '-std=c11', '-D_GNU_SOURCE', '-DSRR_BROWSER_STREAMING',
               *['-I' + str(dep / 'include') for dep in dependencies], *sorted((folder / 'src').glob('*.c')),
               *[path for dep in dependencies for path in sorted((dep / 'src').glob('*.c'))],
               '-sEXPORT_NAME=createMakerom', '-sINITIAL_MEMORY=67108864',
-              '-sMAXIMUM_MEMORY=4294967296', '-o', OUTPUT / 'makerom.mjs'])
+              '-sMAXIMUM_MEMORY=536870912', '-o', OUTPUT / 'makerom.mjs'])
     generate_texture_converter()
     archive = source_archive()
     manifest = {'emscripten': EMSCRIPTEN_VERSION,

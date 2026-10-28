@@ -18,7 +18,7 @@
   <main>
     <div class="introduction">
       <h1>The Simpsons: Hit & Run</h1>
-      <p>Create a 3DS installer from your PC copy of the game.</p>
+      <p>Create the complete v1.2 3DS installer from your PC copy.</p>
       <p class="privacy">Files are processed on this device and are never uploaded.</p>
     </div>
     <div class="workbench">
@@ -32,11 +32,21 @@
         <div id="selection" class="selection" aria-live="polite">No game selected</div>
       </section>
       <section class="build-panel" aria-labelledby="build-title">
-        <div class="step-heading"><span>2</span><h2 id="build-title">Build your installer</h2></div>
-        <p>Conversion runs in this tab. Keep it open until the build finishes.</p>
+        <div class="step-heading"><span>2</span><h2 id="build-title">Build v1.2</h2></div>
+        <p>All v1.2 visual and audio enhancements are included. Keep this tab open while your device prepares the game.</p>
         <div class="build-controls"><button id="build" class="primary" disabled>Build CIA</button><button id="cancel" class="quiet" hidden>Cancel build</button></div>
         <div id="status" class="status" role="status" aria-live="polite">Choose an ISO or game folder to begin.</div>
-        <progress id="progress" aria-label="Build progress" hidden></progress>
+        <div id="work-status" hidden>
+          <div class="progress-heading"><span id="phase-name">Check game</span><span id="elapsed" aria-label="Elapsed build time">0:00</span></div>
+          <progress id="progress" aria-label="Current step progress"></progress>
+          <ol class="phase-list" aria-label="Build steps">
+            <li id="phase-inspect" data-state="waiting">Check game</li>
+            <li id="phase-textures" data-state="waiting">Prepare textures</li>
+            <li id="phase-visuals" data-state="waiting">Prepare v1.2 visuals</li>
+            <li id="phase-media" data-state="waiting">Convert sound and movies</li>
+            <li id="phase-package" data-state="waiting">Build CIA</li>
+          </ol>
+        </div>
         <div id="error" class="error" role="alert" hidden></div>
         <div id="result" hidden>
           <div class="step-heading"><span>3</span><h2>Your installer is ready</h2></div>
@@ -48,8 +58,8 @@
       </section>
     </div>
     <div class="after-build">
-      <section><h2>Then, on your 3DS</h2><p>Copy your CIA to <code>cias</code> on the SD card. Open <b>FBI → SD → cias</b> and install it. Keep at least <b>4 GB free</b> before copying.</p><p>Updating? Install over the existing title. Back up <code>3ds/simpsons</code> first; keep your saves and <code>3ds/dspfirm.cdc</code>.</p></section>
-      <section><h2>Before you start</h2><p>Use desktop Chrome or Edge. Allow at least <b>8 GB of free disk space</b> for temporary files. Keep this tab open while it builds.</p><p>Building can take time, especially when converting the movies.</p><button id="clear" class="text-button">Clear this builder’s temporary files</button></section>
+      <section><h2>Then, on your 3DS</h2><p>Save the CIA, then copy it to <code>cias</code> on the SD card. Open <b>FBI → SD → cias</b> and install it. Keep at least <b>4 GB free</b> before copying.</p><p>Updating? Install over the existing title. Back up <code>3ds/simpsons</code> first; keep your saves and <code>3ds/dspfirm.cdc</code>.</p></section>
+      <section><h2>Before you start</h2><p>Use a current Chrome, Edge or Safari browser. Allow at least <b>8 GB of free space</b> for temporary build files. Your original game files stay unchanged.</p><p>Building time depends on your device. Completed steps stay here so an interrupted build can continue when you select the same game.</p><button id="clear" class="text-button">Clear this builder’s temporary files</button></section>
     </div>
   </main>
   <footer><p>An unofficial homebrew project. Requires your own PC game files and a 3DS with custom firmware.</p><nav><a href="./tools.html">Tool licences and source</a><a href="https://github.com/AlexMolina08/The-Simpsons-Hit-and-Run-O3DS/blob/main/docs/INSTALL.md">Installation help</a></nav></footer>

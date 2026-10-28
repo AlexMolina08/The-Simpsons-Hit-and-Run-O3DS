@@ -64,3 +64,5 @@ tools. `tool-manifest.json` records source revisions and artifact SHA-256 hashes
 
 The WebAssembly ETC1 output is checked against native tex3ds 2.3.0, using the
 same high-quality encoder, 8×8 tile order, and little-endian ETC1 block bytes.
+
+NumPy 2.0.2 supplies array mathematics for v1.2 scenery preparation. Its BSD and bundled component notices ship in `licenses/numpy-LICENSE.txt`, extracted from the pinned Pyodide wheel. The exact wheel metadata is included in `vendor/pyodide/pyodide-lock.json`.

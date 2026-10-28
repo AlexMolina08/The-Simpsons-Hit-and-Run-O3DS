@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="referrer" content="no-referrer">
+  <title>Local browser export QA</title>
+  <link rel="stylesheet" href="./local-export.css">
+  <script type="module" src="./local-export.mjs"></script>
+</head>
+<body>
+  <main>
+    <h1>Local browser export QA</h1>
+    <p>This test uses synthetic bytes only. Open it on a separate localhost port from the real builder.</p>
+    <p>The large fixture uses about 1.9 GiB of browser storage. Saving it needs additional device space.</p>
+    <div class="controls">
+      <button id="small">Create 8 MiB fixture</button>
+      <button id="large">Create 1.9 GiB fixture</button>
+      <button id="restore">Reopen fixture</button>
+      <button id="checks" disabled>Run HEAD and range checks</button>
+    </div>
+    <p id="status" role="status" aria-live="polite">Checking this browser…</p>
+    <dl id="fixture"></dl>
+    <div class="controls">
+      <button id="stream" disabled>Download through local worker</button>
+      <button id="blob" disabled>Download OPFS File</button>
+    </div>
+    <p>Download buttons report only that a download started. Check Downloads or Files, then select the saved file below.</p>
+    <label class="verify">Verify a downloaded fixture <input id="verify" type="file" accept=".bin,application/octet-stream" disabled></label>
+    <p id="verified" role="status" aria-live="polite"></p>
+    <h2>Checks</h2>
+    <pre id="details" aria-live="polite"></pre>
+  </main>
+</body>
+</html>

@@ -45,20 +45,19 @@ These are emulator captures, not measurements of console performance.
 
 ## Build your CIA
 
-Use your own **complete retail PC game folder**. The builder prepares textures,
-movies, sound, and HOME Menu artwork from those local files, then creates your CIA.
-Your game folder is read only; neither it nor the finished installer is uploaded.
+The **v1.2 browser builder is under validation**. Its final public home will be
+**GitHub Pages**; the public link will be added after testing and publication.
+It creates a complete CIA from your own PC ISO or installed game folder.
+The public version needs no desktop tools or account. Select your copy, build, then save the CIA.
+Your originals stay unchanged; game data and the installer are never uploaded.
 
-The browser-only builder is not published yet. Until it is available, follow the
-[local source-build guide](docs/INSTALL.md#build-from-your-own-pc-copy) for Windows
-through WSL 2, Linux, or macOS. It includes PC-folder and disc-image preparation.
+The builder includes the accepted v1.2 visuals, stereoscopic 3D, audio and gameplay
+improvements. Allow at least **8 GB free** on the device and keep the tab open.
+The tested English PC image is supported; other installer layouts may require an
+installed PC folder. Phone builds remain experimental until physical-device checks
+are complete. See [browser and installation guidance](docs/INSTALL.md#build-from-your-own-pc-copy).
 
-The source builder checks the installation, converts and validates all game cinematics,
-compiles the port, and writes:
-
-```text
-out/releases/v1.1.1/Simpsons-Hit-and-Run-3DS-v1.1.1.cia
-```
+Contributors can also use the [advanced source-build guide](docs/INSTALL.md#advanced-build-from-source).
 
 ## Install
 

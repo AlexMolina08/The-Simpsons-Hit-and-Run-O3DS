@@ -7,20 +7,21 @@ The same CIA supports all models. You need a console with custom firmware and FB
 - **Have created your CIA?** Follow [Install your locally created CIA](#install-your-locally-created-cia).
 - **Have the PC game folder or a PC disc ISO?** Follow [Build from your own PC copy](#build-from-your-own-pc-copy).
 
-Complete game-data installers are not provided for download. Create your CIA
-locally from your own retail PC copy using the instructions below. A browser-only
-builder is being prepared; this guide does not claim that it is available yet.
+Complete game-data installers are not provided for download. The v1.2 browser
+builder is under validation; its final public host will be GitHub Pages. The
+public link will be added to the project README after testing and publication.
+It creates a CIA locally from your PC copy without desktop tools or game uploads.
 
 ## Install your locally created CIA
 
 1. Turn off the console and connect its SD card to your computer.
-2. Create **Simpsons-Hit-and-Run-3DS-v1.1.1.cia** from your PC copy using
+2. Create **Simpsons-Hit-and-Run-3DS-v1.2.cia** from your PC copy using
    [Build from your own PC copy](#build-from-your-own-pc-copy).
 3. Make sure the SD card has at least **4 GB free before copying**. It needs room
    for both the locally created CIA and the installed game. Copy the CIA into `cias`
    at the root of the card. Create that folder if necessary.
 4. Safely eject the card, put it back in the console and turn the console on.
-5. Open **FBI → SD → cias → Simpsons-Hit-and-Run-3DS-v1.1.1.cia → Install CIA**.
+5. Open **FBI → SD → cias → Simpsons-Hit-and-Run-3DS-v1.2.cia → Install CIA**.
    Wait until FBI confirms installation has finished.
 6. Exit FBI and launch **The Simpsons: Hit & Run** from the HOME Menu.
 7. After checking the game works, you may delete the installer from `sd:/cias/`.
@@ -63,6 +64,40 @@ the same SD card and that the original `Save1`–`Save4` files remain in that fo
 Your computer backup provides a recovery copy.
 
 ## Build from your own PC copy
+
+1. Once published, open the browser builder using the link in the project README
+   in a current Chrome, Edge or Safari browser. Allow at least **8 GB free** for
+   temporary files. Keep the page open and the device awake during the build.
+2. Choose your **PC ISO** or **complete installed PC game folder**. The folder
+   should contain `art`, `scripts`, `sound`, `movies` and the retail `.rcf` archives.
+   Your originals are read only. The website downloads its processing tools
+   automatically; you do not install or run a desktop program.
+3. Select **Build CIA**. The builder prepares the accepted v1.2 textures, car and
+   character detail, HUD artwork, lighting across all seven maps, distant
+   landmarks, audio and complete cinematics, then packages the frozen v1.2 game.
+4. Select **Save CIA** and wait for the save or download to finish. You can also
+   save a build report. Keep the completed installer private because it contains
+   data from your PC copy.
+5. Follow [Install your locally created CIA](#install-your-locally-created-cia).
+
+The English PC copy is the validated reference. Supported images are read locally;
+installer programs are never executed. ISO layouts vary, and this is not a
+universal installer or console-disc converter. If an image is unsupported, select
+its complete installed PC folder. Other languages remain unvalidated.
+
+**Phones:** use an ISO when the browser cannot select a folder. iPhone and Android
+end-to-end builds remain experimental until physical-device testing is complete.
+Mac Safari and a phone-sized desktop layout do not establish phone compatibility.
+
+Completed stages remain in this browser's local storage. If a build is interrupted,
+select the same copy and build again to reuse verified stages. Changing browsers,
+clearing website data or receiving a different builder recipe can require a fresh
+build. **Clear this builder’s temporary files** removes only its local build data.
+
+## Advanced: build from source
+
+The contributor workflow below retains its v1.1.1 version examples. Use the browser
+route above for the frozen accepted v1.2 package and its verified visual recipe.
 
 This route runs on **Windows through WSL 2**, **Linux**, and **macOS**. It converts
 retail PC data and compiles a complete CIA. The PC game does not run on the 3DS;

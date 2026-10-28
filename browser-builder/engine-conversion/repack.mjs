@@ -191,7 +191,7 @@ async function verify(blob, expected, signal) {
   if (((crc ^ 0xffffffff) >>> 0) !== expected) fail('a game file failed its checksum');
 }
 
-export async function extractRepack(layout, {storage, onProgress = () => {}, signal, codecFactory} = {}) {
+export async function extractRepack(layout, {storage, onProgress = () => {}, signal, codecFactory, onFile = () => {}} = {}) {
   if (!storage) throw new Error('Temporary browser storage is required to unpack this disc.');
   const entries = [...layout.files], metadata = entries.find(([name]) => /(?:^|\/)setup-0\.bin$/i.test(name));
   const primary = entries.find(([name]) => /(?:^|\/)elamigos-1\.bin$/i.test(name));
@@ -210,8 +210,10 @@ export async function extractRepack(layout, {storage, onProgress = () => {}, sig
       let position = 0;
       for (const file of block.members) {
         if (file.folder) continue;
+        const offset = position;
         const blob = result.blob.slice(position, position + file.size); position += file.size;
         await verify(blob, file.crc, signal); files.set(file.path, blob);
+        onFile(file.path, {container: result.name, offset, size: file.size, crc: file.crc});
       }
       onProgress({stage: 'extract', detail: 'Verified the unpacked game files', completed: files.size});
     }

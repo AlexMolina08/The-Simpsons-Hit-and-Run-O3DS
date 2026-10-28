@@ -11,10 +11,51 @@ export async function createBuildStorage(name = 'hit-run-3ds-build') {
   };
   return {
     directory,
+    async read(path) {
+      try {
+        const components = path.split('/');
+        if (components.some(part => !part || part === '.' || part === '..')) throw new Error('Invalid temporary file path.');
+        let parent = directory;
+        for (const component of components.slice(0, -1)) parent = await parent.getDirectoryHandle(component);
+        return (await parent.getFileHandle(components.at(-1))).getFile();
+      } catch (error) { if (error.name === 'NotFoundError') return null; throw error; }
+    },
+    async readJSON(path) {
+      const file = await this.read(path);
+      if (!file) return null;
+      try { return JSON.parse(await file.text()); } catch { return null; }
+    },
+    async writeJSON(path, value) { return this.write(path, new Blob([JSON.stringify(value)])); },
+    async remove(path) {
+      const components = path.split('/');
+      if (components.some(part => !part || part === '.' || part === '..')) throw new Error('Invalid temporary file path.');
+      let parent = directory;
+      try {
+        for (const component of components.slice(0, -1)) parent = await parent.getDirectoryHandle(component);
+        await parent.removeEntry(components.at(-1), {recursive: true});
+      } catch (error) { if (error.name !== 'NotFoundError') throw error; }
+    },
     async write(path, blob) {
       const file = await resolve(path);
-      const stream = await file.createWritable();
-      try { await blob.stream().pipeTo(stream); } catch (error) { await stream.abort().catch(() => {}); throw error; }
+      if (typeof file.createWritable === 'function') {
+        const stream = await file.createWritable();
+        try { await blob.stream().pipeTo(stream); } catch (error) { await stream.abort().catch(() => {}); throw error; }
+      } else {
+        const handle = await file.createSyncAccessHandle();
+        try {
+          handle.truncate(0);
+          let position = 0;
+          for await (const chunk of blob.stream()) {
+            let offset = 0;
+            while (offset < chunk.length) {
+              const written = handle.write(chunk.subarray(offset), {at: position});
+              if (!written) throw new Error('Temporary storage stopped accepting data.');
+              offset += written; position += written;
+            }
+          }
+          handle.flush();
+        } finally { handle.close(); }
+      }
       return file.getFile();
     },
     async openSync(path) {
@@ -51,7 +92,12 @@ export function mountDiskOutput(module, path, handle, onWrite = () => {}) {
       return handle.read(buffer.subarray(offset, offset + length), {at: position});
     },
     write(stream, buffer, offset, length, position) {
-      const written = handle.write(buffer.subarray(offset, offset + length), {at: position});
+      let written = 0;
+      while (written < length) {
+        const count = handle.write(buffer.subarray(offset + written, offset + length), {at: position + written});
+        if (!count) throw new FS.ErrnoError(29);
+        written += count;
+      }
       size = Math.max(size, position + written); node.usedBytes = size;
       const now = performance.now();
       if (now - lastProgress > 200) { onWrite(size); lastProgress = now; }

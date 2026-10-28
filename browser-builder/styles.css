@@ -6,6 +6,7 @@
   background: #fafafa;
   --muted: #646464;
   --line: #dedede;
+  --progress: #d2ad00;
 }
 
 * { box-sizing: border-box; }
@@ -86,3 +87,20 @@ footer nav { display: flex; flex-wrap: wrap; gap: 20px; align-items: start; just
 @media (prefers-reduced-motion: reduce) {
   * { scroll-behavior: auto !important; transition: none !important; }
 }
+
+.progress-heading { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; font-size: 13px; margin: 12px 0 8px; }
+#elapsed { color: var(--muted); font-variant-numeric: tabular-nums; }
+progress { accent-color: var(--progress); }
+.phase-list { list-style: none; padding: 4px 0 0; margin: 16px 0 22px; display: grid; gap: 10px; }
+.phase-list li { display: flex; gap: 10px; align-items: center; color: var(--muted); font-size: 13px; line-height: 1.4; }
+.phase-list li::before { content: ''; width: 8px; height: 8px; flex: 0 0 8px; border: 1px solid #bcbcbc; border-radius: 50%; }
+.phase-list li[data-state="active"] { color: #242424; font-weight: 600; }
+.phase-list li[data-state="active"]::before { border-color: var(--progress); background: #f4d13b; }
+.phase-list li[data-state="complete"]::before { border-color: #555; background: #555; }
+@media (max-width: 680px) {
+  .build-controls { position: relative; flex-wrap: wrap; }
+  .build-controls .primary, #save { min-height: 48px; width: 100%; }
+  .quiet, .text-button { min-height: 44px; }
+  .progress-heading { margin-top: 18px; }
+}
+@media (prefers-reduced-motion: reduce) { *, *::before, *::after { scroll-behavior: auto !important; animation: none !important; transition: none !important; } }

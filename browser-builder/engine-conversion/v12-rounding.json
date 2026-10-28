@@ -1,0 +1,1075 @@
+{
+  "version": 1,
+  "purpose": "Restore the exact accepted ARM baker result at measured, source-bound AO ray-boundary differences. Contains signed deltas only, never source pixels or geometry.",
+  "files": {
+    "l1r3.p3d": {
+      "source_sha256": "884bf495da38ffc5852f371058619b54be4f7678ad59919ccb1dbc09f490be57",
+      "strict_sha256": "96566179ad48ddb73f4ca2353061d750071d535f4a2aecf0a1168bfa5e1f4c91",
+      "accepted_sha256": "244a5ce65c829137b84053d414a3ca2152281ca258ccb04329788aa6f406e66b",
+      "deltas": [
+        [
+          818723,
+          -1
+        ],
+        [
+          818727,
+          -1
+        ],
+        [
+          823801,
+          1
+        ],
+        [
+          823805,
+          1
+        ],
+        [
+          823996,
+          1
+        ],
+        [
+          823997,
+          1
+        ],
+        [
+          1503144,
+          1
+        ]
+      ]
+    },
+    "l1r4a.p3d": {
+      "source_sha256": "693ead56e64ccb4bc00dbf6f39d92456427dd09f029be7d002f3d0f9efe46868",
+      "strict_sha256": "181843342a812beb1fa80f16406b58d60af7c6b47669617451f981202e8a00eb",
+      "accepted_sha256": "3ec01d7157ea3494f7852254a2ab350875a715cc9fe67de4c0faeb71ec4c95e1",
+      "deltas": [
+        [
+          398274,
+          1
+        ],
+        [
+          556704,
+          -2
+        ],
+        [
+          556705,
+          -2
+        ],
+        [
+          556706,
+          -2
+        ]
+      ]
+    },
+    "l1r4b.p3d": {
+      "source_sha256": "d9888334c7d20603c950abb803b8d251097c840a0296b5c67e1b78f06ff8e2c7",
+      "strict_sha256": "474857cf24f6381ab4869892f74016a1f8dc7d9349578785f35b69d36410c489",
+      "accepted_sha256": "60a78d9791c586744b0dc0f492239b0d4596f99b216a560ac4b15ae224a61239",
+      "deltas": [
+        [
+          385333,
+          1
+        ],
+        [
+          385334,
+          1
+        ],
+        [
+          385338,
+          1
+        ],
+        [
+          385339,
+          1
+        ],
+        [
+          406752,
+          1
+        ],
+        [
+          433272,
+          1
+        ],
+        [
+          433276,
+          1
+        ],
+        [
+          461113,
+          -1
+        ],
+        [
+          461117,
+          -1
+        ],
+        [
+          532808,
+          -1
+        ]
+      ]
+    },
+    "l1r6.p3d": {
+      "source_sha256": "d72ecfc529b60c9951efc00fac5cdc23693504c813d609fcb520881b20f38c90",
+      "strict_sha256": "7fdd7bbe0f27433f6b1441ce77c199cd072390b80ad201825f2709137852a29b",
+      "accepted_sha256": "c789eb823102d09253ac8c603b58a6258516b93c82d5fa13489b9f0117dba90e",
+      "deltas": [
+        [
+          1291136,
+          1
+        ],
+        [
+          1291137,
+          1
+        ]
+      ]
+    },
+    "l1z3.p3d": {
+      "source_sha256": "3213698d98663f4db3e21e1f035a32039790b6742665a7c327dc7d3921c181ee",
+      "strict_sha256": "aaab827dfa1d44279d92bc4c654c1675a725f5a1f5dd5634e39b86122dcf7e61",
+      "accepted_sha256": "046468dc4fda6644ab387a7a16579e4d1be7eea6ecd15f071634475a86304917",
+      "deltas": [
+        [
+          1112273,
+          -1
+        ],
+        [
+          1112274,
+          -1
+        ],
+        [
+          1112275,
+          -1
+        ],
+        [
+          1112277,
+          -1
+        ],
+        [
+          1112426,
+          -1
+        ],
+        [
+          1112427,
+          -1
+        ],
+        [
+          1112430,
+          -1
+        ]
+      ]
+    },
+    "l1z4.p3d": {
+      "source_sha256": "661debf95f15c700005e4a10e6e027eaf83c5318b6bf1dd8407057d2172274c1",
+      "strict_sha256": "132e5128310657251ceba3de4fa0b4985cf4d4dddd8abf7c75f992fa26a92662",
+      "accepted_sha256": "c895e786f313dd8039839a9b35bfe2c90cb21592bf63580fe512dfd019b4af28",
+      "deltas": [
+        [
+          546699,
+          1
+        ]
+      ]
+    },
+    "l1z6.p3d": {
+      "source_sha256": "247e3639c05da8e85d50c86fbad62cfa922e4e40b11b5c1bc8db39f7a009f28d",
+      "strict_sha256": "c8a96ef3886122ca710828aa37b69a9489dcc99751a854a31b5dbc2689624c93",
+      "accepted_sha256": "4db4e037bca5fffad017969f7e601ec9d51c62371598c6f1dba791b86644144d",
+      "deltas": [
+        [
+          1146651,
+          1
+        ],
+        [
+          1146652,
+          1
+        ],
+        [
+          1146655,
+          1
+        ],
+        [
+          1146656,
+          1
+        ]
+      ]
+    },
+    "l1z7.p3d": {
+      "source_sha256": "723c884df83c3cc7a27977d36aad15b5041353458d6c89d36ea545ba28055747",
+      "strict_sha256": "a956656148420f9fc1ef1c721ebab5323a24c13fa10f2e2f1b9f77d58c927843",
+      "accepted_sha256": "5ee16e0de6f517ec8ed82ac299127c85743728369d988a3cc9558628d0708f4f",
+      "deltas": [
+        [
+          1126340,
+          1
+        ],
+        [
+          1126342,
+          1
+        ],
+        [
+          1126344,
+          1
+        ],
+        [
+          1126346,
+          1
+        ]
+      ]
+    },
+    "l2r1.p3d": {
+      "source_sha256": "a9b51d228d9bf5061989bf0b00c50bfeed28cd3bf5f7f0cede4a41c716138983",
+      "strict_sha256": "1aa28a97bb34a35b67e15dadf8973060b5417280c432e8287c4c0522756f1b12",
+      "accepted_sha256": "2a92333d4f29fb2f91046575f2b3f93e1d9c47ce4fe5c1779150198564d569f3",
+      "deltas": [
+        [
+          995856,
+          1
+        ]
+      ]
+    },
+    "l2r3.p3d": {
+      "source_sha256": "2665f0f489e38a95cad2fb7a7f7b85180cac8cd051d8b55865498d82bbff5646",
+      "strict_sha256": "7ee340604a85857c9cf9999f1366198265bbff24d499e5ed7b7abd8e39a56f93",
+      "accepted_sha256": "cb6c81c916a213e366128c8897cb13f4073140434687df868782ad83908384fc",
+      "deltas": [
+        [
+          849423,
+          -1
+        ]
+      ]
+    },
+    "l2z1.p3d": {
+      "source_sha256": "940da904f65e03529e737ba926678d82e29713ab68960abfc2af9bdfe1c43234",
+      "strict_sha256": "6b249474299c1330ab0fb5da446ca18e6effacb019470eb1eb3e7a8d45d95bcb",
+      "accepted_sha256": "07f9527ed50b5fc4daf2c74baea4d0e49594fd4a8f64a9865d34be45960ced77",
+      "deltas": [
+        [
+          1591774,
+          1
+        ],
+        [
+          1591776,
+          1
+        ],
+        [
+          1591778,
+          1
+        ],
+        [
+          2085850,
+          1
+        ],
+        [
+          2085851,
+          1
+        ],
+        [
+          2274449,
+          1
+        ]
+      ]
+    },
+    "l2z2.p3d": {
+      "source_sha256": "1969772f09f294bb1143c0f6952c34bbf602cd59643109dc3b2d5c4a5d8ef54f",
+      "strict_sha256": "bb4d0d5fc14844de0fb97bb06882ad603cc8d15489630aa0f84cd7fec388e343",
+      "accepted_sha256": "566ff94f960c04281b9f52fb3238cf421f8d13da9d211ddb5f7e9679600de143",
+      "deltas": [
+        [
+          1048246,
+          1
+        ],
+        [
+          1048247,
+          1
+        ]
+      ]
+    },
+    "l2z3.p3d": {
+      "source_sha256": "0e383feca562d0055d05ac6c7ece80477e6c59405190eb65b423803a2b3630a8",
+      "strict_sha256": "9b327e32ab9e656a4050d7e78ed9c825d18590da849879f93ca98f56ea5ef945",
+      "accepted_sha256": "8e2e436cca2ceb13cb00ead5233561c19310cafe795294c4898b10e7fe6405ff",
+      "deltas": [
+        [
+          930419,
+          1
+        ],
+        [
+          969427,
+          1
+        ],
+        [
+          1118335,
+          1
+        ],
+        [
+          1118337,
+          1
+        ],
+        [
+          1118339,
+          1
+        ],
+        [
+          1118341,
+          1
+        ],
+        [
+          1118343,
+          1
+        ],
+        [
+          1118345,
+          1
+        ],
+        [
+          1118347,
+          1
+        ],
+        [
+          1118349,
+          1
+        ]
+      ]
+    },
+    "l2z4.p3d": {
+      "source_sha256": "7635d3467c9d33803e3256de18a92b7a9f4e98c72f0ebce2fca1788691f5aa5d",
+      "strict_sha256": "b79eaa2828d8d6850c9958502900b6457dcd1114c5153044ed51b8764a92777d",
+      "accepted_sha256": "df467ca85e6a52ef386b99d8a1087b47f51b7c46036675ee8e3f431fa215da52",
+      "deltas": [
+        [
+          1774614,
+          -1
+        ],
+        [
+          1775454,
+          1
+        ]
+      ]
+    },
+    "l3z4.p3d": {
+      "source_sha256": "20bcb2f18f7ce1a4745ace5cdb3d2697ef948fcd6cfe0dd68603739143a598e4",
+      "strict_sha256": "93e31497e722a67472a521bddf11377cceb2de72579b73c0a131cfbd55564398",
+      "accepted_sha256": "e9fc80056bb90eafe123f7cd32c36f6714377312abcb2ef78f457bea592fb3d7",
+      "deltas": [
+        [
+          1133514,
+          -1
+        ],
+        [
+          1133515,
+          -1
+        ],
+        [
+          1133518,
+          -1
+        ],
+        [
+          1133519,
+          -1
+        ],
+        [
+          1613382,
+          1
+        ],
+        [
+          1613383,
+          1
+        ]
+      ]
+    },
+    "l4r2.p3d": {
+      "source_sha256": "aeef2fd99c23a56cbd3056a7962c9a4b16c542f7956527973c5a217c1188371c",
+      "strict_sha256": "083be510b3e1a37e07b35366386f785dc469592e0d7978fa85b927ddc42f5ff6",
+      "accepted_sha256": "45db427069fc2d9f61ad0ae9c1fd6c906e7f6268746146cc529d8a2c54936140",
+      "deltas": [
+        [
+          706985,
+          1
+        ],
+        [
+          706986,
+          1
+        ],
+        [
+          706987,
+          1
+        ],
+        [
+          1334245,
+          1
+        ],
+        [
+          1334246,
+          1
+        ]
+      ]
+    },
+    "l4r3.p3d": {
+      "source_sha256": "23797aac4c9a8908d4b7f2c49ef57065efef28ea33059bc05d44cbf14052928b",
+      "strict_sha256": "5c4fb2561cb1e56bcc3701492429f848739638af1c5ddb585facbb6f631a991b",
+      "accepted_sha256": "c22e148dfe3a3a50ebb6766552492a9c9c66b0aa6eb90c31e343a5e6f40258e5",
+      "deltas": [
+        [
+          1279434,
+          1
+        ],
+        [
+          1279438,
+          1
+        ],
+        [
+          1684035,
+          1
+        ],
+        [
+          1684036,
+          1
+        ],
+        [
+          1684037,
+          1
+        ]
+      ]
+    },
+    "l4r4a.p3d": {
+      "source_sha256": "0abdaf1655a7884a9cb140acc45d3afa097d24bac47cb39395531b2f6837d016",
+      "strict_sha256": "c26d298d3cc94a30bb348b9778de782b0307a4cb54631d1b5b642b61aea3276e",
+      "accepted_sha256": "57b13a6e82b870f35d7c73aee85e5542d41ab9cde4f6c557bc71a15fb741c8f6",
+      "deltas": [
+        [
+          406663,
+          1
+        ],
+        [
+          406664,
+          2
+        ],
+        [
+          406665,
+          1
+        ],
+        [
+          406667,
+          1
+        ],
+        [
+          406668,
+          2
+        ],
+        [
+          406669,
+          1
+        ],
+        [
+          644801,
+          -1
+        ],
+        [
+          644802,
+          -1
+        ],
+        [
+          644976,
+          1
+        ],
+        [
+          644977,
+          2
+        ],
+        [
+          644978,
+          1
+        ],
+        [
+          645148,
+          -2
+        ],
+        [
+          645149,
+          -4
+        ],
+        [
+          645150,
+          -3
+        ]
+      ]
+    },
+    "l4r4b.p3d": {
+      "source_sha256": "119b4bdc7f2574f7641293f228e7edcf89d22a9b5c240cb4670b7f8be751d57a",
+      "strict_sha256": "7e938b0e1df64da785e29b899d33071e5ca50daa71f51998522aa3fc51c22789",
+      "accepted_sha256": "1903055f0c2a20c7bbf2e914ad1c7143bc5baf0a85383542768aaa50a3596074",
+      "deltas": [
+        [
+          315834,
+          1
+        ],
+        [
+          315835,
+          1
+        ],
+        [
+          315836,
+          1
+        ],
+        [
+          315838,
+          1
+        ],
+        [
+          315839,
+          1
+        ],
+        [
+          315840,
+          1
+        ],
+        [
+          659893,
+          -1
+        ],
+        [
+          659895,
+          -1
+        ],
+        [
+          741945,
+          -1
+        ],
+        [
+          741947,
+          -1
+        ],
+        [
+          741949,
+          -1
+        ],
+        [
+          741951,
+          -1
+        ],
+        [
+          758541,
+          1
+        ],
+        [
+          778215,
+          1
+        ],
+        [
+          778216,
+          1
+        ],
+        [
+          806474,
+          1
+        ],
+        [
+          806475,
+          1
+        ],
+        [
+          806478,
+          1
+        ],
+        [
+          806479,
+          1
+        ]
+      ]
+    },
+    "l4r6.p3d": {
+      "source_sha256": "65689f0e70e23be56d45d15e2ede0f46bc5be7aec008daaf10674ef5cc583056",
+      "strict_sha256": "a783671527e20e63b9dfd2bbbb2f509334eac0d8a831443d293b953665907adf",
+      "accepted_sha256": "5d69bc93e35d3355361e22eea62d7e959e3bd331024113b7036ee58601f67707",
+      "deltas": [
+        [
+          1308890,
+          -1
+        ]
+      ]
+    },
+    "l4z1.p3d": {
+      "source_sha256": "d9f46eb4ef1d9bffb3824fff2bb54a557cbdf1352fedef6d21a671e078084b87",
+      "strict_sha256": "bbd259a4bdd2bd60575124e9bbae1d1f5cb54e670f2fd14a410174fc2979014d",
+      "accepted_sha256": "cf5f4ffebd2fe320854728964ec49b8c0622f9b1fa56f49546ebe88b44898382",
+      "deltas": [
+        [
+          909399,
+          1
+        ],
+        [
+          909400,
+          1
+        ]
+      ]
+    },
+    "l4z3.p3d": {
+      "source_sha256": "10eb96be4282cd58c2dd94b81f8b3f37c9c9effdaa4e11a4732684108f1fb494",
+      "strict_sha256": "76794ae57e2ae01fff3ebf53fdaa01b660d24be4cabdc238110b1bed08bf02e2",
+      "accepted_sha256": "1e9e58224622372d8d0a8e7c40f1dcb2a3d47b0f775b8f312fb123284109a017",
+      "deltas": [
+        [
+          896017,
+          -1
+        ],
+        [
+          896022,
+          -1
+        ],
+        [
+          896169,
+          -1
+        ],
+        [
+          896170,
+          -1
+        ]
+      ]
+    },
+    "l4z4.p3d": {
+      "source_sha256": "a0a6668cf39e81e270660279b3cae4c21a6637c7f13dc9c5678ed267fb824698",
+      "strict_sha256": "130985bcbaeba818ee9498ccd05c53309df541d9eff9c8e217acc1a7f223ead9",
+      "accepted_sha256": "f8ebf8e1a3364bd43cb3596810d58a5409be455738b9206117a0c810e4e28931",
+      "deltas": [
+        [
+          560438,
+          -1
+        ],
+        [
+          560439,
+          -1
+        ],
+        [
+          560440,
+          -1
+        ],
+        [
+          562890,
+          -1
+        ],
+        [
+          562891,
+          -1
+        ],
+        [
+          562892,
+          -1
+        ],
+        [
+          585629,
+          -1
+        ],
+        [
+          585639,
+          1
+        ]
+      ]
+    },
+    "l4z6.p3d": {
+      "source_sha256": "f9552e4cb1b613b1895454a95fcaa3e65970828747666f1c395198480651be40",
+      "strict_sha256": "5314be6bb0593680be370bfa3bf8322068f0bcae4e49d9cf122f6fcd22bdb92b",
+      "accepted_sha256": "6fa11943480191d3cc2495068b603c7844790a5928ffcc6c2eb32ad9bcbb4667",
+      "deltas": [
+        [
+          647075,
+          1
+        ],
+        [
+          647079,
+          1
+        ]
+      ]
+    },
+    "l5r1.p3d": {
+      "source_sha256": "f1f059a3778308a3130bc494ba08d1354054e8aee8881780d3352eb22fa167a0",
+      "strict_sha256": "7dc19b84fb4a0cc6a75265eb81789d454a04b604448c3ef28a4b87b5b12c4aeb",
+      "accepted_sha256": "04c9b2bb6b116fabddc65a66ea1ea790351a18ae586b18e87141a2513e34d167",
+      "deltas": [
+        [
+          643646,
+          1
+        ]
+      ]
+    },
+    "l5r3.p3d": {
+      "source_sha256": "63101b9882be5485f9481a4606a0575685b0a336d6c039f9d69ed87e80167fbc",
+      "strict_sha256": "8a2b76c8f3ac89cc1e2a81ebd8ac14bf946319fdf727c536d9c39231739ae310",
+      "accepted_sha256": "7e76882ea642f4f058b4248aa445d029dd9d80950f6e2b041f4b69186578818a",
+      "deltas": [
+        [
+          776410,
+          -1
+        ]
+      ]
+    },
+    "l5z1.p3d": {
+      "source_sha256": "bacfd97c5f3280d401baa7e64f63d7e003d2410dc94624945b52d8188c53cbda",
+      "strict_sha256": "9612f5a8d12318719a8172e70f1f89bd57a1bb6f237863f7835f853326658a78",
+      "accepted_sha256": "cc55bbfe7d653320dc00597321f5787fbe995d1c83310089be4db6c6ec97b5cf",
+      "deltas": [
+        [
+          1677574,
+          1
+        ],
+        [
+          1677577,
+          1
+        ],
+        [
+          1677578,
+          1
+        ],
+        [
+          1677579,
+          1
+        ]
+      ]
+    },
+    "l5z2.p3d": {
+      "source_sha256": "6fde9157c33ad566333d9c6847766a7de3b3364877de1162ffcfc74d55826ca3",
+      "strict_sha256": "7e536596b1529dfcc5d5f9e8cf9de3513023c9e27ad5e60280d66f1a5e87f670",
+      "accepted_sha256": "81f33f755ea288a5273aa12273f6155da7a0b6c48377f069f8cb16fa3f80fd90",
+      "deltas": [
+        [
+          1013883,
+          1
+        ],
+        [
+          1013884,
+          1
+        ],
+        [
+          1343148,
+          -1
+        ],
+        [
+          1343151,
+          -1
+        ],
+        [
+          1343152,
+          -1
+        ],
+        [
+          1343159,
+          1
+        ],
+        [
+          1343160,
+          1
+        ],
+        [
+          1343163,
+          1
+        ],
+        [
+          1429092,
+          1
+        ],
+        [
+          1451100,
+          1
+        ]
+      ]
+    },
+    "l5z3.p3d": {
+      "source_sha256": "5a83c12a4f86ab880975882e6ca1a1fb01d6e2cbdfc167e69f99a744e73cedab",
+      "strict_sha256": "02c549f26d0feb8eafe8fc25cad0f37c5375b4f2e98393c71963cda6a5c3abfe",
+      "accepted_sha256": "01180c08413468f0951d61302fa053e618fc0bea4cdb544db7bc2e8246ec1bdf",
+      "deltas": [
+        [
+          1127606,
+          -1
+        ],
+        [
+          1127610,
+          -1
+        ],
+        [
+          1127614,
+          -1
+        ],
+        [
+          1127618,
+          -1
+        ]
+      ]
+    },
+    "l5z4.p3d": {
+      "source_sha256": "5438c08cc2315943a3736cc9d822ffed5447a3951ae9f8a6f15111236d6342fd",
+      "strict_sha256": "b0ee91c1cd54e67adb30aa39772259429cc38e58d4fb747f216ff8c9f145ec8e",
+      "accepted_sha256": "5081439b3d09fb661d9629ff617831306d851c51b05aabb4af57080a2ecd5d47",
+      "deltas": [
+        [
+          1823817,
+          -1
+        ],
+        [
+          1823818,
+          -1
+        ],
+        [
+          1823819,
+          -1
+        ],
+        [
+          1824217,
+          1
+        ],
+        [
+          1824218,
+          1
+        ],
+        [
+          1824219,
+          1
+        ],
+        [
+          1825001,
+          -1
+        ],
+        [
+          1825002,
+          -1
+        ],
+        [
+          1825003,
+          -1
+        ],
+        [
+          1825549,
+          1
+        ],
+        [
+          1825550,
+          1
+        ],
+        [
+          1825551,
+          1
+        ],
+        [
+          1826641,
+          1
+        ],
+        [
+          1826642,
+          1
+        ],
+        [
+          1826643,
+          1
+        ],
+        [
+          1837158,
+          1
+        ]
+      ]
+    },
+    "l6r1.p3d": {
+      "source_sha256": "c6a84bd2c07390c530c705ffa548a9abf8eab6e4ba79e02c334ff3d5ff62f72c",
+      "strict_sha256": "2e3fd536ac570d18c250e7bf12123c8e9c370d55a2710029a68bc7e9b675ada5",
+      "accepted_sha256": "9de2304d86040e8c884d4af8bf4afd6930a32a81aa96a54e173d207a6f267a6f",
+      "deltas": [
+        [
+          850419,
+          1
+        ],
+        [
+          850420,
+          1
+        ],
+        [
+          850421,
+          1
+        ]
+      ]
+    },
+    "l6r4.p3d": {
+      "source_sha256": "cba21cfcaae0f32a86b0b8ebb3b8892f9869631f5be4222ac2f1afa9d5fbc9cc",
+      "strict_sha256": "9edc492f939bcd956f73083d6a4187735d21350186d1d52e05d465abbef23ab4",
+      "accepted_sha256": "35713e56cf31d4657eb896f3a3a883feafbed0687e56122ff14523c186036005",
+      "deltas": [
+        [
+          784150,
+          -1
+        ]
+      ]
+    },
+    "l6z1.p3d": {
+      "source_sha256": "0b1950c9364f3ffb0e26823b644c9dba208ed75ee2b136846d93454b23f092a7",
+      "strict_sha256": "1e09bfa61c414ee644b197effca816e31034ee57eea5b8bb6b1bc57cbfc40c4e",
+      "accepted_sha256": "4438b3e6d179c8627ccf742d16a0e37191c692aa98ba46b655f0948e861730de",
+      "deltas": [
+        [
+          813597,
+          -1
+        ],
+        [
+          813598,
+          -1
+        ],
+        [
+          813599,
+          -1
+        ]
+      ]
+    },
+    "l6z3.p3d": {
+      "source_sha256": "d17f3b63aefa346ffa69f6dabe3b3be0eb02a2db852a75def2c69aedd5cdba0a",
+      "strict_sha256": "3801c52af939bc8744bf22ecd3aa0f1968810cbd00ae523827d83d2c24fed466",
+      "accepted_sha256": "bc7052b8c09c02cd2dbf4dcd6288e2546783857f97f868abd7511e709439eb95",
+      "deltas": [
+        [
+          1391041,
+          1
+        ],
+        [
+          1391042,
+          1
+        ],
+        [
+          1391043,
+          1
+        ]
+      ]
+    },
+    "l6z4.p3d": {
+      "source_sha256": "2e8ae2ec760213daed32ff83c98242799280f5d9c0c4a907fe5488e8091f8c2d",
+      "strict_sha256": "2ff2da9186e1f1321f4d3ef4a90ff62d1457e3585763b92d1e7b1b65b2726b48",
+      "accepted_sha256": "04c3847af4517e5a9530a614496fe845c82888866298130957903b782c6e3740",
+      "deltas": [
+        [
+          1512031,
+          1
+        ],
+        [
+          1630237,
+          1
+        ],
+        [
+          1705941,
+          1
+        ],
+        [
+          1705942,
+          1
+        ]
+      ]
+    },
+    "l7r2.p3d": {
+      "source_sha256": "1240c8232a8cc20684c93d43dcae3d31d9f988bf86ebb876bda6d005de7e5fa1",
+      "strict_sha256": "ea5470a7798dbdeb558b2c786b4d54f368c0693e376986b5210eb6dfd1f83076",
+      "accepted_sha256": "9aad1f9e741171acf1cce5e2782033734bc36dcc9e94de31b341443a7e54acdd",
+      "deltas": [
+        [
+          927273,
+          1
+        ]
+      ]
+    },
+    "l7r3.p3d": {
+      "source_sha256": "f173786e2bbe9e8f7b00c8f41c5df7503b61a63e93697c702c0420426b3b7963",
+      "strict_sha256": "51422b600f096e145bbf52e8f1047c3faab07555100abe0d25627f4e90f1a324",
+      "accepted_sha256": "2214687c76c2eab812c0573bb01fb3a2f128faa047c7e8439218eefc9d1d0402",
+      "deltas": [
+        [
+          128129,
+          1
+        ]
+      ]
+    },
+    "l7r6.p3d": {
+      "source_sha256": "3057cac93154cc3ee5e2bb894e1737f996df0378d3c4c3c10b96502ff436006a",
+      "strict_sha256": "15c2f545a6944e22d12e40e409528b2aed2689d88ee4fe9a48f8f1a7718c4f18",
+      "accepted_sha256": "13b8ebeff6cd0e24920388e49218144389dce856434a0ee6b238242c8216a7a8",
+      "deltas": [
+        [
+          1301741,
+          -1
+        ]
+      ]
+    },
+    "l7r7.p3d": {
+      "source_sha256": "c628db34c9241f29c801c4aa5f97d4b2b4a89939988681d9719423c897ee0e53",
+      "strict_sha256": "5e5343e72d3f43b84a363da121462e8903c59e1c3d187bc66510189dc1ea5044",
+      "accepted_sha256": "dcf97cd923504a246659981e2dda5b51ed5dbdc4c9489c885d2dc92c5f39b0c9",
+      "deltas": [
+        [
+          963795,
+          -1
+        ]
+      ]
+    },
+    "l7z1.p3d": {
+      "source_sha256": "b597c883e05adbdf30cd61af710d7e989f46422280fa6ae59df34d67ef88905b",
+      "strict_sha256": "100f3a58830476a82177222ec2db93f91ec434d4c56015498aae589d1d8bdd54",
+      "accepted_sha256": "307b3e7c51c3e9fe323cf9e067cc3cd49629595d465570ff30441f714e7ace60",
+      "deltas": [
+        [
+          887838,
+          1
+        ],
+        [
+          887839,
+          1
+        ],
+        [
+          897338,
+          1
+        ]
+      ]
+    },
+    "l7z3.p3d": {
+      "source_sha256": "b412f9a76082164341e3397f2aafb0152e3360e6920627c2ae9ca0da6af0e26e",
+      "strict_sha256": "548e571684d3d9133079127a293a31e8a991c0d1eb7bf2c06d27b3d4dc68cb75",
+      "accepted_sha256": "9235bf5965accc792dec45c6a56d98c1f1cd68e98cc4a0b4d7a661004529c898",
+      "deltas": [
+        [
+          1064758,
+          -1
+        ],
+        [
+          1064912,
+          -1
+        ]
+      ]
+    },
+    "l7z6.p3d": {
+      "source_sha256": "270836236a63fe9e6aab18a921674ccde0039170b99e4a76c460613a83610c1f",
+      "strict_sha256": "7b26d679643a00a0083cbc47015c4932dc255aa247719cb5fb2bde5a8e98b95b",
+      "accepted_sha256": "7bd988f9511eca878213df52284bf5b637b2d5f1e6dcda3258bddd61e59104c7",
+      "deltas": [
+        [
+          526948,
+          1
+        ],
+        [
+          526950,
+          1
+        ],
+        [
+          526952,
+          1
+        ],
+        [
+          526954,
+          1
+        ],
+        [
+          633505,
+          -1
+        ],
+        [
+          633506,
+          -1
+        ],
+        [
+          633507,
+          -1
+        ]
+      ]
+    }
+  },
+  "maximum_abs_delta": 4,
+  "changed_rgb_bytes": 193,
+  "source_rgb_bytes": 4728066
+}

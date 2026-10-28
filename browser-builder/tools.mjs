@@ -13,7 +13,8 @@ function requireSuccess(code, logs, tool) {
   if (code !== 0) throw new Error(`${tool} failed: ${logs.slice(-4).join(' ')}`);
 }
 
-export async function createTools(onProgress = () => {}) {
+export async function createTools(onProgress = () => {}, profile = {}) {
+  const textureConcurrency = Math.max(1, Math.min(4, profile.textureWorkers || 2));
   let nativePromise, ffmpeg, stopped = false;
   const queue = [], encoders = [];
   const rejectJobs = error => {
@@ -31,7 +32,7 @@ export async function createTools(onProgress = () => {}) {
   };
   const startEncoders = () => {
     if (encoders.length) return;
-    for (let index = 0; index < 4; index++) {
+    for (let index = 0; index < textureConcurrency; index++) {
       const worker = new Worker(new URL('./texture-worker.mjs', import.meta.url), {type: 'module'});
       const slot = {worker, job: null};
       encoders.push(slot);
@@ -62,7 +63,7 @@ export async function createTools(onProgress = () => {}) {
       code = ffmpeg.exec('-y', ...mountedArgs);
       const files = new Map();
       for (const output of outputs) {
-        try { files.set(output, ffmpeg.FS.readFile(`/${output}`).slice()); }
+        try { files.set(output, ffmpeg.FS.readFile(`/${output}`)); }
         catch (error) { if (!allowFailure) throw error; }
       }
       if (!allowFailure) requireSuccess(code, logs, 'Movie conversion');
@@ -76,7 +77,7 @@ export async function createTools(onProgress = () => {}) {
     }
   };
   return {
-    textureConcurrency: 4,
+    textureConcurrency,
     runFFmpeg,
     async convertTexture(request) {
       nativePromise ||= createNativeTexture();
@@ -103,7 +104,7 @@ export async function createTools(onProgress = () => {}) {
   };
 }
 
-export async function packageCIA({assets, homeMenu, runtime, rsf, storage, onProgress = () => {}}) {
+export async function packageCIA({assets, homeMenu, runtime, rsf, storage, packedVersion = 1056, onProgress = () => {}}) {
   const bannerLogs = [];
   const banner = await createBannertool({print: line => bannerLogs.push(line), printErr: line => bannerLogs.push(line)});
   banner.FS.writeFile('/banner.png', new Uint8Array(await homeMenu.banner.arrayBuffer()));
@@ -121,18 +122,24 @@ export async function packageCIA({assets, homeMenu, runtime, rsf, storage, onPro
   makerom.FS.writeFile('/game.rsf', rsf);
   makerom.FS.writeFile('/banner.bnr', bannerData);
   makerom.FS.writeFile('/icon.smdh', iconData);
+  // Invalidate success before any output can be truncated or sparsely rewritten.
+  await storage.remove('completed.json');
+  const scratch = await storage.openSync('content.ncch');
+  mountDiskOutput(makerom, '/output/content.ncch', scratch.handle);
   const output = await storage.openSync('installer.cia');
   const disk = mountDiskOutput(makerom, '/output/game.cia', output.handle, size => onProgress({stage: 'package', bytes: size, detail: 'Writing your installer'}));
   try {
     onProgress({stage: 'package', detail: 'Assembling your complete installer'});
     const code = exitStatus(makerom, ['-f', 'cia', '-o', '/output/game.cia', '-target', 't', '-rsf', '/game.rsf',
-      '-DROMFS_ROOT=/game', '-elf', '/runtime.elf', '-icon', '/icon.smdh', '-banner', '/banner.bnr', '-ver', '1041']);
+      '-DROMFS_ROOT=/game', '-elf', '/runtime.elf', '-icon', '/icon.smdh', '-banner', '/banner.bnr', '-ver', String(packedVersion)]);
     requireSuccess(code, logs, 'Installer packaging');
     disk.flush();
     if (disk.size < 1024 * 1024) throw new Error('The installer is incomplete.');
+    onProgress({stage: 'package', detail: 'Installer assembled', bytes: disk.size, heapBytes: makerom.HEAPU8.length});
   } finally {
-    output.handle.close();
+    output.handle.close(); scratch.handle.close();
     makerom.FS.unmount('/game');
+    await storage.remove('content.ncch');
   }
   return output.file.getFile();
 }

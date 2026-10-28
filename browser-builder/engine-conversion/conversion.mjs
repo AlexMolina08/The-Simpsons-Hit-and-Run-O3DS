@@ -377,25 +377,44 @@ function checkAbort(signal) {
  * writeOutput persists generated data to OPFS and returns a File; originals are
  * referenced unchanged, and no user game bytes are sent over the network.
  */
-export async function prepareGameAssets({files: input, tools, pyodide, profile, writeOutput, onProgress = () => {}, signal}) {
+export async function prepareGameAssets({files: input, tools, pyodide, profile, writeOutput, onProgress = () => {}, signal,
+  phase = 'all', previous = null, checkpoints = null}) {
   const summary = validateInput(input), selected = lookupFiles(input);
-  const files = new Map([...selected.files].filter(([path]) => {
+  const files = previous?.files ? new Map(previous.files) : new Map([...selected.files].filter(([path]) => {
     const key = path.toLowerCase();
     return path.split('/').at(-1).toLowerCase() !== 'temp.err' &&
       (/^(art|scripts|sound)\//.test(key) || (!key.includes('/') && key.endsWith('.rcf')));
   }));
+  const report = {...summary, ...(previous?.report || {})};
+  const homeMenu = {...(previous?.homeMenu || {})};
   const persist = async (path, value) => {
     checkAbort(signal);
     const file = await writeOutput(path, value instanceof Blob ? value : new Blob([value]));
     files.set(path, file);
     return file;
   };
-  const texture = await prepareTextureBundle({files, profile, pyodide, tools, progress: onProgress, checkCancelled: () => checkAbort(signal)});
-  await persist('native146.bundle', texture.blob);
+  if (phase === 'all' || phase === 'textures') {
+    const cached = await checkpoints?.read('native-textures');
+    if (cached) {
+      for (const entry of cached.files) files.set(...entry);
+      Object.assign(report, cached.metadata);
+      onProgress({stage: 'textures', detail: 'Reusing verified textures'});
+    } else {
+      const texture = await prepareTextureBundle({files: selected.files, profile, pyodide, tools, progress: onProgress, checkCancelled: () => checkAbort(signal)});
+      const file = await persist('native146.bundle', texture.blob);
+      const metadata = {textureBundleSHA256: texture.sha256, textures: texture.entries};
+      await checkpoints?.commit('native-textures', new Map([['native146.bundle', file]]), metadata);
+      Object.assign(report, metadata);
+    }
+  }
+
+  if (phase === 'all' || phase === 'media') {
 
   const dialog = selected.get('dialog.rcf');
   for (let index = 0; index < GREETINGS.length; index++) {
     checkAbort(signal);
+    const cached = await checkpoints?.read(`greeting-${index}`);
+    if (cached) { for (const entry of cached.files) files.set(...entry); continue; }
     const source = await archiveMember(dialog, GREETINGS[index]);
     const name = `greeting-${index}.pcm`;
     const result = await mediaCommand(tools.runFFmpeg, {
@@ -411,10 +430,15 @@ export async function prepareGameAssets({files: input, tools, pyodide, profile, 
     if (peak <= 32 || peak >= 27000) throw new Error('A character greeting is silent or clips.');
     const header = new Uint8Array(12), view = new DataView(header.buffer);
     header.set(textEncoder.encode('LID1')); view.setUint32(4, 24000, true); view.setUint32(8, audio.length / 2, true);
-    await persist(`sound/3ds-lid/${String(index).padStart(2, '0')}.bin`, new Blob([header, audio]));
+    const path = `sound/3ds-lid/${String(index).padStart(2, '0')}.bin`;
+    const file = await persist(path, new Blob([header, audio]));
+    await checkpoints?.commit(`greeting-${index}`, new Map([[path, file]]));
     onProgress({stage: 'audio', completed: index + 1, total: GREETINGS.length, detail: 'Converting character voices'});
   }
 
+  const cueCheckpoint = await checkpoints?.read('home-cue');
+  if (cueCheckpoint) homeMenu.cue = cueCheckpoint.files.get('home-menu/banner.wav');
+  else {
   const theme = await archiveMember(selected.get('music02.rcf'), 'sound\\music\\simpsons_theme.rsd');
   const cue = await mediaCommand(tools.runFFmpeg, {
     inputs: [{name: 'theme.rsd', data: theme}], args: ['-hide_banner', '-loglevel', 'error', '-i', 'theme.rsd', '-t', '2.8', '-af',
@@ -423,7 +447,17 @@ export async function prepareGameAssets({files: input, tools, pyodide, profile, 
   });
   const cueBytes = await bytesOf(toolOutput(cue, 'banner.wav'));
   validateBannerCue(cueBytes);
-  const homeMenu = {cue: await writeOutput('home-menu/banner.wav', new Blob([cueBytes]))};
+  homeMenu.cue = await writeOutput('home-menu/banner.wav', new Blob([cueBytes]));
+  await checkpoints?.commit('home-cue', new Map([['home-menu/banner.wav', homeMenu.cue]]));
+  }
+  }
+
+  if (phase === 'all' || phase === 'textures') {
+  const artworkCheckpoint = await checkpoints?.read('home-artwork');
+  if (artworkCheckpoint) {
+    homeMenu.banner = artworkCheckpoint.files.get('home-menu/banner.png');
+    homeMenu.icon = artworkCheckpoint.files.get('home-menu/icon.png');
+  } else {
 
   const render = pyodide.globals.get('render_artwork');
   const frontend = pyodide.toPy(await bytesOf(selected.get('art/frontend/scrooby/frontend.p3d')));
@@ -436,16 +470,32 @@ export async function prepareGameAssets({files: input, tools, pyodide, profile, 
       homeMenu.icon = await writeOutput('home-menu/icon.png', new Blob([artwork['icon.png']]));
     } finally { result.destroy(); }
   } finally { render.destroy(); frontend.destroy(); logo.destroy(); }
+  await checkpoints?.commit('home-artwork', new Map([['home-menu/banner.png', homeMenu.banner], ['home-menu/icon.png', homeMenu.icon]]));
+  }
+  }
+
+  if (phase === 'all' || phase === 'media') {
 
   const movieReport = [], movies = movieNames(selected);
   for (let index = 0; index < movies.length; index++) {
     checkAbort(signal);
     const stem = movies[index];
     onProgress({stage: 'movies', completed: index, total: movies.length, detail: `Converting ${stem}`});
+    const cached = await checkpoints?.read(`movie-${stem}`);
+    if (cached) {
+      for (const entry of cached.files) files.set(...entry);
+      movieReport.push(cached.metadata);
+      onProgress({stage: 'movies', completed: index + 1, total: movies.length, detail: `Reused ${stem}`});
+      continue;
+    }
     const movie = await convertMovie(selected.get(`movies/${stem}.rmv`), stem, tools.runFFmpeg);
-    await persist(`movies/${stem}.3dm`, movie.blob);
-    movieReport.push({file: `${stem}.3dm`, frames: movie.frames, audioBytes: movie.audioBytes, videoBytes: movie.videoBytes});
+    const path = `movies/${stem}.3dm`, file = await persist(path, movie.blob);
+    const metadata = {file: `${stem}.3dm`, frames: movie.frames, audioBytes: movie.audioBytes, videoBytes: movie.videoBytes};
+    movieReport.push(metadata);
+    await checkpoints?.commit(`movie-${stem}`, new Map([[path, file]]), metadata);
     onProgress({stage: 'movies', completed: index + 1, total: movies.length, detail: `Converted ${stem}`});
   }
-  return {files, homeMenu, report: {...summary, textureBundleSHA256: texture.sha256, textures: texture.entries, movies: movieReport}};
+  report.movies = movieReport;
+  }
+  return {files, homeMenu, report};
 }
