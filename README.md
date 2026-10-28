@@ -3,9 +3,10 @@
 Version **1.1.1**. A homebrew port for original Nintendo 3DS and 2DS. The same build also runs on
 New 3DS and New 2DS XL, enabling their faster CPU and L2 cache automatically.
 You need your own retail PC copy of the game to build from source.
-Game data and DSP firmware are not distributed in this source repository.
+Complete game-data installers are not provided for download. Build your CIA locally
+from your own retail PC copy. DSP firmware must come from your own console.
 
-[Install](#install) · [Update](#updating-an-existing-installation) · [Build from your PC copy](docs/INSTALL.md#build-from-your-own-pc-copy) · [Controls](#interface-and-controls) · [Release notes](https://github.com/AlexMolina08/The-Simpsons-Hit-and-Run-O3DS/releases/tag/v1.1.1)
+[Build your CIA](#build-your-cia) · [Install](#install) · [Update](#updating-an-existing-installation) · [Controls](#interface-and-controls) · [Release notes](https://github.com/AlexMolina08/The-Simpsons-Hit-and-Run-O3DS/releases/tag/v1.1.1)
 
 ## Screenshots and menu tour
 
@@ -42,58 +43,54 @@ These are emulator captures, not measurements of console performance.
 
 </details>
 
+## Build your CIA
+
+Use your own **complete retail PC game folder**. The builder prepares textures,
+movies, sound, and HOME Menu artwork from those local files, then creates your CIA.
+Your game folder is read only; neither it nor the finished installer is uploaded.
+
+The browser-only builder is not published yet. Until it is available, follow the
+[local source-build guide](docs/INSTALL.md#build-from-your-own-pc-copy) for Windows
+through WSL 2, Linux, or macOS. It includes PC-folder and disc-image preparation.
+
+The source builder checks the installation, converts and validates all game cinematics,
+compiles the port, and writes:
+
+```text
+out/releases/v1.1.1/Simpsons-Hit-and-Run-3DS-v1.1.1.cia
+```
+
 ## Install
 
-Download the [complete v1.1.1 CIA](https://github.com/AlexMolina08/The-Simpsons-Hit-and-Run-O3DS/releases/download/v1.1.1/Simpsons-Hit-and-Run-3DS-v1.1.1.cia).
-It includes game data and all 17 cinematics. A console with custom firmware and FBI is required.
+A console with custom firmware and FBI is required.
 
-1. Keep at least **4 GB free on the SD card before copying** the CIA.
-2. Download it on your computer and copy it to `sd:/cias/`.
-3. In **FBI → SD → cias**, select the CIA and choose **Install CIA**.
-4. Wait for success, then launch the game from the **HOME Menu**.
+1. Create the CIA from your PC copy using the build instructions above.
+2. Keep at least **4 GB free on the SD card before copying** the CIA.
+3. Copy your CIA to `sd:/cias/`.
+4. In **FBI → SD → cias**, select it and choose **Install CIA**.
+5. Wait for success, then launch the game from the **HOME Menu**.
 
+Your locally created CIA includes its prepared game data and all cinematics from your PC copy.
 Sound needs your console's DSP firmware at `sd:/3ds/dspfirm.cdc`, dumped with DSP1.
-No separate PC-data copy is needed for the complete CIA.
+No separate PC-data copy is needed on the SD card after creating the complete CIA.
 
-**[Full installation guide: release CIA, PC game folder, or PC ISO — Windows, Linux and macOS](docs/INSTALL.md)**
+**[Full installation and source-build guide](docs/INSTALL.md)**
 
 ### Updating an existing installation
 
 1. Close the game and turn off the console.
 2. **Back up the entire `sd:/3ds/simpsons/` folder to your computer.** Keep your DSP firmware on SD.
-3. Download the new **v1.1.1 CIA**, copy it to `sd:/cias/`, and install it with
-   **FBI → SD → cias → select the CIA → Install CIA**. Confirm replacement if asked.
-4. Launch the game from the **HOME Menu** and load your existing save.
+3. Create the new version's CIA from your PC copy, then copy it to `sd:/cias/`.
+4. Install it with **FBI → SD → cias → select the CIA → Install CIA**. Confirm replacement if asked.
+5. Launch the game from the **HOME Menu**, then check your existing save and settings.
 
 **Do not uninstall the old game or delete its save folder.** Copying the CIA to
 SD alone does not update the installed title. The title ID and save format stay
 the same; your saves and settings remain. After checking the update, you can
-delete the installer from `cias/`.
+delete your local installer from `cias/`.
 
 If you used an old `.3dsx`, launch the newly installed HOME Menu icon to use this
 release. [Full update and recovery instructions](docs/INSTALL.md#update-without-losing-your-progress).
-
-### Install with a QR code
-
-Open **FBI → Remote Install → Scan QR Code** and scan this from another screen:
-
-<a href="images/cia-install-qr.png"><img src="images/cia-install-qr.png" width="424" alt="Scan with FBI to install the complete version 1.1.1 CIA"></a>
-
-[Open the QR at full size](images/cia-install-qr.png). Keep its white border visible.
-It points directly to the complete v1.1.1 CIA. For this large download, the computer/SD
-method above is recommended. If FBI fails, report its version, exact error code
-and the percentage reached.
-
-## Build a CIA
-
-Have an installed **retail PC game folder**, or your **PC disc ISO(s)**?
-Follow the [step-by-step PC-copy installation guide](docs/INSTALL.md#build-from-your-own-pc-copy).
-It explains how to prepare the game files, install the tools and build on
-**Windows through WSL 2, Linux, and macOS**.
-
-The builder takes the installed game directory, not an ISO or installer CAB.
-The guide covers that preparation step. For build flags, Homebrew Launcher and
-packaging details, see the [technical build guide](docs/OLD3DS.md).
 
 ## Interface and controls
 

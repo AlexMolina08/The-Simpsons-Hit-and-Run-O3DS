@@ -14,8 +14,10 @@ inside it. The original `build.bat` follows the separate New 3DS build path.
   On Debian/Ubuntu: `sudo apt install git build-essential cmake ninja-build python3 ffmpeg`.
   Check `cmake --version` and `python3 --version`; older distributions need newer packages.
 - Install FFmpeg, or use `python3 -m pip install imageio-ffmpeg` in a Python virtual environment.
-- Use your installed retail PC game, including all 17 `.rmv` movies. Earlier
+- Use your installed retail PC game, including all its `.rmv` movies. Earlier
   development/leaked data is not supported.
+  English PC data has 16 movies; the optional German `gvuglogo.rmv` logo is also
+  preserved and validated when present.
 
 ## macOS
 
@@ -81,7 +83,7 @@ python3 tools/3ds/make_cia.py "/path/to/PC game"
 ```
 
 The command validates prerequisites, prepares game data, converts the movies,
-fully decodes all 17 conversions, compares frame counts and complete PCM against
+fully decodes all game cinematics, compares frame counts and complete PCM against
 the originals, preserves video proportions with letterboxing where needed, rebuilds the accepted native texture bundle, compiles dependencies
 and the game, checks ARMv6K/VFPv2 and the fixed 64 MiB startup
 budget, then packages a complete CIA. Normal play is enabled. The release profile preserves the accepted v104 rendering
@@ -205,20 +207,19 @@ unavailable. It does not change music playback positions or game settings. This
 feature runs while the game is active; it cannot add sounds to the system HOME
 Menu or other applications. Actual sleep/wake audio needs a physical console check.
 
-## Publish a release
+## Keep complete game-data installers local
 
-Publishing is separate from local building. **Release CIA.command** invokes the
-versioned release launcher. Commit source changes on `main` first. Install GitHub
-CLI and sign in using `gh auth login`. The launcher prepares packaging tools,
-rebuilds, packages, tags and uploads a test release. It verifies server checksums
-before publishing and does not overwrite an existing public version.
+Use **Build CIA.command** or `tools/3ds/make_cia.py` with your retail PC game
+folder. This creates a private installer without a GitHub login or publication.
+See the [own-copy build guide](INSTALL.md#build-from-your-own-pc-copy).
+
+The legacy **Release CIA.command** launcher no longer publishes complete game-data
+CIAs. It requires `--no-upload`; upload and resume flags do not bypass this check.
+It can still create or verify a versioned private build from a clean source tree:
 
 ```sh
 python3 tools/3ds/release_cia.py --version 1.1.1 --stable --no-upload
-python3 tools/3ds/release_cia.py --version 1.1.1 --stable --resume
 ```
 
-The first command builds a versioned local package. The second resumes an
-interrupted upload after verifying source/tag/artifact integrity. Use `--dry-run`
-to inspect the plan. Use `--stable` only after the intended hardware validation.
-Builds live under `out/releases/vVERSION/`; this workflow preserves earlier packages.
+Builds live under `out/releases/vVERSION/`; this workflow preserves earlier local
+packages. Build and packaging checks do not establish installed-console behavior.

@@ -4,17 +4,20 @@ These steps cover Nintendo 3DS, 3DS XL, 2DS, New 3DS, New 3DS XL and New 2DS XL.
 The same CIA supports all models. You need a console with custom firmware and FBI.
 
 - **Already have the port?** Follow [Update without losing your progress](#update-without-losing-your-progress).
-- **Want to install the ready-made release?** Follow [Install the release CIA](#install-the-release-cia).
+- **Have created your CIA?** Follow [Install your locally created CIA](#install-your-locally-created-cia).
 - **Have the PC game folder or a PC disc ISO?** Follow [Build from your own PC copy](#build-from-your-own-pc-copy).
 
-## Install the release CIA
+Complete game-data installers are not provided for download. Create your CIA
+locally from your own retail PC copy using the instructions below. A browser-only
+builder is being prepared; this guide does not claim that it is available yet.
+
+## Install your locally created CIA
 
 1. Turn off the console and connect its SD card to your computer.
-2. Download **Simpsons-Hit-and-Run-3DS-v1.1.1.cia** from the
-   [v1.1.1 release](https://github.com/AlexMolina08/The-Simpsons-Hit-and-Run-O3DS/releases/tag/v1.1.1).
-   Choose the `.cia` file under **Assets**, not GitHub's **Source code** archives.
+2. Create **Simpsons-Hit-and-Run-3DS-v1.1.1.cia** from your PC copy using
+   [Build from your own PC copy](#build-from-your-own-pc-copy).
 3. Make sure the SD card has at least **4 GB free before copying**. It needs room
-   for both the downloaded CIA and the installed game. Copy the CIA into `cias`
+   for both the locally created CIA and the installed game. Copy the CIA into `cias`
    at the root of the card. Create that folder if necessary.
 4. Safely eject the card, put it back in the console and turn the console on.
 5. Open **FBI → SD → cias → Simpsons-Hit-and-Run-3DS-v1.1.1.cia → Install CIA**.
@@ -23,16 +26,11 @@ The same CIA supports all models. You need a console with custom firmware and FB
 7. After checking the game works, you may delete the installer from `sd:/cias/`.
    Keep the installed title and the `sd:/3ds/simpsons/` folder.
 
-The complete CIA includes the game data and all 17 cinematics. It needs no separate
-PC-data copy. A source build produces the same type of complete installer.
+Your locally created CIA includes the prepared game data and all game cinematics.
+It needs no separate PC-data copy on the SD card.
 
 **Sound:** use DSP1 on your console to dump its DSP firmware. The resulting file
 must be `sd:/3ds/dspfirm.cdc`. Keep it when installing or updating the game.
-
-**QR alternative:** open **FBI → Remote Install → Scan QR Code**, then scan the
-[release QR](../images/cia-install-qr.png) from another screen. It installs the same CIA.
-For this large download, copying the CIA from a computer is more reliable than
-console Wi-Fi. If QR download fails, use the SD steps above.
 
 ## Update without losing your progress
 
@@ -43,9 +41,7 @@ files or replace your save folder.
 2. Copy the whole **`3ds/simpsons` folder from your SD card to your computer** as a
    backup. It holds `Save1`–`Save4` and `srr2_settings.ini` when present. Keep this
    backup outside the SD card. Also keep `3ds/dspfirm.cdc` on the card.
-3. Download **Simpsons-Hit-and-Run-3DS-v1.1.1.cia** from the
-   [v1.1.1 release](https://github.com/AlexMolina08/The-Simpsons-Hit-and-Run-O3DS/releases/tag/v1.1.1).
-   Copy it to `sd:/cias/`. Keep at least **4 GB free before copying** to allow room
+3. Create the new version's CIA from your own PC copy, then copy it to `sd:/cias/`. Keep at least **4 GB free before copying** to allow room
    for the installer and installation work.
 4. Put the SD card back in the console. Open **FBI → SD → cias**, select the new
    CIA and choose **Install CIA**. If FBI asks to replace the existing title,
@@ -89,7 +85,7 @@ Hit and Run/
   art/frontend/scrooby/bootup.p3d
   scripts/
   sound/
-  movies/                  (all 17 .rmv files)
+  movies/                  (all game .rmv files)
   scripts.rcf
   dialog.rcf
   music00.rcf
@@ -98,6 +94,9 @@ Hit and Run/
   music03.rcf
   ...other retail .rcf archives
 ```
+
+The English PC copy contains 16 movies. Some regional copies also include the
+German `gvuglogo.rmv` logo; the builder preserves and validates it when present.
 
 **If you have PC disc ISOs on Windows:**
 
@@ -213,7 +212,7 @@ Run in **Ubuntu/WSL, Linux Terminal, or macOS Terminal**:
 
 ```sh
 cd ~
-git clone --branch v1.1.1 https://github.com/AlexMolina08/The-Simpsons-Hit-and-Run-O3DS.git
+git clone --branch main https://github.com/AlexMolina08/The-Simpsons-Hit-and-Run-O3DS.git
 cd The-Simpsons-Hit-and-Run-O3DS
 python3 -m venv .venv
 source .venv/bin/activate
@@ -241,8 +240,8 @@ python3 tools/3ds/make_cia.py "$HOME/Games/Hit and Run" --version 1.1.1
 python3 tools/3ds/make_cia.py "$HOME/Games/Hit and Run" --version 1.1.1
 ```
 
-The tool checks the installation, copies assets, converts and validates all 17
-movies, compiles the game and creates the CIA. Keep the terminal open until it
+The tool checks the installation, copies assets, converts and validates all game
+cinematics, compiles the game and creates the CIA. Keep the terminal open until it
 prints **Ready to install**. It does not upload or publish your files.
 
 Your installer is:
@@ -253,7 +252,7 @@ out/releases/v1.1.1/Simpsons-Hit-and-Run-3DS-v1.1.1.cia
 
 On WSL, run `explorer.exe out/releases/v1.1.1` to open the output in Windows.
 On Linux/macOS, open that folder with your file manager. Install the CIA using the
-[SD steps above](#install-the-release-cia). No extra game-data copy is needed.
+[SD steps above](#install-your-locally-created-cia). No extra game-data copy is needed.
 
 ### Common build problems
 
@@ -270,5 +269,5 @@ On Linux/macOS, open that folder with your file manager. Install the CIA using t
   `.venv` before running the build command again.
 
 For a console install failure, report the CIA filename, FBI version, full error
-code and percentage reached. A valid download alone does not prove installation
+code and percentage reached. A valid local package alone does not prove installation
 or gameplay on your particular console.
