@@ -47,6 +47,8 @@ public:
     bool BeginWorldTarget(void);
     bool EndWorldTarget(void);
     bool StereoActive(void) const { return stereoThisFrame; }
+    void SubmitWorldEarly(void);
+    float StereoEyeShift(void) const { return eyeShift; }
     bool IsWorldTarget(void) const { return worldActive; }
     int WorldWidth(void) const { return worldWidth; }
     int WorldHeight(void) const { return worldHeight; }
@@ -81,6 +83,8 @@ private:
     bool ApplyGraphicsMode(void);
 #endif
     bool  stereoThisFrame;
+    u32* earlyWorldCommands;
+    u32 earlyWorldWords;
 
     void StartTopSegment(void);
     void FinishTopSegment(void);

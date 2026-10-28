@@ -1,3 +1,4 @@
+#include <main/nativebench.h>
 #ifdef SRR2_OLD3DS_VISUAL_UPGRADE
 #include <pddi/pica/contactshadow.hpp>
 #include <pddi/pica/visualstyle.hpp>
@@ -3761,6 +3762,10 @@ void Vehicle::Display()
         return;
     }
 
+#ifdef SRR2_OLD3DS_NATIVE_BENCH
+    if(mTrafficVehicle && mTrafficVehicle->GetIsActive() && !mCreatedByParkedCarManager)
+        NativeBench::CountAmbientTrafficDisplay();
+#endif
     DSG_BEGIN_PROFILE("  Vehicle::Display")
     BillboardQuadManager::Enable();
     //DisplaySimpleShadow();

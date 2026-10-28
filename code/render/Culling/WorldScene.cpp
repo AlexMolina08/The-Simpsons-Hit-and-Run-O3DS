@@ -1,3 +1,7 @@
+#include <main/nativebench.h>
+#ifdef SRR2_OLD_3DS
+extern "C" void picaWorldOpaqueQueue(void);
+#endif
 #include <main/old3dsperformance.h>
 #ifdef SRR2_OLD3DS_VISUAL_UPGRADE
 #include <main/landmarkvisibility.h>
@@ -299,9 +303,14 @@ bool WorldScene::IsSphereInCone( rmt::Vector& irCenter, float iRadius )
     // nv:  cull small things that are far away
     const float SMALL_THING = 0.85f;
     const float SMALL_THING_CULL_DIST_SQR = 4000.0f; // 40m
+#ifdef SRR2_OLD3DS_NATIVE_BENCH
+    const float smallCullSquared=NativeBench::SmallObjectCullSquared();
+#else
+    const float smallCullSquared=SMALL_THING_CULL_DIST_SQR;
+#endif
     rmt::Vector v;
     v.Sub(mViewPosn, irCenter);
-    if( (iRadius < SMALL_THING) && (v.MagnitudeSqr() > SMALL_THING_CULL_DIST_SQR) )
+    if( (iRadius < SMALL_THING) && (v.MagnitudeSqr() > smallCullSquared) )
     {
         return false;
     }
@@ -1679,18 +1688,18 @@ void WorldScene::RenderSimpleShadows( void )
 #ifdef SRR2_OLD3DS_CAUSAL_DIAG
     O3ExperimentWorld worldScope;
 #endif
-#ifdef SRR2_OLD_3DS
+#ifdef SRR2_OLD3DS_RUNTIME_PROFILE
     Old3dsRenderScope timing(1);
 #endif
     p3d::pddi->SetZWrite(false);
 	for( int i = 0; i < mShadowCastersPass1.mUseSize; ++i )
 	{
-#ifdef SRR2_OLD_3DS
+#ifdef SRR2_OLD3DS_RUNTIME_PROFILE
         const unsigned before = g_old3dsDrawCalls;
         ++g_old3dsSimpleShadowCalls;
 #endif
         mShadowCastersPass1[ i ]->DisplaySimpleShadow();
-#ifdef SRR2_OLD_3DS
+#ifdef SRR2_OLD3DS_RUNTIME_PROFILE
         g_old3dsSimpleShadowDrawn += g_old3dsDrawCalls != before;
 #endif
 	}
@@ -1700,12 +1709,12 @@ void WorldScene::RenderSimpleShadows( void )
 //	}
     for(int i=mpZSortsPassShadowCasters.size()-1; i>-1; i--)
 	{
-#ifdef SRR2_OLD_3DS
+#ifdef SRR2_OLD3DS_RUNTIME_PROFILE
         const unsigned before = g_old3dsDrawCalls;
         ++g_old3dsSimpleShadowCalls;
 #endif
         mpZSortsPassShadowCasters[i]->DisplaySimpleShadow();
-#ifdef SRR2_OLD_3DS
+#ifdef SRR2_OLD3DS_RUNTIME_PROFILE
         g_old3dsSimpleShadowDrawn += g_old3dsDrawCalls != before;
 #endif
 	}
@@ -1772,6 +1781,9 @@ BEGIN_PROFILE("qsort display")
 //END_PROFILE("opaque inner")	
 	}
 END_PROFILE("qsort display")
+#ifdef SRR2_OLD_3DS
+    picaWorldOpaqueQueue();
+#endif
 }
 
 void WorldScene::RenderTranslucent( void )
@@ -1789,7 +1801,7 @@ void WorldScene::RenderTranslucent( void )
     BEGIN_PROFILE("qsort2")
 	    //qsort(mpZSortsPass2.mpData, (size_t)mpZSortsPass2.mUseSize, sizeof(IEntityDSG*), gZSortCompare);
         {
-#ifdef SRR2_OLD_3DS
+#ifdef SRR2_OLD3DS_RUNTIME_PROFILE
             Old3dsRenderScope timing(2);
 #endif
             std::sort( mpZSortsPass2.begin(), mpZSortsPass2.end(), gZSortCompare );
@@ -1799,17 +1811,17 @@ void WorldScene::RenderTranslucent( void )
 DSG_SET_PROFILE('T')
 BEGIN_PROFILE("qsort2 display")
     {
-#ifdef SRR2_OLD_3DS
+#ifdef SRR2_OLD3DS_RUNTIME_PROFILE
     Old3dsRenderScope timing(3);
 #endif
     for(int i=mpZSortsPass2.size()-1; i>-1; i--)
 	{
 //BEGIN_PROFILE("translucent inner")	
-#ifdef SRR2_OLD_3DS
+#ifdef SRR2_OLD3DS_RUNTIME_PROFILE
         Old3dsEntityScope entityTiming(mpZSortsPass2[i]->Old3dsCategory());
 #endif
 		{ O3_RECUR_ENTITY(mpZSortsPass2[i],1); mpZSortsPass2[i]->Display(); }
-#ifdef SRR2_OLD_3DS
+#ifdef SRR2_OLD3DS_RUNTIME_PROFILE
         ++g_old3dsPhase2Entities[mpZSortsPass2[i]->mTranslucent ? 1 : 0];
 #endif
 //END_PROFILE("translucent inner")	

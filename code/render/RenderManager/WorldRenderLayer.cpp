@@ -287,7 +287,7 @@ void WorldRenderLayer::Render()
             }
 #endif
             BEGIN_PROFILE( "Render WorldScene" );
-#ifdef SRR2_OLD_3DS
+#ifdef SRR2_OLD3DS_RUNTIME_PROFILE
             // Render sub-phase timing. render_ms covers the whole render flow as
             // one blob; these split the largest part of it. Slots are
             // 0 traversal/sort, 1 opaque, 2 translucent, 3 billboards,
@@ -298,7 +298,7 @@ void WorldRenderLayer::Render()
             picaContactBegin();
 #endif
             mpWorldScene->Render( view );
-#ifdef SRR2_OLD_3DS
+#ifdef SRR2_OLD3DS_RUNTIME_PROFILE
             {
                 const u64 now = svcGetSystemTick();
                 g_old3dsRenderPhases[0] += (now - wrlPhaseTick) * 1000.0 / SYSCLOCK_ARM11;
@@ -314,7 +314,7 @@ void WorldRenderLayer::Render()
             //p3d::inventory->SelectSection("Default");
 
             mpWorldScene->RenderOpaque();
-#ifdef SRR2_OLD_3DS
+#ifdef SRR2_OLD3DS_RUNTIME_PROFILE
             {
                 const u64 now = svcGetSystemTick();
                 g_old3dsRenderPhases[1] += (now - wrlPhaseTick) * 1000.0 / SYSCLOCK_ARM11;
@@ -324,7 +324,7 @@ void WorldRenderLayer::Render()
 
             BEGIN_PROFILE( "Render coins" );
             {
-#ifdef SRR2_OLD_3DS
+#ifdef SRR2_OLD3DS_RUNTIME_PROFILE
                 Old3dsRenderScope timing(0);
 #endif
                 GetCoinManager()->Render();
@@ -357,7 +357,7 @@ void WorldRenderLayer::Render()
             BEGIN_PROFILE( "RenderTranslucent" );
             mpWorldScene->RenderTranslucent();
             END_PROFILE( "RenderTranslucent" );
-#ifdef SRR2_OLD_3DS
+#ifdef SRR2_OLD3DS_RUNTIME_PROFILE
             {
                 const u64 now = svcGetSystemTick();
                 g_old3dsRenderPhases[2] += (now - wrlPhaseTick) * 1000.0 / SYSCLOCK_ARM11;
@@ -371,7 +371,7 @@ void WorldRenderLayer::Render()
         GetBillboardQuadManager()->DisplayAll();
 		END_PROFILE( "BBQ Display All" );
         BillboardQuadManager::Disable();
-#ifdef SRR2_OLD_3DS
+#ifdef SRR2_OLD3DS_RUNTIME_PROFILE
         {
             const u64 now = svcGetSystemTick();
             g_old3dsRenderPhases[3] += (now - wrlPhaseTick) * 1000.0 / SYSCLOCK_ARM11;
@@ -385,7 +385,7 @@ void WorldRenderLayer::Render()
         GetSparkleManager()->Render( Sparkle::SRM_ExcludeSorted );
 
             END_PROFILE( "RenderSparkles" );
-#ifdef SRR2_OLD_3DS
+#ifdef SRR2_OLD3DS_RUNTIME_PROFILE
             {
                 const u64 now = svcGetSystemTick();
                 g_old3dsRenderPhases[4] += (now - wrlPhaseTick) * 1000.0 / SYSCLOCK_ARM11;
@@ -402,7 +402,7 @@ void WorldRenderLayer::Render()
                 mpGuts[i]->Display();
             }
             END_PROFILE( "Render Guts" );
-#ifdef SRR2_OLD_3DS
+#ifdef SRR2_OLD3DS_RUNTIME_PROFILE
             {
                 const u64 now = svcGetSystemTick();
                 g_old3dsRenderPhases[5] += (now - wrlPhaseTick) * 1000.0 / SYSCLOCK_ARM11;

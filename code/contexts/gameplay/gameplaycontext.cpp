@@ -1,3 +1,4 @@
+#include <main/old3dsprofile.h>
 #include <main/old3dsrecurring.h>
 #ifdef SRR2_OLD_3DS
 #include <3ds.h>
@@ -500,13 +501,13 @@ void GameplayContext::OnUpdate( unsigned int elapsedTime )
 
 	    BEGIN_PROFILE( "Update Particles" );
 
-#ifdef SRR2_OLD_3DS
+#ifdef SRR2_OLD3DS_RUNTIME_PROFILE
         const u64 effectsTick = svcGetSystemTick();
 #endif
 	    { O3_RECUR(Effects); GetParticleManager()->Update( elapsedTime );
         GetBreakablesManager()->Update( elapsedTime );
 	    GetAnimEntityDSGManager()->Update( elapsedTime ); }
-#ifdef SRR2_OLD_3DS
+#ifdef SRR2_OLD3DS_RUNTIME_PROFILE
         g_old3dsUpdateStages[3] += (svcGetSystemTick() - effectsTick) * 1000.0 / SYSCLOCK_ARM11;
 #endif
 
@@ -517,11 +518,11 @@ void GameplayContext::OnUpdate( unsigned int elapsedTime )
     #endif 
 
     BEGIN_PROFILE("WorldPhysics");
-        #ifdef SRR2_OLD_3DS
+        #ifdef SRR2_OLD3DS_RUNTIME_PROFILE
         const u64 stage0Tick = svcGetSystemTick();
 #endif
         { O3_RECUR(Physics); GetWorldPhysicsManager()->Update(elapsedTime); }
-#ifdef SRR2_OLD_3DS
+#ifdef SRR2_OLD3DS_RUNTIME_PROFILE
         g_old3dsUpdateStages[0] += (svcGetSystemTick() - stage0Tick) * 1000.0 / SYSCLOCK_ARM11;
 #endif
     END_PROFILE("WorldPhysics");
@@ -529,11 +530,11 @@ void GameplayContext::OnUpdate( unsigned int elapsedTime )
         // ordering is important. Unless other parts of code change, we must call
         // this before WorldPhysManager::Update() because PedestrianManager
         // sets the flags for all characters to be updated in WorldPhys Update 
-        #ifdef SRR2_OLD_3DS
+        #ifdef SRR2_OLD3DS_RUNTIME_PROFILE
         const u64 stage1Tick = svcGetSystemTick();
 #endif
         { O3_RECUR(Pedestrian); PedestrianManager::GetInstance()->Update( elapsedTime ); }
-#ifdef SRR2_OLD_3DS
+#ifdef SRR2_OLD3DS_RUNTIME_PROFILE
         g_old3dsUpdateStages[1] += (svcGetSystemTick() - stage1Tick) * 1000.0 / SYSCLOCK_ARM11;
 #endif
 
@@ -547,11 +548,11 @@ void GameplayContext::OnUpdate( unsigned int elapsedTime )
     END_PROFILE("TriggerVolumeTracker");
 
     BEGIN_PROFILE("TrafficManager");
-        #ifdef SRR2_OLD_3DS
+        #ifdef SRR2_OLD3DS_RUNTIME_PROFILE
         const u64 stage2Tick = svcGetSystemTick();
 #endif
         { O3_RECUR(Traffic); TrafficManager::GetInstance()->Update( elapsedTime ); }
-#ifdef SRR2_OLD_3DS
+#ifdef SRR2_OLD3DS_RUNTIME_PROFILE
         g_old3dsUpdateStages[2] += (svcGetSystemTick() - stage2Tick) * 1000.0 / SYSCLOCK_ARM11;
 #endif
     END_PROFILE("TrafficManager");

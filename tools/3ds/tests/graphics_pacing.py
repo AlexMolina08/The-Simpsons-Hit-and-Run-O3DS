@@ -27,12 +27,12 @@ int main(){
  pace(SYSCLOCK_ARM11);assert(!vblanks&&sleeps==1);
  RequestQuality(true);Complete(true);pace(0);assert(!vblanks&&sleeps==2);
  Initialize(Old2DS);Complete(true);pace(0);assert(!vblanks&&sleeps==3);
- Initialize(New3DS);Complete(true);pace(0);assert(!vblanks&&sleeps==4);
- RequestQuality(false);Complete(true);pace(0);assert(vblanks==1&&sleeps==4);
- pace(SYSCLOCK_ARM11);assert(vblanks==2&&sleeps==4);
+ Initialize(New3DS);Complete(true);pace(0);assert(vblanks==1&&sleeps==3);
+ RequestQuality(false);Complete(true);pace(0);assert(vblanks==2&&sleeps==3);
+ pace(SYSCLOCK_ARM11);assert(vblanks==3&&sleeps==3);
  Initialize(New2DSXL);Complete(true);RequestQuality(false);Complete(true);pace(0);
- assert(vblanks==3&&sleeps==4);
- Initialize(255);Complete(true);pace(0);assert(vblanks==3&&sleeps==5);
+ assert(vblanks==4&&sleeps==3);
+ Initialize(255);Complete(true);pace(0);assert(vblanks==4&&sleeps==4);
 }
 '''
 with tempfile.TemporaryDirectory(prefix="srr-pacing-") as directory:

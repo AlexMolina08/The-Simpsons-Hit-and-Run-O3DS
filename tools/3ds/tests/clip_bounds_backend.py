@@ -17,16 +17,22 @@ prelude=r'''
 #include <cstring>
 #include <cstdio>
 #include <limits>
+#define SRR2_OLD3DS_NATIVE_BENCH
+namespace NativeBench {bool stereoClip=false;bool StereoClip(){return stereoClip;}}
+namespace Graphics3DS {float convergence=1;float StereoConvergence(){return convergence;}}
 #define SRR2_OLD3DS_CLIP_BOUNDS
 #define SRR2_OLD3DS_GPU_SKIN_SUPPORT
 #define ADD_STAT(...) ((void)0)
+#define O3_POOL(...) ((void)0)
+#define O3_MAIN_SCOPE(...) ((void)0)
+#define O3_RECUR(...) ((void)0)
 const unsigned PICA_VERTEX_STRIDE=36;
 const int PDDI_MATRIX_MODELVIEW=0,PDDI_PROJECTION_PERSPECTIVE=1;
 bool g_picaInFrame=true;
 struct C3D_FVec {float w=0,z=0,y=0,x=0;};
 struct C3D_Mtx {C3D_FVec r[4];};
 struct pddiMatrix {float m[4][4]={{1,0,0,0},{0,1,0,0},{0,0,1,0},{0,0,0,1}};const float* Row4(unsigned i)const{return m[i];}};
-struct Display {bool world=true,stereo=false;bool IsWorldTarget()const{return world;}bool StereoActive()const{return stereo;}};
+struct Display {bool world=true,stereo=false;bool IsWorldTarget()const{return world;}bool StereoActive()const{return stereo;}float shift=.03f;float StereoEyeShift()const{return shift;}};
 struct Stack {pddiMatrix matrix;pddiMatrix* Top(){return &matrix;}};
 struct View {int projectionMode=PDDI_PROJECTION_PERSPECTIVE;};
 struct State {Stack stack;Stack* matrixStack[1]={&stack};View view;View* viewState=&view;};
@@ -82,6 +88,15 @@ int main(){
  b.skinDrawing=true;c.DrawPrimBuffer(nullptr,&b);assert(draws==6);b.skinDrawing=false;
  b.transient=true;c.DrawPrimBuffer(nullptr,&b);assert(draws==7);b.transient=false;
  b.primType=99;assert(!b.CullNative());b.primType=0;
+ // Stereo keeps a conservative union of both eye frusta, with live cache keys.
+ c.d.stereo=true;NativeBench::stereoClip=true;
+ const unsigned beforeStereo=draws;c.DrawPrimBuffer(nullptr,&b);assert(draws==beforeStereo);
+ // Enlarged homogeneous W retains either-eye edge geometry, then invalidates
+ // when convergence or slider changes even if projection/modelview do not.
+ Graphics3DS::convergence=100;c.DrawPrimBuffer(nullptr,&b);assert(draws==beforeStereo+1);
+ Graphics3DS::convergence=1;c.DrawPrimBuffer(nullptr,&b);assert(draws==beforeStereo+1);
+ c.d.shift=std::numeric_limits<float>::quiet_NaN();c.DrawPrimBuffer(nullptr,&b);assert(draws==beforeStereo+2);
+ c.d.shift=.03f;NativeBench::stereoClip=false;c.d.stereo=false;
  float low[3],high[3];memcpy(low,b.clipLow,12);memcpy(high,b.clipHigh,12);
  picaNoNormal::Pack(data,3);b.noNormalPacked=true;b.UpdateClipBounds();assert(b.clipBoundsValid&&!memcmp(low,b.clipLow,12)&&!memcmp(high,b.clipHigh,12));
  float nan=std::numeric_limits<float>::quiet_NaN();memcpy(data,&nan,4);b.UpdateClipBounds();assert(!b.clipBoundsValid&&!b.CullNative());

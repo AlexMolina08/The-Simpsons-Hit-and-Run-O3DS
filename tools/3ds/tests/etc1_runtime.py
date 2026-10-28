@@ -31,6 +31,8 @@ prelude = r'''
 #include <vector>
 #include <CommonCrypto/CommonDigest.h>
 #include "pddi/pica/nativetexture.hpp"
+#include "pddi/pica/gpuuploadguard.hpp"
+namespace picaUpload {unsigned gpuHandoff=0;}
 #include "pddi/pica/nativebundle.hpp"
 #include "bundle_index.hpp"
 using AVSHA=CC_SHA256_CTX;

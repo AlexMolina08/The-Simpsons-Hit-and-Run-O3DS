@@ -10,6 +10,35 @@
 #include <string.h>
 #include <stddef.h>
 
+#ifdef SRR2_OLD3DS_NATIVE_BENCH
+// The SDK dirties fog/combiner state even when the requested value is unchanged.
+// Retain every actual transition and the accepted adjacent render barrier.
+// SDK restore dirty flags remain authoritative; no independent GPU cache exists.
+static bool fogReuse=false;
+static unsigned fogModeCalls,fogModeSkipped,fogColorCalls,fogColorSkipped,fogFlushes;
+void picaNativeEnableFogReuse(bool enabled){fogReuse=enabled;}
+void picaNativeFogMode(GPU_FOGMODE fogMode,GPU_GASMODE gasMode,bool zFlip)
+{
+    C3D_Context* ctx=C3Di_GetContext();
+    const u32 value=(ctx->texEnvBuf&~0x100FFu)|(fogMode&7u)|((gasMode&1u)<<3)|(zFlip?BIT(16):0);
+    ++fogModeCalls;
+    if(fogReuse && (ctx->flags&C3DiF_Active) && value==ctx->texEnvBuf){++fogModeSkipped;return;}
+    C3D_FogGasMode(fogMode,gasMode,zFlip);
+}
+void picaNativeFogColor(u32 color)
+{
+    C3D_Context* ctx=C3Di_GetContext();++fogColorCalls;
+    if(fogReuse && (ctx->flags&C3DiF_Active) && color==ctx->fogClr){++fogColorSkipped;return;}
+    C3D_FogColor(color);
+}
+void picaNativeFogStats(unsigned* modeCalls,unsigned* modeSkipped,unsigned* colorCalls,unsigned* colorSkipped,unsigned* flushes)
+{
+    *modeCalls=fogModeCalls;*modeSkipped=fogModeSkipped;
+    *colorCalls=fogColorCalls;*colorSkipped=fogColorSkipped;*flushes=fogFlushes;
+}
+
+#endif
+
 extern void __real_C3Di_UpdateContext(void);
 extern void __real_GPUCMD_Add(u32 header,const u32* parameters,u32 count);
 
@@ -18,6 +47,9 @@ extern void __real_GPUCMD_Add(u32 header,const u32* parameters,u32 count);
 void __wrap_GPUCMD_Add(u32 header,const u32* parameters,u32 count)
 {
     if((header&0x3ffu)==GPUREG_TEXENV_UPDATE_BUFFER && (header&0x10000u) && count) {
+#ifdef SRR2_OLD3DS_NATIVE_BENCH
+        ++fogFlushes;
+#endif
         const u32 flush=1;
         __real_GPUCMD_Add(GPUCMD_HEADER(0,15,GPUREG_FRAMEBUFFER_FLUSH),&flush,1);
     }
@@ -248,6 +280,9 @@ static void compileState(Packet* p,C3D_Context* ctx)
         // Fog-mode changes can discard earlier scenery still in the fragment
         // pipeline on PICA. Drain rendering before changing fog/combiner state;
         // this GPU command does not wait on the CPU or split stereo segments.
+#ifdef SRR2_OLD3DS_NATIVE_BENCH
+        ++fogFlushes;
+#endif
         writeOne(p,GPUREG_FRAMEBUFFER_FLUSH,15,1);
         writeOne(p,GPUREG_TEXENV_UPDATE_BUFFER,7,ctx->texEnvBuf);
         writeOne(p,GPUREG_TEXENV_BUFFER_COLOR,15,ctx->texEnvBufClr);

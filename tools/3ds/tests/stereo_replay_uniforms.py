@@ -54,7 +54,8 @@ void picaWriteEye(float shift){buffers[current].push_back(95);buffers[current].p
 struct Context {void FlushStreams(){}};
 struct picaDisplay {
  bool stereoThisFrame=true;float eyeShift=.02f;Context storage,*context=&storage;void* targetRight=this;
- void StartTopSegment();void FinishTopSegment();
+ u32* earlyWorldCommands=nullptr;u32 earlyWorldWords=0;
+ void StartTopSegment();void FinishTopSegment();void SubmitWorldEarly();
 };
 '''
 uniforms = clean(root / 'libs/pure3d/pddi/pica/nativeuniformsnapshot.h')
@@ -70,13 +71,19 @@ void draw(unsigned slot,u32 expected){
  buffers[current].push_back(1000+slot);buffers[current].push_back(expected);
 }
 int main(){
- for(unsigned slot:{0u,3u,20u,26u,94u}){
+ for(bool splitPrefix:{false,true})for(unsigned slot:{0u,3u,20u,26u,94u}){
   for(auto& buffer:buffers)buffer.clear();queue.clear();current=0;
   picaNativeUniformInvalidate(GPU_VERTEX_SHADER,0,96);set(slot,0);
   picaDisplay display;display.StartTopSegment();
   // The first draw repeats a setup value. The final draw changes that value.
-  draw(slot,0);draw(slot,1);display.FinishTopSegment();
-  assert(queue.size()==4 && queue[1].data==queue[3].data);
+  draw(slot,0);
+  if(splitPrefix){
+   assert(C3Di_SplitFrame(&display.earlyWorldCommands,&display.earlyWorldWords));
+   GX_ProcessCommandList(display.earlyWorldCommands,display.earlyWorldWords*4,GX_CMDLIST_FLUSH);
+  }
+  draw(slot,1);display.FinishTopSegment();
+  assert(queue.size()==(splitPrefix?6u:4u));
+  assert(queue[1].data==queue[splitPrefix?4:3].data);
   u32 gpu[96]={};unsigned draws=0,sceneEyeWrites=0;
   for(unsigned q=0;q<queue.size();++q){
    const auto& submission=queue[q];
@@ -86,13 +93,19 @@ int main(){
      if(gpu[reg-1000]!=value)return 77;
      assert(gpu[95]==(draws<2?10u:20u));++draws;
     }else{
-     if(reg==95 && (q==1 || q==3))++sceneEyeWrites;
+     if(reg==95 && (splitPrefix?(q==1 || q==2 || q==4 || q==5):(q==1 || q==3)))++sceneEyeWrites;
      gpu[reg]=value;
     }
    }
   }
   assert(draws==4 && !sceneEyeWrites);
  }
+ // A world-only top segment still replays when no HUD commands follow it.
+ for(auto& buffer:buffers)buffer.clear();queue.clear();current=0;
+ picaDisplay worldOnly;worldOnly.StartTopSegment();draw(3,42);
+ assert(C3Di_SplitFrame(&worldOnly.earlyWorldCommands,&worldOnly.earlyWorldWords));
+ GX_ProcessCommandList(worldOnly.earlyWorldCommands,worldOnly.earlyWorldWords*4,GX_CMDLIST_FLUSH);
+ worldOnly.FinishTopSegment();assert(queue.size()==4&&queue[1].data==queue[3].data);
  picaDisplay mono;mono.stereoThisFrame=false;
  for(unsigned i=0;i<95;++i)uniformCache.valid[0][i]=true;
  const unsigned submissions=unsigned(queue.size());

@@ -1383,7 +1383,7 @@ static rmt::Vector4 alignedDistFromPlane __attribute__((aligned(16)));//vf8
 
 #else
     obFoundPlane = false;
-#ifdef SRR2_OLD_3DS
+#ifdef SRR2_OLD3DS_RUNTIME_PROFILE
     bool reachedTris = false;
     Old3dsTriScope triScope(obFoundPlane, reachedTris);
 #endif
@@ -1393,7 +1393,7 @@ static rmt::Vector4 alignedDistFromPlane __attribute__((aligned(16)));//vf8
         rCurrentLeaf.mIntersectElems[i]->IntoTheVoid_WithGoFastaStripes();
         for( int j=rCurrentLeaf.mIntersectElems[i]->nTris()-1; j>-1; j-- )
         {
-#ifdef SRR2_OLD_3DS
+#ifdef SRR2_OLD3DS_RUNTIME_PROFILE
             reachedTris = true;
 #endif
             const int searchStart = j;
@@ -1401,13 +1401,13 @@ static rmt::Vector4 alignedDistFromPlane __attribute__((aligned(16)));//vf8
             foundTerrainType = rCurrentLeaf.mIntersectElems[i]->mFlatTriFast(j,TriPts,TriNorm );
             if(foundTerrainType==-1)
             {
-#ifdef SRR2_OLD_3DS
+#ifdef SRR2_OLD3DS_RUNTIME_PROFILE
                 ++g_old3dsTriExhausted;
 #endif
 #ifdef SRR2_OLD3DS_FLAT_TRI_FAST
                 if(searchStart > 0)
                 {
-#ifdef SRR2_OLD_3DS
+#ifdef SRR2_OLD3DS_RUNTIME_PROFILE
                     g_old3dsTriRescanAvoided += (unsigned)((searchStart * (searchStart + 1)) / 2);
 #endif
                 }
@@ -1416,7 +1416,7 @@ static rmt::Vector4 alignedDistFromPlane __attribute__((aligned(16)));//vf8
                 continue;
 #endif
             }
-#ifdef SRR2_OLD_3DS
+#ifdef SRR2_OLD3DS_RUNTIME_PROFILE
             ++g_old3dsTriPlaneTests;
 #endif
             // This first test finds the ground plane directly beneath the sphere (on the y axis)

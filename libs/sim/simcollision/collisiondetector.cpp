@@ -207,14 +207,18 @@ static void UpdateVolumeForPass(CollisionVolume* vol, unsigned passStamp)
     const bool redundant = (vol->UpdatePassStamp() == passStamp);
     if(redundant)
     {
+#ifdef SRR2_OLD3DS_RUNTIME_PROFILE
         ++g_old3dsUpdateAllRedundant;
+#endif
     }
     else
     {
         vol->SetUpdatePassStamp(passStamp);
     }
 
+#ifdef SRR2_OLD3DS_RUNTIME_PROFILE
     ++g_old3dsUpdateAllCalls;
+#endif
 
 #ifdef SRR2_OLD3DS_COLLVOL_CACHE
     // The repeat would recompute values the first update already produced. The
@@ -232,8 +236,10 @@ static void UpdateVolumeForPass(CollisionVolume* vol, unsigned passStamp)
     }
 #endif
 
+#ifdef SRR2_OLD3DS_RUNTIME_PROFILE
     const bool timed = ((g_old3dsUpdateAllCalls & 7u) == 1u);
     const u64 tick = timed ? svcGetSystemTick() : 0;
+#endif
 
 #ifdef SRR2_OLD3DS_COLLVOL_VERIFY
     // Hash the geometry the repeat is about to overwrite, then hash it again
@@ -265,6 +271,7 @@ static void UpdateVolumeForPass(CollisionVolume* vol, unsigned passStamp)
     }
 #endif
 
+#ifdef SRR2_OLD3DS_RUNTIME_PROFILE
     if(timed)
     {
         const double ms = (svcGetSystemTick() - tick) * 1000.0 / SYSCLOCK_ARM11;
@@ -279,6 +286,7 @@ static void UpdateVolumeForPass(CollisionVolume* vol, unsigned passStamp)
             ++g_old3dsUpdateAllSamples;
         }
     }
+#endif
 }
 #endif
 
@@ -297,7 +305,9 @@ void CollisionDetector::DetectCollision(TArray<CollisionObjectPair>* inPList, TA
 #else
     const unsigned sUpdatePassStamp = NextUpdatePassStamp();
 #endif
+#ifdef SRR2_OLD3DS_RUNTIME_PROFILE
     ++g_old3dsDetectPasses;
+#endif
 #endif
 
     for (int i=0; i < inPList->GetSize(); i++)
@@ -308,7 +318,7 @@ void CollisionDetector::DetectCollision(TArray<CollisionObjectPair>* inPList, TA
         // checks a collision is possible between the two objects
         if (p->mNeedsUpdate)
         {
-#ifdef SRR2_OLD_3DS
+#ifdef SRR2_OLD3DS_RUNTIME_PROFILE
             ++g_old3dsPairUpdates;
 #endif
             if(!p->mObjectA->IsStatic() )
@@ -319,7 +329,7 @@ void CollisionDetector::DetectCollision(TArray<CollisionObjectPair>* inPList, TA
                 p->VolumeA()->UpdateAll();
 #endif
             }
-#ifdef SRR2_OLD_3DS
+#ifdef SRR2_OLD3DS_RUNTIME_PROFILE
             else
             {
                 ++g_old3dsUpdateAllStaticSkip;
@@ -334,7 +344,7 @@ void CollisionDetector::DetectCollision(TArray<CollisionObjectPair>* inPList, TA
                 p->VolumeB()->UpdateAll();
 #endif
             }
-#ifdef SRR2_OLD_3DS
+#ifdef SRR2_OLD3DS_RUNTIME_PROFILE
             else
             {
                 ++g_old3dsUpdateAllStaticSkip;

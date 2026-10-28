@@ -415,7 +415,7 @@ void AnimEntityDSG::LoadSetUp( tCompositeDrawable* pDrawable, tMultiController* 
 
 void AnimEntityDSG::GetBoundingBox( rmt::Box3D* box )
 {
-#ifdef SRR2_OLD_3DS
+#ifdef SRR2_OLD3DS_RUNTIME_PROFILE
     ++g_old3dsAnimQueries[0];
     if(mParticleSystemBoundingBox)
     {

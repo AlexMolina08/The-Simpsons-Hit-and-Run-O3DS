@@ -10,6 +10,7 @@ def prefix(name,ending):
  return s[start:s.index(ending,start)]+'}\n'
 begin=prefix('BeginWorld','    if(display->BeginWorldTarget())')
 end=prefix('EndWorld','    if(!display->IsWorldTarget()) return;')
+opaque=s[s.index('void picaContext::SubmitOpaqueWorld('):s.index('extern "C" void picaWorldBegin(')]
 objects=s[s.index('bool picaContext::BeginStereoObject('):s.index('void picaContext::BeginWorld(void)')]
 flag_start=s.index('#ifdef SRR2_3DS_STEREO_GPU_SKIN\n        if(skinProgramBound && Graphics3DS::Stereo())')
 skin_flag=s[flag_start:s.index('#endif',flag_start)+len('#endif')]
@@ -20,6 +21,8 @@ fixture=r'''
 #include <vector>
 #include <cstring>
 #define SRR2_OLD_3DS
+#define SRR2_OLD3DS_NATIVE_BENCH
+namespace NativeBench {unsigned phase=1;unsigned EarlyWorldQueuePhase(){return phase;}}
 #define SRR2_3DS_STEREO_GPU_SKIN
 namespace Graphics3DS {bool stereo=false;bool Stereo(){return stereo;}}
 enum {GPU_VERTEX_SHADER};std::vector<bool> skinDepth;
@@ -29,16 +32,25 @@ struct View {int projectionMode=PDDI_PROJECTION_PERSPECTIVE;struct {float fov=1.
 struct picaContext {
  View view;struct {View* viewState;} state{&view};
  bool stereoWorldPass=false,stereoObjectPass=false,stereoOn=false,bottomPass=false;
+ struct EarlyDisplay {bool* depth;unsigned submits=0;bool lastDepth=false;void SubmitWorldEarly(){lastDepth=*depth;++submits;}} hardware{&stereoOn};
+ EarlyDisplay* display=&hardware;
  bool skinProgramBound=true;void UploadStereoFlag();
  float stereoObjectDistance=0;unsigned updates=0;std::vector<bool> flushDepth;
  void SetupHardwareProjection();void FlushStreams(){flushDepth.push_back(stereoOn);}
- void BeginWorld();void EndWorld();
+ void BeginWorld();void EndWorld();void SubmitOpaqueWorld();
  bool BeginStereoObject(float);void EndStereoObject();
 };
 void picaContext::SetupHardwareProjection(){++updates;
 '''
 main=r'''
 int main(){
+ picaContext probe;
+ Graphics3DS::stereo=true;probe.SubmitOpaqueWorld();assert(probe.hardware.submits==0);
+ probe.BeginWorld();probe.SubmitOpaqueWorld();assert(probe.hardware.submits==0);
+ NativeBench::phase=2;probe.SubmitOpaqueWorld();assert(probe.hardware.submits==1&&probe.hardware.lastDepth);
+ probe.bottomPass=true;probe.SubmitOpaqueWorld();assert(probe.hardware.submits==1);
+ probe.bottomPass=false;probe.EndWorld();probe.SubmitOpaqueWorld();assert(probe.hardware.submits==2);
+ NativeBench::phase=1;Graphics3DS::stereo=false;
  picaContext c;
  c.BeginWorld();c.EndWorld();assert(c.updates==0 && c.flushDepth.empty());
  c.SetupHardwareProjection();assert(!c.stereoOn); // Existing mono heuristic remains unchanged.
@@ -51,6 +63,7 @@ int main(){
  c.view.projectionMode=PDDI_PROJECTION_ORTHOGRAPHIC;c.SetupHardwareProjection();assert(!c.stereoOn);
  c.view.projectionMode=PDDI_PROJECTION_PERSPECTIVE;c.SetupHardwareProjection();assert(c.stereoOn);
  c.EndWorld();assert(!c.stereoOn && !c.stereoWorldPass);
+ assert(c.hardware.submits==1&&c.hardware.lastDepth);
  assert(c.flushDepth.size()==2 && c.flushDepth.back()); // Last world geometry drains with depth still enabled.
  c.view.camera.fov=1.0f;c.SetupHardwareProjection();assert(!c.stereoOn);
  c.EndWorld();assert(c.flushDepth.size()==2);
@@ -78,8 +91,23 @@ int main(){
  c.skinProgramBound=true;Graphics3DS::stereo=false;c.UploadStereoFlag();assert(skinDepth.size()==writes);
 }
 '''
+stable_main=r'''
+int main(){
+ picaContext c;Graphics3DS::stereo=true;
+ c.SubmitOpaqueWorld();assert(c.hardware.submits==0);
+ c.BeginWorld();c.SubmitOpaqueWorld();assert(c.hardware.submits==1 && c.hardware.lastDepth);
+ c.bottomPass=true;c.SubmitOpaqueWorld();assert(c.hardware.submits==1);
+ c.bottomPass=false;c.EndWorld();assert(c.hardware.submits==2);
+ c.SubmitOpaqueWorld();assert(c.hardware.submits==2);
+ Graphics3DS::stereo=false;picaContext mono;
+ mono.BeginWorld();mono.SubmitOpaqueWorld();mono.EndWorld();assert(!mono.hardware.submits);
+}
+'''
 with tempfile.TemporaryDirectory(prefix='srr-world-stereo-') as d:
- p=Path(d);(p/'test.cpp').write_text(fixture+projection+'}\n'+begin+end+objects+'void picaContext::UploadStereoFlag(){\n'+skin_flag+'\n}\n'+main)
- subprocess.run(['clang++','-std=c++17','-Wall','-Wextra','-Werror','-fsanitize=address,undefined',str(p/'test.cpp'),'-o',str(p/'test')],check=True)
- subprocess.run([str(p/'test')],check=True)
-print('PASS: world/artwork depth scopes, flat frontend zooms/HUD/lower screen, nested-scope rejection, drain order and unchanged mono scope.')
+ p=Path(d)
+ for label,setup,checks in [('benchmark',fixture,main),
+     ('stable',fixture.replace('#define SRR2_OLD3DS_NATIVE_BENCH',''),stable_main)]:
+  (p/'test.cpp').write_text(setup+projection+'}\n'+begin+end+objects+opaque+'void picaContext::UploadStereoFlag(){\n'+skin_flag+'\n}\n'+checks)
+  subprocess.run(['clang++','-std=c++17','-Wall','-Wextra','-Werror','-fsanitize=address,undefined',str(p/'test.cpp'),'-o',str(p/'test')],check=True)
+  subprocess.run([str(p/'test')],check=True)
+print('PASS: benchmark and stable opaque submission, world/artwork scopes, flat frontend/HUD/bottom, drain order and unchanged mono scope.')

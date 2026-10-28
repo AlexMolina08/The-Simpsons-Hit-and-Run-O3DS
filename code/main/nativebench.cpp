@@ -32,6 +32,7 @@
 #include <loading/loadingmanager.h>
 #include <worldsim/avatarmanager.h>
 #include <worldsim/vehiclecentral.h>
+#include <worldsim/traffic/trafficmanager.h>
 #include <events/eventmanager.h>
 #include <poser/poseengine.hpp>
 #include <worldsim/character/character.h>
@@ -251,6 +252,17 @@ static bool checkpointIO=false;
 static unsigned diagnostic=0;
 static bool residentShaders=false;
 static unsigned loaderSliceUs=0;
+static unsigned earlyWorldQueue=2;
+static bool stereoClip=false;
+static float smallObjectCullSquared=4000.0f;
+float SmallObjectCullSquared(){return smallObjectCullSquared;}
+bool StereoClip(){return stereoClip;}
+bool EarlyWorldQueue(){return earlyWorldQueue!=0;}
+unsigned EarlyWorldQueuePhase(){return earlyWorldQueue;}
+static unsigned trafficLimit=0,trafficVisible=0,trafficFrames=0,trafficActiveTotal=0,trafficVisibleTotal=0,trafficActiveMaximum=0,trafficVisibleMaximum=0;
+unsigned AmbientTrafficLimit(unsigned accepted){return trafficLimit?trafficLimit:accepted;}
+void CountAmbientTrafficDisplay(){if(collecting)++trafficVisible;}
+
 #ifdef SRR2_OLD3DS_NATIVE_UNIFORMS
 static bool nativeUniforms=true;
 #else
@@ -295,6 +307,7 @@ bool NativeUniforms(){return nativeUniforms;}
 // Benchmark-only input driver. Follow immutable road points through the normal
 // controller; never move world objects or change simulation/traffic state.
 static bool roadRoute=false;
+static unsigned roadDirection=0;
 static rmt::Vector roadPoints[512],roadLastPosition;
 static unsigned roadPointCount=0,roadPoint=0,roadStalledMs=0,roadReverseMs=0,roadRecoveries=0;
 static float roadDistance=0,roadPlannedDistance=0;
@@ -477,6 +490,40 @@ static bool ParseRunArgument(const char* argument)
  else if(!strncmp(argument,"bench_adpcm_prune=",18))g_old3dsAdpcmPrune=atoi(argument+18)!=0;
  else if(!strncmp(argument,"bench_traffic_facing=",21))g_old3dsTrafficFacingOnly=atoi(argument+21)!=0;
  else if(!strncmp(argument,"bench_vehicle_profile=",22))vehicleProfile=atoi(argument+22)!=0;
+ else if(!strncmp(argument,"bench_small_distance=",21)){
+  const char* value=argument+21;char* end=nullptr;const float distance=strtof(value,&end);
+  if(value==end || *end || !std::isfinite(distance) || distance<64 || distance>240)return false;
+  smallObjectCullSquared=distance*distance;
+ }
+ else if(!strncmp(argument,"bench_road_direction=",21)){
+  const char* value=argument+21;
+  if(!strcmp(value,"forward"))roadDirection=1;
+  else if(!strcmp(value,"reverse"))roadDirection=2;
+  else if(!strcmp(value,"west"))roadDirection=3;
+  else return false;
+ }
+#ifdef SRR2_OLD3DS_VRAM_TEXTURES
+ else if(!strncmp(argument,"bench_vram_compact=",19))g_picaVramCompact=atoi(argument+19)!=0;
+
+#endif
+ else if(!strncmp(argument,"bench_traffic_limit=",20)){
+  const char* value=argument+20;char* end=nullptr;unsigned long limit=strtoul(value,&end,10);
+  if(value==end || *end || limit<1 || limit>5)return false;
+  trafficLimit=unsigned(limit);
+ }
+#if defined(SRR2_OLD3DS_NATIVE_TEXTURE_BUNDLE) && defined(SRR2_OLD3DS_NATIVE_ETC1)
+ else if(!strncmp(argument,"bench_exact_world_cache=",24))g_picaNativeExactWorldFallback=atoi(argument+24)!=0;
+ else if(!strncmp(argument,"bench_native_unbuffered=",24))g_picaNativeBundleUnbuffered=atoi(argument+24)!=0;
+#endif
+#ifdef SRR2_OLD3DS_NATIVE_CONTEXT
+ else if(!strncmp(argument,"bench_fog_reuse=",16))picaNativeEnableFogReuse(atoi(argument+16)!=0);
+#endif
+ else if(!strncmp(argument,"bench_early_world_queue=",24)){
+  const char* value=argument+24;char* end=nullptr;unsigned long phase=strtoul(value,&end,10);
+  if(value==end || *end || phase>2)return false;
+  earlyWorldQueue=unsigned(phase);
+ }
+ else if(!strncmp(argument,"bench_stereo_clip=",18))stereoClip=atoi(argument+18)!=0;
  else if(!strncmp(argument,"bench_recurring=",16))Old3dsRecurring::requested=atoi(argument+16)!=0;
 #ifdef SRR2_OLD3DS_RECURRING_PROFILE
  else if(!strncmp(argument,"bench_recurring_window=",sizeof("bench_recurring_window=")-1)){
@@ -711,6 +758,7 @@ void Init(int argc,char** argv){
 }
 unsigned Seed(unsigned fallback){return enabled?seed:fallback;}
 unsigned Begin(unsigned elapsed,int context){
+ trafficVisible=0;
  u64 now=svcGetSystemTick();
  if(previousCaptured){unsigned ticks=(unsigned)(now-lastBeginTick);records[(recordCount-1)%recordCapacity].period=ticks;periodSum+=ticks;++periodSamples;previousCaptured=false;}
  lastBeginTick=now;
@@ -835,7 +883,10 @@ unsigned Begin(unsigned elapsed,int context){
   if(fraction<0)fraction=0;if(fraction>1)fraction=1;
   rmt::Vector position;segment->GetPosition(fraction,.5f,&position);
   avatar->GetCharacter()->GetFacing(facing);
-  const float sign=edge.x*facing.x+edge.z*facing.z>=0?1.0f:-1.0f;
+  // A private direction control makes repeated routes independent of tiny
+  // changes in the idle player's heading before automatic vehicle entry.
+  const float alignment=roadDirection==3?-edge.x:edge.x*facing.x+edge.z*facing.z;
+  const float sign=roadDirection==1?1.0f:roadDirection==2?-1.0f:alignment>=0?1.0f:-1.0f;
   setupCar->SetInitialPositionGroundOffsetAutoAdjust(&position);
   setupCar->mResetFacingRadians=std::atan2(sign*edge.x,sign*edge.z);
   placementRelocated=true;
@@ -1009,6 +1060,10 @@ bool End(u64 work,int context){
 #if defined(SRR2_OLD3DS_VEHICLE_PROFILE) || defined(SRR2_OLD3DS_NATIVE_BENCH)
  Old3dsVehicleProfile::CaptureEnabled()=false;
 #endif
+ const unsigned activeTraffic=unsigned(TrafficManager::GetInstance()->GetNumActiveTraffic());
+ ++trafficFrames;trafficActiveTotal+=activeTraffic;trafficVisibleTotal+=trafficVisible;
+ if(activeTraffic>trafficActiveMaximum)trafficActiveMaximum=activeTraffic;
+ if(trafficVisible>trafficVisibleMaximum)trafficVisibleMaximum=trafficVisible;
  current.pairs=g_old3dsCollisionPairs-pairStart;current.areas=g_old3dsPhysicsAreas-areaStart;current.entities=entityCalls()-entityStart;
  #ifdef SRR2_OLD3DS_GPU_SKIN_SUPPORT
  current.skinBudgetFallbacks=g_picaSkinMetrics.fallback[picaSkin::BudgetLimit]-skinBudgetStart;
@@ -1160,7 +1215,15 @@ void Dump(){if(!enabled)return;
  fprintf(f,"NATIVE_FONT_WORK enabled=%u prepared_lines=%u prepared_glyphs=%u long_lines=%u capacity=%u same_vertices=1 same_texture_order=1 same_spacing_pass=1 whole_session=1\n",p3dFontWork::enabled,p3dFontWork::preparedLines,p3dFontWork::preparedGlyphs,p3dFontWork::longLines,p3dFontWork::Capacity);
  fprintf(f,"NATIVE_LOADER_SLICE override_us=%u gameplay_only=1 loading_policy_unchanged=1 geometry_io_unchanged=1\n",loaderSliceUs);
  fprintf(f,"NATIVE_GRAPHICS model=%u quality=%u stereo=%u width=%u height=240 target_fps=%u\n",unsigned(Graphics3DS::SystemModel()),Graphics3DS::Quality(),Graphics3DS::Stereo(),Graphics3DS::RenderWidth(),Graphics3DS::TargetFPS());
- fprintf(f,"NATIVE_QUALITY mode=%u draw_distance=%.1f ambient_traffic=%u ambient_pedestrians=%u physics_step_ms=%u audio_predictors=%u particle_emission_scale=%.2f distant_pedestrian_actions=%u flat_lighting=%u shadow_distance=%.1f mission_simulation=full\n",Old3dsPerformance::mode,Old3dsPerformance::Enabled()?Old3dsPerformance::DrawDistance():200.0f,Old3dsPerformance::Enabled()?Old3dsPerformance::TrafficLimit():5u,Old3dsPerformance::Enabled()?Old3dsPerformance::PedestrianLimit():7u,Old3dsPerformance::PhysicsStepMilliseconds(),Old3dsPerformance::ReducedAudioSearch()?3u:8u,Old3dsPerformance::ParticleEmissionScale(),Old3dsPerformance::DistantPedestrianActions(),Old3dsPerformance::FlatLighting(),Old3dsPerformance::Enabled()?0.0f:200.0f);
+ fprintf(f,"NATIVE_QUALITY mode=%u draw_distance=%.1f ambient_traffic=%u ambient_pedestrians=%u physics_step_ms=%u audio_predictors=%u particle_emission_scale=%.2f distant_pedestrian_actions=%u flat_lighting=%u shadow_distance=%.1f mission_simulation=full\n",Old3dsPerformance::mode,Old3dsPerformance::Enabled()?Old3dsPerformance::DrawDistance():200.0f,Old3dsPerformance::Enabled()?AmbientTrafficLimit(Old3dsPerformance::TrafficLimit()):5u,Old3dsPerformance::Enabled()?Old3dsPerformance::PedestrianLimit():7u,Old3dsPerformance::PhysicsStepMilliseconds(),Old3dsPerformance::ReducedAudioSearch()?3u:8u,Old3dsPerformance::ParticleEmissionScale(),Old3dsPerformance::DistantPedestrianActions(),Old3dsPerformance::FlatLighting(),Old3dsPerformance::Enabled()?0.0f:200.0f);
+ fprintf(f,"NATIVE_AMBIENT_TRAFFIC limit=%u frames=%u active_total=%u visible_total=%u active_maximum=%u visible_maximum=%u scope=measured_route cpu_scene_traversals_added=0\n",AmbientTrafficLimit(Old3dsPerformance::TrafficLimit()),trafficFrames,trafficActiveTotal,trafficVisibleTotal,trafficActiveMaximum,trafficVisibleMaximum);
+#ifdef SRR2_OLD3DS_NATIVE_CONTEXT
+ unsigned fogModeCalls,fogModeSkipped,fogColorCalls,fogColorSkipped,fogFlushes;
+ picaNativeFogStats(&fogModeCalls,&fogModeSkipped,&fogColorCalls,&fogColorSkipped,&fogFlushes);
+ fprintf(f,"NATIVE_FOG_STATE mode_calls=%u mode_skipped=%u color_calls=%u color_skipped=%u flushes=%u scope=whole_session actual_transitions_preserved=1\n",fogModeCalls,fogModeSkipped,fogColorCalls,fogColorSkipped,fogFlushes);
+#endif
+
+
  fprintf(f,"NATIVE_LANDMARK requested=%u placed=%u zone_requested=%u x=%.5f y=%.5f z=%.5f visibility_distance=%.1f temporary_setup_only=1\n",casinoAnchor,casinoAnchorPlaced,casinoZoneRequested,casinoAnchorPosition.x,casinoAnchorPosition.y,casinoAnchorPosition.z,Old3dsPerformance::DrawDistance());
  if(casinoAnchor && placed){
   tPointCamera* camera=GetSuperCamManager()->GetSCC(0)->GetCamera();
@@ -1237,6 +1300,7 @@ void Dump(){if(!enabled)return;
  fprintf(f,"NATIVE_LOAD_WINDOW placement_valid=%u boot_to_placement_us=%.3f includes_initialization_and_loading=1 includes_realtime_stability_ms=%u excludes_netloader_transfer=1\n",
      placementTick!=0,placementTick?(placementTick-initializationTick)*1000000.0/SYSCLOCK_ARM11:0,replay?0u:3000u);
  fprintf(f,"NATIVE_ROUTE road=%u points=%u point=%u distance=%.3f recoveries=%u planned_distance=%.3f built_roads=%u path_exhausted=%u input_only=1\n",roadRoute,roadPointCount,roadPoint,roadDistance,roadRecoveries,roadPlannedDistance,roadBuiltCount,roadPathExhausted);
+ fprintf(f,"NATIVE_ROUTE_SETUP direction_override=%u initial_facing_radians=%.8f\n",roadDirection,GetGameplayManager()->GetCurrentVehicle()?GetGameplayManager()->GetCurrentVehicle()->mResetFacingRadians:0.0f);
  fprintf(f,"NATIVE_REPLAY drains=%u timeouts=%u reload=%u reload_phase=%u reload_dispatches=%u reload_observed_levels=%u\n",replayDrains,drainTimeouts,reload,reloadPhase,reloadDispatches,reloadObservedLevels);
  fprintf(f,"NATIVE_VERIFY calls=%u failures=%u\n",verifyAll,verifyAllFailures);
  fprintf(f,"NATIVE_COUNTERS 0=timed_scope_calls 1=adpcm_clips 2=adpcm_pcm_samples\n");

@@ -18,6 +18,12 @@ void picaNativeConfigureReflectionEntries(const shaderProgram_s* mono,unsigned m
                                          const shaderProgram_s* stereo,unsigned stereoOrdinary,unsigned stereoReflected);
 void picaNativeReflectionEntryStats(unsigned* ordinary,unsigned* reflected,unsigned* enabled);
 #endif
+#ifdef SRR2_OLD3DS_NATIVE_BENCH
+void picaNativeEnableFogReuse(bool enabled);
+void picaNativeFogMode(GPU_FOGMODE fogMode,GPU_GASMODE gasMode,bool zFlip);
+void picaNativeFogColor(u32 color);
+void picaNativeFogStats(unsigned* modeCalls,unsigned* modeSkipped,unsigned* colorCalls,unsigned* colorSkipped,unsigned* flushes);
+#endif
 void picaNativeBindTexture1(C3D_Tex* texture);
 bool picaNativeNormalProgramBound(void);
 C3D_Tex* picaNativeTexture0(void);

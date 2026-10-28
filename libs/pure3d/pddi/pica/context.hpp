@@ -50,6 +50,7 @@ public:
     void EndFrame();
 #ifdef SRR2_OLD_3DS
     void BeginWorld(void);
+    void SubmitOpaqueWorld(void);
     void EndWorld(void);
     bool BeginStereoObject(float screenDistance);
     void EndStereoObject(void);

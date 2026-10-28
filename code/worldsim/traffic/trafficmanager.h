@@ -169,6 +169,9 @@ public:
 
     void SetMaxTraffic( int n );
     int GetMaxTraffic();
+#ifdef SRR2_OLD3DS_NATIVE_BENCH
+    int GetNumActiveTraffic() const { return mNumTraffic; }
+#endif
 
     void EnableTraffic();
     void DisableTraffic();

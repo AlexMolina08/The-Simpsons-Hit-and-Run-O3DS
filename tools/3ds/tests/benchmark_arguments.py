@@ -11,7 +11,8 @@ with tempfile.TemporaryDirectory(prefix='srr-bench-args-') as directory:
 #include <cstdio>
 #include <cmath>
 #include <initializer_list>
-static bool portraitActor=false,portraitNPC=false,portraitTraffic=false,portraitPlayerObserver=false,g_old3dsPreparedAudio=false,g_old3dsPreparedAudioShort=false;static char portraitModel[32]={},portraitActorModel[32]="male6";static float stereoTestSlider=-1,portraitDistance=1,portraitBearing=45;
+static float smallObjectCullSquared=4000.0f;static unsigned roadDirection=0,trafficLimit=0;static unsigned earlyWorldQueue=0;static bool stereoClip=false;static bool portraitActor=false,portraitNPC=false,portraitTraffic=false,portraitPlayerObserver=false,g_old3dsPreparedAudio=false,g_old3dsPreparedAudioShort=false;static char portraitModel[32]={},portraitActorModel[32]="male6";static float stereoTestSlider=-1,portraitDistance=1,portraitBearing=45;
+static bool g_picaNativeExactWorldFallback=false,g_picaNativeBundleUnbuffered=false,g_picaVramCompact=false;
 namespace Old3dsPerformance { unsigned mode=1; }
 namespace HandheldHudCadence { bool boostPickupAnimations=true; }
 namespace Old3dsRecurring { bool requested=false,focusDropWindow=false;unsigned stationaryMs=0,windowStartMs=15000,windowEndMs=18000; }
@@ -90,11 +91,36 @@ int main(){
  assert(!ParseRunArgument("bench_particle_projection=0"));
  assert(!ParseRunArgument("bench_fused_trig=1"));
  assert(!ParseRunArgument("bench_fused_trig=0"));
+#ifdef SRR2_OLD3DS_VRAM_TEXTURES
+ assert(ParseRunArgument("bench_vram_compact=1")&&g_picaVramCompact);
+ assert(ParseRunArgument("bench_vram_compact=0")&&!g_picaVramCompact);
+
+#endif
+ assert(ParseRunArgument("bench_small_distance=100")&&smallObjectCullSquared==10000);
+ assert(!ParseRunArgument("bench_small_distance=nan")&&smallObjectCullSquared==10000);
+ assert(ParseRunArgument("bench_road_direction=west")&&roadDirection==3);
+ assert(ParseRunArgument("bench_road_direction=forward")&&roadDirection==1);
+ assert(ParseRunArgument("bench_road_direction=reverse")&&roadDirection==2);
+ assert(!ParseRunArgument("bench_road_direction=bad")&&roadDirection==2);
+ for(unsigned limit=1;limit<=5;++limit){char argument[64];snprintf(argument,sizeof(argument),"bench_traffic_limit=%u",limit);assert(ParseRunArgument(argument)&&trafficLimit==limit);}
+ for(const char* invalid:{"bench_traffic_limit=0","bench_traffic_limit=6","bench_traffic_limit=nan","bench_traffic_limit=3x"})assert(!ParseRunArgument(invalid)&&trafficLimit==5);
+#if defined(SRR2_OLD3DS_NATIVE_TEXTURE_BUNDLE) && defined(SRR2_OLD3DS_NATIVE_ETC1)
+ assert(ParseRunArgument("bench_native_unbuffered=1")&&g_picaNativeBundleUnbuffered);
+ assert(ParseRunArgument("bench_native_unbuffered=0")&&!g_picaNativeBundleUnbuffered);
+ assert(ParseRunArgument("bench_exact_world_cache=1")&&g_picaNativeExactWorldFallback);
+ assert(ParseRunArgument("bench_exact_world_cache=0")&&!g_picaNativeExactWorldFallback);
+#endif
+ assert(ParseRunArgument("bench_early_world_queue=1")&&earlyWorldQueue);
+ assert(ParseRunArgument("bench_early_world_queue=2")&&earlyWorldQueue==2);
+ assert(!ParseRunArgument("bench_early_world_queue=3")&&earlyWorldQueue==2);
+ assert(ParseRunArgument("bench_early_world_queue=0")&&!earlyWorldQueue);
+ assert(ParseRunArgument("bench_stereo_clip=1")&&stereoClip);
+ assert(ParseRunArgument("bench_stereo_clip=0")&&!stereoClip);
  assert(ParseRunArgument("bench_recurring=1")&&Old3dsRecurring::requested);
  assert(ParseRunArgument("bench_stationary_ms=6000")&&Old3dsRecurring::stationaryMs==6000);
 }
 ''')
  for enabled in (False,True):
-  subprocess.run(['c++','-std=c++17','-DSRR2_OLD3DS_PREPARED_AUDIO','-DSRR2_OLD3DS_GPU_SKIN_SUPPORT','-DSRR2_OLD3DS_NATIVE_TEXTURE_BUNDLE','-DSRR2_OLD3DS_BOTTOM_MAP_15HZ',*(['-DSRR2_OLD3DS_RECURRING_PROFILE'] if enabled else []),'-fsanitize=address,undefined',str(cpp),'-o',str(p/'test')],check=True)
+  subprocess.run(['c++','-std=c++17','-DSRR2_OLD3DS_VRAM_TEXTURES','-DSRR2_OLD3DS_NATIVE_TEXTURE_BUNDLE','-DSRR2_OLD3DS_NATIVE_ETC1','-DSRR2_OLD3DS_PREPARED_AUDIO','-DSRR2_OLD3DS_GPU_SKIN_SUPPORT','-DSRR2_OLD3DS_NATIVE_TEXTURE_BUNDLE','-DSRR2_OLD3DS_BOTTOM_MAP_15HZ',*(['-DSRR2_OLD3DS_RECURRING_PROFILE'] if enabled else []),'-fsanitize=address,undefined',str(cpp),'-o',str(p/'test')],check=True)
   subprocess.run([str(p/'test')],check=True)
 print('PASS: production argument parsing with recurring profiling compiled on and off, bounded window validation and unchanged defaults.')

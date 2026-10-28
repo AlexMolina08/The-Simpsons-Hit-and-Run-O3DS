@@ -15,6 +15,8 @@
 #ifndef OLD3DS_DIAG_H
 #define OLD3DS_DIAG_H
 
+#include <main/old3dsprofile.h>
+
 #ifdef SRR2_OLD_3DS
 
 // Physics. Bucket indices: 0 = one substep, 1 = two, 2 = three or more.
@@ -59,6 +61,7 @@ extern "C" unsigned g_old3dsSimpleShadowDrawn; // calls issuing at least one dra
 class Old3dsRenderScope
 {
 public:
+#ifdef SRR2_OLD3DS_RUNTIME_PROFILE
     explicit Old3dsRenderScope(unsigned slot) : slot(slot), draws(g_old3dsDrawCalls), tick(
 #ifndef SRR2_OLD3DS_OPTIONAL_DIAG
         0
@@ -76,6 +79,9 @@ public:
         if(tick) g_old3dsPhase2Ticks[slot] += svcGetSystemTick() - tick;
         g_old3dsPhase2Draws[slot] += g_old3dsDrawCalls - draws;
     }
+#else
+    explicit Old3dsRenderScope(unsigned) {}
+#endif
 private:
     unsigned slot, draws;
     u64 tick;
@@ -140,6 +146,7 @@ private:
 class Old3dsEntityScope
 {
 public:
+#ifdef SRR2_OLD3DS_RUNTIME_PROFILE
     explicit Old3dsEntityScope(unsigned category) : previous(g_old3dsActiveEntity), tick(0), draws(g_old3dsDrawCalls)
     {
         #ifdef SRR2_OLD3DS_CAUSAL_DIAG
@@ -166,6 +173,9 @@ public:
         stats->draws += g_old3dsDrawCalls - draws;
         g_old3dsActiveEntity = previous;
     }
+#else
+    explicit Old3dsEntityScope(unsigned) {}
+#endif
 private:
     int previous;
     u64 tick;
@@ -293,6 +303,7 @@ extern "C" double   g_old3dsTriMs;
 class Old3dsTriScope
 {
 public:
+#ifdef SRR2_OLD3DS_RUNTIME_PROFILE
     explicit Old3dsTriScope(bool& found, bool& reachedTris)
         : mFound(found),
           mReachedTris(reachedTris),
@@ -332,12 +343,17 @@ public:
             g_old3dsTriMs += (svcGetSystemTick() - mStartTick) * 1000.0 / SYSCLOCK_ARM11;
         }
     }
+#else
+    Old3dsTriScope(bool&, bool&) {}
+#endif
 private:
+#ifdef SRR2_OLD3DS_RUNTIME_PROFILE
     bool& mFound;
     bool& mReachedTris;
     unsigned mCandidatesStart;
     bool mTimed;
     u64 mStartTick;
+#endif
 };
 
 #endif // SRR2_OLD_3DS

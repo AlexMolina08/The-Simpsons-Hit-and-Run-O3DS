@@ -1,3 +1,4 @@
+#include <main/old3dsprofile.h>
 #include <main/graphics3ds.h>
 #ifdef SRR2_OLD3DS_PARTICLE_CLIP
 extern "C" void old3dsDumpParticleClip();
@@ -304,7 +305,7 @@ extern "C" int main( int argc, char *argv[] )
     //
     // Run it!  Control will not return from here until the game is stopped.
     //
-#ifdef SRR2_OLD3DS_JOINT_ROTATION_REUSE
+#if defined(SRR2_OLD3DS_RUNTIME_PROFILE) && defined(SRR2_OLD3DS_JOINT_ROTATION_REUSE)
     old3dsValidateJointRotationReuse();
 #endif
     pGame->Run();
@@ -314,6 +315,7 @@ extern "C" int main( int argc, char *argv[] )
 #ifdef SRR2_OLD_3DS
     picaRelease3DIndicator();
 #endif
+#ifdef SRR2_OLD3DS_RUNTIME_PROFILE
 #if defined(SRR2_OLD_3DS) && defined(SRR2_OLD3DS_COLL_PREP)
     old3dsDumpPairTail();
 #endif
@@ -363,6 +365,7 @@ extern "C" int main( int argc, char *argv[] )
 #ifdef SRR2_OLD3DS_GPU_SKIN_SUPPORT
     extern void picaSkinDump();
     picaSkinDump();
+#endif
 #endif
 
 

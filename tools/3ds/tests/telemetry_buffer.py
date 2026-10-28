@@ -7,6 +7,7 @@ root=Path(__file__).resolve().parents[3]
 diag=(root/'code/main/old3dsdiag.h').read_text()
 def extract(start,end): return diag[diag.index(start):diag.index(end,diag.index(start))]
 prelude=r'''
+#define SRR2_OLD3DS_OPTIONAL_DIAG
 #include <cassert>
 #include <cstdio>
 #include <cstdarg>

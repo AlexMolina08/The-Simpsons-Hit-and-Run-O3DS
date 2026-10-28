@@ -565,7 +565,7 @@ const unsigned PROFILE_CHANNEL_AI = 1;
 const unsigned PROFILE_CHANNEL_RENDER = 2;
 const unsigned PROFILE_CHANNEL_LOAD = 3;
 
-#ifdef SRR2_OLD_3DS
+#ifdef SRR2_OLD3DS_RUNTIME_PROFILE
 #include <main/old3dsreport.h>
 #endif
 
@@ -609,7 +609,7 @@ void Game::Run()
     static aptHookCookie s_aptCookie;
     aptHook( &s_aptCookie, srr2AptHook, NULL );
 #endif
-#ifdef SRR2_OLD_3DS
+#ifdef SRR2_OLD3DS_RUNTIME_PROFILE
     double updateMs = 0.0, renderMs = 0.0, serviceMs = 0.0, loadMs = 0.0;
     unsigned profileFrames = 0;
     double workMs = 0.0, peakWorkMs = 0.0;
@@ -634,7 +634,7 @@ void Game::Run()
 #endif
 
         const ContextEnum ctx = GetGameFlow() ? GetGameFlow()->GetCurrentContext() : CONTEXT_ENTRY;
-#ifdef SRR2_OLD_3DS
+#ifdef SRR2_OLD3DS_RUNTIME_PROFILE
         static u64 lastDiagnosticTick = svcGetSystemTick();
         static unsigned lastPresented = g_picaPresentedFrames;
         // Pause first, then press SELECT to dump. Hold L as well to exit cleanly.
@@ -664,6 +664,7 @@ void Game::Run()
 #endif
         Graphics3DS::AllowChanges(ctx == CONTEXT_FRONTEND || ctx == CONTEXT_PAUSE);
         const u64 frameStartTick = svcGetSystemTick();
+#ifdef SRR2_OLD3DS_RUNTIME_PROFILE
         const u64 diagnosticTick = svcGetSystemTick();
         const u64 sampleTicks = diagnosticTick - lastDiagnosticTick;
         if(sampleTicks >= (u64)SYSCLOCK_ARM11 * 5)
@@ -788,6 +789,7 @@ void Game::Run()
             lastPresented = presented;
         }
 #endif
+#endif
 #ifdef SRR2_OLD_3DS
         g_picaWorldScaleAllowed = (ctx == CONTEXT_GAMEPLAY || ctx == CONTEXT_PAUSE);
 #endif
@@ -868,7 +870,7 @@ void Game::Run()
         // Service the GameFlow and RenderFlow.
         //
 
-#ifdef SRR2_OLD_3DS
+#ifdef SRR2_OLD3DS_RUNTIME_PROFILE
         u64 phaseTick = svcGetSystemTick();
 #ifdef SRR2_OLD3DS_GPU_SKIN_SUPPORT
         u64 skinUpdateTicks=0, skinRenderTicks=0;
@@ -882,12 +884,14 @@ void Game::Run()
             DEMOPROFILE( g_DemoProfiler.Start(PROFILE_CHANNEL_AI); )
             mpTimerList->Service(); //nv
             { NB_SCOPE(Update); O3_RECUR(Update); mpGameFlow->OnTimerDone(elapsed, NULL); }
-#ifdef SRR2_OLD_3DS
+#ifdef SRR2_OLD3DS_RUNTIME_PROFILE
             const u64 updateTicks=svcGetSystemTick()-phaseTick;
 #ifdef SRR2_OLD3DS_CAUSAL_DIAG
             O3ExperimentPhase(0,updateTicks);
 #endif
+#ifdef SRR2_OLD3DS_RUNTIME_PROFILE
             updateMs += updateTicks * 1000.0 / SYSCLOCK_ARM11;
+#endif
 #ifdef SRR2_OLD3DS_GPU_SKIN_SUPPORT
             skinUpdateTicks=updateTicks;
 #endif
@@ -1002,12 +1006,14 @@ void Game::Run()
         //
         // Service FTech subsystems.
         //
-#ifdef SRR2_OLD_3DS
+#ifdef SRR2_OLD3DS_RUNTIME_PROFILE
         const u64 renderTicks=svcGetSystemTick()-phaseTick;
 #ifdef SRR2_OLD3DS_CAUSAL_DIAG
         O3ExperimentPhase(1,renderTicks);
 #endif
+#ifdef SRR2_OLD3DS_RUNTIME_PROFILE
         renderMs += renderTicks * 1000.0 / SYSCLOCK_ARM11;
+#endif
 #ifdef SRR2_OLD3DS_GPU_SKIN_SUPPORT
         skinRenderTicks=renderTicks;
 #endif
@@ -1055,7 +1061,7 @@ void Game::Run()
         }
         }
         DEMOPROFILE( g_DemoProfiler.Start(PROFILE_CHANNEL_LOAD); )
-#ifdef SRR2_OLD_3DS
+#ifdef SRR2_OLD3DS_RUNTIME_PROFILE
         const u64 serviceTicks=svcGetSystemTick()-phaseTick;
 #ifdef SRR2_OLD3DS_CAUSAL_DIAG
         O3ExperimentPhase(2,serviceTicks);
@@ -1064,7 +1070,7 @@ void Game::Run()
         phaseTick = svcGetSystemTick();
 #endif
         { NB_SCOPE(Stream); p3d::loadManager->SwitchTask(); }
-#ifdef SRR2_OLD_3DS
+#ifdef SRR2_OLD3DS_RUNTIME_PROFILE
         const u64 loadTicks=svcGetSystemTick()-phaseTick;
 #ifdef SRR2_OLD3DS_CAUSAL_DIAG
         O3ExperimentPhase(3,loadTicks);
@@ -1090,14 +1096,20 @@ void Game::Run()
         O3ExperimentEnd(frameTicks,elapsed);
 #endif
 #ifdef SRR2_OLD3DS_GPU_SKIN_SUPPORT
+#ifdef SRR2_OLD3DS_RUNTIME_PROFILE
         picaSkinEndFrame(frameTicks,skinUpdateTicks,skinRenderTicks,ctx==CONTEXT_GAMEPLAY);
+#else
+        picaSkinEndFrame(0,0,0,false);
+#endif
 #endif
 #ifdef SRR2_OLD3DS_NATIVE_BENCH
         if(NativeBench::End(frameTicks,ctx)) mExitNow=true;
 #endif
+#ifdef SRR2_OLD3DS_RUNTIME_PROFILE
         workMs += currentWorkMs;
         if(currentWorkMs > peakWorkMs) peakWorkMs = currentWorkMs;
         if(frameTicks > frameBudgetTicks) ++overBudgetFrames;
+#endif
         if(Graphics3DS::IsNew() && Graphics3DS::TargetFPS() == 60)
         {
             // Follow the LCD refresh instead of drifting against a nominal 60 Hz clock.
@@ -1145,7 +1157,7 @@ void Game::Run()
 
         END_PROFILER_FRAME();
     }
-#ifdef SRR2_OLD_3DS
+#ifdef SRR2_OLD3DS_RUNTIME_PROFILE
     Old3dsDumpReports("clean-exit");
 #endif
 #ifdef RAD_3DS

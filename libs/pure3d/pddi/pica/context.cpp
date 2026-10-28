@@ -1,4 +1,5 @@
 #include <main/old3dsperformance.h>
+#include <main/nativebench.h>
 extern "C" int g_picaWorldScaleAllowed;
 #include <main/old3dsrecurring.h>
 #include <main/old3dspools.h>
@@ -10,6 +11,10 @@ extern "C" int g_picaWorldScaleAllowed;
 #ifdef SRR2_OLD3DS_NATIVE_CONTEXT
 #include <pddi/pica/trackeduniforms.hpp>
 #include <pddi/pica/nativecontext.h>
+#ifdef SRR2_OLD3DS_NATIVE_BENCH
+#define C3D_FogGasMode picaNativeFogMode
+#define C3D_FogColor picaNativeFogColor
+#endif
 #endif
 #ifdef SRR2_OLD3DS_DRAW_PACKET
 #include <pddi/pica/drawpacket.h>
@@ -1358,11 +1363,30 @@ extern "C" void picaDumpClipBoundsStats()
 }
 bool picaContext::CullBounds(const float low[3], const float high[3])
 {
-    if(!g_picaInFrame || bottomPass || display->StereoActive() ||
+    if(!g_picaInFrame || bottomPass ||
        state.viewState->projectionMode != PDDI_PROJECTION_PERSPECTIVE) return false;
+#ifdef SRR2_OLD3DS_NATIVE_BENCH
+    C3D_Mtx cullingProjection=hwProjection;
+#else
+    const C3D_Mtx& cullingProjection=hwProjection;
+#endif
+    if(display->StereoActive())
+    {
+#ifdef SRR2_OLD3DS_NATIVE_BENCH
+        if(!NativeBench::StereoClip()) return false;
+#else
+        return false;
+#endif
+#ifdef SRR2_OLD3DS_NATIVE_BENCH
+        float row[4]={hwProjection.r[3].x,hwProjection.r[3].y,hwProjection.r[3].z,hwProjection.r[3].w};
+        if(!picaClipBounds::WidenStereo(row,display->StereoEyeShift(),Graphics3DS::StereoConvergence())) return false;
+        cullingProjection.r[3].x=row[0];cullingProjection.r[3].y=row[1];
+        cullingProjection.r[3].z=row[2];cullingProjection.r[3].w=row[3];
+#endif
+    }
     const pddiMatrix* mv=state.matrixStack[PDDI_MATRIX_MODELVIEW]->Top();
 #ifdef SRR2_OLD3DS_CLIP_PLANE_PREP
-    const bool projectionChanged=!clipPrepared || memcmp(&clipProjection,&hwProjection,sizeof(clipProjection));
+    const bool projectionChanged=!clipPrepared || memcmp(&clipProjection,&cullingProjection,sizeof(clipProjection));
     if(projectionChanged || memcmp(&clipModelView,mv,sizeof(clipModelView)))
     {
         if(projectionChanged)
@@ -1370,11 +1394,11 @@ bool picaContext::CullBounds(const float low[3], const float high[3])
             float projection[4][4];
             for(unsigned row=0;row<4;++row)
             {
-                projection[row][0]=hwProjection.r[row].x;projection[row][1]=hwProjection.r[row].y;
-                projection[row][2]=hwProjection.r[row].z;projection[row][3]=hwProjection.r[row].w;
+                projection[row][0]=cullingProjection.r[row].x;projection[row][1]=cullingProjection.r[row].y;
+                projection[row][2]=cullingProjection.r[row].z;projection[row][3]=cullingProjection.r[row].w;
             }
             clipProjectionPlanes=picaClipBounds::PrepareProjection(projection);
-            clipProjection=hwProjection;
+            clipProjection=cullingProjection;
         }
         float modelView[4][4];
         for(unsigned row=0;row<4;++row) for(unsigned col=0;col<4;++col)
@@ -1384,14 +1408,14 @@ bool picaContext::CullBounds(const float low[3], const float high[3])
     }
 #else
     if(!clipPrepared || memcmp(&clipModelView,mv,sizeof(clipModelView)) ||
-       memcmp(&clipProjection,&hwProjection,sizeof(clipProjection)))
+       memcmp(&clipProjection,&cullingProjection,sizeof(clipProjection)))
     {
-        clipModelView=*mv;clipProjection=hwProjection;clipPrepared=true;
+        clipModelView=*mv;clipProjection=cullingProjection;clipPrepared=true;
         float modelView[4][4], projection[4][4];
         for(unsigned row=0;row<4;++row) {
             for(unsigned col=0;col<4;++col) modelView[row][col]=mv->Row4(col)[row];
-            projection[row][0]=hwProjection.r[row].x;projection[row][1]=hwProjection.r[row].y;
-            projection[row][2]=hwProjection.r[row].z;projection[row][3]=hwProjection.r[row].w;
+            projection[row][0]=cullingProjection.r[row].x;projection[row][1]=cullingProjection.r[row].y;
+            projection[row][2]=cullingProjection.r[row].z;projection[row][3]=cullingProjection.r[row].w;
         }
         clipTransform=picaClipBounds::Prepare(modelView,projection);
     }
@@ -1768,7 +1792,9 @@ void picaContext::SetVertexUniforms(bool lit, pddiColour ambient, pddiColour dif
     {
         memcpy(&lastModelView, mv, sizeof(lastModelView));
         modelViewUploaded = true;
+#ifdef SRR2_OLD3DS_RUNTIME_PROFILE
         ++g_old3dsModelViewUploads;
+#endif
         Old3dsCount(O3_MV_UPLOAD);
 #endif
     C3D_Mtx hwModelView;
@@ -1787,7 +1813,10 @@ void picaContext::SetVertexUniforms(bool lit, pddiColour ambient, pddiColour dif
 #ifdef SRR2_OLD_3DS
     }
     else {
-        ++g_old3dsModelViewReuses; Old3dsCount(O3_MV_REUSE); }
+#ifdef SRR2_OLD3DS_RUNTIME_PROFILE
+        ++g_old3dsModelViewReuses; Old3dsCount(O3_MV_REUSE);
+#endif
+    }
 #endif
 
 #ifdef SRR2_OLD3DS_UNLIT_PROJECTION
@@ -2268,7 +2297,9 @@ void picaContext::DrawContactShadows()
     ++picaContact::batches;picaContact::drawn+=contactCount;
     if(contactCount>picaContact::peakInstances)picaContact::peakInstances=contactCount;
 #endif
+#ifdef SRR2_OLD3DS_RUNTIME_PROFILE
     ++g_old3dsDrawCalls;g_old3dsDrawVerts+=contactCount*picaContact::Indices;
+#endif
 }
 extern "C" void picaContactBegin(){if(s_picaContext)s_picaContext->BeginContactShadows();}
 extern "C" void picaContactQueue(const float* c,const float* n,const float* f,float w,float l,float a)
@@ -3041,7 +3072,7 @@ bool picaPrimBuffer::BuildExpanded(void)
 #endif
         if(expanded == NULL)
         {
-#ifdef SRR2_OLD_3DS
+#ifdef SRR2_OLD3DS_RUNTIME_PROFILE
             // Linear failures are reported separately from the ordinary heap.
             ++g_old3dsLinearFailures;
             if(needed > g_old3dsLinearFailureBytes)
@@ -3103,7 +3134,7 @@ void picaPrimBuffer::Display(void)
 #endif
     if(!g_picaInFrame)
     {
-#ifdef SRR2_OLD_3DS
+#ifdef SRR2_OLD3DS_RUNTIME_PROFILE
         ++g_old3dsDrawDroppedNoFrame;
 #endif
         return;
@@ -3111,7 +3142,7 @@ void picaPrimBuffer::Display(void)
 
     if(!buffer || !PrimIsDrawable(primType))
     {
-#ifdef SRR2_OLD_3DS
+#ifdef SRR2_OLD3DS_RUNTIME_PROFILE
         ++g_old3dsDrawDroppedNotDrawable;
 #endif
         return;
@@ -3201,7 +3232,7 @@ void picaPrimBuffer::Display(void)
 
         const u32 headroom = 2048;
 
-#ifdef SRR2_OLD_3DS
+#ifdef SRR2_OLD3DS_RUNTIME_PROFILE
         // Track command-buffer pressure so a full buffer cannot be mistaken for
         // an optimization. A dropped draw is missing geometry, not saved work.
         if(cmdBuf != NULL)
@@ -3214,7 +3245,7 @@ void picaPrimBuffer::Display(void)
         if(cmdBuf == NULL || (cmdOffset + headroom) > cmdSize
           )
         {
-#ifdef SRR2_OLD_3DS
+#ifdef SRR2_OLD3DS_RUNTIME_PROFILE
             ++g_old3dsDrawDroppedNoRoom;
 #endif
             return;
@@ -3262,7 +3293,7 @@ void picaPrimBuffer::Display(void)
 #endif
                     osConvertVirtToPhys(vertexData) - PICA_BUFINFO_BASE);
 
-#ifdef SRR2_OLD_3DS
+#ifdef SRR2_OLD3DS_RUNTIME_PROFILE
 #ifdef SRR2_OLD3DS_GPU_SKIN_SUPPORT
     ++g_picaSkinMetrics.draws; g_picaSkinMetrics.submittedVertices+=count;
 #endif
@@ -3582,6 +3613,7 @@ void picaContext::EndWorld(void)
     {
         // Drain world geometry before the first HUD projection disables depth.
         FlushStreams();
+        if(!bottomPass)display->SubmitWorldEarly();
         stereoWorldPass = false;
         SetupHardwareProjection();
     }
@@ -3652,9 +3684,23 @@ void picaContext::EndWorld(void)
     ApplyFogState();
 }
 
+void picaContext::SubmitOpaqueWorld(void)
+{
+#ifdef SRR2_OLD_3DS
+#ifdef SRR2_OLD3DS_NATIVE_BENCH
+    if(NativeBench::EarlyWorldQueuePhase()!=2)return;
+#endif
+    if(stereoWorldPass && !bottomPass)display->SubmitWorldEarly();
+#endif
+}
+
 extern "C" void picaWorldBegin(void)
 {
     if(s_picaContext) s_picaContext->BeginWorld();
+}
+extern "C" void picaWorldOpaqueQueue(void)
+{
+    if(s_picaContext)s_picaContext->SubmitOpaqueWorld();
 }
 extern "C" void picaWorldEnd(void)
 {
@@ -3954,7 +4000,9 @@ bool picaPrimBuffer::TryGpuSkin(pddiShader *material, const pddiMatrix *const *m
         reason = picaSkin::NoShader;
     if (reason == picaSkin::Ready)
     {
-        u64 start = svcGetSystemTick();
+#ifdef SRR2_OLD3DS_RUNTIME_PROFILE
+        const u64 start = svcGetSystemTick();
+#endif
         float packed[picaSkin::MaxBones][3][4];
 #ifdef SRR2_OLD3DS_GPU_SKIN_EYE_PALETTE
         float view[4][4];
@@ -4012,10 +4060,14 @@ bool picaPrimBuffer::TryGpuSkin(pddiShader *material, const pddiMatrix *const *m
                     dst[3 * i + r].w = packed[i][r][3];
                 }
             g_picaSkinMetrics.vectors += 3 * count;
+#ifdef SRR2_OLD3DS_RUNTIME_PROFILE
             g_picaSkinMetrics.paletteTicks += svcGetSystemTick() - start;
+#endif
             return SubmitGpuSkin(material);
         }
+#ifdef SRR2_OLD3DS_RUNTIME_PROFILE
         g_picaSkinMetrics.paletteTicks += svcGetSystemTick() - start;
+#endif
     }
 #endif
     ++g_picaSkinMetrics.fallback[reason];

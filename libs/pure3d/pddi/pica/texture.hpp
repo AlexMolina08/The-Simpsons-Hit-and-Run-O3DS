@@ -8,6 +8,11 @@ struct picaVramAllocation;
 struct picaLinearTextureRetirement;
 #if defined(SRR2_OLD3DS_NATIVE_BENCH) && defined(SRR2_OLD3DS_VRAM_TEXTURES)
 extern bool g_picaVramCapturePromote,g_picaVramCopyDiagnostics;
+extern bool g_picaVramCompact;
+#endif
+#if defined(SRR2_OLD3DS_NATIVE_BENCH) && defined(SRR2_OLD3DS_NATIVE_TEXTURE_BUNDLE)
+extern bool g_picaNativeExactWorldFallback;
+extern bool g_picaNativeBundleUnbuffered;
 #endif
 #ifdef SRR2_OLD3DS_NATIVE_TEXTURES
 struct picaNativeTextureStats { unsigned hits,misses,invalid,bytes,cost[3][5]; };

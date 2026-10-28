@@ -619,7 +619,7 @@ void picaMat::PreRender(void)
     (void)reflective;
 #endif
 #endif
-#ifdef SRR2_OLD_3DS
+#ifdef SRR2_OLD3DS_RUNTIME_PROFILE
     g_old3dsDrawBlended = texEnv[i].alphaBlendMode != PDDI_BLEND_NONE;
     g_old3dsDrawAlphaTested = texEnv[i].alphaTest;
 #endif

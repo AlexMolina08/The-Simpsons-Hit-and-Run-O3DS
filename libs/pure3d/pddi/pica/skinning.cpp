@@ -1,4 +1,5 @@
 #include <pddi/pica/skinning.hpp>
+#include <main/old3dsprofile.h>
 #ifdef SRR2_OLD3DS_GPU_SKIN_SUPPORT
 #include <citro3d.h>
 #include <cstdio>
@@ -164,15 +165,17 @@ static void capture()
 #endif
 void picaSkinEndFrame(u64 work, u64 update, u64 render, bool gameplay)
 {
+#ifdef SRR2_OLD3DS_RUNTIME_PROFILE
     g_picaSkinMetrics.workTicks += work;
     g_picaSkinMetrics.updateTicks += update;
     g_picaSkinMetrics.renderTicks += render;
     g_picaSkinMetrics.gameplayFrames += gameplay;
-    ++frameNumber;
     ++g_picaSkinMetrics.frames;
     unsigned freeBytes = linearSpaceFree();
     if (!g_picaSkinMetrics.minFree || freeBytes < g_picaSkinMetrics.minFree)
         g_picaSkinMetrics.minFree = freeBytes;
+#endif
+    ++frameNumber;
 #ifdef SRR2_OLD3DS_GPU_SKIN_METRICS
     if (frameNumber % 120u == 0)
         capture();

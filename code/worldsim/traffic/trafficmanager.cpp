@@ -1,4 +1,5 @@
 #include <main/old3dsperformance.h>
+#include <main/nativebench.h>
 //=============================================================================
 // Copyright (C) 2002 Radical Entertainment Ltd.  All rights reserved.
 //
@@ -705,8 +706,12 @@ BEGIN_PROFILE( "Traffic Man: Add" );
                             }
 
                             // Cap ambient spawns only. Mission vehicles use VehicleCentral.
-                            if( Old3dsPerformance::Enabled() && maxTrafficToUse > int(Old3dsPerformance::TrafficLimit()) )
-                                maxTrafficToUse = int(Old3dsPerformance::TrafficLimit());
+                            unsigned ambientLimit=Old3dsPerformance::TrafficLimit();
+#ifdef SRR2_OLD3DS_NATIVE_BENCH
+                            ambientLimit=NativeBench::AmbientTrafficLimit(ambientLimit);
+#endif
+                            if( Old3dsPerformance::Enabled() && maxTrafficToUse > int(ambientLimit) )
+                                maxTrafficToUse = int(ambientLimit);
                             if( mNumTraffic < maxTrafficToUse )
                             {
                                 // set cPos;

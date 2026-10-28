@@ -2,6 +2,21 @@
 #define PICA_CLIP_BOUNDS_HPP
 #include <cmath>
 namespace picaClipBounds {
+// Both eye projections subtract eyeShift * (clipW - convergence) from clipY.
+// For every potentially visible point clipW is nonnegative, so widening the
+// homogeneous W row by abs(eyeShift) * (clipW + abs(convergence)) contains both
+// eyes. The same wider planes conservatively retain geometry crossing W=0.
+// This changes only CPU rejection bounds; rendered positions remain untouched.
+inline bool WidenStereo(float row[4],float eyeShift,float convergence)
+{
+    if(!std::isfinite(eyeShift) || std::fabs(eyeShift)>0.1f ||
+       !std::isfinite(convergence) || convergence<0 || convergence>10000.0f) return false;
+    const float shift=std::fabs(eyeShift)*1.002f;
+    const float bias=std::fabs(eyeShift*convergence)*1.002f+0.0001f;
+    for(unsigned i=0;i<4;++i) row[i]*=1.0f+shift;
+    row[3]+=bias;
+    return true;
+}
 struct Transform {
     float coefficient[4][4], error[4][4];
     bool valid;

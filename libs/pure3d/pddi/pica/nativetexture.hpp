@@ -42,16 +42,20 @@ inline void Encode(const Description& d,unsigned char* out)
         d.width,d.height,d.format,d.levels,d.sourceBytes,d.bytes};
     for(unsigned i=0;i<11;++i)Put(out+4*i,words[i]);
 }
-template<class Hash> bool Key(const Description& d,const void* source,Hash& hash,
-                             unsigned char* header,char* hex)
+template<class Hash> bool HeaderKey(Hash& hash,const unsigned char* header,char* hex)
 {
-    Encode(d,header);
-    if(!hash(source,d.sourceBytes,header+44))return false;
     unsigned char key[32];
     if(!hash(header,76,key))return false;
     static const char digits[]="0123456789abcdef";
     for(unsigned i=0;i<32;++i){hex[2*i]=digits[key[i]>>4];hex[2*i+1]=digits[key[i]&15];}
     hex[64]=0;return true;
+}
+template<class Hash> bool Key(const Description& d,const void* source,Hash& hash,
+                             unsigned char* header,char* hex)
+{
+    Encode(d,header);
+    if(!hash(source,d.sourceBytes,header+44))return false;
+    return HeaderKey(hash,header,hex);
 }
 template<class Hash> bool Read(FILE* f,const unsigned char* expected,unsigned bytes,
                               void* destination,Hash& hash,void (*yield)()=nullptr,bool exactFile=true)

@@ -27,7 +27,7 @@ source=r'''
 #include <cassert>
 #include <cstdio>
 #include <thread>
-using u16=uint16_t;using u32=uint32_t;using u64=uint64_t;using GPU_CULLMODE=unsigned;using GPU_EARLYDEPTHFUNC=unsigned;using GPU_LOGICOP=unsigned;using GPU_GASDEPTHFUNC=unsigned;using GPU_SHADER_TYPE=unsigned;using C3D_LightEnv=void;
+using u16=uint16_t;using u32=uint32_t;using u64=uint64_t;using GPU_FOGMODE=unsigned;using GPU_GASMODE=unsigned;using GPU_CULLMODE=unsigned;using GPU_EARLYDEPTHFUNC=unsigned;using GPU_LOGICOP=unsigned;using GPU_GASDEPTHFUNC=unsigned;using GPU_SHADER_TYPE=unsigned;using C3D_LightEnv=void;
 constexpr unsigned GPU_VERTEX_SHADER=0,GPU_GEOMETRY_SHADER=1,GPU_GAS=7,GPU_NO_FOG=0;
 #define BIT(n) (1u<<(n))
 #define GPU_MAKEGASDEPTHFUNC(n) ((0xAF02>>((int)(n)<<1))&3)
@@ -57,6 +57,9 @@ C3D_Context context;std::vector<u32> words;unsigned appends=0;
 u32 storage[8192];u32* gpuCmdBuf=storage;unsigned gpuCmdBufOffset=0,gpuCmdBufSize=8192;
 bool uniformFast=true;bool nativeBenchNativeUniforms(){return uniformFast;}
 C3D_Context* C3Di_GetContext(){return &context;}
+void C3D_FogGasMode(GPU_FOGMODE fog,GPU_GASMODE gas,bool flip){if(!(context.flags&C3DiF_Active))return;context.flags|=C3DiF_TexEnvBuf;context.texEnvBuf=(context.texEnvBuf&~0x100FFu)|(fog&7u)|((gas&1u)<<3)|(flip?BIT(16):0);}
+void C3D_FogColor(u32 color){if(!(context.flags&C3DiF_Active))return;context.flags|=C3DiF_TexEnvBuf;context.fogClr=color;}
+
 u32 osConvertVirtToPhys(const void* p){return uintptr_t(p);}
 void GPUCMD_AddRawCommands(const u32* p,unsigned n){++appends;assert(gpuCmdBufOffset+n<=gpuCmdBufSize);memcpy(storage+gpuCmdBufOffset,p,n*4);gpuCmdBufOffset+=n;}
 void GPUCMD_Add(u32 header,const u32* p,unsigned n){

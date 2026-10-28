@@ -307,7 +307,7 @@ with tempfile.TemporaryDirectory() as td:
  (p/'test.cpp').write_text(prelude+methods+tests)
  for enabled,compact,pedestrians,batch,rigid,eye,cast,eye_cache in ((False, False, False, False, False, False, False, False), (True, False, False, False, False, False, False, False), (True, True, False, False, False, False, False, False), (True, True, True, False, False, False, False, False), (True, True, True, True, False, False, False, False), (True, False, False, True, False, False, False, False), (True, True, True, True, True, False, False, False), (True, True, True, True, True, True, False, False), (True, True, True, True, True, True, True, False), (True, True, True, True, True, True, True, True)):
   if packed and not (enabled and compact and pedestrians and batch and rigid and eye and cast and eye_cache):continue
-  flags=['-DSRR2_OLD3DS_GPU_SKIN_SUPPORT','-DSRR2_OLD3DS_GPU_SKIN_METRICS']+(['-DSRR2_OLD3DS_GPU_SKIN'] if enabled else [])
+  flags=['-DSRR2_OLD3DS_RUNTIME_PROFILE','-DSRR2_OLD3DS_GPU_SKIN_SUPPORT','-DSRR2_OLD3DS_GPU_SKIN_METRICS']+(['-DSRR2_OLD3DS_GPU_SKIN'] if enabled else [])
   flags+=(['-DSRR2_OLD3DS_NATIVE_BENCH'] if diagnostics else [])
   flags+=(['-DSRR2_OLD3DS_CHARACTER_FORM'] if form else [])
   flags+=(['-DSRR2_OLD3DS_GPU_SKIN_BORROW'] if borrow else [])
@@ -321,6 +321,6 @@ with tempfile.TemporaryDirectory() as td:
   flags+=(['-DSRR2_OLD3DS_GPU_SKIN_CAST'] if cast else [])
   flags+=(['-DSRR2_OLD3DS_GPU_SKIN_EYE_PALETTE'] if eye else [])
   flags+=['-DVSH_BONE_BASE='+str(20 if eye else 24 if compact else 27)]+(['-DSRR2_OLD3DS_GPU_SKIN_COMPACT'] if compact else [])
-  subprocess.run(['clang++','-std=c++11','-fsanitize=address,undefined','-I',str(p),'-I',str(ROOT/'libs/pure3d'),*flags,
+  subprocess.run(['clang++','-std=c++11','-fsanitize=address,undefined','-I',str(p),'-I',str(ROOT/'libs/pure3d'),'-I',str(ROOT/'code'),*flags,
       str(p/'test.cpp'),str(ROOT/'libs/pure3d/pddi/pica/skinning.cpp'),'-o',str(p/'test')],check=True)
   subprocess.run([str(p/'test')],cwd=p,check=True)

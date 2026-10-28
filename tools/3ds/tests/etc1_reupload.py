@@ -27,6 +27,9 @@ prelude = prelude.replace(' void UploadLevel(int);', '''
  void TryPromoteVram();void FreeStaging();pddiLockInfo* Lock(int,pddiRect*);void Unlock(int);
  void UploadLevel(int);''')
 prelude += r'''
+#include <cstdint>
+using u64=std::uint64_t;static u64 ticks=1;u64 svcGetSystemTick(){return ticks++;}
+const unsigned SYSCLOCK_ARM11=1000000;namespace NativeBench {bool collecting=false;}
 unsigned C3D_TexCalcTotalSize(unsigned size,unsigned levels){return (size-(size>>(2*(levels+1))))*4/3;}
 bool failLinear=false,failConversion=false;unsigned lastLinearBytes=0;
 void* TestMalloc(size_t bytes){return failConversion?nullptr:malloc(bytes);}
@@ -64,10 +67,13 @@ void dispose(picaTexture& t){
 }
 int main(){
  pixelBytes=2;std::mt19937 random(33017);
- for(int alpha:{0,1,8})for(int levels:{0,2})for(bool vram:{false,true}){
-  auto t=makeTexture(alpha,levels,true);auto reference=makeTexture(alpha,levels,false);
+ for(bool compact:{false,true})for(int alpha:{0,1,8})for(int levels:{0,2})for(bool vram:{false,true}){
+  g_picaVramCompact=compact;auto t=makeTexture(alpha,levels,true);auto reference=makeTexture(alpha,levels,false);
   reference.vramEligible=false;
-  if(vram){t.TryPromoteVram();assert(t.vramAllocation);}else t.vramEligible=false;
+  if(vram){t.TryPromoteVram();assert(t.vramAllocation);
+   assert(t.vramAllocation->bytes==(compact?C3D_TexCalcTotalSize(t.tex.size,levels):t.nativeAllocationBytes));
+   for(unsigned i=0;i<C3D_TexCalcTotalSize(t.tex.size,levels);++i)assert(((unsigned char*)t.tex.data)[i]==0xa5);
+  }else t.vramEligible=false;
   void* previous=t.tex.data;auto* owner=t.vramAllocation;
   if(vram){
    failLinear=true;assert(!t.Lock(0,nullptr));failLinear=false;
@@ -98,7 +104,7 @@ with tempfile.TemporaryDirectory(prefix='srr-etc1-reupload-') as directory:
     folder = Path(directory)
     (folder / 'test.cpp').write_text(prelude + methods + tests)
     subprocess.run(['clang++', '-std=c++14', '-O2', '-fsanitize=address,undefined',
-                    '-DSRR2_OLD3DS_NATIVE_ETC1', '-DSRR2_OLD3DS_VRAM_TEXTURES',
+                    '-DSRR2_OLD3DS_NATIVE_ETC1', '-DSRR2_OLD3DS_VRAM_TEXTURES','-DSRR2_OLD3DS_NATIVE_BENCH',
                     '-I' + str(root), '-I' + str(root / 'libs/pure3d'), str(folder / 'test.cpp'),
                     str(root / 'libs/pure3d/pddi/pica/swizzle.cpp'),
                     str(root / 'libs/pure3d/pddi/gl/decompress.cpp'), '-o', str(folder / 'test')], check=True)

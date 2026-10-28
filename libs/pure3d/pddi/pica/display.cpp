@@ -9,6 +9,12 @@
 #ifdef SRR2_OLD3DS_NATIVE_BENCH
 #include <main/nativebench.h>
 #endif
+#ifdef SRR2_OLD_3DS
+extern "C" {
+#include "citro3d_171/internal.h"
+}
+#include <pddi/pica/earlyqueue.hpp>
+#endif
 #include "pddi_shbin.h"
 
 extern "C" void C3Di_UpdateContext(void);
@@ -158,6 +164,9 @@ extern "C" void picaDumpStereoDiagnostics(FILE* file)
             (unsigned long)s_indicatorLcdResult,(unsigned long)s_indicatorWriteResult);
     }
 #endif
+    fprintf(file,"NATIVE_EARLY_QUEUE enabled=%u phase=%u starts=%u deferred_callbacks=%u completed_callbacks=%u gpu_timer_excludes_early_work=%u loop_period_valid=1 commands_reordered=0 scene_traversals_added=0\n",
+        NativeBench::EarlyWorldQueue(),NativeBench::EarlyWorldQueuePhase(),picaEarlyQueue::Current().starts,
+        picaEarlyQueue::Current().deferred.load(),picaEarlyQueue::Current().completed.load(),NativeBench::EarlyWorldQueue());
     fprintf(file, "NATIVE_STEREO active_frames=%u replayed_segments=%u minimum_slider=%.4f maximum_slider=%.4f scope=whole_session cpu_scene_traversals_per_segment=1\n",
         stereoFrames, stereoSegments, minimumStereoSlider, maximumStereoSlider);
     fprintf(file, "NATIVE_STEREO_DEPTH measured_frames=%u stereo_frames=%u slider_min=%.4f slider_max=%.4f convergence_min=%.4f convergence_max=%.4f maximum_background_pair_pixels=12 authored_background_pair_pixels=8 obstruction_foreground_budget_pixels=6 shader_register=95 gpu_bones=25 camera_profiles=1 world_frustum_budget=0 per_vertex_clamp=0\n",
@@ -218,6 +227,14 @@ extern "C" void (*g_picaGpuWaitHook)(int lend) = 0;
 
 #include <SDL.h>
 
+static void picaFinishFrame(unsigned flags)
+{
+    C3D_FrameEnd(flags);
+#ifdef SRR2_OLD_3DS
+    picaEarlyQueue::Arm();
+#endif
+}
+
 picaDisplay::picaDisplay(pddiDisplayInfo* info)
 {
     displayInfo = info;
@@ -240,6 +257,8 @@ picaDisplay::picaDisplay(pddiDisplayInfo* info)
     renderWidth = 400;
 #endif
     stereoThisFrame = false;
+    earlyWorldCommands = nullptr;
+    earlyWorldWords = 0;
     eyeShift    = 0.0f;
     c3dStarted  = false;
     inFrame     = false;
@@ -254,12 +273,13 @@ picaDisplay::~picaDisplay()
 #endif
     if(inFrame)
     {
-        C3D_FrameEnd(0);
+        picaFinishFrame(0);
         inFrame = false;
         g_picaInFrame = 0;
     }
 
 #ifdef SRR2_OLD_3DS
+    if(picaEarlyQueue::Current().queue){C3Di_RenderQueueWaitDone();picaEarlyQueue::Restore();}
     if(worldTarget) C3D_RenderTargetDelete(worldTarget);
     if(worldTexture.data) C3D_TexDelete(&worldTexture);
 #endif
@@ -502,7 +522,7 @@ void picaDisplay::BeginFrame(void)
 #endif
             if(g_picaGpuWaitHook) g_picaGpuWaitHook(1);
 
-#ifdef SRR2_OLD_3DS
+#ifdef SRR2_OLD3DS_RUNTIME_PROFILE
             const u64 waitTick = svcGetSystemTick();
 #endif
             {
@@ -511,7 +531,7 @@ void picaDisplay::BeginFrame(void)
 #endif
                 frameOk = C3D_FrameBegin(0);
             }
-#ifdef SRR2_OLD_3DS
+#ifdef SRR2_OLD3DS_RUNTIME_PROFILE
             g_picaFrameWaitMs += (svcGetSystemTick() - waitTick) * 1000.0 / SYSCLOCK_ARM11;
             // A failed begin submits no frame at all. The old code discarded this
             // result, so a busy GPU was invisible in the diagnostics.
@@ -527,12 +547,15 @@ void picaDisplay::BeginFrame(void)
             return;
         }
 
+#ifdef SRR2_OLD_3DS
+        picaEarlyQueue::Restore();
+#endif
         if(!C3D_FrameDrawOn(target))
         {
-#ifdef SRR2_OLD_3DS
+#ifdef SRR2_OLD3DS_RUNTIME_PROFILE
             ++g_old3dsFrameBeginNoDraw;
 #endif
-            C3D_FrameEnd(0);
+            picaFinishFrame(0);
             return;
         }
 
@@ -571,6 +594,7 @@ void picaDisplay::BeginFrame(void)
 
 void picaDisplay::StartTopSegment(void)
 {
+    earlyWorldCommands=nullptr;earlyWorldWords=0;
     if(stereoThisFrame)
     {
         if(context) context->FlushStreams();
@@ -591,6 +615,28 @@ void picaDisplay::StartTopSegment(void)
     }
 }
 
+void picaDisplay::SubmitWorldEarly(void)
+{
+#ifdef SRR2_OLD_3DS
+#ifdef SRR2_OLD3DS_NATIVE_BENCH
+    if(!NativeBench::EarlyWorldQueue())return;
+#endif
+    // Only the verified original-model stereo path starts the GPU early.
+    // Mono and New-model presentation retain their existing submission policy.
+    if(!inFrame || worldActive || earlyWorldCommands || !stereoThisFrame || Graphics3DS::IsNew())return;
+    C3D_Context* ctx=C3Di_GetContext();
+    // The extra world split consumes at most two queue entries in stereo.
+    // Keep ample room for both eye setups, HUD, bottom display and transfers.
+    if(ctx->gxQueue.maxEntries-ctx->gxQueue.numEntries<16)return;
+    if(context)context->FlushStreams();
+    u32* commands=nullptr;u32 words=0;
+    if(!C3Di_SplitFrame(&commands,&words))return;
+    GX_ProcessCommandList(commands,words*4,GX_CMDLIST_FLUSH);
+    if(stereoThisFrame){earlyWorldCommands=commands;earlyWorldWords=words;}
+    picaEarlyQueue::Start(&ctx->gxQueue);
+#endif
+}
+
 void picaDisplay::FinishTopSegment(void)
 {
     if(!stereoThisFrame)
@@ -599,22 +645,28 @@ void picaDisplay::FinishTopSegment(void)
     if(context) context->FlushStreams();
     u32* sceneBuf = NULL;
     u32  sceneSize = 0;
-    if(C3Di_SplitFrame(&sceneBuf, &sceneSize))
+    const bool hasTail=C3Di_SplitFrame(&sceneBuf, &sceneSize);
+    if(earlyWorldCommands || hasTail)
     {
 #ifdef SRR2_OLD3DS_NATIVE_BENCH
         ++stereoSegments;
-        picaAuditStereoScene(sceneBuf,sceneSize);
+        if(earlyWorldCommands)picaAuditStereoScene(earlyWorldCommands,earlyWorldWords);
+        if(hasTail)picaAuditStereoScene(sceneBuf,sceneSize);
 #endif
         // Old-model EndFrame flushes only its final command segment. Publish
         // this scene segment before either eye consumes it on real hardware.
-        GX_ProcessCommandList(sceneBuf, sceneSize * 4, GX_CMDLIST_FLUSH);
+        if(hasTail)GX_ProcessCommandList(sceneBuf, sceneSize * 4, GX_CMDLIST_FLUSH);
 
         C3D_FrameDrawOn(targetRight);
         C3Di_UpdateContext();
         picaWriteEye(eyeShift);
         C3D_FrameSplit(GX_CMDLIST_FLUSH);
 
-        GX_ProcessCommandList(sceneBuf, sceneSize * 4, 0);
+        // Replay the exact world prefix followed by its original HUD tail.
+        // Both eyes inherit the same uniforms, state and drawing order.
+        if(earlyWorldCommands)GX_ProcessCommandList(earlyWorldCommands,earlyWorldWords*4,0);
+        if(hasTail)GX_ProcessCommandList(sceneBuf, sceneSize * 4, 0);
+        earlyWorldCommands=nullptr;earlyWorldWords=0;
     }
 }
 
@@ -644,7 +696,7 @@ void picaDisplay::EndFrame(void)
         FinishTopSegment();
         stereoThisFrame = false;
 
-#ifdef SRR2_OLD_3DS
+#ifdef SRR2_OLD3DS_RUNTIME_PROFILE
         const u64 submitTick = svcGetSystemTick();
 #endif
         // Textures, persistent geometry and immediate rings flush their own
@@ -655,16 +707,18 @@ void picaDisplay::EndFrame(void)
         O3ExperimentSubmit();
 #endif
         Old3dsCadence::Submit(g_picaPresentedFrames+1);
-        C3D_FrameEnd(GX_CMDLIST_FLUSH);
+        picaFinishFrame(GX_CMDLIST_FLUSH);
 #else
-        C3D_FrameEnd(0);
+        picaFinishFrame(0);
 #endif
         inFrame = false;
         g_picaInFrame = 0;
 #ifdef SRR2_OLD_3DS
+#ifdef SRR2_OLD3DS_RUNTIME_PROFILE
         g_picaFrameSubmitMs += (svcGetSystemTick() - submitTick) * 1000.0 / SYSCLOCK_ARM11;
-        ++g_picaPresentedFrames;
         ++g_old3dsFramePresented;
+#endif
+        ++g_picaPresentedFrames;
         picaUpdate3DIndicator();
 #endif
     }

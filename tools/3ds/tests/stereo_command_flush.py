@@ -35,10 +35,12 @@ void C3D_FrameDrawOn(void*) {cpu[current][2] = 456;}
 struct Context {void FlushStreams() {++streamFlushes;}};
 struct picaDisplay {
     bool stereoThisFrame = true;
+    u32* earlyWorldCommands=nullptr;u32 earlyWorldWords=0;
     float eyeShift = 0.045f;
     Context storage, *context = &storage;
     void* targetRight = this;
     void StartTopSegment();
+    void SubmitWorldEarly();
     void FinishTopSegment();
 };
 '''

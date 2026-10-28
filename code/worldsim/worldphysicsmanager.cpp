@@ -1236,7 +1236,7 @@ void WorldPhysicsManager::Update(unsigned int timeDeltaMilliSeconds)
         numSubsteps = (timeDeltaMilliSeconds + stepLimit - 1) / stepLimit;
     }
 
-#ifdef SRR2_OLD_3DS
+#ifdef SRR2_OLD3DS_RUNTIME_PROFILE
     // Record the substep count this update selected. mLastTime is not yet
     // updated, so this mirrors the threshold above exactly.
     {
@@ -1574,7 +1574,7 @@ void WorldPhysicsManager::WorldSimSubstepGuts(float dt, bool firstSubstep)
 
 BEGIN_PROFILE("DetectCollisions")
     bool printOut = false;
-#ifdef SRR2_OLD_3DS
+#ifdef SRR2_OLD3DS_RUNTIME_PROFILE
     // Record the collision workload this substep was handed, so cost can be
     // related to scene complexity rather than only to elapsed time.
     g_old3dsPhysicsAreas += (unsigned)mCollisionManager->GetActivatedAreaCount();
