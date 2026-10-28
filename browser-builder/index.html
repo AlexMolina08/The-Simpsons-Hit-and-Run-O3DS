@@ -1,0 +1,57 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="Create a Hit & Run 3DS installer locally in your browser using your own PC game files.">
+  <meta name="referrer" content="no-referrer">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; worker-src 'self' blob:; style-src 'self'; img-src 'self' data:; connect-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'">
+  <title>Hit & Run 3DS Builder</title>
+  <link rel="stylesheet" href="./styles.css">
+  <script type="module" src="./app.mjs"></script>
+</head>
+<body>
+  <header class="masthead">
+    <a class="wordmark" href="./">3DS installer builder</a>
+    <a class="source-link" href="https://github.com/AlexMolina08/The-Simpsons-Hit-and-Run-O3DS" target="_blank" rel="noopener noreferrer">Project & source</a>
+  </header>
+  <main>
+    <div class="introduction">
+      <h1>The Simpsons: Hit & Run</h1>
+      <p>Create a 3DS installer from your PC copy of the game.</p>
+      <p class="privacy">Files are processed on this device and are never uploaded.</p>
+    </div>
+    <div class="workbench">
+      <section class="input-panel" aria-labelledby="source-title">
+        <div class="step-heading"><span>1</span><h2 id="source-title">Choose your game</h2></div>
+        <p>Select your PC disc image, or the folder where the game is already installed.</p>
+        <input id="iso" type="file" accept=".iso,application/x-iso9660-image" hidden>
+        <input id="folder" type="file" webkitdirectory multiple hidden>
+        <button id="choose-iso" class="choose-button">Choose ISO</button>
+        <button id="choose" class="text-button folder-button">Choose installed game folder</button>
+        <div id="selection" class="selection" aria-live="polite">No game selected</div>
+      </section>
+      <section class="build-panel" aria-labelledby="build-title">
+        <div class="step-heading"><span>2</span><h2 id="build-title">Build your installer</h2></div>
+        <p>Conversion runs in this tab. Keep it open until the build finishes.</p>
+        <div class="build-controls"><button id="build" class="primary" disabled>Build CIA</button><button id="cancel" class="quiet" hidden>Cancel build</button></div>
+        <div id="status" class="status" role="status" aria-live="polite">Choose an ISO or game folder to begin.</div>
+        <progress id="progress" aria-label="Build progress" hidden></progress>
+        <div id="error" class="error" role="alert" hidden></div>
+        <div id="result" hidden>
+          <div class="step-heading"><span>3</span><h2>Your installer is ready</h2></div>
+          <p id="result-size"></p>
+          <button id="save" class="primary">Save CIA</button>
+          <button id="save-report" class="quiet">Save build report</button>
+          <p class="result-note">Keep this installer private. It includes data from your PC copy.</p>
+        </div>
+      </section>
+    </div>
+    <div class="after-build">
+      <section><h2>Then, on your 3DS</h2><p>Copy your CIA to <code>cias</code> on the SD card. Open <b>FBI → SD → cias</b> and install it. Keep at least <b>4 GB free</b> before copying.</p><p>Updating? Install over the existing title. Back up <code>3ds/simpsons</code> first; keep your saves and <code>3ds/dspfirm.cdc</code>.</p></section>
+      <section><h2>Before you start</h2><p>Use desktop Chrome or Edge. Allow at least <b>8 GB of free disk space</b> for temporary files. Keep this tab open while it builds.</p><p>Building can take time, especially when converting the movies.</p><button id="clear" class="text-button">Clear this builder’s temporary files</button></section>
+    </div>
+  </main>
+  <footer><p>An unofficial homebrew project. Requires your own PC game files and a 3DS with custom firmware.</p><nav><a href="./tools.html">Tool licences and source</a><a href="https://github.com/AlexMolina08/The-Simpsons-Hit-and-Run-O3DS/blob/main/docs/INSTALL.md">Installation help</a></nav></footer>
+</body>
+</html>

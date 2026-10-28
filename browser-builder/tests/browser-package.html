@@ -1,0 +1,12 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>Local packaging verification</title>
+<h1>Local packaging verification</h1>
+<p>Development test. Select the private prepared fixture folder. Files stay local.</p>
+<input id="folder" type="file" webkitdirectory multiple hidden>
+<button id="choose">Select prepared fixture</button>
+<button id="run" disabled>Test browser packaging</button>
+<p id="status">No fixture selected.</p>
+<pre id="report"></pre>
+<a id="save" hidden download="browser-package-proof.cia">Save test CIA</a>
+<script type="module" src="./qa-package.mjs"></script>
