@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Compare common native context packets with the upstream 1.7.1 command stream."""
+"""Verify upstream state parity plus the required PICA fog-state render barrier."""
 from pathlib import Path
 import subprocess,tempfile,re,shutil,sys
 root=Path(__file__).resolve().parents[3]
@@ -90,9 +90,26 @@ uniform_snapshot=clean((root/'libs/pure3d/pddi/pica/nativeuniformsnapshot.h').re
 context_snapshot=clean((root/'libs/pure3d/pddi/pica/nativecontextsnapshot.h').read_text())
 source+='#ifndef TEST_NO_BENCH\n#define SRR2_OLD3DS_NATIVE_BENCH\n#endif\n#define SRR2_OLD3DS_NATIVE_CONTEXT\n'
 source+='namespace Reference {\n'+commands+fixture+uniform_snapshot+'\n'+context_snapshot+'\n'+uniforms+'\n'+methods+update+'picaNativeCommandBlock* g_picaNativeCommandBlock=nullptr;\n}\n'
-source+='#undef PICA_NATIVE_COMMANDS_H\n#undef PICA_NATIVE_UNIFORM_SNAPSHOT_H\n#undef PICA_NATIVE_CONTEXT_SNAPSHOT_H\nnamespace Candidate {\n'+commands+fixture+uniform_snapshot+'\n'+context_snapshot+'\n'+uniforms+'\n'+methods+update.replace('C3Di_UpdateContext(','__real_C3Di_UpdateContext(')+clean((root/'libs/pure3d/pddi/pica/nativecontext.c').read_text())+'\n}\n'
+candidate_fixture=fixture.replace('void GPUCMD_Add(u32 header,const u32* p,unsigned n){','void __real_GPUCMD_Add(u32 header,const u32* p,unsigned n){')
+candidate_fixture='\nvoid __wrap_GPUCMD_Add(u32,const u32*,u32);\nvoid GPUCMD_Add(u32 h,const u32* p,unsigned n){__wrap_GPUCMD_Add(h,p,n); }\n'+candidate_fixture
+source+='#undef PICA_NATIVE_COMMANDS_H\n#undef PICA_NATIVE_UNIFORM_SNAPSHOT_H\n#undef PICA_NATIVE_CONTEXT_SNAPSHOT_H\nnamespace Candidate {\n'+commands+candidate_fixture+uniform_snapshot+'\n'+context_snapshot+'\n'+uniforms+'\n'+methods+update.replace('C3Di_UpdateContext(','__real_C3Di_UpdateContext(')+clean((root/'libs/pure3d/pddi/pica/nativecontext.c').read_text())+'\n}\n'
 source+=r'''
 unsigned state=127843;unsigned randomValue(){state=state*1664525u+1013904223u;return state;}
+bool sameStateWithFogBarrier(const std::vector<u32>& expected,const std::vector<u32>& actual){
+ // Preserve every upstream word and require the extra flush immediately before
+ // the fog write. A flush before shader setup does not satisfy this contract.
+ size_t fog=expected.size();
+ for(size_t at=0;at+1<expected.size();){
+  const u32 header=expected[at+1];
+  if((header&1023)==GPUREG_TEXENV_UPDATE_BUFFER){fog=at;break;}
+  at+=(1+((header>>20)&2047)+2)&~size_t(1);
+ }
+ if(fog==expected.size())return actual==expected;
+ if(actual.size()!=expected.size()+2 || actual[fog]!=1 ||
+    actual[fog+1]!=GPUCMD_HEADER(0,15,GPUREG_FRAMEBUFFER_FLUSH))return false;
+ auto withoutBarrier=actual;withoutBarrier.erase(withoutBarrier.begin()+fog,withoutBarrier.begin()+fog+2);
+ return withoutBarrier==expected;
+}
 int main(){
 #ifndef SRR2_OLD3DS_NATIVE_BENCH
  assert(Candidate::g_picaNativeContextEnabled);
@@ -201,7 +218,7 @@ int main(){
 #endif
   Reference::words.assign(Reference::storage,Reference::storage+Reference::gpuCmdBufOffset);
   Candidate::words.assign(Candidate::storage,Candidate::storage+Candidate::gpuCmdBufOffset);
-  assert(Reference::words==Candidate::words);
+  assert(sameStateWithFogBarrier(Reference::words,Candidate::words));
   assert(!memcmp(Reference::C3D_FVUnifDirty,Candidate::C3D_FVUnifDirty,sizeof(Reference::C3D_FVUnifDirty)));
   assert(!memcmp(Reference::C3Di_FVUnifEverDirty,Candidate::C3Di_FVUnifEverDirty,sizeof(Reference::C3Di_FVUnifEverDirty)));
   assert(!Candidate::g_picaNativeCommandBlock);
@@ -217,7 +234,7 @@ int main(){
  (void)ownedSnapshots;
 #endif
  assert(fast>9000 && newAppends<oldAppends);
- printf("PASS: 40000 upstream context command/state comparisons; %u common-path reductions, appends %lu -> %lu. Rare state forwards unchanged. Not hardware timing.\n",fast,oldAppends,newAppends);
+ printf("PASS: 40000 upstream state comparisons with one required flush before each fog-state write; %u common-path reductions, appends %lu -> %lu. Not hardware timing.\n",fast,oldAppends,newAppends);
 #ifdef SRR2_OLD3DS_VISUAL_UPGRADE
  Candidate::context={};Candidate::context.flags=C3DiF_Active;Candidate::context.program=&reflection;
  reflection.geometryShader=nullptr;Candidate::g_picaNativeContextEnabled=true;Candidate::uniformFast=true;

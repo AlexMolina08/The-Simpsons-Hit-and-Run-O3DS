@@ -11,6 +11,18 @@
 #include <stddef.h>
 
 extern void __real_C3Di_UpdateContext(void);
+extern void __real_GPUCMD_Add(u32 header,const u32* parameters,u32 count);
+
+// Keep the SDK's fog-mode write adjacent to its render barrier. Flushing at
+// fallback entry is too early: shader and attribute setup can follow it.
+void __wrap_GPUCMD_Add(u32 header,const u32* parameters,u32 count)
+{
+    if((header&0x3ffu)==GPUREG_TEXENV_UPDATE_BUFFER && (header&0x10000u) && count) {
+        const u32 flush=1;
+        __real_GPUCMD_Add(GPUCMD_HEADER(0,15,GPUREG_FRAMEBUFFER_FLUSH),&flush,1);
+    }
+    __real_GPUCMD_Add(header,parameters,count);
+}
 #ifdef SRR2_OLD3DS_SUBMIT_PROFILE
 extern void __wrap_C3D_UpdateUniforms(GPU_SHADER_TYPE type);
 #define nativeUpdateUniforms __wrap_C3D_UpdateUniforms
@@ -233,6 +245,10 @@ static void compileState(Packet* p,C3D_Context* ctx)
         ctx->flags&=~C3DiF_TexStatus;
     }
     if(ctx->flags&C3DiF_TexEnvBuf) {
+        // Fog-mode changes can discard earlier scenery still in the fragment
+        // pipeline on PICA. Drain rendering before changing fog/combiner state;
+        // this GPU command does not wait on the CPU or split stereo segments.
+        writeOne(p,GPUREG_FRAMEBUFFER_FLUSH,15,1);
         writeOne(p,GPUREG_TEXENV_UPDATE_BUFFER,7,ctx->texEnvBuf);
         writeOne(p,GPUREG_TEXENV_BUFFER_COLOR,15,ctx->texEnvBufClr);
         writeOne(p,GPUREG_FOG_COLOR,15,ctx->fogClr);
