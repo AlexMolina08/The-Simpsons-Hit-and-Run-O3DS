@@ -46,6 +46,15 @@ jobs:
         run: python3 tools/3ds/tests/credits_rendering.py
       - name: Handheld tutorial text layout
         run: python3 tools/3ds/tests/handheld_text.py
+      - name: Browser builder selection and language state
+        run: |
+          node browser-builder/tests/app-state-unit.mjs
+          node browser-builder/tests/conversion-unit.mjs
+          node browser-builder/tests/languages-unit.mjs
+      - name: HOME Menu artwork
+        run: |
+          python3 -m pip install Pillow==10.2.0
+          python3 tools/3ds/tests/home_artwork.py
       - name: Character form preparation and depth haze
         run: |
           python3 tools/3ds/tests/character_form.py

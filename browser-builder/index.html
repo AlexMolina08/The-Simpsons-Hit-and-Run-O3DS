@@ -3,38 +3,58 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="description" content="Create a Hit & Run 3DS installer locally in your browser using your own PC game files.">
+  <meta name="description" content="Create a Hit & Run 3DS installer locally using your own PC game files.">
   <meta name="referrer" content="no-referrer">
   <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; worker-src 'self' blob:; style-src 'self'; img-src 'self' data:; connect-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'">
-  <title>Hit & Run 3DS Builder</title>
+  <title>Hit &amp; Run 3DS Builder</title>
   <link rel="stylesheet" href="./styles.css">
   <script type="module" src="./app.mjs"></script>
 </head>
 <body>
   <header class="masthead">
-    <a class="wordmark" href="./">3DS installer builder</a>
-    <a class="source-link" href="https://github.com/AlexMolina08/The-Simpsons-Hit-and-Run-O3DS" target="_blank" rel="noopener noreferrer">Project & source</a>
+    <a class="wordmark" href="./"><span class="brand-mark" aria-hidden="true">3DS</span> Hit &amp; Run Builder</a>
+    <nav class="header-actions" aria-label="Project links">
+      <a class="source-link" href="https://github.com/AlexMolina08/The-Simpsons-Hit-and-Run-O3DS" target="_blank" rel="noopener noreferrer">Source</a>
+      <details class="help" id="help">
+        <summary aria-label="How the builder works" title="How the builder works">?</summary>
+        <div class="help-popover">
+          <h2>How it works</h2>
+          <ol class="process">
+            <li><span>1</span><strong>Select game</strong><small>Your PC copy</small></li>
+            <li><span>2</span><strong>Convert files</strong><small>On this device</small></li>
+            <li><span>3</span><strong>Build CIA</strong><small>Save your file</small></li>
+            <li><span>4</span><strong>Install</strong><small>On your 3DS</small></li>
+          </ol>
+          <p>Your game files are processed locally. Your generated CIA is your file and contains data from your PC copy; keep it private.</p>
+        </div>
+      </details>
+    </nav>
   </header>
-  <main>
-    <div class="introduction">
-      <h1>The Simpsons: Hit & Run</h1>
-      <p>Create the complete v1.2 3DS installer from your PC copy.</p>
-      <p class="privacy">Files are processed on this device and are never uploaded.</p>
+  <main class="builder-main">
+    <div class="page-heading">
+      <div><h1>CIA builder</h1><p>Create an installer from your own PC copy.</p></div>
+      <span class="version">v1.2</span>
     </div>
+    <section class="utility-notes" aria-label="Builder instructions">
+      <p><strong>How it works:</strong> Select your PC copy, build and save the CIA, then copy it to <code>cias</code> on your SD card and install it using FBI.</p>
+      <p><strong>Storage:</strong> Allow at least 8 GB free on this device and 4 GB on the SD card before copying. Your game files stay on this device.</p>
+    </section>
     <div class="workbench">
       <section class="input-panel" aria-labelledby="source-title">
-        <div class="step-heading"><span>1</span><h2 id="source-title">Choose your game</h2></div>
-        <p>Select your PC disc image, ZIP, or installed game folder. For a CD edition, select all three disc images together.</p>
+        <div class="section-heading"><h2 id="source-title">Game files</h2><span>1 / 2</span></div>
+        <p>Choose a PC disc image, ZIP or installed game folder. For a CD set, select all discs together.</p>
         <input id="iso" type="file" accept=".iso,.zip,application/x-iso9660-image,application/zip" multiple hidden>
         <input id="folder" type="file" webkitdirectory multiple hidden>
-        <button id="choose-iso" class="choose-button">Choose disc images or ZIP</button>
-        <button id="choose" class="text-button folder-button">Choose installed game folder</button>
+        <div class="file-controls">
+          <button id="choose-iso" class="choose-button">Choose disc images or ZIP</button>
+          <button id="choose" class="choose-button">Choose game folder</button>
+        </div>
         <div id="selection" class="selection" aria-live="polite">No game selected</div>
         <label id="language-choice" hidden>Game language <select id="game-language" aria-label="Game language"></select></label>
       </section>
       <section class="build-panel" aria-labelledby="build-title">
-        <div class="step-heading"><span>2</span><h2 id="build-title">Build v1.2</h2></div>
-        <p>All v1.2 visual and audio enhancements are included. Keep this tab open while your device prepares the game.</p>
+        <div class="section-heading"><h2 id="build-title">Build installer</h2><span>2 / 2</span></div>
+        <p>Keep this tab open. Conversion and packaging run on your device.</p>
         <div class="build-controls"><button id="build" class="primary" disabled>Build CIA</button><button id="cancel" class="quiet" hidden>Cancel build</button></div>
         <div id="status" class="status" role="status" aria-live="polite">Choose an ISO or game folder to begin.</div>
         <div id="work-status" hidden>
@@ -50,19 +70,20 @@
         </div>
         <div id="error" class="error" role="alert" hidden></div>
         <div id="result" hidden>
-          <div class="step-heading"><span>3</span><h2>Your installer is ready</h2></div>
+          <div class="result-heading"><h2>Installer ready</h2><span>Complete</span></div>
           <p id="result-size"></p>
-          <button id="save" class="primary">Save CIA</button>
-          <button id="save-report" class="quiet">Save build report</button>
-          <p class="result-note">Keep this installer private. It includes data from your PC copy.</p>
+          <div class="result-actions"><button id="save" class="primary">Save CIA</button><button id="save-report" class="quiet">Save build report</button></div>
+          <p class="result-note">Your CIA contains your game data. Keep the file private.</p>
         </div>
       </section>
     </div>
-    <div class="after-build">
-      <section><h2>Then, on your 3DS</h2><p>Save the CIA, then copy it to <code>cias</code> on the SD card. Open <b>FBI → SD → cias</b> and install it. Keep at least <b>4 GB free</b> before copying.</p><p>Updating? Install over the existing title. Back up <code>3ds/simpsons</code> first; keep your saves and <code>3ds/dspfirm.cdc</code>.</p></section>
-      <section><h2>Before you start</h2><p>Use a current Chrome, Edge or Safari browser. Allow at least <b>8 GB of free space</b> for temporary build files. Your original game files stay unchanged.</p><p>Building time depends on your device. Completed steps stay here so an interrupted build can continue when you select the same game.</p><button id="clear" class="text-button">Clear this builder’s temporary files</button></section>
+    <div class="utility-actions">
+      <button id="clear" class="text-button">Clear temporary build files</button>
     </div>
   </main>
-  <footer><p>An unofficial homebrew project. Requires your own PC game files and a 3DS with custom firmware.</p><nav><a href="./tools.html">Tool licences and source</a><a href="https://github.com/AlexMolina08/The-Simpsons-Hit-and-Run-O3DS/blob/main/docs/INSTALL.md">Installation help</a></nav></footer>
+  <footer>
+    <p>Unofficial homebrew. Requires a PC copy and a 3DS with custom firmware.</p>
+    <nav><a href="./tools.html">Tool licences</a><a href="https://github.com/AlexMolina08/The-Simpsons-Hit-and-Run-O3DS/blob/main/docs/INSTALL.md">Installation help</a></nav>
+  </footer>
 </body>
 </html>

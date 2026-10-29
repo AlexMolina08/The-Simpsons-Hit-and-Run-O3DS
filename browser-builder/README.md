@@ -78,6 +78,7 @@ See [validation evidence](VALIDATION.md) for measured runs and device limits.
 These checks use synthetic fixtures and do not require game files:
 
 ```sh
+node browser-builder/tests/app-state-unit.mjs
 node browser-builder/tests/conversion-unit.mjs
 node browser-builder/tests/iso-unit.mjs
 node browser-builder/tests/local-state.mjs

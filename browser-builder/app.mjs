@@ -5,9 +5,19 @@ import {createBuildStorage} from './opfs.mjs';
 import {offerFileDownload} from './downloads.mjs';
 import {browserProfile, keepScreenAwake} from './platform.mjs';
 const $ = id => document.getElementById(id);
+const help = $('help');
+document.addEventListener('click', event => {
+  if (help.open && !help.contains(event.target)) help.open = false;
+});
+document.addEventListener('keydown', event => {
+  if (event.key === 'Escape' && help.open) {
+    help.open = false;
+    help.querySelector('summary').focus();
+  }
+});
 const phases = ['inspect', 'textures', 'visuals', 'media', 'package'];
 const phaseNames = {inspect: 'Check game', textures: 'Prepare textures', visuals: 'Prepare v1.2 visuals', media: 'Convert sound and movies', package: 'Build CIA'};
-let files, iso, worker, result, resultName, report, wakeLock;
+let files, iso, worker, result, resultName, report, wakeLock, selectionBase = '';
 let saving = false, clearing = false, selecting = false, starting = false, currentPhase, started = 0, elapsedTimer;
 let restoring = true;
 const formatSize = value => `${(value / 1024 ** 3).toFixed(2)} GB`;
@@ -19,7 +29,15 @@ function busy() {
   $('game-language').disabled = locked;
   $('build').disabled = locked || (!files && !iso);
   $('cancel').hidden = !worker;
-  $('clear').disabled = locked; $('save').disabled = locked;
+  $('clear').disabled = locked; $('save').disabled = locked || !result;
+}
+function clearResult() {
+  result = resultName = report = null;
+  $('result').hidden = true;
+  $('work-status').hidden = true;
+}
+function showSelection() {
+  $('selection').textContent = `${selectionBase} · ${languageProfile($('game-language').value).name}`;
 }
 function markPhase(phase, complete = false) {
   const index = phases.indexOf(phase);
@@ -88,10 +106,11 @@ function configureLanguages(languages) {
 }
 $('iso').onchange = async () => {
   if (worker || saving || clearing || selecting || !$('iso').files.length) return;
-  error(''); files = null; iso = null; selecting = true; busy();
+  error(''); files = null; iso = null; clearResult(); $('language-choice').hidden = true; selecting = true; busy();
   $('selection').textContent = 'Reading disc image…';
   try {
     const selected = [...$('iso').files];
+    $('iso').value = '';
     const inputStorage = await createBuildStorage('hit-run-3ds-input');
     await inputStorage.clear();
     const layout = await readGameImages(selected, {storage: inputStorage,
@@ -100,26 +119,34 @@ $('iso').onchange = async () => {
     if (layout.kind === 'installed') validateInput(layout.files);
     configureLanguages(layout.languages);
     iso = {layout, inputs: new Map(selected.map((file, index) => [`${index}/${file.name}`, file]))};
-    $('selection').textContent = `${selected.map(file => file.name).join(' + ')} · ${languageProfile($('game-language').value).name}`;
+    selectionBase = selected.map(file => file.name).join(' + '); showSelection();
     $('selection').classList.add('valid'); $('status').textContent = 'Ready. The builder will reuse verified completed steps for this copy.';
-  } catch (reason) { $('selection').textContent = 'The image could not be opened.'; $('selection').classList.remove('valid'); error(reason.message); }
+  } catch (reason) { $('iso').value = ''; $('selection').textContent = 'The image could not be opened.'; $('selection').classList.remove('valid'); error(reason.message); }
   finally { selecting = false; busy(); }
 };
 $('folder').onchange = () => {
-  if (worker || saving || clearing || selecting) return;
-  error(''); files = null; iso = null;
+  if (worker || saving || clearing || selecting || !$('folder').files.length) return;
+  error(''); files = null; iso = null; clearResult(); $('language-choice').hidden = true;
   try {
-    const chosen = [...$('folder').files], summary = validateInput(chosen);
+    const chosen = [...$('folder').files];
+    $('folder').value = '';
+    const summary = validateInput(chosen);
     configureLanguages(summary.languages);
     files = chosen;
-    $('selection').textContent = `${chosen[0].webkitRelativePath.split('/')[0]} · ${summary.fileCount.toLocaleString()} files · ${summary.languageName}`;
+    selectionBase = `${chosen[0].webkitRelativePath.split('/')[0]} · ${summary.fileCount.toLocaleString()} files`; showSelection();
     $('selection').classList.add('valid'); $('status').textContent = 'Your PC copy is ready. Completed steps can be reused.';
-  } catch (reason) { $('selection').textContent = 'This folder is not ready to build.'; $('selection').classList.remove('valid'); error(reason.message); }
+  } catch (reason) { $('folder').value = ''; $('selection').textContent = 'This folder is not ready to build.'; $('selection').classList.remove('valid'); error(reason.message); }
+  busy();
+};
+$('game-language').onchange = () => {
+  if (!files && !iso) return;
+  clearResult(); showSelection();
+  $('status').textContent = 'Language selected. Build the CIA for this copy.';
   busy();
 };
 $('build').onclick = async () => {
   if ((!files && !iso) || worker || saving || clearing || selecting || starting || restoring) return;
-  error(''); $('result').hidden = true;
+  error(''); clearResult();
   if (!navigator.storage?.getDirectory || !('Worker' in window) || !('WebAssembly' in window)) {
     error('This browser is missing local build support. Try current Chrome, Edge or Safari.'); return;
   }
@@ -165,8 +192,9 @@ $('clear').onclick = async () => {
     for (const name of ['hit-run-3ds-build', 'hit-run-3ds-input']) {
       try { await directory.removeEntry(name, {recursive: true}); } catch (reason) { if (reason.name !== 'NotFoundError') throw reason; }
     }
-    files = iso = null; $('selection').textContent = 'No game selected'; $('language-choice').hidden = true;
-    result = null; report = null; $('result').hidden = true;
+    files = iso = null; selectionBase = ''; $('iso').value = ''; $('folder').value = '';
+    $('selection').textContent = 'No game selected'; $('selection').classList.remove('valid'); $('language-choice').hidden = true;
+    clearResult();
     $('status').textContent = 'Temporary build files cleared. Your original game files are unchanged.';
   } catch (reason) { if (reason.name !== 'NotFoundError') error(reason.message); }
   finally { clearing = false; busy(); }
