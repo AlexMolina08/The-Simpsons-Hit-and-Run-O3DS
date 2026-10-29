@@ -19,8 +19,9 @@ assert.equal(crc32(new TextEncoder().encode('123456789')), 0xcbf43926);
 
 const names = [
   'art/frontend/scrooby/bootup.p3d', 'art/frontend/scrooby/frontend.p3d',
+  'art/frontend/scrooby/resource/txtbible/srr2.p3d',
   'art/frontend/scrooby/resource/pure3d/logo_anim.p3d', 'scripts/example.mfk', 'sound/example.rsd',
-  'scripts.rcf', 'dialog.rcf', 'music00.rcf', 'music01.rcf', 'music02.rcf', 'music03.rcf',
+  'scripts.rcf', 'dialog.rcf', 'soundfx.rcf', 'carsound.rcf', 'music00.rcf', 'music01.rcf', 'music02.rcf', 'music03.rcf',
   ...REQUIRED_MOVIES.map(name => `movies/${name}.rmv`),
 ];
 const input = new Map(names.map(name => [name, new File([new Uint8Array([1])], name.split('/').at(-1))]));
@@ -37,6 +38,27 @@ assert.throws(() => validateInput(incomplete), /fmv8.rmv/);
 assert.throws(() => normalizeInputFiles(new Map([['../outside', new Blob()]])), /invalid file path/);
 assert.throws(() => validateInput(new Map([...input, ['Simpsons-Debug.exe', new Blob()]])), /development data/);
 assert.throws(() => validateInput(new Map([...input, ['Scripts.rcf', new Blob()]])), /duplicate names/);
+const upperSound = new Map(input);
+upperSound.delete('soundfx.rcf'); upperSound.set('SOUNDFX.RCF', new Blob(['sound']));
+assert.equal(validateInput(upperSound).language, 'en');
+assert.ok(normalizeInputFiles(upperSound).has('soundfx.rcf'));
+const noSound = new Map(input); noSound.delete('carsound.rcf');
+assert.throws(() => validateInput(noSound), /carsound\.rcf/);
+const mixedDirectories = normalizeInputFiles(new Map([
+  ['SCRIPTS/cars/pursuit/L1cop.con', new Blob(['one'])],
+  ['SCRIPTS/CARS/Pursuit/Other.con', new Blob(['two'])],
+]));
+assert.deepEqual([...mixedDirectories.keys()], ['scripts/cars/pursuit/L1cop.con', 'scripts/cars/pursuit/Other.con']);
+const mergedAssets = normalizeInputFiles(new Map([
+  ['ART/Frontend/menu.p3d', new Blob()], ['art/frontend/generated.p3d', new Blob()],
+  ['SOUND/Effects/one.rsd', new Blob()], ['sound/3ds-dsp-clips.bin', new Blob()],
+]));
+assert.deepEqual([...mergedAssets.keys()], ['art/Frontend/menu.p3d', 'art/Frontend/generated.p3d',
+  'sound/Effects/one.rsd', 'sound/3ds-dsp-clips.bin']);
+assert.throws(() => normalizeInputFiles(new Map([
+  ['scripts/cars/pursuit/L1cop.con', new Blob(['one'])],
+  ['SCRIPTS/CARS/Pursuit/l1COP.CON', new Blob(['two'])],
+])), /duplicate names/);
 
 // A longer audio tail must extend the final image rather than truncate audio.
 const pcm = new Uint8Array(12800), video = new Uint8Array([0, 0, 1, 0xb3]);

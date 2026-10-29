@@ -1,4 +1,4 @@
-import {prepareGameAssets, loadTextureParser, PYTHON_MODULES, validateInput, validateDialogue, normalizeInputFiles} from './engine-conversion/conversion.mjs';
+import {prepareGameAssets, loadTextureParser, PYTHON_MODULES, validateInput, validateDialogue, validateTextBible, normalizeInputFiles} from './engine-conversion/conversion.mjs';
 import {VISUAL_PYTHON_MODULES, prepareV12Assets, prepareV12Audio} from './engine-conversion/v12.mjs';
 import {createTools, packageCIA} from './tools.mjs';
 import {createBuildStorage} from './opfs.mjs';
@@ -105,7 +105,11 @@ onmessage = async ({data}) => {
           }
         } else throw new Error('This PC image uses an unsupported installer. Select its installed game folder instead.');
       }
+      // Disc extraction returns its own path map. Normalize it before keeping
+      // those paths for the preparation and packaging phases as well.
+      files = normalizeInputFiles(files);
       const summary = validateInput(files, language);
+      summary.text = await validateTextBible(files, language);
       const recipe = JSON.parse(new TextDecoder().decode(await fetchChecked('./v12-recipe.json', manifest.v12RecipeSHA256)));
       const dialogue = [...files].find(([path]) => path.toLowerCase() === languageProfile(language).archive)?.[1];
       summary.dialogue = await validateDialogue(dialogue, recipe.dialogueKeys?.[language]);
@@ -153,6 +157,9 @@ onmessage = async ({data}) => {
       tools.releaseConverters();
     } else if (phase === 'package') {
       const {prepared} = context;
+      // Generated overrides can introduce a second spelling of an existing
+      // directory. Unify it before writing the case-sensitive RomFS tree.
+      prepared.files = normalizeInputFiles(prepared.files);
       const runtime = data.runtime || await fetchChecked('./runtime.elf', manifest.runtimeSHA256);
       const rsf = data.rsf || new TextDecoder().decode(await fetchChecked('./game.rsf', manifest.rsfSHA256));
       let packageHeapBytes;

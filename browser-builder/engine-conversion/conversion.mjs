@@ -39,13 +39,29 @@ function safePath(path) {
 
 /** Accept either a relative-path map, or the result of an HTML folder picker. */
 export function normalizeInputFiles(input) {
-  if (input instanceof Map) {
-    return new Map([...input].map(([path, file]) => [safePath(path), file]));
-  }
-  const entries = [...input].map(file => [file.webkitRelativePath || file.name, file]);
+  const entries = input instanceof Map ? [...input] : [...input].map(file => [file.webkitRelativePath || file.name, file]);
   const firstComponents = new Set(entries.map(([path]) => path.replaceAll('\\', '/').split('/')[0]));
-  const stripRoot = firstComponents.size === 1 && entries.every(([path]) => path.includes('/'));
-  return new Map(entries.map(([path, file]) => [safePath(stripRoot ? path.slice(path.indexOf('/') + 1) : path), file]));
+  const stripRoot = !(input instanceof Map) && firstComponents.size === 1 && entries.every(([path]) => path.includes('/'));
+  const result = new Map(), directories = new Map(), filenames = new Set();
+  for (const [path, file] of entries) {
+    const parts = safePath(stripRoot ? path.slice(path.indexOf('/') + 1) : path).split('/');
+    const canonical = [];
+    for (const part of parts.slice(0, -1)) {
+      const key = [...canonical, part].join('/').toLowerCase();
+      if (!directories.has(key)) {
+        const gameRoot = canonical.length === 0 && /^(art|scripts|sound|movies)$/i.test(part);
+        directories.set(key, gameRoot ? part.toLowerCase() : part);
+      }
+      canonical.push(directories.get(key));
+    }
+    const filename = parts.at(-1);
+    canonical.push(parts.length === 1 && /\.rcf$/i.test(filename) ? filename.toLowerCase() : filename);
+    const normalized = canonical.join('/'), key = normalized.toLowerCase();
+    if (filenames.has(key)) throw new Error(`The selected folder has duplicate names: ${path}`);
+    filenames.add(key);
+    result.set(normalized, file);
+  }
+  return result;
 }
 
 function lookupFiles(input) {
@@ -69,8 +85,10 @@ export function validateInput(input, language) {
   const selectedLanguage = selectLanguage(selected.files, language);
   const required = [
     'art/frontend/scrooby/bootup.p3d', 'art/frontend/scrooby/frontend.p3d',
+    'art/frontend/scrooby/resource/txtbible/srr2.p3d',
     'art/frontend/scrooby/resource/pure3d/logo_anim.p3d',
-    'scripts.rcf', selectedLanguage.archive, 'music00.rcf', 'music01.rcf', 'music02.rcf', 'music03.rcf',
+    'scripts.rcf', selectedLanguage.archive, 'soundfx.rcf', 'carsound.rcf',
+    'music00.rcf', 'music01.rcf', 'music02.rcf', 'music03.rcf',
     ...REQUIRED_MOVIES.map(name => `movies/${name}.rmv`),
   ];
   const missing = required.filter(path => !selected.get(path));
@@ -100,6 +118,50 @@ async function bytesOf(value, start = 0, end) {
   if (value instanceof Uint8Array) return value.slice(start, end);
   if (value instanceof ArrayBuffer) return new Uint8Array(value.slice(start, end));
   return new Uint8Array(await value.slice(start, end).arrayBuffer());
+}
+
+/** Verify that the selected language has a complete retail text table. */
+export async function validateTextBible(input, language) {
+  const selected = lookupFiles(input);
+  const profile = selectLanguage(selected.files, language);
+  const source = selected.get('art/frontend/scrooby/resource/txtbible/srr2.p3d');
+  if (!source || fileSize(source) > 16 * 1024 * 1024) throw new Error('The game text file is missing or invalid.');
+  const bytes = await bytesOf(source);
+  const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+  const invalid = () => { throw new Error('The game text file is incomplete or invalid.'); };
+  const chunk = (offset, limit) => {
+    if (offset + 12 > limit) invalid();
+    const type = view.getUint32(offset, true), header = view.getUint32(offset + 4, true), size = view.getUint32(offset + 8, true);
+    if (header < 12 || size < header || offset + size > limit) invalid();
+    return {type, body: offset + 12, children: offset + header, end: offset + size};
+  };
+  const root = chunk(0, bytes.length);
+  if (root.type !== 0xff443350 || root.end !== bytes.length) invalid();
+  for (let pos = root.children; pos < root.end;) {
+    const bible = chunk(pos, root.end); pos = bible.end;
+    if (bible.type !== 0x1800d) continue;
+    for (let item = bible.children; item < bible.end;) {
+      const table = chunk(item, bible.end); item = table.end;
+      if (table.type !== 0x1800e || table.body >= table.end) continue;
+      let cursor = table.body + 1 + bytes[table.body];
+      if (cursor + 13 > table.end) invalid();
+      const id = String.fromCharCode(bytes[cursor++]);
+      const count = view.getUint32(cursor, true), modulo = view.getUint32(cursor + 4, true), size = view.getUint32(cursor + 8, true);
+      cursor += 12;
+      if (!count || !modulo || size % 2 || count > 100000 || cursor + count * 8 + size > table.end) invalid();
+      if (id !== profile.bible) continue;
+      const offsets = cursor + count * 4, strings = offsets + count * 4;
+      for (let i = 0; i < count; i++) {
+        const offset = view.getUint32(offsets + i * 4, true);
+        if (offset % 2 || offset + 2 > size) invalid();
+        let end = strings + offset;
+        while (end + 2 <= strings + size && view.getUint16(end, true) !== 0) end += 2;
+        if (end + 2 > strings + size) invalid();
+      }
+      return {language: profile.code, strings: count};
+    }
+  }
+  throw new Error(`This PC copy has no ${profile.name} text table. Select a complete copy containing that language.`);
 }
 
 function fileSize(value) {
