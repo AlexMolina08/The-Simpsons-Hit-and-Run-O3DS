@@ -4,7 +4,7 @@ A homebrew port for Nintendo 3DS and 2DS, including the original models. It also
 
 ## Browser builder
 
-The v1.2 builder creates an installable CIA from your PC copy, directly in your browser:
+[Open the browser builder](https://alexmolina08.github.io/The-Simpsons-Hit-and-Run-O3DS/) to create an installable CIA from your PC copy:
 
 1. Select your PC disc image or installed game folder.
 2. If your copy includes several languages, choose the one you want.
@@ -12,7 +12,7 @@ The v1.2 builder creates an installable CIA from your PC copy, directly in your 
 
 The builder detects English, French and Spanish copies. Your game files stay on your device. Allow at least **8 GB** of free space and keep the tab open while it works.
 
-The browser builder is still being tested and has not been published yet. Its link will appear here when it is available. Developers can find setup instructions in [browser-builder/README.md](browser-builder/README.md).
+French and Spanish builds are still being validated on hardware. Developers can find setup instructions in [browser-builder/README.md](browser-builder/README.md).
 
 ## Screenshots
 
