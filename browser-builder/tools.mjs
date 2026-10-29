@@ -111,7 +111,7 @@ export async function packageCIA({assets, homeMenu, runtime, rsf, storage, packe
   banner.FS.writeFile('/icon.png', new Uint8Array(await homeMenu.icon.arrayBuffer()));
   banner.FS.writeFile('/banner.wav', new Uint8Array(await homeMenu.cue.arrayBuffer()));
   requireSuccess(exitStatus(banner, ['makebanner', '-i', '/banner.png', '-a', '/banner.wav', '-o', '/banner.bnr']), bannerLogs, 'HOME Menu banner');
-  requireSuccess(exitStatus(banner, ['makesmdh', '-s', 'The Simpsons: Hit & Run', '-l', 'The Simpsons: Hit & Run — Nintendo 3DS',
+  requireSuccess(exitStatus(banner, ['makesmdh', '-s', 'The Simpsons: Hit & Run', '-l', 'The Simpsons: Hit & Run\n— Nintendo 3DS —',
     '-p', 'Hit & Run 3DS contributors', '-i', '/icon.png', '-r', 'regionfree', '-f', 'visible,recordusage', '-o', '/icon.smdh']), bannerLogs, 'HOME Menu icon');
   const bannerData = banner.FS.readFile('/banner.bnr').slice(), iconData = banner.FS.readFile('/icon.smdh').slice();
   const logs = [];

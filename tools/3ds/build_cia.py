@@ -101,7 +101,7 @@ def main():
         subprocess.run([str(args.bannertool.resolve()), 'makebanner', '-i', str(home_menu / 'banner.png'),
                         '-a', str(cue), '-o', str(work / 'banner.bnr')], check=True)
         subprocess.run([str(args.bannertool.resolve()), 'makesmdh', '-s', 'The Simpsons: Hit & Run',
-                        '-l', 'The Simpsons: Hit & Run — Nintendo 3DS', '-p', 'Hit & Run 3DS contributors',
+                        '-l', 'The Simpsons: Hit & Run\n— Nintendo 3DS —', '-p', 'Hit & Run 3DS contributors',
                         '-i', str(home_menu / 'icon.png'), '-r', 'regionfree', '-f', 'visible,recordusage',
                         '-o', str(work / 'icon.smdh')], check=True)
         shutil.copy2(work / 'banner.bnr', home_menu / 'banner.bnr')

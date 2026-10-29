@@ -8,10 +8,10 @@ import struct
 import sys
 import tempfile
 
-from PIL import Image
+from PIL import Image, ImageDraw
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-from prepare_home_artwork import FRONTEND, LOGO, Node, frontend_logo, png_image, prepare, render_artwork
+from prepare_home_artwork import FRONTEND, LOGO, Node, frontend_logo, png_image, prepare, render_artwork, retail_logo_banner, transparent_banner
 
 
 def string(value):
@@ -43,10 +43,29 @@ assert render_artwork(memoryview(frontend), memoryview(logo)) == result
 assert set(result) == {'banner.png', 'icon.png'}
 for name, expected in [('banner.png', (256, 128)), ('icon.png', (48, 48))]:
     with Image.open(io.BytesIO(result[name])) as image:
-        assert image.size == expected and image.mode == 'RGB'
+        assert image.size == expected and image.mode == ('RGBA' if name == 'banner.png' else 'RGB')
         if name == 'icon.png':
             assert image.getpixel((24, 24)) == (0, 128, 0)
 assert source_hashes == [hashlib.sha256(raw).hexdigest() for raw in (frontend, logo)]
+
+# Dark lettering enclosed by bright artwork must survive background removal.
+sample = Image.new('RGB', (640, 480), (0, 0, 0))
+draw = ImageDraw.Draw(sample)
+draw.rectangle((100, 130, 300, 300), fill=(255, 220, 0))
+draw.rectangle((180, 190, 220, 230), fill=(0, 0, 0))
+banner = retail_logo_banner(sample)
+banner.thumbnail((256, 128), Image.Resampling.LANCZOS)
+assert banner.width <= 256 and banner.height == 128 and banner.mode == 'RGBA'
+assert banner.getpixel((0, 0))[3] == 0
+black = banner.getpixel((76, 49))
+assert max(black[:3]) < 20 and black[3] > 240, black
+
+# Unknown layouts must keep off-centre artwork and existing transparency.
+unknown = Image.new('RGBA', (640, 480), (255, 0, 0, 0))
+ImageDraw.Draw(unknown).rectangle((560, 100, 630, 200), fill=(255, 0, 0, 255))
+preserved = transparent_banner(unknown)
+assert preserved.getchannel('A').getextrema() == (0, 255)
+assert preserved.getchannel('A').getbbox()[2] > 200
 
 bad = image_node('logo.bmp', 'red')
 bad.children[0].body = struct.pack('<I', len(bad.children[0].body)) + bad.children[0].body[4:]

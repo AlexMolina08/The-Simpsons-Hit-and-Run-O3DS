@@ -7,13 +7,14 @@ import json
 from pathlib import Path
 import struct
 
-from PIL import Image, ImageOps
+from PIL import Image, ImageChops, ImageDraw, ImageFilter, ImageOps
 
 from skin_inventory import chunks, pstring
 
 
 FRONTEND = Path('art/frontend/scrooby/frontend.p3d')
 LOGO = Path('art/frontend/scrooby/resource/pure3d/logo_anim.p3d')
+RETAIL_LOGO_PIXELS_SHA256 = '41fc75323dfa5c76674e1ea5f0b2b62a31120e38f17f793189ec6255687ef222'
 
 
 class Node:
@@ -110,17 +111,53 @@ def on_black(image):
     return Image.alpha_composite(background, image).convert('RGB')
 
 
+def retail_logo_banner(image):
+    """Remove the known retail logo's background and retain enclosed ink."""
+    # The dark green outside the ink is a baked-in glow, not a transparent layer.
+    region = image.crop((26, 87, 598, 379)).convert('RGB')
+    red, green, blue = region.split()
+    brightness = ImageChops.lighter(ImageChops.lighter(red, green), blue)
+    bright = brightness.point(lambda value: 255 if value > 55 else 0)
+    if not bright.getbbox():
+        raise ValueError('The PC HOME Menu logo is empty or damaged')
+    low = brightness.point(lambda value: 255 if value < 70 else 0)
+    green_glow = ImageChops.subtract(green, ImageChops.lighter(red, blue)).point(
+        lambda value: 255 if value > 2 else 0)
+    region.paste((0, 0, 0), mask=ImageChops.darker(low, green_glow))
+
+    # Fill enclosed holes before expanding the silhouette so black letters
+    # and silhouettes inside the artwork remain visible on light themes.
+    padded = Image.new('L', (region.width + 2, region.height + 2), 0)
+    padded.paste(bright, (1, 1))
+    ImageDraw.floodfill(padded, (0, 0), 128)
+    inside = padded.point(lambda value: 0 if value == 128 else 255)
+    inside = inside.crop((1, 1, region.width + 1, region.height + 1))
+    alpha = inside.filter(ImageFilter.MaxFilter(9)).filter(ImageFilter.GaussianBlur(.7))
+    fitted = region.convert('RGBA')
+    fitted.putalpha(alpha)
+    return fitted
+
+
+def transparent_banner(image):
+    """Create a banner from the supplied PC artwork without shipping game images."""
+    rgba = image.convert('RGBA')
+    if rgba.size == (640, 480) and hashlib.sha256(rgba.tobytes()).hexdigest() == RETAIL_LOGO_PIXELS_SHA256:
+        fitted = retail_logo_banner(rgba)
+    else:
+        # Preserve unknown or already-transparent artwork without clipping it.
+        fitted = rgba
+    fitted.thumbnail((256, 128), Image.Resampling.LANCZOS)
+    banner = Image.new('RGBA', (256, 128), (0, 0, 0, 0))
+    banner.alpha_composite(fitted, ((256 - fitted.width) // 2, (128 - fitted.height) // 2))
+    return banner
+
+
 def render_artwork(frontend_bytes, logo_bytes):
     """Return generated PNG bytes; usable by both native Python and browser Python."""
     # Pyodide converts Uint8Array to memoryview; the shared P3D reader uses bytes.
     frontend_bytes, logo_bytes = bytes(frontend_bytes), bytes(logo_bytes)
     frontend, square = frontend_logo(frontend_bytes), square_logo(logo_bytes)
-    # Keep the retail logo's aspect ratio and the familiar wide HOME Menu framing.
-    framed = on_black(frontend).crop((0, frontend.height * 2 // 15,
-                                     frontend.width, frontend.height * 5 // 6))
-    fitted = ImageOps.contain(framed, (256, 128), Image.Resampling.LANCZOS)
-    banner = Image.new('RGB', (256, 128))
-    banner.paste(fitted, ((256 - fitted.width) // 2, (128 - fitted.height) // 2))
+    banner = transparent_banner(frontend)
     icon = ImageOps.pad(on_black(square), (48, 48), Image.Resampling.LANCZOS,
                         color=(0, 0, 0))
     result = {}
