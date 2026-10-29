@@ -49,7 +49,13 @@ p { margin: 0 0 12px; }
 .section-heading, .result-heading { display: flex; align-items: baseline; justify-content: space-between; gap: 16px; margin-bottom: 8px; }
 .section-heading > span, .result-heading > span { color: var(--muted); font-size: 11px; font-variant-numeric: tabular-nums; }
 .input-panel > p, .build-panel > p { font-size: 13px; color: var(--muted); }
-.file-controls, .build-controls, .result-actions { display: flex; flex-wrap: wrap; gap: 9px; align-items: center; }
+.build-controls, .result-actions { display: flex; flex-wrap: wrap; gap: 9px; align-items: center; }
+.source-selector > summary { list-style: none; display: inline-flex; align-items: center; justify-content: space-between; gap: 18px; min-height: 42px; border: 1px solid #889a90; border-radius: 2px; padding: 9px 14px; color: #27352f; background: #fff; font-size: 13px; font-weight: 600; }
+.source-selector > summary::-webkit-details-marker { display: none; }
+.source-selector > summary::after { content: '▾'; font-size: 12px; }
+.source-selector > summary:hover { background: #f1f5f1; border-color: #526d5e; }
+.source-options { display: grid; justify-items: start; gap: 8px; padding-top: 10px; }
+.source-options p { margin: -2px 0 2px; color: var(--muted); font-size: 12px; }
 .choose-button, .primary { min-height: 42px; border: 1px solid #889a90; border-radius: 2px; padding: 9px 14px; font-size: 13px; font-weight: 600; }
 .choose-button { color: #27352f; background: #fff; }
 .choose-button:hover:not(:disabled) { background: #f1f5f1; border-color: #526d5e; }
@@ -95,7 +101,8 @@ footer nav { display: flex; flex-wrap: wrap; gap: 16px; }
   .masthead { padding: 16px 16px 0; }
   main { padding: 18px 16px 26px; }
   .input-panel, .build-panel { padding: 18px; }
-  .file-controls { display: grid; grid-template-columns: 1fr; }
+  .source-selector > summary { min-height: 46px; width: 100%; }
+  .source-options { justify-items: stretch; }
   .choose-button, .primary { min-height: 46px; width: 100%; }
   .build-controls .quiet, .result-actions .quiet { min-height: 40px; }
   .result-actions { display: grid; }
