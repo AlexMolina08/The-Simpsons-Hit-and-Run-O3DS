@@ -24,7 +24,7 @@ animation = source[start:source.index('\n            }', start)]
 start = source.index('    m_loadingImage->SetRawSprite(')
 ready = source[start:source.index('\n#endif\n}', start)]
 game = (root / 'code/main/game.cpp').read_text()
-start = game.index('        g_p3dYieldTimeUs = ( ctx == CONTEXT_GAMEPLAY')
+start = game.index('        g_p3dYieldTimeUs = ctx == CONTEXT_GAMEPLAY')
 assignment = game[start:game.index(';', start) + 1]
 spiral = method((root / 'code/presentation/gui/utility/specialfx.cpp').read_text(), 'bool GuiSFX::Spiral')
 font_getter = method((root / 'libs/scrooby/src/FeText.cpp').read_text(), 'tFont* FeText::GetFont() const')
@@ -115,7 +115,7 @@ int main() {
     assert(budget(CONTEXT_LOADING_GAMEPLAY)<=8000);
     s_newspaperEntranceActive=false;
     assert(budget(CONTEXT_LOADING_GAMEPLAY)==52000);
-    assert(budget(CONTEXT_GAMEPLAY)==8000 && budget(CONTEXT_PAUSE)==8000);
+    assert(budget(CONTEXT_GAMEPLAY)==2000 && budget(CONTEXT_PAUSE)==8000);
     assert(budget(CONTEXT_FRONTEND)==52000 && budget(CONTEXT_LOADING_FRONTEND)==52000);
     tFont atlas;
     FeText label;

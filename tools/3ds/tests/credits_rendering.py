@@ -74,6 +74,8 @@ program = r'''
 #include "code/presentation/gui/utility/handheldcredits.h"
 #define O3_MAIN_SCOPE(stage) ((void)0)
 #define SRR2_OLD_3DS 1
+#include "libs/pure3d/p3d/fontwork.hpp"
+namespace p3dFontWork {bool enabled=true;unsigned preparedLines=0,preparedGlyphs=0,longLines=0;}
 using P3D_UNICODE=char16_t;
 enum {CENTRE_X=1,PDDI_MATRIX_MODELVIEW,PDDI_SP_BASETEX,PDDI_PRIM_TRIANGLES,PDDI_PRIM_TRISTRIP,PDDI_V_CT};
 struct Matrix {float v[4][4]={{1,0,0,0},{0,1,0,0},{0,0,1,0},{0,0,0,1}};const float* Row4(unsigned col)const{return v[col];}};
@@ -150,6 +152,15 @@ int main(){
  }
  Texture texture;tSprite sprite;sprite.textures[0]=&texture;sprite.Shader=&shader;
  const std::u16string line(32,u'A');
+ // Exercise both bounded glyph preparation and its long-line fallback.
+ bypassClip=true;
+ font.DisplayLine(line.c_str(),CENTRE_X);
+ assert(p3dFontWork::preparedLines==1 && p3dFontWork::preparedGlyphs==line.size());
+ const std::u16string longLine(p3dFontWork::Capacity+1,u'A');
+ const unsigned beforeLong=font.draws;
+ font.DisplayLine(longLine.c_str(),CENTRE_X);
+ assert(p3dFontWork::longLines==1 && font.draws-beforeLong==longLine.size());
+ device.used=device.failures=0;
  // Same geometry budget as hardware; unculled credits exceed it immediately.
  stack.value.v[0][0]=stack.value.v[1][1]=0.003f;
  bypassClip=true;

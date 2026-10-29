@@ -20,6 +20,7 @@ namespace Old3dsPerformance {static bool flat=true;bool FlatLighting(){return fl
 const unsigned PICA_VERTEX_STRIDE=36,PICA_VERTEX_OFF_COL=32,PDDI_V_NORMAL=16;
 static unsigned flushes=0;
 void GSPGPU_FlushDataCache(void*,unsigned){++flushes;}
+void picaSkinPrepareCheckpoint(unsigned){}
 struct picaPrimBuffer {
  bool transient=false,expandDirty=false;
  unsigned allocated=1,vertexType=PDDI_V_NORMAL,primType=0,mem=36,skinBoneCount=0;

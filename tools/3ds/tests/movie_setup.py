@@ -22,6 +22,7 @@ with tempfile.TemporaryDirectory() as tmp:
 with tempfile.TemporaryDirectory() as tmp:
  root=Path(tmp);game=root/'game';sources=game/'movies';converted=root/'converted'
  sources.mkdir(parents=True);converted.mkdir()
+ (game/'dialog.rcf').write_bytes(b'dialogue fixture')
  for name in REQUIRED_MOVIES:
   (sources/(name+'.rmv')).write_bytes(b'original fixture')
   (converted/(name+'.3dm')).write_bytes(b'converted fixture')
@@ -29,9 +30,10 @@ with tempfile.TemporaryDirectory() as tmp:
  assert len(select_movies(sources,'.rmv'))==16
  def check(count):
   argv=['validate_movies',str(game),'--movies',str(converted),'--out',str(root/'audit.json')]
-  with patch.object(sys,'argv',argv),patch.object(validate_movies,'find_ffmpeg',return_value='ffmpeg'),patch.object(validate_movies,'validate',side_effect=lambda ffmpeg,source,movie:{'file':movie.name,'decoded_frames':1}) as validator,redirect_stdout(io.StringIO()):
+  with patch.object(sys,'argv',argv),patch.object(validate_movies,'find_ffmpeg',return_value='ffmpeg'),patch.object(validate_movies,'validate',side_effect=lambda ffmpeg,source,movie,language,cross_target_pcm:{'file':movie.name,'decoded_frames':1,'pcm_matches_source':True}) as validator,redirect_stdout(io.StringIO()):
    validate_movies.main()
   assert validator.call_count==count
+  assert all(call.args[3:] == ('en', False) for call in validator.call_args_list)
   results=json.loads((root/'audit.json').read_text())['movies']
   assert results[1]['file']=='fmv1A.3dm'
   assert len(results)==count
