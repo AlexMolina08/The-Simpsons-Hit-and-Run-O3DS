@@ -1145,7 +1145,7 @@ void RenderManager::OnProcessRequestsComplete( void* pUserData )
                 HeapMgr()->DumpHeapStats( true );
                 GetLoadingManager()->AddCallback( this, (int*)pUserData );
 #else
-                GetLoadingManager()->AddRequest( FILEHANDLER_PURE3D, spSomeDamnFile, GMA_LEVEL_ZONE, mpZEL->GetLoadZone(i), NULL, this, (int*)pUserData);  
+                GetLoadingManager()->AddRequest( FILEHANDLER_PURE3D, spSomeDamnFile, GMA_LEVEL_ZONE, mpZEL->GetLoadZone(i), NULL, this, (int*)pUserData, mDoneInitialLoad);
 #endif
             }
             else
@@ -1213,7 +1213,7 @@ BEGIN_PROFILE( "Add Requests Int" );
                     GetLoadingManager()->LoadSync( FILEHANDLER_PURE3D, spSomeDamnFile, GMA_LEVEL_ZONE, mpZEL->GetLoadZone(i) );
                     HeapMgr()->DumpHeapStats( true );
 #else
-                    GetLoadingManager()->AddRequest( FILEHANDLER_PURE3D, spSomeDamnFile, GMA_LEVEL_ZONE, mpZEL->GetLoadZone(i), NULL, this, &msLayer);  
+                    GetLoadingManager()->AddRequest( FILEHANDLER_PURE3D, spSomeDamnFile, GMA_LEVEL_ZONE, mpZEL->GetLoadZone(i), NULL, this, &msLayer, mDoneInitialLoad);
 #endif
 
 END_PROFILE( "Add Requests Int" );
@@ -1644,7 +1644,7 @@ BEGIN_PROFILE( "Add Requests Int" );
                 GetLoadingManager()->LoadSync( FILEHANDLER_PURE3D, spSomeDamnFile, GMA_LEVEL_ZONE, mpZEL->GetLoadZone(i) );
                 HeapMgr()->DumpHeapStats( true );
 #else
-                GetLoadingManager()->AddRequest( FILEHANDLER_PURE3D, spSomeDamnFile, GMA_LEVEL_ZONE, mpZEL->GetLoadZone(i), NULL, this, &msLayer);  
+                GetLoadingManager()->AddRequest( FILEHANDLER_PURE3D, spSomeDamnFile, GMA_LEVEL_ZONE, mpZEL->GetLoadZone(i), NULL, this, &msLayer, mDoneInitialLoad);
 #endif
 
 END_PROFILE( "Add Requests Int" );

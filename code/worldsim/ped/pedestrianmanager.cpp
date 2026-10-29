@@ -1331,7 +1331,12 @@ void PedestrianManager::AddPeds( rmt::Vector center, float addRadius )
 
     // Invoke search on DSG for path segments that intersect with 
     // our radius
+#ifdef SRR2_OLD3DS_QUERY_SCRATCH
+    PathSegment* pathScratch[200];
+    ReserveArray<PathSegment*> orList(pathScratch,200);
+#else
     ReserveArray<PathSegment*> orList;
+#endif
     ::GetIntersectManager()->FindPathSegmentElems( center, addRadius, orList );
 
     //

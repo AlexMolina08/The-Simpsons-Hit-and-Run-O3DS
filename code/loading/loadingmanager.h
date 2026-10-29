@@ -75,7 +75,8 @@ class LoadingManager : public FileHandler::LoadFileCallback
                          const char* sectionName = 0, 
                          const char* groupTag = NULL ,
                          LoadingManager::ProcessRequestsCallback* pCallback = NULL, 
-                         void* pUserData = 0 );
+                         void* pUserData = 0,
+                         bool highPriorityWorld = false );
 
         inline void AddRequest( FileHandlerEnum handlerType, 
                                 const char* filename,

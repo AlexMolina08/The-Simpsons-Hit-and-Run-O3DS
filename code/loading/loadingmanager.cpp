@@ -22,6 +22,7 @@
 // Project Includes
 //========================================
 #include <loading/loadingmanager.h>
+#include <loading/worldpriority.h>
 #include <loading/filehandlerfactory.h>
 #include <loading/cementfilehandler.h>
 #include <memory/srrmemory.h>
@@ -186,7 +187,8 @@ void LoadingManager::AddRequest
     const char* sectionName,
     const char* groupTag,
     LoadingManager::ProcessRequestsCallback* pCallback, 
-    void* pUserData
+    void* pUserData,
+    bool highPriorityWorld
 )
 {
     if ( mCancellingLoads )
@@ -272,6 +274,16 @@ void LoadingManager::AddRequest
     mRequests[mRequestTail].pUserData = pUserData;
     mRequestTail = newTail;
 
+
+#ifdef SRR2_OLD_3DS
+    if(highPriorityWorld && handlerType==FILEHANDLER_PURE3D && heap==GMA_LEVEL_ZONE &&
+       WorldPriority::Exterior(filename)) {
+        WorldPriority::Promote(mRequests,unsigned(mRequestHead),unsigned(mRequestTail),mLoading,
+            [](const LoadingRequest& request){return WorldPriority::Exterior(request.filename) && request.heap==GMA_LEVEL_ZONE;});
+    }
+#else
+    (void)highPriorityWorld;
+#endif
     this->ProcessNextRequest();
 }
 
@@ -304,15 +316,20 @@ void LoadingManager::OnLoadFileComplete( void* pUserData )
     }
     
     // Continue onto the next request.
+    // A completion callback can enqueue more work and reuse the freed ring
+    // slot. Retain the completed handler and callback values across that call.
+    FileHandler* completedHandler=request.pFileHandler;
+    ProcessRequestsCallback* completedCallback=request.pCallback;
+    void* completedData=request.pUserData;
     mRequestHead = (mRequestHead + 1) % MAX_REQUESTS;
     mLoading = false;
 
-    if(request.pCallback)
+    if(completedCallback)
     {
-        request.pCallback->OnProcessRequestsComplete(request.pUserData);
+        completedCallback->OnProcessRequestsComplete(completedData);
     }
 
-    request.pFileHandler->Release();
+    completedHandler->Release();
 
     this->ProcessNextRequest();
 }
