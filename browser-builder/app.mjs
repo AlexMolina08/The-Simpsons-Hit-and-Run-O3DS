@@ -16,7 +16,7 @@ document.addEventListener('keydown', event => {
   }
 });
 const phases = ['inspect', 'textures', 'visuals', 'media', 'package'];
-const phaseNames = {inspect: 'Check game', textures: 'Prepare textures', visuals: 'Prepare v1.2 visuals', media: 'Convert sound and movies', package: 'Build CIA'};
+const phaseNames = {inspect: 'Check game', textures: 'Prepare textures', visuals: 'Prepare game visuals', media: 'Convert sound and movies', package: 'Build CIA'};
 let files, iso, worker, result, resultName, report, wakeLock, selectionBase = '';
 let saving = false, clearing = false, selecting = false, starting = false, currentPhase, started = 0, elapsedTimer;
 let restoring = true;
