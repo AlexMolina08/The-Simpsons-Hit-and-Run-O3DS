@@ -20,6 +20,14 @@
       "bytes": 12092,
       "sha256": "3ffd5b4853fc5203c0e4a8280eb2e30521eb6644bb0c64c622dd8981f2a019a0"
     },
+    "apple-touch-icon.png": {
+      "bytes": 44226,
+      "sha256": "55e0ce9c47e134d6d21f7edf839fb762eb38aa585fa1a07118c7a2ec8b33741a"
+    },
+    "builder-icon.png": {
+      "bytes": 259103,
+      "sha256": "2b623f2ef8703190beebf03d7efa04ea6983fc36addc67b7f4885cee72ed9d5b"
+    },
     "checkpoints.mjs": {
       "bytes": 3243,
       "sha256": "d9da1c6e3e3e989fa1d2bb341da67d82db59d5dd4dc84f401c20a502156e084a"
@@ -97,8 +105,8 @@
       "sha256": "f9c07188df6b236c7817d1af5a232ae4c3a5ff36751638fc737dc71f4f2ff1ec"
     },
     "index.html": {
-      "bytes": 5648,
-      "sha256": "4c672c5a8ff7a6ba530e9fe9041461ce8776e986a2b765ef006d443b0559d15c"
+      "bytes": 5768,
+      "sha256": "ed2c2248f4df37e3b353ec1e1e82dcdce24bd0c114bb53f9659bfc1bdddcd483"
     },
     "licenses/CPython-LICENSE.txt": {
       "bytes": 13936,
@@ -293,8 +301,8 @@
       "sha256": "ff5372cc1cb5abb63b9587ee71076159728403699ee7445c983429cf354641e0"
     },
     "styles.css": {
-      "bytes": 7918,
-      "sha256": "07622948a7ae6704803324da3d6c2ec49bea8cbde0c25f204a4da67e441ffcb8"
+      "bytes": 8210,
+      "sha256": "18ad6b650eb185538b711fc6ee4f112bdcb2d5eec55b53af3250c76e45cceda1"
     },
     "texture-worker.mjs": {
       "bytes": 837,
@@ -305,8 +313,8 @@
       "sha256": "530cef70852c5b587b29e4f75a9eed0334334bf1013630ddf8bcf452c0c20566"
     },
     "tools.html": {
-      "bytes": 2626,
-      "sha256": "2b15ca325f2b74afd6cf883184f26867c5c303df9fdeaa5d205ee7a7c276f344"
+      "bytes": 2755,
+      "sha256": "93909f82a978fdba21a46b1b306a6584cfd5933cd706a971919dff41880b173e"
     },
     "tools.mjs": {
       "bytes": 7658,
