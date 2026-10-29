@@ -2,6 +2,7 @@
 """Validate retail contextual text with the shipped font advances and production reflow."""
 from pathlib import Path
 import json
+import argparse
 import re
 import struct
 import subprocess
@@ -13,21 +14,38 @@ data = root / 'sdcard/3ds/simpsons/art/frontend'
 bible = data / 'scrooby/resource/txtbible/srr2.p3d'
 if not bible.is_file():
     raise SystemExit('Retail data required: run against the installed game assets.')
-b = bible.read_bytes()
-a = 12 + struct.unpack_from('<I', b, 16)[0] + 12
-a += 1 + b[a]
-assert b[a] == ord('E')
-count, modulo, _ = struct.unpack_from('<III', b, a + 1)
-entries = {}
-for i in range(count):
-    key = struct.unpack_from('<I', b, a + 13 + i * 4)[0]
-    start = a + 13 + count * 8 + struct.unpack_from('<I', b, a + 13 + count * 4 + i * 4)[0]
-    end = start
-    while b[end:end + 2] != b'\0\0':
-        end += 2
-    entries[key] = b[start:end].decode('utf-16le')
+parser = argparse.ArgumentParser(description=__doc__)
+parser.add_argument('--french-game', type=Path)
+parser.add_argument('--spanish-game', type=Path)
+options = parser.parse_args()
 
-def lookup(key):
+def language_entries(path, language):
+    data = path.read_bytes()
+    cursor = 12 + struct.unpack_from('<I', data, 16)[0]
+    while cursor < len(data):
+        kind, header, total = struct.unpack_from('<III', data, cursor)
+        position = cursor + 12
+        position += 1 + data[position]
+        if kind == 0x1800e and data[position] == ord(language):
+            count, modulo, size = struct.unpack_from('<III', data, position + 1)
+            hashes = position + 13
+            offsets = hashes + count * 4
+            strings = offsets + count * 4
+            entries = {}
+            for i in range(count):
+                key = struct.unpack_from('<I', data, hashes + i * 4)[0]
+                start = strings + struct.unpack_from('<I', data, offsets + i * 4)[0]
+                end = start
+                while end + 2 <= strings + size and data[end:end + 2] != b'\0\0':
+                    end += 2
+                if end + 2 > strings + size:
+                    raise ValueError(f'{path}: unterminated {language} text')
+                entries[key] = data[start:end].decode('utf-16le')
+            return entries, modulo
+        cursor += total
+    raise ValueError(f'{path}: no {language} text table')
+
+def lookup(key, entries, modulo):
     value = 0
     for character in key:
         value = (64 * value + ord(character)) % modulo
@@ -65,33 +83,44 @@ areas = {
 }
 fixtures = []
 summary = {}
-for path in (data / 'scrooby2/pages').glob('*.pag'):
-    for element in ET.parse(path).iter():
-        if element.tag not in ('Text', 'MultiText'):
-            continue
-        name = element.get('Name')
-        area = areas.get(name)
-        if name == 'Message' and path.stem == 'Hud':
-            area = (237, 13, 3, 190, 237)
-        elif name == 'Message' and path.stem in ('GenericPrompt', 'ErrorPrompt', 'Message'):
-            area = (288, 16, 4, 42, 122)
-        if not area:
-            continue
-        for string in element.iter('String'):
-            key = string.get('stringId')
-            text = lookup(key) if key else None
-            if not text:
+controls = (root / 'libs/scrooby/src/3dscontrols.h').read_text()
+correction_body = controls.split('static const Entry frenchCorrections[] = {', 1)[1].split('};', 1)[0]
+corrections = {json.loads('"'+original+'"'): json.loads('"'+fixed+'"')
+               for original, fixed in re.findall(r'\{"([^"\n]*)", "([^"\n]*)"\}', correction_body)}
+sources = [('E', bible, 'entries')]
+for language, game, table in [('F', options.french_game, 'frenchEntries'), ('S', options.spanish_game, 'spanishEntries')]:
+    if game:
+        sources.append((language, game/'art/frontend/scrooby/resource/txtbible/srr2.p3d', table))
+for language, bible_path, table in sources:
+    entries, modulo = language_entries(bible_path, language)
+    body = controls.split('static const Entry ' + table + '[] = {', 1)[1].split('};', 1)[0]
+    overrides = {key: json.loads('"'+text+'"') for key, text in re.findall(r'\{"([^"\n]+)", "([^"\n]*)"\}', body)}
+    for path in (data / 'scrooby2/pages').glob('*.pag'):
+        for element in ET.parse(path).iter():
+            if element.tag not in ('Text', 'MultiText'):
                 continue
-            # Match the port's real control-caption substitutions.
-            overrides = dict(re.findall(r'\{"([^"]+)", "([^"\n]*)"\}',
-                (root / 'libs/scrooby/src/3dscontrols.h').read_text()))
-            text = overrides.get(key, text).replace('\\', ' ')
-            assert len(text) < 512, (key, len(text))
-            fixtures.append((key, text, area))
-            if name == 'Message' and path.stem in ('GenericPrompt', 'ErrorPrompt'):
-                # The narrowest frontend TV prompt keeps every retained line.
-                fixtures.append((key + '_TV', text, (224, 16, 2, 56, 102)))
-            summary[path.stem] = summary.get(path.stem, 0) + 1
+            name = element.get('Name')
+            area = areas.get(name)
+            if name == 'Message' and path.stem == 'Hud':
+                area = (237, 13, 3, 190, 237)
+            elif name == 'Message' and path.stem in ('GenericPrompt', 'ErrorPrompt', 'Message'):
+                area = (288, 16, 4, 42, 122)
+            if not area:
+                continue
+            for string in element.iter('String'):
+                key = string.get('stringId')
+                text = lookup(key, entries, modulo) if key else None
+                if not text:
+                    continue
+                text = overrides.get(key, text)
+                if language == 'F': text = corrections.get(text, text)
+                text = text.replace('\\', ' ')
+                assert len(text) < 512, (language, key, len(text))
+                fixtures.append((language + ':' + key, text, area))
+                if name == 'Message' and path.stem in ('GenericPrompt', 'ErrorPrompt'):
+                    fixtures.append((language + ':' + key + '_TV', text, (224, 16, 2, 56, 102)))
+                label = language + ':' + path.stem
+                summary[label] = summary.get(label, 0) + 1
 assert len(fixtures) > 500, summary
 literal = lambda text: 'u' + json.dumps(text, ensure_ascii=True)
 font_maps = ','.join('{' + ','.join(f'{{{c},{w:.9f}f}}' for c, w in font.items()) + '}' for font in fonts)
@@ -110,14 +139,14 @@ std::u16string content(const char16_t* text){std::u16string result;while(*text){
 int main(){
  unsigned scroll=0;unsigned worst=0;
  for(auto& advances:fonts)for(const auto& test:fixtures){
-  const auto measure=[&](const char16_t* text,float height){float w=0;while(*text){auto i=advances.find(*text++);w+=i==advances.end()?0.5f:i->second;}return w*height;};
+  const auto measure=[&](const char16_t* text,float height){float w=0;while(*text){auto code=*text++;auto i=advances.find(code);if(i==advances.end()){fprintf(stderr,"Missing glyph U+%04X for ",unsigned(code));for(const char16_t* c=test.key;*c;++c)fputc(char(*c),stderr);fputc(10,stderr);return 1e9f;}w+=i->second;}return w*height;};
   char16_t lines[16][256]={};unsigned count=0;float size=test.height;
   for(;size>=12;--size){
    count=HandheldText::Wrap(test.text,lines,[&](const char16_t* line){return measure(line,size)<=test.width;});
    if(count<=test.visible)break;
   }
   if(size<12)size=12;
-  if(std::u16string(test.key).find(u"MISSION_OBJECTIVE")==0 && test.width==272)assert(count<=test.visible);
+  if(std::u16string(test.key).find(u"MISSION_OBJECTIVE")!=std::u16string::npos && test.width==272)assert(count<=test.visible);
   assert(count<=16); // No retail text may disappear beyond the retained scroll buffer.
   if(count>worst)worst=count;
   std::u16string joined;

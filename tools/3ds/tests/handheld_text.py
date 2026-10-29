@@ -64,14 +64,30 @@ if font.is_file() and bible.is_file():
             value = json.loads('"' + text + '"').replace('\\', '\n')
             assert all(ord(c) in advances for c in value if c not in '\n\r')
             fixtures.append(value)
+    corrections = controls.split('static const Entry frenchCorrections[] = {', 1)[1].split('};', 1)[0]
+    for source, encoded in re.findall(r'\{"([^"\n]*)", "([^"\n]*)"\}', corrections):
+        value = json.loads('"' + encoded + '"')
+        assert all(ord(c) in advances for c in value if c not in '\n\r'), f'Missing corrected glyph in {value}'
+        fixtures.append(value)
     captions = controls.split('static const CaptionEntry captions[] = {', 1)[1].split('};', 1)[0]
     quoted = r'"(?:[^"\\]|\\.)*"'
-    for row in captions.splitlines():
-        values = re.findall(quoted, row)
-        for encoded in values[2:]:
+    pattern = r'\{CaptionHash\((' + quoted + r')\),\s*(' + quoted + r'),\s*(' + quoted + r'),\s*(' + quoted + r')\s*\}'
+    caption_rows = re.findall(pattern, captions, re.DOTALL)
+    assert caption_rows, 'No native captions found'
+    guide_lines = []
+    for _, english, french, spanish in caption_rows:
+        for encoded in (english, french, spanish):
             value = json.loads(encoded)
-            missing = {c for c in value if ord(c) not in advances}
+            missing = {c for c in value if c not in '\n\r' and ord(c) not in advances}
             assert not missing, f'Missing caption glyphs: {missing} in {value}'
+            if value.startswith(('A: Jump / gas', 'A : Saut / accélérer', 'A: Saltar / acelerar',
+                                 'L + Pad: Camera', 'L + Pad : Caméra', 'L + Pad: Cámara')):
+                lines = value.split('\n')
+                assert len(lines) == 6, value
+                guide_lines.extend(lines)
+    assert len(guide_lines) == 36, 'Missing translated controller guide'
+    for line in guide_lines:
+        assert sum(advances[ord(c)] for c in line) * .375 <= 130, f'Controller guide overflows: {line}'
     sources = [(bible, 'E', 'entries'),
                (options.french_game/'art/frontend/scrooby/resource/txtbible/srr2.p3d' if options.french_game else None, 'F', 'frenchEntries'),
                (options.spanish_game/'art/frontend/scrooby/resource/txtbible/srr2.p3d' if options.spanish_game else None, 'S', 'spanishEntries')]

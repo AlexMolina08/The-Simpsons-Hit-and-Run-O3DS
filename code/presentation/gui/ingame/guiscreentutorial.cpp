@@ -148,7 +148,7 @@ CGuiScreenTutorial::CGuiScreenTutorial
         }
 #endif
 
-#ifdef PAL
+#if defined(PAL) && !defined(SRR2_OLD_3DS)
         Scrooby::Group* frame = pPageSmallBoard->GetGroup( "Frame" );
         if( frame != NULL )
         {

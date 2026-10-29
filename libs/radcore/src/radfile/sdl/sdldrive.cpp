@@ -30,6 +30,7 @@
 #include <strings.h>
 #include <errno.h>
 #include <SDL.h>
+#include "casepath.hpp"
 
 enum { SRR2_MAX_TRACKED_FILES = 64 };
 struct Srr2TrackedFile
@@ -387,6 +388,15 @@ radDrive::CompletionStatus radSdlDrive::OpenFile
         if( count > 0 && (unsigned)count < sizeof( bundled ) )
         {
             *pHandle = SDL_RWFromFile( bundled, createFlags );
+            if( !*pHandle )
+            {
+                char resolved[ radFileFilenameMax + 1 ];
+                if( srr2ResolveCasePath( "romfs:/", bundled + 7, resolved, sizeof( resolved ) ) )
+                {
+                    *pHandle = SDL_RWFromFile( resolved, createFlags );
+                    if( *pHandle ) strcpy( bundled, resolved );
+                }
+            }
             if( *pHandle ) strcpy( fullName, bundled );
         }
     }
