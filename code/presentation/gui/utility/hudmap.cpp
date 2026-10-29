@@ -1879,13 +1879,19 @@ namespace
         Fill(bounds.left+10,bounds.bottom-1,bounds.right-10,bounds.bottom,tColour(255,223,102,95));
     }
 
+    void NativeCaption(const char* text,P3D_UNICODE* output,unsigned capacity)
+    {
+        const char* translated = Scrooby3DSControls::Caption(text,FeTextBible::GetCurrentLanguageID());
+        const char* source = translated ? translated : text;
+        unsigned count = 0;
+        if(!capacity)return;
+        while(source && *source && count+1<capacity)output[count++]=Scrooby3DSControls::Next(source);
+        output[count]=0;
+    }
+
     void Ascii(tFont* font,const char* text,float x,float baseline,float height,tColour colour,float width=290)
     {
-        P3D_UNICODE unicode[128];
-        const char* caption = Scrooby3DSControls::Caption(text,FeTextBible::GetCurrentLanguageID());
-        if(caption && Scrooby3DSControls::Length(caption) < 128) {
-            const unsigned words = Scrooby3DSControls::Copy(unicode,caption); unicode[words] = 0;
-        } else p3d::AsciiToUnicode(text,unicode,128);
+        P3D_UNICODE unicode[128];NativeCaption(text,unicode,128);
         BottomLabel(font,unicode,x,baseline,height,colour,width);
     }
 
@@ -2099,7 +2105,7 @@ namespace
 
     void FooterAction(tFont* font,const char* key,const char* caption,float left,float right)
     {
-        P3D_UNICODE text[48];p3d::AsciiToUnicode(caption,text,48);
+        P3D_UNICODE text[48];NativeCaption(caption,text,48);
         const float badge=strcmp(key,"START")==0?40:18;
         const float captionWidth=font->GetTextWidth(text)*12/font->GetFontHeight();
         const float width=badge+6+fminf(captionWidth,right-left-badge-6);
@@ -2353,7 +2359,7 @@ namespace
         {
             Gradient(-40,0,360,240,tColour(49,41,79),tColour(14,15,35));
             auto centered=[&](const char* text,float y,float height,tColour colour){
-                P3D_UNICODE label[128];p3d::AsciiToUnicode(text,label,128);
+                P3D_UNICODE label[128];NativeCaption(text,label,128);
                 const float width=fminf(288,font->GetTextWidth(label)*height/font->GetFontHeight());
                 BottomLabel(font,label,(320-width)*0.5f,y,height,colour,288);
             };
@@ -2383,7 +2389,7 @@ namespace
             BottomLabel(face,label,(320-width)*0.5f,y,HandheldCredits::Height,colour,HandheldCredits::Width);
         };
         P3D_UNICODE role[64],name[32];
-        p3d::AsciiToUnicode("3DS adaptation made by",role,64);p3d::AsciiToUnicode("AlexMolina08",name,32);
+        NativeCaption("3DS adaptation made by",role,64);p3d::AsciiToUnicode("AlexMolina08",name,32);
         line(font,role,HandheldCredits::RoleY,Gold);line(font,name,HandheldCredits::NameY,Gold);
         float baseline=HandheldCredits::OriginalY;
         for(unsigned i=0;i<credits->GetNumCreditsTexts3DS();++i){
@@ -2570,7 +2576,7 @@ namespace
             Rounded(28,124+press,52,146+press,tColour(11,10,23),tColour(11,10,23));
             Rounded(29,124+press,51,143+press,tColour(130,126,145),tColour(53,50,67));
             Ascii(font,"X",35,138+press,13,White,14);
-            P3D_UNICODE label[32];p3d::AsciiToUnicode(caption,label,32);
+            P3D_UNICODE label[32];NativeCaption(caption,label,32);
             // Fit compelete words rather than letting the narrow caption split glyphs across rows.
             P3D_UNICODE* second=NULL;
             for(P3D_UNICODE* c=label;*c;++c)if(*c==' '){*c=0;second=c+1;break;}
@@ -2697,7 +2703,7 @@ namespace
             tFont* font=choices->GetFont();
             Ascii(font,"MAIN MENU",tv?46:12,tv?51:23,tv?16:18,Gold,tv?228:296);
             P3D_UNICODE hint[48];
-            p3d::AsciiToUnicode("A SELECT",hint,48);
+            NativeCaption("A SELECT",hint,48);
             if(screen->IsButtonVisible(BUTTON_ICON_ACCEPT))BottomLabel(font,hint,tv?46:12,tv?201:231,tv?12:13,White,tv?228:296);
             const float scroll=tv?MainScrollPosition(menu):0;
             if(tv)ClipRegion({43,58,277,188});
@@ -2979,8 +2985,8 @@ namespace
                         BottomLabel(font,lines[row],52,firstLine+row*(height+5),height,tColour(255,255,255),216);
                 }
                 P3D_UNICODE hide[32],next[32];
-                p3d::AsciiToUnicode("X HIDE TUTORIALS",hide,32);
-                p3d::AsciiToUnicode("A CONTINUE",next,32);
+                NativeCaption("X HIDE TUTORIALS",hide,32);
+                NativeCaption("A CONTINUE",next,32);
                 if( disableShown ) BottomLabel(font,hide,30,220,13,tColour(225,219,234),160);
                 const float nextWidth=font->GetTextWidth(next)*13/font->GetFontHeight();
                 BottomLabel(font,next,290-nextWidth,220,13,tColour(225,219,234),100);

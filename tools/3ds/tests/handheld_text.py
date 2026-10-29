@@ -58,6 +58,14 @@ if font.is_file() and bible.is_file():
             value = json.loads('"' + text + '"').replace('\\', '\n')
             assert all(ord(c) in advances for c in value if c not in '\n\r')
             fixtures.append(value)
+    captions = controls.split('static const CaptionEntry captions[] = {', 1)[1].split('};', 1)[0]
+    quoted = r'"(?:[^"\\]|\\.)*"'
+    for row in captions.splitlines():
+        values = re.findall(quoted, row)
+        for encoded in values[2:]:
+            value = json.loads(encoded)
+            missing = {c for c in value if ord(c) not in advances}
+            assert not missing, f'Missing caption glyphs: {missing} in {value}'
     for number in range(100):
         key = f'TUTORIAL_{number:03}'
         value = 0

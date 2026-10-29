@@ -95,7 +95,7 @@ static constexpr unsigned CaptionHash(const char* text)
 }
 static inline const char* Caption(const char* original,char language)
 {
-    if(language != 'F' && language != 'S') return NULL;
+    if(!original || (language != 'F' && language != 'S')) return NULL;
     struct CaptionEntry {unsigned key; const char* english; const char* french; const char* spanish;};
     static const CaptionEntry captions[] = {
         {CaptionHash("GRAPHICS"), "GRAPHICS", "GRAPHISMES", "GRÁFICOS"},
@@ -103,7 +103,7 @@ static inline const char* Caption(const char* original,char language)
         {CaptionHash("PHONE BOOTH"), "PHONE BOOTH", "CABINE TÉLÉPHONIQUE", "CABINA TELEFÓNICA"},
         {CaptionHash("SHOP"), "SHOP", "BOUTIQUE", "TIENDA"},
         {CaptionHash("LOADING"), "LOADING", "CHARGEMENT", "CARGANDO"},
-        {CaptionHash("PREVIEW UNAVAILABLE"), "PREVIEW UNAVAILABLE", "APERÇU INDISPONIBLE", "VISTA NO DISPONIBLE"},
+        {CaptionHash("PREVIEW UNAVAILABLE"), "PREVIEW UNAVAILABLE", "Aperçu indisponible", "VISTA NO DISPONIBLE"},
         {CaptionHash("THE END"), "THE END", "FIN", "FIN"},
         {CaptionHash("CREDITS"), "CREDITS", "CRÉDITS", "CRÉDITOS"},
         {CaptionHash("MAIN MENU"), "MAIN MENU", "MENU PRINCIPAL", "MENÚ PRINCIPAL"},
@@ -134,7 +134,7 @@ static inline const char* Caption(const char* original,char language)
         {CaptionHash("UNLOCK MISSIONS"), "UNLOCK MISSIONS", "DÉBLOQUER LES MISSIONS", "DESBLOQUEAR MISIONES"},
         {CaptionHash("UNLOCK MOVIES"), "UNLOCK MOVIES", "DÉBLOQUER LES VIDÉOS", "DESBLOQUEAR VÍDEOS"},
         {CaptionHash("UNLOCK CARS"), "UNLOCK CARS", "DÉBLOQUER LES VÉHICULES", "DESBLOQUEAR COCHES"},
-        {CaptionHash("+100 COINS"), "+100 COINS", "+100 PIÈCES", "+100 MONEDAS"},
+        {CaptionHash("+100 COINS"), "+100 COINS", "+100 pièces", "+100 MONEDAS"},
         {CaptionHash("INVINCIBLE CAR"), "INVINCIBLE CAR", "VÉHICULE INVINCIBLE", "COCHE INVENCIBLE"},
         {CaptionHash("NO SPEED LIMIT"), "NO SPEED LIMIT", "VITESSE ILLIMITÉE", "VELOCIDAD ILIMITADA"},
         {CaptionHash("FAST ACCELERATION"), "FAST ACCELERATION", "ACCÉLÉRATION RAPIDE", "ACELERACIÓN RÁPIDA"},
@@ -142,7 +142,7 @@ static inline const char* Caption(const char* original,char language)
         {CaptionHash("ONE-HIT TRAFFIC"), "ONE-HIT TRAFFIC", "UN COUP SUFFIT", "TRÁFICO DE UN GOLPE"},
         {CaptionHash("WRECKED CAR LOOK"), "WRECKED CAR LOOK", "ASPECT ENDOMMAGÉ", "ASPECTO DESTROZADO"},
         {CaptionHash("RED BRICK CARS"), "RED BRICK CARS", "VÉHICULES EN BRIQUES", "COCHES DE LADRILLOS"},
-        {CaptionHash("KICK SWAPS MODEL"), "KICK SWAPS MODEL", "FRAPPER CHANGE LE MODÈLE", "PATADA CAMBIA MODELO"},
+        {CaptionHash("KICK SWAPS MODEL"), "KICK SWAPS MODEL", "Frapper change le modèle", "PATADA CAMBIA MODELO"},
         {CaptionHash("EXTRA CAMERAS"), "EXTRA CAMERAS", "CAMÉRAS SUPPLÉMENTAIRES", "CÁMARAS ADICIONALES"},
         {CaptionHash("SPEEDOMETER"), "SPEEDOMETER", "COMPTEUR DE VITESSE", "VELOCÍMETRO"},
         {CaptionHash("SHOW POSITION"), "SHOW POSITION", "AFFICHER LA POSITION", "MOSTRAR POSICIÓN"},
@@ -159,6 +159,30 @@ static inline const char* Caption(const char* original,char language)
         {CaptionHash("800x240 / 30 FPS TARGET"), "800x240 / 30 FPS TARGET", "800x240 / CIBLE 30 IPS", "800x240 / OBJETIVO 30 FPS"},
         {CaptionHash("400x240 / 60 FPS TARGET"), "400x240 / 60 FPS TARGET", "400x240 / CIBLE 60 IPS", "400x240 / OBJETIVO 60 FPS"},
         {CaptionHash("400x240 / 30 FPS TARGET"), "400x240 / 30 FPS TARGET", "400x240 / CIBLE 30 IPS", "400x240 / OBJETIVO 30 FPS"},
+        {CaptionHash("CONTINUE"), "CONTINUE", "CONTINUER", "CONTINUAR"},
+        {CaptionHash("SELECT"), "SELECT", "CHOISIR", "ELEGIR"},
+        {CaptionHash("CANCEL"), "CANCEL", "ANNULER", "CANCELAR"},
+        {CaptionHash("START MISSION"), "START MISSION", "COMMENCER", "INICIAR MISIÓN"},
+        {CaptionHash("CALL CAR"), "CALL CAR", "APPELER", "LLAMAR COCHE"},
+        {CaptionHash("REPAIR & CALL"), "REPAIR & CALL", "RÉPARER ET APPELER", "REPARAR Y LLAMAR"},
+        {CaptionHash("BUY"), "BUY", "ACHETER", "COMPRAR"},
+        {CaptionHash("ROTATE LEFT"), "ROTATE LEFT", "ROTATION GAUCHE", "GIRAR IZQUIERDA"},
+        {CaptionHash("ROTATE RIGHT"), "ROTATE RIGHT", "ROTATION DROITE", "GIRAR DERECHA"},
+        {CaptionHash("X HIDE TUTORIALS"), "X HIDE TUTORIALS", "X MASQUER CONSEILS", "X OCULTAR AYUDAS"},
+        {CaptionHash("Thank you so much for playing."), "Thank you so much for playing.", "Merci beaucoup d'avoir joué.", "Muchas gracias por jugar."},
+        {CaptionHash("Bringing this game to Nintendo 3DS has"), "Bringing this game to Nintendo 3DS has", "Adapter ce jeu sur Nintendo 3DS a été", "Llevar este juego a Nintendo 3DS ha"},
+        {CaptionHash("been a challenging and rewarding journey."), "been a challenging and rewarding journey.", "un défi exigeant et passionnant.", "sido un viaje difícil y gratificante."},
+        {CaptionHash("I hope you have enjoyed playing this as"), "I hope you have enjoyed playing this as", "J'espère que vous avez pris autant", "Espero que hayas disfrutado jugando"},
+        {CaptionHash("much as I have enjoyed bringing it to life."), "much as I have enjoyed bringing it to life.", "de plaisir à jouer que moi à créer.", "tanto como yo al darle vida."},
+        {CaptionHash("23 October 2026"), "23 October 2026", "23 octobre 2026", "23 de octubre de 2026"},
+        {CaptionHash("\"It always seems impossible until it's done.\""), "\"It always seems impossible until it's done.\"", "\"Tout semble impossible jusqu'à ce qu'on le fasse.\"", "\"Siempre parece imposible hasta que se hace.\""},
+        {CaptionHash("3DS adaptation made by"), "3DS adaptation made by", "Adaptation 3DS réalisée par", "Adaptación para 3DS de"},
+        {CaptionHash("INTERACT"), "INTERACT", "INTERAGIR", "INTERACTUAR"},
+        {CaptionHash("TALK"), "TALK", "PARLER", "HABLAR"},
+        {CaptionHash("ENTER VEHICLE"), "ENTER VEHICLE", "MONTER", "ENTRAR EN COCHE"},
+        {CaptionHash("GO INSIDE"), "GO INSIDE", "ENTRER", "ENTRAR"},
+        {CaptionHash("BUY VEHICLE"), "BUY VEHICLE", "ACHETER", "COMPRAR COCHE"},
+        {CaptionHash("OUTFITS"), "OUTFITS", "TENUES", "TRAJES"},
     };
     const unsigned key = CaptionHash(original);
     for(size_t i=0;i<sizeof(captions)/sizeof(captions[0]);++i)
