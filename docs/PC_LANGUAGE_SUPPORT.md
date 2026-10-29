@@ -33,8 +33,9 @@ this file continue in English. Save serialization and title identity do not
 change.
 
 Handheld controls and port-specific captions use UTF-8 to UTF-16 conversion.
-Mission names and narrative stay in the original selected text table. Font
-coverage and tutorial wrapping tests use the actual game font where available.
+Most game text comes from the selected retail table; a small set of French text
+receives spelling corrections. Font coverage and tutorial wrapping tests use the
+actual game font where available.
 French HUD artwork is converted from its own source, checked against its own
 accepted fingerprint; the English HUD is never substituted.
 

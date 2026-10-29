@@ -29,6 +29,11 @@ focused regression checks live in `tools/3ds/tests/`; run the ones relevant to
 your change. Some require Clang, the 3DS toolchain or locally prepared game data.
 A passing host check is not a substitute for building and testing the game.
 
+For interface changes, run `ui_assets.py`, `context_text.py` and
+`handheld_text.py` in `tools/3ds/tests/`. The first two require prepared game
+data; the last also runs without it. Check the rendered screens and physical
+hardware as well.
+
 ## Submit a change
 
 - Keep each pull request focused on one fix or feature. Describe the problem,
