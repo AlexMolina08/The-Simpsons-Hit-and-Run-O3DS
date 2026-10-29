@@ -174,6 +174,12 @@ struct LoadStats
 
 tLoadStatus  tP3DFileHandler::Load(tFile* file, tEntityStore* store)
 {
+    if(file->GetSize() < 12)
+    {
+        p3d::printf("Missing or truncated P3D file: %s\n", file->GetFullFilename());
+        return LOAD_ERROR;
+    }
+
 #ifdef P3D_TRACK_LOAD_STATS
     std::map<unsigned, LoadStats> chunkLoadTimes;
     tLoadManager::ResetTaskedOutStats();

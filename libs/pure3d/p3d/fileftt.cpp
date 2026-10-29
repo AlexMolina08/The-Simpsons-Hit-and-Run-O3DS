@@ -227,13 +227,22 @@ bool tFileFTT::GetData(void* buf, unsigned count, DataType type)
         OpenFile();
     }
 
-    int numBytes = count * type;
-
      // No data to read
-     if ( numBytes == 0 )
+     if ( count == 0 )
      {
           return true;
      }
+
+     // A missing file reports zero length. Do not enter the double-buffer
+     // path: an empty second cache previously became a negative memcpy size.
+     // Bound the read before multiplying, including malformed chunk lengths.
+     if(type <= 0 || position < 0 || position > fileSize ||
+        count > (unsigned)(fileSize - position) / (unsigned)type)
+     {
+         return false;
+     }
+
+    int numBytes = count * type;
 
      if(currentPos + numBytes <= currentSize)
      {
@@ -584,7 +593,7 @@ void tFileFTT::OpenFile( void )
         currentBuffer = cache[0];
         currentPos = 0;
         currentSize = rmt::Min(CACHE_SIZE, fileSize);
-        nextSize = rmt::Min(fileSize - CACHE_SIZE, CACHE_SIZE);
+        nextSize = fileSize > CACHE_SIZE ? rmt::Min(fileSize - CACHE_SIZE, CACHE_SIZE) : 0;
 
         WaitForCompletion();
     }

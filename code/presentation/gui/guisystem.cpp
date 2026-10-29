@@ -518,7 +518,9 @@ MEMTRACK_PUSH_GROUP( "CGUISystem" );
     //
     GetGameDataManager()->RegisterGameData( this, 1, "GUI System" );
 
-#if defined( PAL ) && !defined( RAD_DEMO )
+// The 3DS package already selects one available language before loading text.
+// Skip the separate console language chooser and its temporary project.
+#if defined( PAL ) && !defined( RAD_DEMO ) && !defined( RAD_3DS )
 /*
   #ifdef RAD_GAMECUBE
     // GC ONLY: load language configuration file
