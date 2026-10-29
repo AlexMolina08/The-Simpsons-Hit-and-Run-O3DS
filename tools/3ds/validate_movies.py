@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Fully decode Old 3DS movies and compare timing and PCM with retail originals."""
 import argparse
+import array
 import hashlib
 import json
 from pathlib import Path
@@ -11,6 +12,7 @@ import tempfile
 
 from setup_sd import MOVIE_HEADER, MOVIE_MAGIC, find_ffmpeg
 from movie_names import select_movies
+from game_language import LANGUAGES, select_language, movie_audio_track
 
 
 def header(path):
@@ -39,13 +41,15 @@ def decoded_frames(ffmpeg, path, source=False):
     return frames[-1]
 
 
-def source_pcm(ffmpeg, source):
-    command = [ffmpeg, '-hide_banner', '-loglevel', 'error', '-xerror', '-i', str(source), '-vn', '-map', '0:a:0', '-ac', '2', '-ar', '32000', '-c:a', 'pcm_s16le', '-f', 's16le', '-']
+def source_pcm(ffmpeg, source, track=0, capture=None):
+    command = [ffmpeg, '-hide_banner', '-loglevel', 'error', '-xerror', '-i', str(source), '-vn', '-map', f'0:a:{track}', '-ac', '2', '-ar', '32000', '-c:a', 'pcm_s16le', '-f', 's16le', '-']
     digest, size = hashlib.sha256(), 0
     with tempfile.TemporaryFile() as errors:
         with subprocess.Popen(command, stdout=subprocess.PIPE, stderr=errors) as process:
             while block := process.stdout.read(1024 * 1024):
                 digest.update(block)
+                if capture is not None:
+                    capture.write(block)
                 size += len(block)
             if process.wait():
                 errors.seek(0)
@@ -53,7 +57,8 @@ def source_pcm(ffmpeg, source):
     return size, digest.hexdigest()
 
 
-def validate(ffmpeg, source, movie):
+def validate(ffmpeg, source, movie, language='en', cross_target_pcm=False):
+    track = movie_audio_track(ffmpeg, source, language)
     frames, audio_bytes, video_offset = header(movie)
     audio_hash = hashlib.sha256()
     with tempfile.TemporaryDirectory(prefix='srr-movie-check-') as folder:
@@ -82,10 +87,37 @@ def validate(ffmpeg, source, movie):
         if decoded_frames(ffmpeg, video) != frames:
             raise ValueError(f'{movie.name}: decoded frame count differs from header')
     source_frames = decoded_frames(ffmpeg, source, source=True)
+    pcm_exact, rounded_samples, maximum_error = True, 0, 0
     if audio_bytes:
-        expected_bytes, expected_hash = source_pcm(ffmpeg, source)
-        if (expected_bytes, expected_hash) != (audio_bytes, audio_hash.hexdigest()):
-            raise ValueError(f'{movie.name}: PCM differs from the complete retail audio')
+        if track is None:
+            raise ValueError(f'{movie.name}: unexpected audio absent from source')
+        expected_bytes, expected_hash = source_pcm(ffmpeg, source, track)
+        pcm_exact = (expected_bytes, expected_hash) == (audio_bytes, audio_hash.hexdigest())
+        if not pcm_exact:
+            if not cross_target_pcm or expected_bytes != audio_bytes:
+                raise ValueError(f'{movie.name}: PCM differs from the complete retail audio')
+            # A host libm and WebAssembly can round one resampled value across
+            # a 16-bit boundary. Permit one least-significant-bit difference per
+            # aligned sample, explicitly requested for cross-target checks.
+            with tempfile.TemporaryFile() as reference:
+                source_pcm(ffmpeg, source, track, reference)
+                reference.seek(0)
+                with movie.open('rb') as actual:
+                    actual.seek(MOVIE_HEADER.size)
+                    remaining = audio_bytes
+                    while remaining:
+                        size = min(remaining, 1024 * 1024)
+                        left, right = array.array('h'), array.array('h')
+                        left.frombytes(reference.read(size))
+                        right.frombytes(actual.read(size))
+                        for expected, value in zip(left, right):
+                            error = abs(expected - value)
+                            if error:
+                                rounded_samples += 1
+                                maximum_error = max(maximum_error, error)
+                        remaining -= size
+            if maximum_error > 1:
+                raise ValueError(f'{movie.name}: PCM error exceeds one least-significant bit')
     else:
         streams = subprocess.run([ffmpeg, '-hide_banner', '-i', str(source)], capture_output=True, text=True).stderr
         if 'Audio:' in streams:
@@ -95,10 +127,12 @@ def validate(ffmpeg, source, movie):
         raise ValueError(f'{movie.name}: video is truncated or has unexpected padding ({frames} != {expected_frames})')
     with movie.open('rb') as stream:
         digest = hashlib.file_digest(stream, 'sha256').hexdigest()
-    return {'file': movie.name, 'sha256': digest, 'bytes': movie.stat().st_size, 'decoded_frames': frames,
+    return {'file': movie.name, 'language': language, 'audio_track': track, 'sha256': digest, 'bytes': movie.stat().st_size, 'decoded_frames': frames,
             'source_frames_at_2997': source_frames, 'held_tail_frames': frames - source_frames,
             'video_seconds': round(frames * 1001 / 30000, 6), 'audio_seconds': audio_bytes / 128000,
-            'pcm_sha256': audio_hash.hexdigest(), 'pcm_matches_source': True}
+            'pcm_sha256': audio_hash.hexdigest(), 'pcm_matches_source': pcm_exact,
+            'pcm_complete': True, 'pcm_rounded_samples': rounded_samples,
+            'pcm_max_sample_error': maximum_error}
 
 
 def main():
@@ -107,7 +141,11 @@ def main():
     parser.add_argument('--movies', type=Path, required=True)
     parser.add_argument('--out', type=Path, required=True)
     parser.add_argument('--ffmpeg')
+    parser.add_argument('--language', choices=LANGUAGES)
+    parser.add_argument('--cross-target-pcm', action='store_true',
+                        help='Allow only 1-LSB cross-target rounding; every aligned sample and full length are checked')
     args = parser.parse_args()
+    language = select_language(args.game, args.language)['code']
     try:
         sources = select_movies(args.game / 'movies', '.rmv')
         movies = dict(select_movies(args.movies, '.3dm'))
@@ -118,10 +156,11 @@ def main():
     ffmpeg = find_ffmpeg(args.ffmpeg)
     results = []
     for name, source in sources:
-        result = validate(ffmpeg, source, movies[name])
+        result = validate(ffmpeg, source, movies[name], language, args.cross_target_pcm)
         result['file'] = name + '.3dm'
         results.append(result)
-        print(f'Checked {source.name}: {result["decoded_frames"]} frames; complete PCM matches', flush=True)
+        pcm = 'complete PCM matches exactly' if result['pcm_matches_source'] else f'complete PCM; {result["pcm_rounded_samples"]} samples differ by 1 LSB'
+        print(f'Checked {source.name}: {result["decoded_frames"]} frames; {pcm}', flush=True)
     args.out.parent.mkdir(parents=True, exist_ok=True)
     args.out.write_text(json.dumps({'movies': results, 'validation': 'Complete host decode, stream bounds, frame counts, source timing and exact PCM comparison; console playback remains a separate check'}, indent=2) + '\n')
 

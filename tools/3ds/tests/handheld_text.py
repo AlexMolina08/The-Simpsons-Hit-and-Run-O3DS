@@ -2,11 +2,17 @@
 """Check handheld reflow, padding and content preservation, optionally with retail font metrics."""
 from pathlib import Path
 import json
+import argparse
+import unicodedata
 import re
 import struct
 import subprocess
 import tempfile
 
+parser = argparse.ArgumentParser(description=__doc__)
+parser.add_argument('--french-game', type=Path)
+parser.add_argument('--spanish-game', type=Path)
+options = parser.parse_args()
 root = Path(__file__).resolve().parents[3]
 fixtures = ['MOVE WITH THE CIRCLE PAD.\\PRESS A TO JUMP.\\HOLD B TO RUN.\\HOLD L + CIRCLE PAD TO MOVE THE CAMERA.',
             'PRESS A TO ACCELERATE.\\STEER WITH THE CIRCLE PAD.\\PRESS B TO BRAKE OR REVERSE.\\PRESS Y OR R TO HANDBRAKE.',
@@ -66,15 +72,47 @@ if font.is_file() and bible.is_file():
             value = json.loads(encoded)
             missing = {c for c in value if ord(c) not in advances}
             assert not missing, f'Missing caption glyphs: {missing} in {value}'
-    for number in range(100):
-        key = f'TUTORIAL_{number:03}'
-        value = 0
-        for c in key:
-            value = (64 * value + ord(c)) % modulo
-        if value in entries:
-            text = overrides.get(key, entries[value]).replace('\\\\', '\\').replace('\\', '\n')
-            fixtures.append(text[:255])
-            retail += 1
+    sources = [(bible, 'E', 'entries'),
+               (options.french_game/'art/frontend/scrooby/resource/txtbible/srr2.p3d' if options.french_game else None, 'F', 'frenchEntries'),
+               (options.spanish_game/'art/frontend/scrooby/resource/txtbible/srr2.p3d' if options.spanish_game else None, 'S', 'spanishEntries')]
+    for source, language, table in sources:
+        if source is None or not source.is_file():
+            continue
+        raw = source.read_bytes()
+        cursor = 12 + struct.unpack_from('<I', raw, 16)[0]
+        selected = None
+        while cursor < len(raw):
+            kind, header, total = struct.unpack_from('<III', raw, cursor)
+            position = cursor + 12
+            position += 1 + raw[position]
+            if kind == 0x1800e and raw[position] == ord(language):
+                selected = position
+                break
+            cursor += total
+        assert selected is not None, f'{language} text table missing'
+        count, modulo, size = struct.unpack_from('<III', raw, selected + 1)
+        hashes, offsets, strings = selected + 13, selected + 13 + count * 4, selected + 13 + count * 8
+        entries = {}
+        for i in range(count):
+            offset = strings + struct.unpack_from('<I', raw, offsets + i * 4)[0]
+            end = offset
+            while raw[end:end+2] != b'\0\0':
+                end += 2
+            entries[struct.unpack_from('<I', raw, hashes + i * 4)[0]] = raw[offset:end].decode('utf-16le')
+        letters = {character for text in entries.values() for character in text if unicodedata.category(character).startswith('L')}
+        assert all(ord(character) in advances for character in letters), f'{language}: a retail letter is missing from the font'
+        body = controls.split('static const Entry ' + table + '[] = {', 1)[1].split('};', 1)[0]
+        overrides = {key: json.loads('"' + text + '"') for key, text in re.findall(r'\{"(TUTORIAL_\d+)", "([^"\n]*)"\}', body)}
+        for number in range(100):
+            key = f'TUTORIAL_{number:03}'
+            value = 0
+            for character in key:
+                value = (64 * value + ord(character)) % modulo
+            if value in entries:
+                text = overrides.get(key, entries[value]).replace('\\', '\n')
+                assert len(text) <= 255, f'{language} {key} exceeds runtime tutorial buffer'
+                fixtures.append(text)
+                retail += 1
 
 layout_source = (root / 'code/presentation/gui/utility/hudmap.cpp').read_text()
 layout_start = layout_source.index('                    const float blockHeight=height+(lineCount-1)*(height+5);')
@@ -155,4 +193,4 @@ with tempfile.TemporaryDirectory(prefix='srr-handheld-text-') as temporary:
                     '-fsanitize=address,undefined', '-fno-sanitize-recover=all', '-I', str(root),
                     str(path / 'test.cpp'), '-o', str(path / 'test')], check=True)
     subprocess.run([str(path / 'test')], check=True)
-print(f'Retail check: {retail} English tutorial entries with actual font advances.' if retail else 'Retail data absent; synthetic fixtures only.')
+print(f'Retail check: {retail} localized tutorial entries with actual font advances.' if retail else 'Retail data absent; synthetic fixtures only.')
