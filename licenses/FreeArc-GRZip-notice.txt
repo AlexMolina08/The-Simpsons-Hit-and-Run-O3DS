@@ -1,0 +1,45 @@
+/*-------------------------------------------------*/
+/* GRZipII/libGRZip compressor          libGRZip.c */
+/* libGRZip Compression(Decompression) Functions   */
+/*-------------------------------------------------*/
+
+/*--
+  This file is a part of GRZipII and/or libGRZip, a program
+  and library for lossless, block-sorting data compression.
+
+  Copyright (C) 2002-2004 Grebnov Ilya. All rights reserved.
+
+  This library is free software; you can redistribute it and/or
+  modify it under the terms of the GNU Lesser General Public
+  License as published by the Free Software Foundation; either
+  version 2.1 of the License, or (at your option) any later version.
+
+  This library is distributed in the hope that it will be useful,
+  but WITHOUT ANY WARRANTY; without even the implied warranty of
+  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU
+  Lesser General Public License for more details.
+
+  Grebnov Ilya, Ivanovo, Russian Federation.
+  Ilya.Grebnov@magicssoft.ru, http://magicssoft.ru/
+
+  This program is based on (at least) the work of:
+  Juergen Abel, Jon L. Bentley, Edgar Binder,
+  Charles Bloom, Mike Burrows, Andrey Cadach,
+  Damien Debin, Sebastian Deorowicz, Peter Fenwick,
+  George Plechanov, Michael Schindler, Robert Sedgewick,
+  Julian Seward, David Wheeler, Vadim Yoockin.
+
+  BWT compression mode:
+    Compression     memory use : [6-9]*BlockLen  + 1Mb   (6 for fast bwt, 9 for strong bwt)
+    Decompression   memory use : 5*BlockLen      + 1Mb
+  ST4 compression mode:
+    Compression     memory use : 5*BlockLen      + 1Mb
+    Decompression   memory use : 5.125*BlockLen  + 1Mb
+
+  For more information on these sources, see the manual.
+--*/
+
+#include <math.h>
+#include <stdlib.h>
+#include <string.h>
+

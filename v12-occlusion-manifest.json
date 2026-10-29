@@ -1,0 +1,39 @@
+{
+  "emscripten": "4.0.23",
+  "compiler": "emcc (Emscripten gcc/clang-like replacement + linker emulating GNU ld) 4.0.23 (7a5d93b50f6a3a35e85a0d2fc9e667b8498e6aed)",
+  "flags": [
+    "-O3",
+    "-std=c++17",
+    "-ffp-contract=off",
+    "-fno-fast-math",
+    "-sMODULARIZE=1",
+    "-sEXPORT_ES6=1",
+    "-sEXPORT_NAME=createOcclusion",
+    "-sALLOW_MEMORY_GROWTH=1",
+    "-sINITIAL_MEMORY=33554432",
+    "-sMAXIMUM_MEMORY=1073741824",
+    "-sENVIRONMENT=web,worker,node",
+    "-sFILESYSTEM=0",
+    "-sEXIT_RUNTIME=0",
+    "-sEXPORTED_FUNCTIONS=[\"_v12_occlusion_create\",\"_v12_occlusion_count\",\"_v12_occlusion_sample\",\"_v12_occlusion_destroy\",\"_v12_occlusion_bake\",\"_malloc\",\"_free\"]",
+    "-sEXPORTED_RUNTIME_METHODS=[\"HEAPU8\"]",
+    "--no-entry"
+  ],
+  "production_source_sha256": "7a333682d2269b4b1332b7d5ad001731a93805521360445a9d8c35faf7da2734",
+  "adapter_sha256": "d03cd46aa1e24c4842db1dd57e430eddef087e629a0ef4adfe2ce3f7a77d09e7",
+  "files": {
+    "occlusion.mjs": {
+      "sha256": "7afcacbf7d2c7ec2696dde134cc4485db1bf9a69b27c1054e6cf43cf86580c91",
+      "bytes": 8985
+    },
+    "occlusion.wasm": {
+      "sha256": "1dc031dcd9aff68869055e821cb22ed47c73462e26e6640d7449bdd8e09a6394",
+      "bytes": 47807
+    },
+    "occlusion-sources.tar.gz": {
+      "sha256": "c626e5c1354337dcbd61be9214c2453ee0fbe625b7a93636c83ffe11a7e87606",
+      "bytes": 5457
+    }
+  },
+  "game_data_included": false
+}

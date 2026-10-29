@@ -1,0 +1,4 @@
+#define COPYRIGHT "Delta: binary tables preprocessor v1.51  (c) Bulat.Ziganshin@gmail.com  2013-09-18"
+/* All rights reserved. You can for free use decompression part of the algorithm for decompression of FreeArc archives.
+   For any other usage ask me for the license.
+

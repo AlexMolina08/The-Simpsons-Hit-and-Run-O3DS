@@ -1,0 +1,441 @@
+{
+  "version": "1.2",
+  "packedVersion": 1056,
+  "titleID": "000400000f3a1100",
+  "sourceCommit": "08c145d0f0d1b98a08d5e1d524185c7552ada1cd",
+  "originalELFSHA256": "25572ba78c4b27037ce8b4d20ebc935f9f37c5c2971df4047072b998ea591e3c",
+  "runtimeSHA256": "1f285b26ffd45825ac70d00e19d9163acd916d9075ba1ea91030b174a1d4a8c2",
+  "rsfSHA256": "f9c07188df6b236c7817d1af5a232ae4c3a5ff36751638fc737dc71f4f2ff1ec",
+  "textureProfileSHA256": "64a6fc3fb428e4e699cb478ca159fafd250afe50e683223e2ffd3c5e4574801f",
+  "v12RecipeSHA256": "0a881428214cd814cd61ba6d9a62c5cd83b75742b52c85cfd1ae416b972cf753",
+  "v12RoundingsSHA256": "49e3fe2523d0739a06b9437b568a7e79ba76d169ba47ba22b3e721964f04a077",
+  "buildID": "e21dad36d79440f69aae6f5840af63bb885c858687e716d863b8578bd37a031b",
+  "minimumCIABytes": 1000000000,
+  "files": {
+    "THIRD_PARTY_NOTICES.md": {
+      "bytes": 8507,
+      "sha256": "ae53c50bdcd2e1ea73ca224f849c18d2d776e13a2767ece333ba5b9700792d76"
+    },
+    "app.mjs": {
+      "bytes": 12092,
+      "sha256": "3ffd5b4853fc5203c0e4a8280eb2e30521eb6644bb0c64c622dd8981f2a019a0"
+    },
+    "checkpoints.mjs": {
+      "bytes": 3243,
+      "sha256": "d9da1c6e3e3e989fa1d2bb341da67d82db59d5dd4dc84f401c20a502156e084a"
+    },
+    "downloads.mjs": {
+      "bytes": 2435,
+      "sha256": "7d46aa29ad71c9be6e3a58ae1ec5d6b9e02510e5df262dced32f290c82eb233c"
+    },
+    "engine-conversion/asset-semantics.py": {
+      "bytes": 2836,
+      "sha256": "e9a65b8fecf6ffb2e9d1d2e6acd3c6faac4a204163342adeb687379ea5ab30af"
+    },
+    "engine-conversion/audio-cache.mjs": {
+      "bytes": 8232,
+      "sha256": "25ba4c0e462091e73eedcaf808b1c3bb61dea7a45eac61d480884986f3e84d6f"
+    },
+    "engine-conversion/conversion.mjs": {
+      "bytes": 32690,
+      "sha256": "0bec3bc5d62e88e6a638bd0773bf8df5b4875ccca5f313f11db0b1fff44d9be7"
+    },
+    "engine-conversion/installshield.mjs": {
+      "bytes": 3860,
+      "sha256": "02ca72aedcd588e59fc841b2206db493bb8e43c891bad420c08dce3a9c9c0496"
+    },
+    "engine-conversion/iso.mjs": {
+      "bytes": 10583,
+      "sha256": "5d3fbd4cdd22787a25220d3afc9f078e1b1beeeaf9b0fabfb2702f6d3e0f17a4"
+    },
+    "engine-conversion/languages.mjs": {
+      "bytes": 1257,
+      "sha256": "3a5ec8cd12d1731a79a83526850ca5a9bcadce230a902e155f63a7acdd646082"
+    },
+    "engine-conversion/repack.mjs": {
+      "bytes": 13942,
+      "sha256": "202f8de1d61e78447879d4a9072e47f4a3a432f43fd3d694bdb53799eaebbb7a"
+    },
+    "engine-conversion/source-input.mjs": {
+      "bytes": 6908,
+      "sha256": "60c93139f553311b1f7557aa610a2633ae3393ed65fb89970824a240ffd989c2"
+    },
+    "engine-conversion/texture-extract.py": {
+      "bytes": 1333,
+      "sha256": "2b0d16abf02534c37ab23744ec47d356c0bb0d93b1adddf5feb9145e2d7c2c95"
+    },
+    "engine-conversion/v12-assets.py": {
+      "bytes": 16636,
+      "sha256": "6f72206e96682b8a42675460340184829fbca5cfb8ce555589c596229240d337"
+    },
+    "engine-conversion/v12-rounding.json": {
+      "bytes": 23958,
+      "sha256": "49e3fe2523d0739a06b9437b568a7e79ba76d169ba47ba22b3e721964f04a077"
+    },
+    "engine-conversion/v12.mjs": {
+      "bytes": 8878,
+      "sha256": "9ec8336d3337d2deb13bbb3dd15a0ae63deaaad73fea53619f6c5437730adbb7"
+    },
+    "ffmpeg-manifest.json": {
+      "bytes": 2297,
+      "sha256": "13a566c2f4460d590d718cf984b562932a2fde375284b5b0ff8cc637a099167a"
+    },
+    "ffmpeg-sources.tar.gz": {
+      "bytes": 15953498,
+      "sha256": "ab0d380b886a9b3cbbebb2d53630549e63cc81452f83441330e59c9aa52a6c83"
+    },
+    "freearc-manifest.json": {
+      "bytes": 881,
+      "sha256": "b0eae6d453e90ac673f387707c94f3614c194addf13f13575ffb4e9fb66a7631"
+    },
+    "freearc-sources.tar.gz": {
+      "bytes": 1237508,
+      "sha256": "2380d0de4703f218e2b126615bfce92777cbb0c70e07fe795f81e188cab4a6f9"
+    },
+    "game.rsf": {
+      "bytes": 6017,
+      "sha256": "f9c07188df6b236c7817d1af5a232ae4c3a5ff36751638fc737dc71f4f2ff1ec"
+    },
+    "index.html": {
+      "bytes": 5648,
+      "sha256": "4c672c5a8ff7a6ba530e9fe9041461ce8776e986a2b765ef006d443b0559d15c"
+    },
+    "licenses/CPython-LICENSE.txt": {
+      "bytes": 13936,
+      "sha256": "3b2f81fe21d181c499c59a256c8e1968455d6689d269aa85373bfb6af41da3bf"
+    },
+    "licenses/Emscripten-LICENSE.txt": {
+      "bytes": 5093,
+      "sha256": "620a78084fc7ca97c0b5dea9abf891f3ffcadfdbf305276f099c9c4e12fc1d86"
+    },
+    "licenses/FFmpeg-LGPL-2.1.txt": {
+      "bytes": 26526,
+      "sha256": "b634ab5640e258563c536e658cad87080553df6f34f62269a21d554844e58bfe"
+    },
+    "licenses/FreeArc-AES-notice.txt": {
+      "bytes": 755,
+      "sha256": "8433c935aa5cfbd409ee95e4996a660336c23a53a5cc77f4a012fc092fda7530"
+    },
+    "licenses/FreeArc-Delta-permission.txt": {
+      "bytes": 271,
+      "sha256": "cb67abcd93eb82f22b93e111b25a83e15f79506d06e023aa3dc60db65a7b82b4"
+    },
+    "licenses/FreeArc-GPL-2.0.txt": {
+      "bytes": 18092,
+      "sha256": "8177f97513213526df2cf6184d8ff986c675afb514d4e68a404010521b880643"
+    },
+    "licenses/FreeArc-GRZip-notice.txt": {
+      "bytes": 1738,
+      "sha256": "4dfab2c9851aec55820eb95d4a61e18042fcaae5a595ad5f9d0d9228490cecef"
+    },
+    "licenses/FreeArc-Serpent-notice.txt": {
+      "bytes": 1647,
+      "sha256": "f2fccf2b9158faf3f54f73286a0160dfbcb726c328753ae77d5bdb9e9f47f12f"
+    },
+    "licenses/FreeArc-Tornado-notice.txt": {
+      "bytes": 234,
+      "sha256": "dad7474e38f0e49c29003f31c37cc0d988c1c5ae173be9b94fb217019095132e"
+    },
+    "licenses/FreeType-LICENSE.txt": {
+      "bytes": 6741,
+      "sha256": "f4b133e25df1f86ad3ffea453aa0e613f0474f34778dbbb3e437e7b2724937d8"
+    },
+    "licenses/Pillow-MIT-CMU.txt": {
+      "bytes": 1446,
+      "sha256": "e706384c6f299d1b6fa782ae657740b372b4bd7938a1a318bf94ac249114758a"
+    },
+    "licenses/bannertool-MIT.txt": {
+      "bytes": 1095,
+      "sha256": "403b76b1b3091546186d3321b11d5e794083c564dd21215f0f1e8e014f622e7c"
+    },
+    "licenses/dxt-decompression-MIT.txt": {
+      "bytes": 2519,
+      "sha256": "4dbb67fcaa64b27b1c25150a3a4b57271f0077b2a8be5e8d510f6f4219dee42e"
+    },
+    "licenses/ffmpeg.wasm-wrapper-MIT.txt": {
+      "bytes": 1066,
+      "sha256": "3e123e29517d76504ffce77b3f8e2ccffd4712493f27694b0aba3e376676459f"
+    },
+    "licenses/libjpeg-README.txt": {
+      "bytes": 18970,
+      "sha256": "31f366acfb6259456d9046eb7f16875e387f8bf029d37ac4c4397bf63f22fd6b"
+    },
+    "licenses/libpng-LICENSE.txt": {
+      "bytes": 5345,
+      "sha256": "dfe5a536b0e5a531f844fb9c101a3089aca60772a503893b8e15f9457e369960"
+    },
+    "licenses/libtiff-COPYRIGHT.txt": {
+      "bytes": 1146,
+      "sha256": "fbd6fed7938541d2c809c0826225fc85e551fdbfa8732b10f0c87e0847acafd7"
+    },
+    "licenses/libwebp-COPYING.txt": {
+      "bytes": 1496,
+      "sha256": "5aec868f669e384a22372a4e8a1a6cd7d44c64cd451f960ca69cc170d1e13acf"
+    },
+    "licenses/libwebp-PATENTS.txt": {
+      "bytes": 1436,
+      "sha256": "cc3273e0694ea5896145e0677699b53471b03ea43021ddc50e7923fbb9f5023c"
+    },
+    "licenses/libyaml-MIT.txt": {
+      "bytes": 1058,
+      "sha256": "d0d8b09800a45cd982e9568fc7669d9c1a4c330e275a821bbe24d54366d16fe9"
+    },
+    "licenses/makerom-MIT.txt": {
+      "bytes": 1124,
+      "sha256": "6e0183da4f7ae7b58aa838db92f565a99ce3b1d0bb31adcf06aa30291665cdd8"
+    },
+    "licenses/mbedtls-Apache-2.0.txt": {
+      "bytes": 11358,
+      "sha256": "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30"
+    },
+    "licenses/numpy-LICENSE.txt": {
+      "bytes": 1543,
+      "sha256": "01fb016849aa427edb1bbbbd55f91c26ca6cadb32a5b20e7f000655dd05b0760"
+    },
+    "licenses/pyodide-MPL-2.0.txt": {
+      "bytes": 16725,
+      "sha256": "1f256ecad192880510e84ad60474eab7589218784b9a50bc7ceee34c2b91f1d5"
+    },
+    "licenses/rg_etc1-zlib.txt": {
+      "bytes": 1056,
+      "sha256": "c66fa888b274ddf2471852df6bb359046ebfc8baacb3311d4568dca8aa0aba67"
+    },
+    "licenses/tex3ds-GPL-3.0.txt": {
+      "bytes": 35147,
+      "sha256": "8ceb4b9ee5adedde47b31e975c1d90c73ad27b6b165a1dcd80c7c545eb65b903"
+    },
+    "licenses/unshield-LICENSE.txt": {
+      "bytes": 1091,
+      "sha256": "3aaecd6f4440a1456c7d6fee4fe82a4d47af55646ae3daa1c806c717a9385bba"
+    },
+    "licenses/unshield-md5-LICENSE.txt": {
+      "bytes": 948,
+      "sha256": "00184dccdca74c97c2e0f267538b17d540e22b73c2755fe8dc052bea01d98774"
+    },
+    "licenses/zlib-LICENSE.txt": {
+      "bytes": 1002,
+      "sha256": "845efc77857d485d91fb3e0b884aaa929368c717ae8186b66fe1ed2495753243"
+    },
+    "native_texture_profile.json": {
+      "bytes": 230968,
+      "sha256": "64a6fc3fb428e4e699cb478ca159fafd250afe50e683223e2ffd3c5e4574801f"
+    },
+    "occlusion-sources.tar.gz": {
+      "bytes": 5457,
+      "sha256": "c626e5c1354337dcbd61be9214c2453ee0fbe625b7a93636c83ffe11a7e87606"
+    },
+    "opfs.mjs": {
+      "bytes": 5400,
+      "sha256": "62176054dc99269da20f44f716d728118f3512a760245ad8308ff419872eacdb"
+    },
+    "platform.mjs": {
+      "bytes": 739,
+      "sha256": "4b28d528179cab81e1bf57be2c676c104469565ca55b66fed7f6642258bed545"
+    },
+    "python/pack_world_sun.py": {
+      "bytes": 6744,
+      "sha256": "e41ba281db9e988b95ea4c2577bce902dd7f37f361a14b526be2c72b4191ea01"
+    },
+    "python/prepare_character_detail.py": {
+      "bytes": 11642,
+      "sha256": "06f555d3e043e0b0433d2e0aa49d5abac2ae1b50ed35d66dd40fed7c27ebb69e"
+    },
+    "python/prepare_character_occlusion.py": {
+      "bytes": 5896,
+      "sha256": "4dc8c0e5b8d10dbaf160385e0fbf12604f6fea31481213347b3a62f611654f35"
+    },
+    "python/prepare_home_artwork.py": {
+      "bytes": 8457,
+      "sha256": "9ad43be862504e99fc75b3467f786b06d23fd2c13b47e4b8f11c3ce406ab4a75"
+    },
+    "python/prepare_landmark_visibility.py": {
+      "bytes": 6199,
+      "sha256": "1b2ce014c76fedd3d2fb719d4ae899ad4043c51c0917b928c1f35eff39475d92"
+    },
+    "python/prepare_native_textures.py": {
+      "bytes": 13068,
+      "sha256": "d7df0d27a6a53d0b2425d287c498146d5ad635a25591a94246d1c843c76e2179"
+    },
+    "python/prepare_scene_occlusion.py": {
+      "bytes": 9356,
+      "sha256": "fefbd43ba8e3e33c0e3f328101e66ebf5d1b16cec411708104d804f861b1c5ec"
+    },
+    "python/prepare_sprite_atlases.py": {
+      "bytes": 5131,
+      "sha256": "2b2d3eb6e75cfd015de27d6861081a7302fcd9549f960f553dd343c50f51f00e"
+    },
+    "python/prepare_streaming_order.py": {
+      "bytes": 7931,
+      "sha256": "f9bd124d69dbe291e38e7c4725f673766b621889b7f498c1b830776b5aecfb36"
+    },
+    "python/prepare_vehicle_reflections.py": {
+      "bytes": 3118,
+      "sha256": "6603a6e11a9b6bf5559a7a8010a0112be4fc2809c5fcde5d0a29fe8116570b9c"
+    },
+    "python/prepare_world_sun.py": {
+      "bytes": 8801,
+      "sha256": "11ac5f64c5fdd35679900c64f4a205f68d3ae8ffce30b0fe1edc440814fcd5ba"
+    },
+    "python/skin_inventory.py": {
+      "bytes": 2583,
+      "sha256": "aef656fba16eb1b17cc0c5be9f5d0a3553d9249de8480ef4c3cfe3baf7cecb92"
+    },
+    "python/strip_character_detail.py": {
+      "bytes": 4085,
+      "sha256": "c26988ad003440081c38e6db60b57b33bf163139a386391a5b1796536f0ca5e8"
+    },
+    "runtime.elf": {
+      "bytes": 8105116,
+      "sha256": "1f285b26ffd45825ac70d00e19d9163acd916d9075ba1ea91030b174a1d4a8c2"
+    },
+    "service-worker.mjs": {
+      "bytes": 2353,
+      "sha256": "ff5372cc1cb5abb63b9587ee71076159728403699ee7445c983429cf354641e0"
+    },
+    "styles.css": {
+      "bytes": 7918,
+      "sha256": "07622948a7ae6704803324da3d6c2ec49bea8cbde0c25f204a4da67e441ffcb8"
+    },
+    "texture-worker.mjs": {
+      "bytes": 837,
+      "sha256": "8a9c835a775ca01928474d2246ced6422e1d3419c4cc6a99681797d67e0df627"
+    },
+    "tool-manifest.json": {
+      "bytes": 2187,
+      "sha256": "530cef70852c5b587b29e4f75a9eed0334334bf1013630ddf8bcf452c0c20566"
+    },
+    "tools.html": {
+      "bytes": 2626,
+      "sha256": "2b15ca325f2b74afd6cf883184f26867c5c303df9fdeaa5d205ee7a7c276f344"
+    },
+    "tools.mjs": {
+      "bytes": 7658,
+      "sha256": "b4d786088273e9273a89892f648411fd20f5fcce168d78feec3e299d4f911bd5"
+    },
+    "v12-audio-manifest.json": {
+      "bytes": 757,
+      "sha256": "3cfabfd6fe659275398feccfc66be8f774081506f8a67a6af0f2b78195ad5ee2"
+    },
+    "v12-audio-sources.tar.gz": {
+      "bytes": 12419,
+      "sha256": "f22de792730a0bad1297138104bd37f06e125379b9ea6195920dca63555253cc"
+    },
+    "v12-occlusion-manifest.json": {
+      "bytes": 1417,
+      "sha256": "c77b04c50e3d3d2ef0d5bd364669a4100bac514c421116c73698ca7423c87b12"
+    },
+    "v12-recipe.json": {
+      "bytes": 451555,
+      "sha256": "0a881428214cd814cd61ba6d9a62c5cd83b75742b52c85cfd1ae416b972cf753"
+    },
+    "vendor/bannertool.mjs": {
+      "bytes": 72755,
+      "sha256": "1cb7e43911b5454d1efebdba6f9205e9a5ffaee1819e81487cf785a8b429dd70"
+    },
+    "vendor/bannertool.wasm": {
+      "bytes": 283491,
+      "sha256": "100011a8f57a9b672b35c71143346ff1c2d52f123d2a7757f1cb3942463290d0"
+    },
+    "vendor/etc1.mjs": {
+      "bytes": 7591,
+      "sha256": "5f15ba2d2ad1dbeca0610fa1662ef3b794e28f279cc7a5a221f5882f68d1d26f"
+    },
+    "vendor/etc1.wasm": {
+      "bytes": 28503,
+      "sha256": "eac530630bc7c0ad04e2893409d460ec1add015036136a05417e535275e694b8"
+    },
+    "vendor/ffmpeg-core.js": {
+      "bytes": 82658,
+      "sha256": "4637137da371c8e2ab84fa9c2769b05eb856ff782c43002509122f28cf213a81"
+    },
+    "vendor/ffmpeg-core.wasm": {
+      "bytes": 2294791,
+      "sha256": "e59e1618c4229b06eeae9a4a5551f6c5d3ffdf25351ca77b3f7e675c635f50ec"
+    },
+    "vendor/freearc-codec.mjs": {
+      "bytes": 71205,
+      "sha256": "f40353887481b192c7d8b0dc4b371828cd84b5aa3b3c96b42df9e4159aee8c8c"
+    },
+    "vendor/freearc-codec.wasm": {
+      "bytes": 170336,
+      "sha256": "19e0610fe144c2b44b9efd616f8e735ba4c3da1ab7f1b91b7df6ea2bb9b76de5"
+    },
+    "vendor/installshield.mjs": {
+      "bytes": 71877,
+      "sha256": "d68103009492b565b1c09f17e57c00e363ceaaf0b2bbe67f52ba08ef0b846bff"
+    },
+    "vendor/installshield.wasm": {
+      "bytes": 68053,
+      "sha256": "6b1333e0d83dae1a3304811c7eef0b7ed08a73ef1e500143731a99632bc3a948"
+    },
+    "vendor/makerom.mjs": {
+      "bytes": 72533,
+      "sha256": "60b97be3e3e4feedf8de3e8cd948b77dcebe4892c8bdaece75225e5b15d70d2f"
+    },
+    "vendor/makerom.wasm": {
+      "bytes": 501957,
+      "sha256": "a8eff5775290cbcf945adb806d637ba8887c264374658a70e7487653d5c0fdc2"
+    },
+    "vendor/native-texture.mjs": {
+      "bytes": 9029,
+      "sha256": "c914c18812998b2baf3669dfb41de7996cbde4c8197cd44640bfc979cfc03ade"
+    },
+    "vendor/native-texture.wasm": {
+      "bytes": 23436,
+      "sha256": "e45bc23a0edaa13a81dbdd85e133c5c0c7225a8c5d198960e85b4fb982d4da58"
+    },
+    "vendor/occlusion.mjs": {
+      "bytes": 8985,
+      "sha256": "7afcacbf7d2c7ec2696dde134cc4485db1bf9a69b27c1054e6cf43cf86580c91"
+    },
+    "vendor/occlusion.wasm": {
+      "bytes": 47807,
+      "sha256": "1dc031dcd9aff68869055e821cb22ed47c73462e26e6640d7449bdd8e09a6394"
+    },
+    "vendor/pyodide/numpy-2.0.2-cp312-cp312-pyodide_2024_0_wasm32.whl": {
+      "bytes": 3061133,
+      "sha256": "ebb61241d962b98b21597d7ce43b67668a6d5bab3acec4fbe958657320d7cd08"
+    },
+    "vendor/pyodide/pillow-10.2.0-cp312-cp312-pyodide_2024_0_wasm32.whl": {
+      "bytes": 987254,
+      "sha256": "43eab147a9355385a99eeac18fb577d4af2fe4bd0bbd23d3ba3ddb92e72c2815"
+    },
+    "vendor/pyodide/pyodide-lock.json": {
+      "bytes": 112205,
+      "sha256": "9c45b916001a750f4102fc287494f3eab215909c7535c626a20db80fd6333e2c"
+    },
+    "vendor/pyodide/pyodide.asm.js": {
+      "bytes": 1255688,
+      "sha256": "6b4c90de5b7172873f04f21884d0e9d2274e305fe32116558fe3e4fbe3618d51"
+    },
+    "vendor/pyodide/pyodide.asm.wasm": {
+      "bytes": 10105545,
+      "sha256": "a50dd1843f805a0b7c45b61037ee0d7b26dfe85efe0e18ef95a34ad24e401f5f"
+    },
+    "vendor/pyodide/pyodide.mjs": {
+      "bytes": 13931,
+      "sha256": "04c052c815abb0bf2981fa38c2dfa58e3120ee5288c956df2b2a15e301782c5f"
+    },
+    "vendor/pyodide/python_stdlib.zip": {
+      "bytes": 2360737,
+      "sha256": "16611534726e5d8ac2bd8f926410b2dcb8d6f49aa24913463533b457a2115c16"
+    },
+    "vendor/v12-audio.mjs": {
+      "bytes": 7649,
+      "sha256": "37193d3a67590065e1ab65b12559f4ea7fea9c397c79288ab5dd750364fd20aa"
+    },
+    "vendor/v12-audio.wasm": {
+      "bytes": 9735,
+      "sha256": "64103eb49e71de90e2562650f9c7995cfde5919b45f0dab5ba1f92d17349af82"
+    },
+    "wasm-tools-sources.tar.gz": {
+      "bytes": 50788326,
+      "sha256": "66be485a4bf7dbc22be103f085c9a1e4b7b32ca850de46961d067231e379b98c"
+    },
+    "worker.mjs": {
+      "bytes": 13389,
+      "sha256": "7184cc5da7c6c8455f3c4cce327b1b2d909cefad3b581e8a2fd9030a3f6d60d2"
+    }
+  },
+  "distribution": "Runtime and conversion tools only. All game assets come from the selected local PC copy."
+}

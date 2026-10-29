@@ -1,0 +1,52 @@
+/* This is an independent implementation of the encryption algorithm:
+ *
+ * Serpent by Ross Anderson, Eli Biham and Lars Knudsen
+ *
+ * which is a candidate algorithm in the Advanced Encryption Standard
+ * programme of the US National Institute of Standards and Technology
+ *
+ * Copyright in this implementation is held by Dr B R Gladman but I
+ * hereby give permission for its free direct or derivative use subject
+ * to acknowledgment of its origin and compliance with any conditions
+ * that the originators of the algorithm place on its exploitation.
+ *
+ * Dr Brian Gladman (gladman@seven77.demon.co.uk) 14th January 1999
+ */
+
+/* modified in order to use the libmcrypt API by Nikos Mavroyanopoulos
+ * All modifications are placed under the license of libmcrypt.
+ */
+
+/* modified in order to use the LibTomCrypt API by Bulat Ziganshin
+ * Test vectors are imported from serpentv.dat file from Crypto++ library
+ * All modifications are placed under the license of LibTomCrypt.
+ */
+
+/*
+Algorithm serpent (serpent.c)
+
+128 bit key:
+Key Setup:    2366 cycles
+Encrypt:       954 cycles =    26.8 mbits/sec
+Decrypt:       907 cycles =    28.2 mbits/sec
+Mean:          931 cycles =    27.5 mbits/sec
+
+192 bit key:
+Key Setup:    2382 cycles
+Encrypt:       967 cycles =    26.5 mbits/sec
+Decrypt:       915 cycles =    28.0 mbits/sec
+Mean:          941 cycles =    27.2 mbits/sec
+
+256 bit key:
+Key Setup:    2360 cycles
+Encrypt:       967 cycles =    26.5 mbits/sec
+Decrypt:       915 cycles =    28.0 mbits/sec
+Mean:          941 cycles =    27.2 mbits/sec
+*/
+
+#include "tomcrypt.h"
+
+#ifdef LTC_SERPENT
+
+const struct ltc_cipher_descriptor serpent_desc =
+{

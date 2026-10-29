@@ -1,0 +1,22 @@
+{
+  "emscripten": "4.0.23",
+  "productionSource": "libs/radsound/src/hal/ctr/ndsphal.cpp",
+  "productionSourceSHA256": "31bdda34693fdd0740114adc4ca741d797f75c3ced6be73b2d4f4c7bb3fa13a9",
+  "kernelSHA256": "443437789ef0409a03224c59c0010c40869b1689ee003f432108542b438318f4",
+  "predictors": 3,
+  "maximumClipSamples": 441000,
+  "files": {
+    "v12-audio.mjs": {
+      "bytes": 7649,
+      "sha256": "37193d3a67590065e1ab65b12559f4ea7fea9c397c79288ab5dd750364fd20aa"
+    },
+    "v12-audio.wasm": {
+      "bytes": 9735,
+      "sha256": "64103eb49e71de90e2562650f9c7995cfde5919b45f0dab5ba1f92d17349af82"
+    },
+    "v12-audio-sources.tar.gz": {
+      "bytes": 12419,
+      "sha256": "f22de792730a0bad1297138104bd37f06e125379b9ea6195920dca63555253cc"
+    }
+  }
+}

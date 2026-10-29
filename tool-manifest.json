@@ -1,0 +1,68 @@
+{
+  "emscripten": "4.0.23",
+  "sources": {
+    "Project_CTR": {
+      "url": "https://github.com/3DSGuy/Project_CTR.git",
+      "revision": "c0488dcb6c3048e6a519716f2b21e2c65859ca75"
+    },
+    "tex3ds": {
+      "url": "https://github.com/devkitPro/tex3ds.git",
+      "revision": "37220c696e873812df41af62d1db0b20c66661fe"
+    },
+    "bannertool": {
+      "url": "https://github.com/carstene1ns/3ds-bannertool.git",
+      "revision": "734d33be79fd3f8c29c6296158f06ac7c5ca9dcb"
+    },
+    "unshield": {
+      "url": "https://github.com/twogood/unshield.git",
+      "revision": "51de441ba6893f11026d4671ccef9e8e2a4634fa"
+    }
+  },
+  "files": {
+    "bannertool.mjs": {
+      "bytes": 72755,
+      "sha256": "1cb7e43911b5454d1efebdba6f9205e9a5ffaee1819e81487cf785a8b429dd70"
+    },
+    "bannertool.wasm": {
+      "bytes": 283491,
+      "sha256": "100011a8f57a9b672b35c71143346ff1c2d52f123d2a7757f1cb3942463290d0"
+    },
+    "etc1.mjs": {
+      "bytes": 7591,
+      "sha256": "5f15ba2d2ad1dbeca0610fa1662ef3b794e28f279cc7a5a221f5882f68d1d26f"
+    },
+    "etc1.wasm": {
+      "bytes": 28503,
+      "sha256": "eac530630bc7c0ad04e2893409d460ec1add015036136a05417e535275e694b8"
+    },
+    "installshield.mjs": {
+      "bytes": 71877,
+      "sha256": "d68103009492b565b1c09f17e57c00e363ceaaf0b2bbe67f52ba08ef0b846bff"
+    },
+    "installshield.wasm": {
+      "bytes": 68053,
+      "sha256": "6b1333e0d83dae1a3304811c7eef0b7ed08a73ef1e500143731a99632bc3a948"
+    },
+    "makerom.mjs": {
+      "bytes": 72533,
+      "sha256": "60b97be3e3e4feedf8de3e8cd948b77dcebe4892c8bdaece75225e5b15d70d2f"
+    },
+    "makerom.wasm": {
+      "bytes": 501957,
+      "sha256": "a8eff5775290cbcf945adb806d637ba8887c264374658a70e7487653d5c0fdc2"
+    },
+    "native-texture.mjs": {
+      "bytes": 9029,
+      "sha256": "c914c18812998b2baf3669dfb41de7996cbde4c8197cd44640bfc979cfc03ade"
+    },
+    "native-texture.wasm": {
+      "bytes": 23436,
+      "sha256": "e45bc23a0edaa13a81dbdd85e133c5c0c7225a8c5d198960e85b4fb982d4da58"
+    }
+  },
+  "corresponding_source": {
+    "file": "wasm-tools-sources.tar.gz",
+    "bytes": 50788326,
+    "sha256": "66be485a4bf7dbc22be103f085c9a1e4b7b32ca850de46961d067231e379b98c"
+  }
+}

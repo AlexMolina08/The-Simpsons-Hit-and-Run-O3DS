@@ -1,0 +1,69 @@
+{
+  "emscripten": "4.0.23",
+  "sources": {
+    "FFmpeg-5.1.4": {
+      "url": "https://github.com/FFmpeg/FFmpeg.git",
+      "revision": "4729204c17f756e186d622060088371d10b34f7e"
+    },
+    "ffmpeg.wasm": {
+      "url": "https://github.com/ffmpegwasm/ffmpeg.wasm.git",
+      "revision": "71aa99d37c02a7b4c435275ca9ef50e612f6efa1"
+    }
+  },
+  "configuration": [
+    "./out/browser-tools/FFmpeg-5.1.4/configure",
+    "--target-os=none",
+    "--arch=x86_32",
+    "--enable-cross-compile",
+    "--disable-asm",
+    "--disable-stripping",
+    "--disable-programs",
+    "--disable-doc",
+    "--disable-debug",
+    "--disable-runtime-cpudetect",
+    "--disable-autodetect",
+    "--disable-pthreads",
+    "--disable-w32threads",
+    "--disable-os2threads",
+    "--disable-network",
+    "--disable-everything",
+    "--enable-avcodec",
+    "--enable-avformat",
+    "--enable-avfilter",
+    "--enable-swresample",
+    "--enable-swscale",
+    "--disable-avdevice",
+    "--disable-postproc",
+    "--enable-protocol=file,pipe",
+    "--enable-demuxer=bink,rsd,xmv,mpegvideo,wav,image2,png_pipe,bmp_pipe",
+    "--enable-muxer=mpeg1video,pcm_s16le,wav,null,image2",
+    "--enable-decoder=bink,wmv2,binkaudio_rdft,binkaudio_dct,pcm_s16le,pcm_s16be,pcm_u8,adpcm_ima_rad,adpcm_ima_wav,adpcm_psx,adpcm_dtk,mpeg1video,png,bmp,rawvideo",
+    "--enable-encoder=mpeg1video,pcm_s16le,wrapped_avframe,png,bmp",
+    "--enable-parser=mpegvideo,png",
+    "--enable-filter=abuffer,abuffersink,buffer,buffersink,format,aformat,aresample,anull,null,fps,scale,pad,setsar,tpad,loudnorm,afade,areverse,atrim,trim",
+    "--enable-zlib",
+    "--nm=emnm",
+    "--ar=emar",
+    "--ranlib=emranlib",
+    "--cc=emcc",
+    "--cxx=em++",
+    "--objcc=emcc",
+    "--dep-cc=emcc",
+    "--extra-cflags=-O3 -sUSE_ZLIB=1 -Wno-incompatible-function-pointer-types",
+    "--extra-ldflags=-sUSE_ZLIB=1"
+  ],
+  "files": {
+    "ffmpeg-core.mjs": {
+      "bytes": 82658,
+      "sha256": "4637137da371c8e2ab84fa9c2769b05eb856ff782c43002509122f28cf213a81"
+    },
+    "ffmpeg-core.wasm": {
+      "bytes": 2294791,
+      "sha256": "e59e1618c4229b06eeae9a4a5551f6c5d3ffdf25351ca77b3f7e675c635f50ec"
+    },
+    "ffmpeg-sources.tar.gz": {
+      "bytes": 15953498,
+      "sha256": "ab0d380b886a9b3cbbebb2d53630549e63cc81452f83441330e59c9aa52a6c83"
+    }
+  }
+}

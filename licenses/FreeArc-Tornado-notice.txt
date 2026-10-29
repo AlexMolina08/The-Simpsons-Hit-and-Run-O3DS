@@ -1,0 +1,7 @@
+// Tornado - fast LZ77 compression algorithm.
+//
+// (c) Bulat Ziganshin
+// (c) Joachim Henke
+// This code is provided on the GPL license.
+// If you need a commercial license to use the code, please write to Bulat.Ziganshin@gmail.com
+

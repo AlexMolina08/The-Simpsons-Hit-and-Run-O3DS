@@ -1,0 +1,27 @@
+{
+  "emscripten": "4.0.23",
+  "source": {
+    "url": "https://github.com/mirror/freearc.git",
+    "revision": "71f3ab36df26401fff4301b4c8600a31a90d8da9"
+  },
+  "purpose": "Decompression of FreeArc game-data archives only; installer code is never executed.",
+  "changes": [
+    "Sequential GRZip and 4x4 scheduling adapter",
+    "GRZip pointer allocation portability",
+    "Portable C AES implementation and normalized source paths"
+  ],
+  "files": {
+    "freearc-codec.mjs": {
+      "bytes": 71205,
+      "sha256": "f40353887481b192c7d8b0dc4b371828cd84b5aa3b3c96b42df9e4159aee8c8c"
+    },
+    "freearc-codec.wasm": {
+      "bytes": 170336,
+      "sha256": "19e0610fe144c2b44b9efd616f8e735ba4c3da1ab7f1b91b7df6ea2bb9b76de5"
+    },
+    "freearc-sources.tar.gz": {
+      "bytes": 1237508,
+      "sha256": "2380d0de4703f218e2b126615bfce92777cbb0c70e07fe795f81e188cab4a6f9"
+    }
+  }
+}
