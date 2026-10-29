@@ -7,9 +7,51 @@ import json
 from pathlib import Path
 import re
 import struct
+import os
+import tempfile
 from skin_inventory import chunks, pstring
 
 TEXTURE, SHADER, STATIC, INTERSECT, GROUP, TEXTURE_PARAM = 0x19000, 0x11000, 0x3f00000, 0x3f00003, 0x10002, 0x11002
+RELEASE_FILES = {
+    'l2z2.p3d': ('51a395cf3e01510a2eaff2058bf7482b535867bdc6734764071f8f7ac01b22dd',
+                 '2a8feb596f81412846e3a4ef42b485075b5fcf043aebcdb3fb93b141f23098ed'),
+    'l2r2.p3d': ('baf5c0de6b3f87896fc32d6abade86fda9fb75ccc908f6e1f1a102543fc841dd',
+                 '7d1a94b89b2d42243cc2e6149dfc28a3ae744659b87603e23a1ecc608f298467'),
+}
+
+
+def release_bytes(name, data, terrain):
+    """Apply only the two byte-verified, physically tested v1.2 permutations."""
+    fingerprints = RELEASE_FILES.get(name.lower())
+    if not fingerprints:
+        return data
+    before, after = fingerprints
+    digest = hashlib.sha256(data).hexdigest()
+    if digest == after:
+        return data
+    if digest != before:
+        raise ValueError(f'Unsupported v1.2 prepared streaming artwork: {name}')
+    result, _ = reorder(data, terrain)
+    if hashlib.sha256(result).hexdigest() != after:
+        raise ValueError(f'Unexpected v1.2 streaming order: {name}')
+    return result
+
+
+def apply_release_order(art):
+    """Replace staged files atomically; never overwrite a hard-linked source."""
+    art = Path(art)
+    terrain = (art / 'l2_TERRA.p3d').read_bytes()
+    outputs = {name: release_bytes(name, (art / name).read_bytes(), terrain)
+               for name in RELEASE_FILES}
+    for name, data in outputs.items():
+        with tempfile.NamedTemporaryFile(dir=art, prefix='.streaming-', delete=False) as staged:
+            temporary = Path(staged.name)
+            staged.write(data)
+        try:
+            os.replace(temporary, art / name)
+        finally:
+            temporary.unlink(missing_ok=True)
+    return {name: hashlib.sha256(data).hexdigest() for name, data in outputs.items()}
 
 
 def top_chunks(data):

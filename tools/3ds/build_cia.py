@@ -14,13 +14,14 @@ from release_version import parse, packed_version, read_cia_version
 from prepare_home_menu import prepare
 from prepare_home_artwork import prepare as prepare_artwork
 from movie_names import select_movies
+from prepare_streaming_order import apply_release_order
 
 REPO = Path(__file__).resolve().parents[2]
 
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('--version', default='1.1.1', help='CIA and release version, for example 1.1.1')
+    parser.add_argument('--version', default='1.2.0', help='CIA and release version, for example 1.2.0')
     parser.add_argument('--data', type=Path, default=REPO / 'sdcard/3ds/simpsons')
     parser.add_argument('--movies', type=Path, help='Optional separate converted movie directory')
     parser.add_argument('--elf', type=Path, default=REPO / 'out/old3ds-build/code/SRR2.elf')
@@ -62,6 +63,7 @@ def main():
                 shutil.copy2(source, target)
         for name in ('art', 'scripts', 'sound'):
             shutil.copytree(args.data / name, romfs / name, copy_function=copy_asset)
+        streaming = apply_release_order(romfs / 'art') if version_fields >= (1, 2, 0) else None
         for source in args.data.glob('*.rcf'):
             copy_asset(source, romfs / source.name)
         bundle = args.data / 'native146.bundle'
@@ -124,7 +126,7 @@ def main():
     manifest = {'source_commit': source_commit, 'build_profile': 'cmake/old3ds-release.cmake', 'home_menu': home_metadata, 'version': version, 'title_id': '000400000f3a1100', 'model': 'Old and New Nintendo 3DS; 64 MiB mode; New 3DS CPU and L2 acceleration',
                 'cia_bytes': args.out.stat().st_size, 'cia_sha256': digest, 'cia_title_version': title_version,
                 'elf_bytes': args.elf.stat().st_size, 'elf_sha256': hashlib.sha256(args.elf.read_bytes()).hexdigest(),
-                'assets': assets, 'movies': movie_audit,
+                'assets': assets, 'movies': movie_audit, 'streaming_road_order': streaming,
                 'validation': 'Packaging only; installed-console validation required before release'}
     args.out.with_suffix('.manifest.json').write_text(json.dumps(manifest, indent=2) + '\n')
     args.out.with_suffix('.sha256').write_text(digest + '  ' + args.out.name + '\n')

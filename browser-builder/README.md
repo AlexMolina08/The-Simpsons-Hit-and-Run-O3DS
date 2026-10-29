@@ -113,12 +113,19 @@ separate from installation and gameplay on a physical console.
 
 ## Static output
 
-After building the tools described in the notices and providing the frozen
-accepted local ELF and provenance manifest, prepare a fresh output directory:
+Build the normal runtime with `tools/3ds/build_old3ds.sh`. It writes the ELF and
+provenance to `out/old3ds/`; site preparation rejects older runtime provenance
+without the v1.2 streaming fixes. After building the tools described in the
+notices, prepare a fresh output directory:
 
 ```sh
 python3 browser-builder/scripts/prepare-site.py --out /path/to/empty/site-output
 ```
+
+The Level 2 world stage applies the two tested road-first file permutations after
+visual preparation. Original chunk bodies and accepted visual features remain
+unchanged. This reduces a demonstrated ground gap; remaining streaming limits
+are documented in [the investigation](../docs/OLD3DS_WORLD_STREAMING.md).
 
 The generated directory contains the runtime, processing tools, corresponding
 tool source and static application files. The script rejects completed CIAs and

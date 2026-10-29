@@ -11,7 +11,7 @@ import sys
 
 ROOT = Path(__file__).resolve().parents[2]
 LOCAL = ROOT / 'out/local-dev/visual-upgrade-20261025'
-DEFAULT_PROVENANCE = ROOT / 'out/local-dev/optimization-20261028/stable-v12-runtime/runtime-provenance.json'
+DEFAULT_PROVENANCE = ROOT / 'out/old3ds/runtime-provenance.json'
 DEFAULT_OVERLAY = LOCAL / 'v12-accepted-asset-overlay'
 DEFAULT_REFERENCE = ROOT / 'out/browser-tools/iso-extraction/pc-game'
 DEFAULT_OUTPUT = ROOT / 'out/browser-v12/v12-recipe.json'
@@ -19,6 +19,7 @@ sys.path.insert(0, str(ROOT/'tools/3ds'))
 sys.path.insert(0, str(ROOT/'browser-builder/engine-conversion'))
 from importlib import import_module
 semantic_fingerprint = import_module('asset-semantics').semantic_fingerprint
+from prepare_streaming_order import RELEASE_FILES, release_bytes
 
 
 def digest(path):
@@ -44,6 +45,8 @@ def validate_runtime(provenance=DEFAULT_PROVENANCE, native_index=None, runtime=N
     require(metadata.get('visual_features_default') == 255, 'Accepted runtime must retain visual mask 255')
     require(metadata.get('early_opaque_queue') is True, 'Accepted stereo submission improvement is missing')
     require(metadata.get('version') == '1.2', 'The browser builder requires the accepted v1.2 runtime')
+    require(metadata.get('streaming_policy') == 1, 'Rebuild v1.2 with the committed streaming fixes')
+    require(metadata.get('source_tree_dirty') is False, 'Commit and rebuild the v1.2 runtime before browser packaging')
     require(re.fullmatch(r'[0-9a-f]{40}', metadata.get('source_commit', '')),
             'The accepted runtime has no complete source commit')
     runtime = Path(runtime or metadata['elf']).resolve()
@@ -107,8 +110,12 @@ def generate_recipe(provenance=DEFAULT_PROVENANCE, overlay=DEFAULT_OVERLAY,
         name = path.relative_to(overlay).as_posix()
         item = {'sha256': digest(path), 'bytes': path.stat().st_size,
                 'required': path.suffix != '.json'}
+        data = path.read_bytes()
+        if name in ('art/l2z2.p3d', 'art/l2r2.p3d'):
+            data = release_bytes(path.name, data, (overlay/'art/l2_TERRA.p3d').read_bytes())
+            item['sha256'] = hashlib.sha256(data).hexdigest()
         if path.suffix.lower() == '.p3d':
-            item['semantic_sha256'] = semantic_fingerprint(path.read_bytes())
+            item['semantic_sha256'] = semantic_fingerprint(data)
         base_path = base/name
         item['change'] = ('new' if not base_path.is_file() else
                           'unchanged' if digest(base_path) == item['sha256'] else 'changed')
@@ -188,6 +195,7 @@ def generate_recipe(provenance=DEFAULT_PROVENANCE, overlay=DEFAULT_OVERLAY,
         'knownCopy': {'description': 'Validated English PC asset layout', 'sourceFiles': known_sources,
                        'sourceManifestSHA256': hashlib.sha256(source_manifest).hexdigest(),
                        'exactOutputChecksRequireMatchingInputs': True},
+        'streamingPolicy': {'version': 1, 'roadFiles': list(RELEASE_FILES), 'chunkBodiesUnchanged': True},
         'overlayCounts': counts, 'requiredOverrides': changes, 'expectedFiles': expected,
     }
 

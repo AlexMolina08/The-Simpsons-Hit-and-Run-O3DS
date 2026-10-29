@@ -12,6 +12,7 @@ import time
 
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT/'tools/3ds'))
+from prepare_streaming_order import RELEASE_FILES, release_bytes
 spec = importlib.util.spec_from_file_location('v12_assets', ROOT/'browser-builder/engine-conversion/v12-assets.py')
 assets = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(assets)
@@ -62,7 +63,11 @@ def main():
                     for item in result['files']:
                         path = output/item['path']
                         accepted = args.accepted/item['path']
-                        if not accepted.is_file() or path.read_bytes() != accepted.read_bytes():
+                        expected = accepted.read_bytes() if accepted.is_file() else None
+                        if expected is not None and path.name in RELEASE_FILES:
+                            expected = release_bytes(path.name, expected,
+                                (args.accepted/'art/l2_TERRA.p3d').read_bytes())
+                        if expected is None or path.read_bytes() != expected:
                             mismatches.append(item['path'])
                     record = {'stage': stage, 'level': level, 'seconds': time.perf_counter()-start,
                               'files': len(result['files']), 'mismatches': mismatches,

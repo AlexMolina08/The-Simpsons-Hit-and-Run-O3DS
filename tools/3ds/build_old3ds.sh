@@ -75,4 +75,7 @@ printf '%s\n' "$attributes" > "$repo/out/old3ds/elf-attributes.txt"
 }
 python3 "$repo/tools/3ds/check_old3ds_memory.py" "$build/code/SRR2.elf" > "$repo/out/old3ds/memory.json"
 cp "$build/SimpsonsNTSC.3dsx" "$repo/out/old3ds/SimpsonsNTSC.3dsx"
+python3 "$repo/tools/3ds/write_runtime_provenance.py" \
+    --elf "$build/code/SRR2.elf" --cache "$build/CMakeCache.txt" \
+    --native-index "$repo/out/native-textures/bundle_index.hpp" --out "$repo/out/old3ds"
 echo "Built: $repo/out/old3ds/SimpsonsNTSC.3dsx"

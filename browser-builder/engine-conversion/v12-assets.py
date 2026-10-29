@@ -22,6 +22,7 @@ PYTHON_MODULES = (
     'prepare_character_occlusion.py', 'prepare_vehicle_reflections.py',
     'prepare_scene_occlusion.py', 'prepare_world_sun.py', 'pack_world_sun.py',
     'prepare_sprite_atlases.py', 'prepare_landmark_visibility.py',
+    'prepare_streaming_order.py',
 )
 PYTHON_PACKAGES = ('pillow', 'numpy')
 CAR_MODELS = (
@@ -322,6 +323,9 @@ def prepare_stage(stage, source_root, output_root, level=None, occlusion=None,
                          '--preserve-sort', '--size', '512'])
             for path in packed.glob('*.p3d'):
                 _copy(path, output/'art'/path.name)
+            if level == '2':
+                from prepare_streaming_order import apply_release_order
+                metadata['streaming_road_order'] = apply_release_order(output/'art')
             metadata['level'] = level
         elif stage == 'landmarks':
             _notify(progress, stage, 'Preparing distant scenery')

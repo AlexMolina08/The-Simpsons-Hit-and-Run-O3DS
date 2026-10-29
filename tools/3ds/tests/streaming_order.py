@@ -10,6 +10,9 @@ import tempfile
 root = Path(__file__).resolve().parents[3]
 sys.path.insert(0, str(root / 'tools/3ds'))
 from prepare_streaming_order import reorder, top_chunks, STATIC, TEXTURE, SHADER, INTERSECT
+import prepare_streaming_order as release_order
+import hashlib
+import os
 from prepare_stream_probes import extract
 
 
@@ -76,6 +79,34 @@ with tempfile.TemporaryDirectory(prefix='stream-order-') as directory:
     before = extract(path)
     path.write_bytes(ordered)
     assert extract(path) == before
+
+with tempfile.TemporaryDirectory(prefix='stream-order-package-') as directory:
+    folder = Path(directory)
+    original_art, staged_art = folder/'original', folder/'staged'
+    original_art.mkdir(); staged_art.mkdir()
+    fingerprints = release_order.RELEASE_FILES
+    try:
+        release_order.RELEASE_FILES = {name: (hashlib.sha256(original).hexdigest(),
+            hashlib.sha256(ordered).hexdigest()) for name in ('l2z2.p3d', 'l2r2.p3d')}
+        (staged_art/'l2_TERRA.p3d').write_bytes(terrain)
+        for name in release_order.RELEASE_FILES:
+            (original_art/name).write_bytes(original)
+            os.link(original_art/name, staged_art/name)
+        release_order.apply_release_order(staged_art)
+        release_order.apply_release_order(staged_art)  # Packaging is idempotent.
+        for name in release_order.RELEASE_FILES:
+            assert (original_art/name).read_bytes() == original
+            assert (staged_art/name).read_bytes() == ordered
+        (staged_art/'l2z2.p3d').write_bytes(original)
+        (staged_art/'l2r2.p3d').write_bytes(b'unsupported')
+        try:
+            release_order.apply_release_order(staged_art)
+        except ValueError:
+            assert (staged_art/'l2z2.p3d').read_bytes() == original
+        else:
+            raise AssertionError('Unsupported input changed a staged file')
+    finally:
+        release_order.RELEASE_FILES = fingerprints
 
 parser = argparse.ArgumentParser()
 parser.add_argument('--art', type=Path)

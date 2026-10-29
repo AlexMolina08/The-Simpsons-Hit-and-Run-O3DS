@@ -7,6 +7,7 @@ export const VISUAL_PYTHON_MODULES = Object.freeze([
   'prepare_character_detail.py', 'strip_character_detail.py', 'prepare_character_occlusion.py',
   'prepare_vehicle_reflections.py', 'prepare_scene_occlusion.py', 'prepare_world_sun.py',
   'pack_world_sun.py', 'prepare_sprite_atlases.py', 'prepare_landmark_visibility.py',
+  'prepare_streaming_order.py',
 ]);
 const text = new TextDecoder();
 const hex = value => [...new Uint8Array(value)].map(byte => byte.toString(16).padStart(2, '0')).join('');

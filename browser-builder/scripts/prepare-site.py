@@ -16,7 +16,7 @@ import zipfile
 
 SITE = Path(__file__).resolve().parents[1]
 REPO = SITE.parent
-PROVENANCE = REPO / 'out/local-dev/optimization-20261028/stable-v12-runtime/runtime-provenance.json'
+PROVENANCE = REPO / 'out/old3ds/runtime-provenance.json'
 RUNTIME = PROVENANCE.parent / 'SRR2.elf'
 ROOT_FILES = ('index.html', 'tools.html', 'styles.css', 'app.mjs', 'worker.mjs',
               'texture-worker.mjs', 'tools.mjs', 'opfs.mjs', 'checkpoints.mjs',
