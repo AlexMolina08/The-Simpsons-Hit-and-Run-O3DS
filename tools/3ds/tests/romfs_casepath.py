@@ -41,6 +41,10 @@ static int fakeClose(DIR*) {return 0;}
 #include HEADER
 int main() {
  char out[257];
+ assert(srr2LowercaseDirectories("romfs:/scripts/cars/Pursuit/L1cop.con", out, sizeof out));
+ assert(!std::strcmp(out, "romfs:/scripts/cars/pursuit/L1cop.con"));
+ assert(!srr2LowercaseDirectories("romfs:/scripts/cars/pursuit/L1cop.con", out, sizeof out));
+ assert(!srr2LowercaseDirectories("romfs:/scripts/cars/Pursuit/L1cop.con", out, 10));
  assert(srr2ResolveCasePath("romfs:/", "scripts/cars/pursuit/L1cop.con", out, sizeof out));
  assert(!std::strcmp(out, "romfs:/scripts/cars/pursuit/L1cop.con"));
  assert(!srr2ResolveCasePath("romfs:/", "scripts/cars/Pursuit/L1cop.con", out, sizeof out));

@@ -391,7 +391,12 @@ radDrive::CompletionStatus radSdlDrive::OpenFile
             if( !*pHandle )
             {
                 char resolved[ radFileFilenameMax + 1 ];
-                if( srr2ResolveCasePath( "romfs:/", bundled + 7, resolved, sizeof( resolved ) ) )
+                if( srr2LowercaseDirectories( bundled, resolved, sizeof( resolved ) ) )
+                {
+                    *pHandle = SDL_RWFromFile( resolved, createFlags );
+                    if( *pHandle ) strcpy( bundled, resolved );
+                }
+                if( !*pHandle && srr2ResolveCasePath( "romfs:/", bundled + 7, resolved, sizeof( resolved ) ) )
                 {
                     *pHandle = SDL_RWFromFile( resolved, createFlags );
                     if( *pHandle ) strcpy( bundled, resolved );

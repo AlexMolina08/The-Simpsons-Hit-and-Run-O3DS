@@ -8,6 +8,23 @@
 #include <string.h>
 #include <strings.h>
 
+// InstallShield copies commonly use lowercase directories with mixed-case
+// filenames. Try that spelling directly before scanning any directories.
+static bool srr2LowercaseDirectories( const char* path, char* result, size_t capacity )
+{
+    const size_t length = strlen( path );
+    if( length >= capacity ) return false;
+    memcpy( result, path, length + 1 );
+    char* lastSlash = strrchr( result, '/' );
+    if( !lastSlash ) return false;
+    bool changed = false;
+    for( char* p = result; p < lastSlash; ++p )
+    {
+        if( *p >= 'A' && *p <= 'Z' ) { *p += 'a' - 'A'; changed = true; }
+    }
+    return changed;
+}
+
 static bool srr2ResolveCasePath( const char* root, const char* relative,
                                  char* result, size_t capacity )
 {
