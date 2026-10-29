@@ -18,7 +18,7 @@ SITE = Path(__file__).resolve().parents[1]
 REPO = SITE.parent
 PROVENANCE = REPO / 'out/old3ds/runtime-provenance.json'
 RUNTIME = PROVENANCE.parent / 'SRR2.elf'
-ROOT_FILES = ('index.html', 'tools.html', 'styles.css', 'app.mjs', 'worker.mjs',
+ROOT_FILES = ('index.html', 'tools.html', 'styles.css', 'builder-icon.png', 'apple-touch-icon.png', 'app.mjs', 'worker.mjs',
               'texture-worker.mjs', 'tools.mjs', 'opfs.mjs', 'checkpoints.mjs',
               'downloads.mjs', 'platform.mjs', 'service-worker.mjs', 'THIRD_PARTY_NOTICES.md')
 RETAIL_SUFFIXES = {'.cia', '.3ds', '.3dsx', '.iso', '.rcf', '.p3d', '.rmv', '.3dm',
