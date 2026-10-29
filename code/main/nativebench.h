@@ -25,6 +25,7 @@ void SaveFilename(char*,unsigned,unsigned);
 void Init(int argc=0,char** argv=nullptr); unsigned Seed(unsigned); unsigned Begin(unsigned elapsed,int context);
 bool ResidentShaders();
 unsigned LoaderSliceUs();
+bool IdleLoaderWait();
 unsigned CurrentRouteMs();
 bool NativeUniforms();
 bool StereoVisualAudit();

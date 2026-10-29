@@ -23,6 +23,10 @@ unsigned Old3dsPerformance::mode = 7;
 // Standard Library
 #include <stdlib.h>
 #include <main/nativebench.h>
+#ifdef SRR2_OLD_3DS
+#include <pddi/pica/gpuuploadguard.hpp>
+extern "C" void (*g_picaGpuWaitHook)(int lend);
+#endif
 #ifdef SRR2_OLD3DS_GPU_SKIN_SUPPORT
 #include <pddi/pica/skinning.hpp>
 #endif
@@ -50,6 +54,18 @@ unsigned Old3dsPerformance::mode = 7;
 #include <citro3d.h>
 #include <malloc.h>
 #include <main/old3dsdiag.h>
+// Frame pacing must not prevent pending resources from using idle CPU time.
+// Block loader-side GPU uploads until the main thread owns the mutex again.
+static void Old3dsWaitForFrame(s64 nanoseconds)
+{
+#ifdef SRR2_OLD3DS_NATIVE_BENCH
+    if(!NativeBench::IdleLoaderWait()){svcSleepThread(nanoseconds);return;}
+#endif
+    picaUpload::Handoff uploadGuard;
+    if(g_picaGpuWaitHook)g_picaGpuWaitHook(1);
+    svcSleepThread(nanoseconds);
+    if(g_picaGpuWaitHook)g_picaGpuWaitHook(0);
+}
 extern "C" unsigned g_picaPresentedFrames;
 extern unsigned g_old3dsModelViewUploads;
 extern unsigned g_old3dsModelViewReuses;
@@ -1116,7 +1132,7 @@ void Game::Run()
             gspWaitForVBlank();
         }
         else if(frameTicks < frameBudgetTicks)
-            svcSleepThread((s64)((frameBudgetTicks - frameTicks) * 1000000000ULL / SYSCLOCK_ARM11));
+            Old3dsWaitForFrame((s64)((frameBudgetTicks - frameTicks) * 1000000000ULL / SYSCLOCK_ARM11));
 #endif
 
         DEMOPROFILE( g_DemoProfiler.Stop(PROFILE_CHANNEL_ALL); )

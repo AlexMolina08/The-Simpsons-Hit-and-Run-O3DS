@@ -302,6 +302,7 @@ void Scope::EndScope(){if(!start)return;u64 end=svcGetSystemTick(),dt=end-start;
  if(parent)parent->child+=dt;top=parent;Checkpoint("leave",stage);}
 bool ResidentShaders(){return residentShaders;}
 unsigned LoaderSliceUs(){return loaderSliceUs;}
+bool IdleLoaderWait(){return true;}
 unsigned CurrentRouteMs(){return elapsedMs;}
 bool NativeUniforms(){return nativeUniforms;}
 // Benchmark-only input driver. Follow immutable road points through the normal
