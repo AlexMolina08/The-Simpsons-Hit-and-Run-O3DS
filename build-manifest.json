@@ -105,8 +105,8 @@
       "sha256": "f9c07188df6b236c7817d1af5a232ae4c3a5ff36751638fc737dc71f4f2ff1ec"
     },
     "index.html": {
-      "bytes": 5768,
-      "sha256": "ed2c2248f4df37e3b353ec1e1e82dcdce24bd0c114bb53f9659bfc1bdddcd483"
+      "bytes": 5770,
+      "sha256": "75b8b53171cdb580f80c329287c3b8b4a26ea1bec07ab6b94300b1fddffd420e"
     },
     "licenses/CPython-LICENSE.txt": {
       "bytes": 13936,
@@ -301,8 +301,8 @@
       "sha256": "ff5372cc1cb5abb63b9587ee71076159728403699ee7445c983429cf354641e0"
     },
     "styles.css": {
-      "bytes": 8210,
-      "sha256": "18ad6b650eb185538b711fc6ee4f112bdcb2d5eec55b53af3250c76e45cceda1"
+      "bytes": 8208,
+      "sha256": "27b865e8065f3f5258829a91783d06c083e9399c354e5d07d4d528ff78ea849f"
     },
     "texture-worker.mjs": {
       "bytes": 837,
