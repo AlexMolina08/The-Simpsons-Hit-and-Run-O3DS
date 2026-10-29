@@ -44,13 +44,17 @@
     <div class="workbench">
       <section class="input-panel" aria-labelledby="source-title">
         <div class="section-heading"><h2 id="source-title">Game files</h2><span>1 / 2</span></div>
-        <p>Choose a PC disc image, ZIP or installed game folder. For a CD set, select all discs together.</p>
+        <p>Select the PC game you own: choose the file you downloaded or the folder where you installed it.</p>
         <input id="iso" type="file" accept=".iso,.zip,application/x-iso9660-image,application/zip" multiple hidden>
         <input id="folder" type="file" webkitdirectory multiple hidden>
-        <div class="file-controls">
-          <button id="choose-iso" class="choose-button">Choose disc images or ZIP</button>
-          <button id="choose" class="choose-button">Choose game folder</button>
-        </div>
+        <details class="source-selector">
+          <summary>Choose your game</summary>
+          <div class="source-options">
+            <button id="choose-iso" class="choose-button">Choose a downloaded file</button>
+            <p>ZIP or ISO, including an ISO inside a ZIP. For multiple discs, select all files together.</p>
+            <button id="choose" class="choose-button">Choose an installed game folder</button>
+          </div>
+        </details>
         <div id="selection" class="selection" aria-live="polite">No game selected</div>
         <label id="language-choice" hidden>Game language <select id="game-language" aria-label="Game language"></select></label>
       </section>
@@ -58,7 +62,7 @@
         <div class="section-heading"><h2 id="build-title">Build installer</h2><span>2 / 2</span></div>
         <p>Keep this tab open. Conversion and packaging run on your device.</p>
         <div class="build-controls"><button id="build" class="primary" disabled>Build CIA</button><button id="cancel" class="quiet" hidden>Cancel build</button></div>
-        <div id="status" class="status" role="status" aria-live="polite">Choose an ISO or game folder to begin.</div>
+        <div id="status" class="status" role="status" aria-live="polite">Choose your game to begin.</div>
         <div id="work-status" hidden>
           <div class="progress-heading"><span id="phase-name">Check game</span><span id="elapsed" aria-label="Elapsed build time">0:00</span></div>
           <progress id="progress" aria-label="Current step progress"></progress>
