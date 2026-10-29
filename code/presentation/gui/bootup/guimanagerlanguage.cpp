@@ -223,7 +223,7 @@ CGuiManagerLanguage::CheckLanguage()
 
     switch( Language::GetHardwareLanguage() )
     {
-#ifndef RAD_WIN32
+#if !defined(RAD_WIN32) || defined(RAD_3DS)
         case Language::ENGLISH:
         {
             CGuiTextBible::SetCurrentLanguage( Scrooby::XL_ENGLISH );

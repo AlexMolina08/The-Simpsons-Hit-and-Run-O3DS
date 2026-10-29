@@ -120,7 +120,7 @@ def main():
     args = parser.parse_args()
     recipe = json.loads(args.recipe.read_text())
     report = json.loads(args.report.read_text())
-    require(report['version'] == '1.2' and report['runtimeSHA256'] == 'fa69c71c57bcb022eddf632ec9a047ae89014d6583504068249bbbaaabbff34c', 'Unexpected build runtime')
+    require(report['version'] == '1.2' and report['sourceCommit'] == recipe['runtime']['sourceCommit'], 'Unexpected build runtime')
     cia, reference = CIA(args.cia), CIA(args.reference_cia)
     require(cia.code_hash() == reference.code_hash(), 'Executable differs from accepted v1.2 package')
     sys.path.insert(0, str(Path(__file__).resolve().parents[2] / 'tools/3ds'))
@@ -128,6 +128,15 @@ def main():
     semantics = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(semantics)
     required = {name.lower(): record for name, record in recipe['requiredOverrides'].items() if record.get('required') is not False}
+    hud = args.game/'art/frontend/scrooby/ingame.p3d'
+    if hud.is_file():
+        variant = recipe.get('hudVariants', {}).get(hashlib.sha256(hud.read_bytes()).hexdigest())
+        if variant:
+            required['art/frontend/scrooby/ingame.p3d'] = variant
+    language = report.get('language', 'en')
+    archive = {'en': 'dialog.rcf', 'fr': 'dialogf.rcf', 'es': 'dialogs.rcf'}[language]
+    offset, size = cia.asset('game-language.txt')
+    require(cia.read(offset, size) == (language+'\n').encode(), 'Wrong packaged language')
     exact = semantic = 0
     for name, record in required.items():
         offset, size = cia.asset(name)
@@ -144,6 +153,9 @@ def main():
         if not path.is_file():
             continue
         name = path.relative_to(args.game).as_posix().lower()
+        if name in ('dialog.rcf', 'dialogf.rcf', 'dialogs.rcf', 'dialogg.rcf') and name != archive:
+            require(name not in cia.files, 'An unused dialogue language was packaged')
+            continue
         if path.name.lower() == 'temp.err' or not (name.startswith(('art/', 'scripts/', 'sound/')) or ('/' not in name and name.endswith('.rcf'))):
             continue
         source_paths.add(name)
@@ -166,7 +178,7 @@ def main():
         offset, size = cia.asset(f'sound/3ds-lid/{index:02d}.bin')
         header = cia.read(offset, 12)
         require(header[:4] == b'LID1' and struct.unpack_from('<I', header, 4)[0] == 24000 and size == 12 + struct.unpack_from('<I', header, 8)[0] * 2, 'Invalid character greeting')
-    known = source_paths | set(required) | {'native146.bundle'} | {'movies/' + movie['file'].lower() for movie in movies} | {f'sound/3ds-lid/{i:02d}.bin' for i in range(10)}
+    known = source_paths | set(required) | {'native146.bundle', 'game-language.txt'} | {'movies/' + movie['file'].lower() for movie in movies} | {f'sound/3ds-lid/{i:02d}.bin' for i in range(10)}
     require(set(cia.files) <= known, f'Unexpected packaged paths: {set(cia.files) - known}')
     verification = subprocess.run([str(args.ctrtool), '--intype=cia', '--verify', str(args.cia)], text=True, capture_output=True, check=True)
     log = verification.stdout + verification.stderr

@@ -49,8 +49,15 @@ if font.is_file() and bible.is_file():
         while b[end:end + 2] != b'\0\0':
             end += 2
         entries[struct.unpack_from('<I', b, hashes + i * 4)[0]] = b[offset:end].decode('utf-16le')
-    overrides = dict(re.findall(r'\{"(TUTORIAL_\d+)", "([^"\n]*)"\}',
-                               (root / 'libs/scrooby/src/3dscontrols.h').read_text()))
+    controls = (root / 'libs/scrooby/src/3dscontrols.h').read_text()
+    english = controls.split('static const Entry entries[] = {', 1)[1].split('};', 1)[0]
+    overrides = dict(re.findall(r'\{"(TUTORIAL_\d+)", "([^"\n]*)"\}', english))
+    for table in ('frenchEntries', 'spanishEntries'):
+        body = controls.split('static const Entry ' + table + '[] = {', 1)[1].split('};', 1)[0]
+        for text in re.findall(r'\{"[^"]+", "([^"\n]*)"\}', body):
+            value = json.loads('"' + text + '"').replace('\\', '\n')
+            assert all(ord(c) in advances for c in value if c not in '\n\r')
+            fixtures.append(value)
     for number in range(100):
         key = f'TUTORIAL_{number:03}'
         value = 0

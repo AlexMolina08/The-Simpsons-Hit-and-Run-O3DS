@@ -25,6 +25,7 @@ SOURCES = {
     'Project_CTR': ('https://github.com/3DSGuy/Project_CTR.git', 'c0488dcb6c3048e6a519716f2b21e2c65859ca75'),
     'tex3ds': ('https://github.com/devkitPro/tex3ds.git', '37220c696e873812df41af62d1db0b20c66661fe'),
     'bannertool': ('https://github.com/carstene1ns/3ds-bannertool.git', '734d33be79fd3f8c29c6296158f06ac7c5ca9dcb'),
+    'unshield': ('https://github.com/twogood/unshield.git', '51de441ba6893f11026d4671ccef9e8e2a4634fa'),
 }
 
 
@@ -38,7 +39,7 @@ def source(name, bootstrap):
     directory = WORK / name
     if not (directory / '.git').is_dir():
         # Source archives produced below already contain the pinned source tree.
-        if (directory / ('makerom/src' if name == 'Project_CTR' else 'source')).is_dir():
+        if (directory / ('makerom/src' if name == 'Project_CTR' else 'lib' if name == 'unshield' else 'source')).is_dir():
             return directory
         if not bootstrap:
             raise SystemExit(f'Missing {name}; rerun with --bootstrap to download pinned tool sources')
@@ -129,7 +130,7 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--bootstrap', action='store_true', help='Download pinned tool sources and Emscripten when missing')
     parser.add_argument('--emsdk', type=Path, default=WORK / 'emsdk')
-    parser.add_argument('--tool', action='append', choices=['etc1', 'native-texture', 'bannertool', 'makerom'])
+    parser.add_argument('--tool', action='append', choices=['etc1', 'native-texture', 'bannertool', 'makerom', 'installshield'])
     arguments = parser.parse_args()
     WORK.mkdir(parents=True, exist_ok=True)
     OUTPUT.mkdir(exist_ok=True)
@@ -157,7 +158,29 @@ def main():
         padding.write_text(fixed)
     common = ['-O3', '-DNDEBUG', '-sMODULARIZE=1', '-sEXPORT_ES6=1',
               '-sALLOW_MEMORY_GROWTH=1', '-sENVIRONMENT=web,worker,node', '-sEXIT_RUNTIME=0']
-    chosen = set(arguments.tool or ['etc1', 'native-texture', 'bannertool', 'makerom'])
+    chosen = set(arguments.tool or ['etc1', 'native-texture', 'bannertool', 'makerom', 'installshield'])
+    if 'installshield' in chosen:
+        folder = upstream['unshield']
+        source_file = folder / 'lib/file.c'
+        original = source_file.read_text()
+        before = 'if (reader->file_descriptor->flags & FILE_COMPRESSED)\n    reader->volume_bytes_left = volume_bytes_left_compressed;'
+        after = 'if (reader->file_descriptor->flags & (FILE_COMPRESSED | FILE_SPLIT))\n    reader->volume_bytes_left = volume_bytes_left_compressed;'
+        if before in original:
+            source_file.write_text(original.replace(before, after, 1))
+        elif after not in original:
+            raise ValueError('Unexpected InstallShield volume reader; review the split-file fix')
+        config = folder / 'lib/unshield_config.h'
+        config.write_text('\n'.join('#define ' + value for value in (
+            'HAVE_STDINT_H 1', 'HAVE_INTTYPES_H 1', 'HAVE_MEMORY_H 1', 'HAVE_STDLIB_H 1',
+            'HAVE_STRING_H 1', 'HAVE_STRINGS_H 1', 'HAVE_SYS_TYPES_H 1', 'HAVE_SYS_STAT_H 1',
+            'HAVE_UNISTD_H 1', 'USE_OUR_OWN_MD5 1', 'SIZE_FORMAT "zu"', 'VERSION "1.6.2"'))+'\n')
+        build(em / 'emcc', [*common, '-sUSE_ZLIB=1', '-sFORCE_FILESYSTEM=1',
+            '-I'+str(folder), '-I'+str(folder/'lib'), SCRIPTS/'installshield_adapter.c',
+            *sorted((folder/'lib').glob('*.c')), folder/'lib/md5/md5c.c',
+            '-sEXPORT_NAME=createInstallShield', '--no-entry',
+            '-sEXPORTED_FUNCTIONS=["_cabinet_open","_cabinet_count","_cabinet_name","_cabinet_size","_cabinet_save","_cabinet_close","_malloc","_free"]',
+            '-sEXPORTED_RUNTIME_METHODS=["FS","WORKERFS","NODEFS","ccall","UTF8ToString","HEAPU8"]',
+            '-lworkerfs.js', '-lnodefs.js', '-o', OUTPUT/'installshield.mjs'])
     if 'etc1' in chosen:
         build(em / 'em++', [*common, '-std=c++17', '-I' + str(upstream['tex3ds'] / 'include'),
               SCRIPTS / 'etc1_adapter.cpp', upstream['tex3ds'] / 'source/rg_etc1.cpp',

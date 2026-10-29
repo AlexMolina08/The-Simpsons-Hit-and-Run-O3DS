@@ -24,12 +24,13 @@
     <div class="workbench">
       <section class="input-panel" aria-labelledby="source-title">
         <div class="step-heading"><span>1</span><h2 id="source-title">Choose your game</h2></div>
-        <p>Select your PC disc image, or the folder where the game is already installed.</p>
-        <input id="iso" type="file" accept=".iso,application/x-iso9660-image" hidden>
+        <p>Select your PC disc image, ZIP, or installed game folder. For a CD edition, select all three disc images together.</p>
+        <input id="iso" type="file" accept=".iso,.zip,application/x-iso9660-image,application/zip" multiple hidden>
         <input id="folder" type="file" webkitdirectory multiple hidden>
-        <button id="choose-iso" class="choose-button">Choose ISO</button>
+        <button id="choose-iso" class="choose-button">Choose disc images or ZIP</button>
         <button id="choose" class="text-button folder-button">Choose installed game folder</button>
         <div id="selection" class="selection" aria-live="polite">No game selected</div>
+        <label id="language-choice" hidden>Game language <select id="game-language" aria-label="Game language"></select></label>
       </section>
       <section class="build-panel" aria-labelledby="build-title">
         <div class="step-heading"><span>2</span><h2 id="build-title">Build v1.2</h2></div>

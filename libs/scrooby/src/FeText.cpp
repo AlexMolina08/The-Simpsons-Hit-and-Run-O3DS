@@ -24,6 +24,9 @@
 #include "FePage.h"
 #include "FeText.h"
 #include "FeTextBible.h"
+#ifdef SRR2_OLD_3DS
+#include "3dscontrols.h"
+#endif
 #include "ResourceManager/FeResourceManager.h"
 #include <raddebug.hpp>
 #include <string.h>
@@ -729,6 +732,18 @@ void FeText::SetString( int index, const char* string, const char* textBibleName
 void FeText::SetString( int index, const char* string, unsigned int textBibleID )
 {
     UnicodeString unicodeString;
+#ifdef SRR2_OLD_3DS
+    const char* caption = !textBibleID ? Scrooby3DSControls::Caption(string,FeTextBible::GetCurrentLanguageID()) : NULL;
+    if(caption) {
+        unsigned short text[256];
+        const unsigned words = Scrooby3DSControls::Length(caption);
+        rAssert(words < 256);
+        if(words < 256) {
+            Scrooby3DSControls::Copy(text,caption); text[words] = 0;
+            unicodeString.ReadUnicode(text);
+        } else unicodeString.ReadAscii(string);
+    } else
+#endif
     unicodeString.ReadAscii( string );
     SetString( index, unicodeString, textBibleID );
 }

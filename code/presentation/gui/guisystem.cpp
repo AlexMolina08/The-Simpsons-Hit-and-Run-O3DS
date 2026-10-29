@@ -19,6 +19,7 @@
 //===========================================================================
 #include <presentation/gui/guisystem.h>
 #include <presentation/gui/guitextbible.h>
+#include <presentation/language.h>
 #include <presentation/gui/bootup/guimanagerlanguage.h>
 #include <presentation/gui/bootup/guimanagerbootup.h>
 #include <presentation/gui/bootup/guiscreenlanguage.h>
@@ -463,6 +464,13 @@ MEMTRACK_PUSH_GROUP( "CGUISystem" );
 
     m_pApp = Scrooby::App::GetInstance();
     rAssert( m_pApp != NULL );
+
+#ifdef RAD_3DS
+    // Choose before the text-bible loader discards the other language tables.
+    const Language::Language language = Language::GetHardwareLanguage();
+    CGuiTextBible::SetCurrentLanguage(language == Language::FRENCH ? Scrooby::XL_FRENCH :
+        language == Language::SPANISH ? Scrooby::XL_SPANISH : Scrooby::XL_ENGLISH);
+#endif
 
     // set Scrooby to use full image names depending on whether or not
     // resource files are joined together into single P3D project file

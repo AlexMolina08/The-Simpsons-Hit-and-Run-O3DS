@@ -1,9 +1,10 @@
-import {prepareGameAssets, loadTextureParser, PYTHON_MODULES, validateInput, normalizeInputFiles} from './engine-conversion/conversion.mjs';
+import {prepareGameAssets, loadTextureParser, PYTHON_MODULES, validateInput, validateDialogue, normalizeInputFiles} from './engine-conversion/conversion.mjs';
 import {VISUAL_PYTHON_MODULES, prepareV12Assets, prepareV12Audio} from './engine-conversion/v12.mjs';
 import {createTools, packageCIA} from './tools.mjs';
 import {createBuildStorage} from './opfs.mjs';
 import {createCheckpoints, inputFingerprint} from './checkpoints.mjs';
 import {readISO, detectISO} from './engine-conversion/iso.mjs';
+import {languageProfile} from './engine-conversion/languages.mjs';
 
 const progress = event => postMessage({type: 'progress', ...event});
 async function fetchChecked(path, expected) {
@@ -37,9 +38,11 @@ function mergeFiles(target, overrides) {
     target.set(path, file); names.set(path.toLowerCase(), path);
   }
 }
-function runtimeInputs(files) {
+function runtimeInputs(files, language) {
+  const selected = languageProfile(language);
   return new Map([...files].filter(([path]) => {
     const key = path.toLowerCase();
+    if (/^dialog[fgs]?\.rcf$/.test(key)) return key === selected.archive;
     return path.split('/').at(-1).toLowerCase() !== 'temp.err' &&
       (/^(art|scripts|sound)\//.test(key) || (!key.includes('/') && key.endsWith('.rcf')));
   }));
@@ -63,17 +66,22 @@ onmessage = async ({data}) => {
       if (manifest.version !== '1.2' || manifest.packedVersion !== 1056) throw new Error('This website does not contain the accepted v1.2 builder.');
       let files = data.files ? normalizeInputFiles(data.files) : null;
       const estimate = await navigator.storage.estimate();
-      const needed = Math.max(8 * 1024 ** 3, data.iso ? data.iso.size * 3 : validateInput(files).inputBytes * 3);
+      const sourceBytes = data.source ? [...data.source.inputs.values()].reduce((sum, file) => sum + file.size, 0) : data.iso?.size;
+      const needed = Math.max(8 * 1024 ** 3, sourceBytes ? sourceBytes * 3 : validateInput(files, data.language).inputBytes * 3);
       // Existing checkpoint data already uses this origin's quota and is reusable.
       if (Number.isFinite(estimate.quota) && estimate.quota < needed) throw new Error('The browser has too little temporary storage. Free space on this device and try again.');
       progress({stage: 'inspect', detail: 'Identifying your local copy for safe resume'});
-      const identity = await inputFingerprint(data.iso || files, (bytes, total) => progress({stage: 'inspect', detail: 'Checking local game files', bytes, completed: bytes, total}));
+      const layout = data.source?.layout || (data.iso ? await detectISO(await readISO(data.iso)) : null);
+      const language = data.language || layout?.languages?.[0] || (files ? validateInput(files).language : 'en');
+      languageProfile(language);
+      const originalIdentity = await inputFingerprint(data.source?.inputs || data.iso || files, (bytes, total) => progress({stage: 'inspect', detail: 'Checking local game files', bytes, completed: bytes, total}));
+      const identity = `${originalIdentity}:${language}`;
       const checkpoints = await createCheckpoints(storage, identity, manifest.buildID || manifest.v12RecipeSHA256);
-      if (data.iso) {
+      if (layout) {
         progress({stage: 'extract', detail: 'Reading disc image'});
-        const layout = await detectISO(await readISO(data.iso));
         if (layout.kind === 'installed') files = layout.files;
-        else if (layout.kind === 'inno-freearc') {
+        else if (layout.kind === 'inno-freearc' || layout.kind === 'installshield') {
+          const cabinet = layout.kind === 'installshield' ? await import('./engine-conversion/installshield.mjs') : null;
           const cached = await checkpoints.read('extract');
           if (cached) {
             files = new Map(cached.metadata.members.map(([path, item]) => {
@@ -81,12 +89,13 @@ onmessage = async ({data}) => {
               if (!parent || item.offset < 0 || item.offset + item.size > parent.size) throw new Error('An extraction checkpoint is incomplete.');
               return [path, parent.slice(item.offset, item.offset + item.size)];
             }));
+            if (cabinet) files = new Map([...cabinet.looseGameFiles(layout), ...files]);
             progress({stage: 'extract', detail: 'Reusing verified extracted game files'});
           }
           else {
-            const {extractRepack} = await import('./engine-conversion/repack.mjs');
+            const extract = cabinet ? cabinet.extractInstallShield : (await import('./engine-conversion/repack.mjs')).extractRepack;
             const members = new Map();
-            files = await extractRepack(layout, {storage, onProgress: progress, onFile: (path, item) => members.set(path, item)});
+            files = await extract(layout, {storage, language, onProgress: progress, onFile: (path, item) => members.set(path, item)});
             const containers = new Map();
             for (const item of members.values()) {
               if (!item.container) throw new Error('The disc extractor did not persist its output.');
@@ -96,12 +105,16 @@ onmessage = async ({data}) => {
           }
         } else throw new Error('This PC image uses an unsupported installer. Select its installed game folder instead.');
       }
-      const summary = validateInput(files);
-      const context = {files, identity, manifest, execution: data.execution,
-        prepared: {files: runtimeInputs(files), homeMenu: {}, report: summary}};
+      const summary = validateInput(files, language);
+      const recipe = JSON.parse(new TextDecoder().decode(await fetchChecked('./v12-recipe.json', manifest.v12RecipeSHA256)));
+      const dialogue = [...files].find(([path]) => path.toLowerCase() === languageProfile(language).archive)?.[1];
+      summary.dialogue = await validateDialogue(dialogue, recipe.dialogueKeys?.[language]);
+      const context = {files, identity, language, manifest, execution: data.execution,
+        prepared: {files: runtimeInputs(files, language), homeMenu: {}, report: summary}};
       completePhase(context, phase, started); return;
     }
     const context = data.context || {prepared: data.prepared, manifest: data.manifest};
+    context.language ||= context.prepared?.report?.language || 'en';
     const {manifest} = context;
     const checkpoints = context.identity ? await createCheckpoints(storage, context.identity, manifest.buildID || manifest.v12RecipeSHA256) : null;
     if (phase === 'textures') {
@@ -111,7 +124,7 @@ onmessage = async ({data}) => {
       const tools = await createTools(progress, context.execution);
       context.prepared = await prepareGameAssets({files: context.files, tools, pyodide, profile,
         writeOutput: (path, value) => storage.write(path, value), onProgress: progress,
-        phase: 'textures', previous: context.prepared, checkpoints});
+        phase: 'textures', previous: context.prepared, checkpoints, language: context.language});
       context.prepared.report.textureHeapBytes = pyodide._module?.HEAPU8?.length || null;
       tools.releaseConverters();
     } else if (phase === 'visuals') {
@@ -119,7 +132,7 @@ onmessage = async ({data}) => {
       const recipe = JSON.parse(new TextDecoder().decode(await fetchChecked('./v12-recipe.json', manifest.v12RecipeSHA256)));
       const rounding = JSON.parse(new TextDecoder().decode(await fetchChecked('./engine-conversion/v12-rounding.json', manifest.v12RoundingsSHA256)));
       const pyodide = await loadPython({visuals: true});
-      const prepared = await prepareV12Assets({files: context.files, pyodide, recipe, rounding, storage, checkpoints, progress});
+      const prepared = await prepareV12Assets({files: context.files, pyodide, recipe, rounding, storage, checkpoints, progress, language: context.language});
       mergeFiles(context.prepared.files, prepared.files);
       const audio = await prepareV12Audio({files: context.files, recipe, storage, checkpoints, progress});
       mergeFiles(context.prepared.files, audio.files);
@@ -136,7 +149,7 @@ onmessage = async ({data}) => {
       const tools = await createTools(progress, context.execution);
       context.prepared = await prepareGameAssets({files: context.files, tools,
         writeOutput: (path, value) => storage.write(path, value), onProgress: progress,
-        phase: 'media', previous: context.prepared, checkpoints});
+        phase: 'media', previous: context.prepared, checkpoints, language: context.language});
       tools.releaseConverters();
     } else if (phase === 'package') {
       const {prepared} = context;
@@ -152,7 +165,7 @@ onmessage = async ({data}) => {
         runtimeSHA256: manifest.runtimeSHA256, sourceCommit: manifest.sourceCommit, packageHeapBytes,
         execution: context.execution, timings: {...context.timings, package: (performance.now() - started) / 1000},
         validation: 'Local asset preparation and container checks; console installation and gameplay are separate validation.'};
-      const filename = `Simpsons-Hit-and-Run-3DS-v${manifest.version}.cia`;
+      const filename = `Simpsons-Hit-and-Run-3DS-v${manifest.version}${context.language === 'en' ? '' : `-${context.language}`}.cia`;
       const localToken = [...crypto.getRandomValues(new Uint8Array(16))].map(value => value.toString(16).padStart(2, '0')).join('');
       await storage.writeJSON('build-report.json', report);
       await storage.writeJSON('completed.json', {filename, bytes: cia.size, localToken, version: manifest.version, runtimeSHA256: manifest.runtimeSHA256, buildID: manifest.buildID, identity: context.identity});

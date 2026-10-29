@@ -1,7 +1,7 @@
 # Browser CIA builder
 
 This static application prepares a complete v1.2 3DS installer from a PC disc
-image or installed game folder selected on the visitor's device. Conversion and
+image, ZIP or installed game folder selected on the visitor's device. Conversion and
 packaging run locally in Web Workers. No desktop program, account or API key is
 needed. Game data is never included in the website or uploaded to a server.
 
@@ -32,19 +32,28 @@ Neither responsive desktop layout nor Mac Safari proves iPhone support.
 - `scripts/` builds the pinned tools and prepares the static website.
 - `THIRD_PARTY_NOTICES.md` and `licenses/` contain tool licensing information.
 
-The reference input is an English PC copy. Installed game folders, directly
-readable PC ISO layouts and the tested Inno/FreeArc PC image layout are handled
-locally. This is not a universal installer or console-disc converter. Unsupported
-ISO layouts receive a request to select the installed PC folder instead. Other
-languages remain unvalidated.
+The builder detects English, French and Spanish from the dialogue archives in
+an installed copy. A multilingual disc offers only its included languages.
+The selected language controls UI text, mission dialogue, character greetings
+and cinematic audio, independently of the console language. English remains
+the default for existing packages without a language file.
+
+Supported input readers cover installed folders, installed-folder ZIPs,
+ISO images inside ZIPs, directly readable PC ISO layouts, InstallShield CAB
+volumes and the tested Inno/FreeArc layout. Select all three ISO images for a
+retail CD edition. Disc sets must come from the same edition. ZIP entries and
+extracted installer files are checked before use. ZIP64, BIN/CUE, console discs
+and other installer layouts require an extracted PC folder instead. Original
+files are read only. See [language validation](../docs/PC_LANGUAGE_SUPPORT.md)
+for the tested copies and remaining checks.
 
 Website preparation verifies the frozen accepted v1.2 executable and diagnostic
 settings, strips debug information into a new file, and binds the runtime,
 packaging configuration, texture profile, visual recipe and processing tools to
 a build ID. The original executable remains unchanged. The CIA keeps Title ID
 `000400000f3a1100`, version 1.2.0 (packed value 1056), the original-3DS 64 MiB
-configuration and the accepted visual feature mask 255. No game runtime source
-changes are part of the browser builder.
+configuration and the accepted visual feature mask 255. The multilingual runtime selects its language before loading the text bible
+and dialogue scripts; save format and Title ID remain unchanged.
 
 All 201 required v1.2 outputs are checked against the accepted release. P3D
 checks permit only lossless PNG compression/metadata differences when dimensions

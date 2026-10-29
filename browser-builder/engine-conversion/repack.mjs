@@ -191,15 +191,16 @@ async function verify(blob, expected, signal) {
   if (((crc ^ 0xffffffff) >>> 0) !== expected) fail('a game file failed its checksum');
 }
 
-export async function extractRepack(layout, {storage, onProgress = () => {}, signal, codecFactory, onFile = () => {}} = {}) {
+export async function extractRepack(layout, {storage, onProgress = () => {}, signal, codecFactory, onFile = () => {}, language = 'en'} = {}) {
   if (!storage) throw new Error('Temporary browser storage is required to unpack this disc.');
   const entries = [...layout.files], metadata = entries.find(([name]) => /(?:^|\/)setup-0\.bin$/i.test(name));
   const primary = entries.find(([name]) => /(?:^|\/)elamigos-1\.bin$/i.test(name));
-  const english = entries.find(([name]) => /(?:^|\/)elamigos-english-polish\.bin$/i.test(name));
-  if (!metadata || !primary || !english) throw new Error('This disc layout is unsupported. This installer needs its main, English and setup data archives.');
+  const edition = ({en: 'english-polish', fr: 'french', es: 'spanish'})[language];
+  const localized = edition && entries.find(([name]) => new RegExp(`(?:^|/)elamigos-${edition}\\.bin$`, 'i').test(name));
+  if (!metadata || !primary || !localized) throw new Error('The installer is missing its main, setup or selected-language archive.');
   onProgress({stage: 'extract', detail: 'Reading the disc archive information'});
   const codec = await makeCodec(storage, onProgress, codecFactory), candidates = await innoConstants(metadata[1], codec), files = new Map();
-  for (const [, archive] of [primary, english]) {
+  for (const [, archive] of [primary, localized]) {
     const {password, blocks} = await readArchive(archive, candidates, codec, storage, signal);
     for (const block of blocks) {
       check(signal); const size = block.members.reduce((n, file) => n + file.size, 0);

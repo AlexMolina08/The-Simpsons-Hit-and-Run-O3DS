@@ -1,5 +1,6 @@
 import {validateInput} from './engine-conversion/conversion.mjs';
-import {readISO, detectISO} from './engine-conversion/iso.mjs';
+import {readGameImages} from './engine-conversion/source-input.mjs';
+import {languageProfile} from './engine-conversion/languages.mjs';
 import {createBuildStorage} from './opfs.mjs';
 import {offerFileDownload} from './downloads.mjs';
 import {browserProfile, keepScreenAwake} from './platform.mjs';
@@ -15,6 +16,7 @@ function error(message) { $('error').textContent = message; $('error').hidden = 
 function busy() {
   const locked = !!worker || saving || clearing || selecting || starting || restoring;
   $('choose').disabled = locked; $('choose-iso').disabled = locked;
+  $('game-language').disabled = locked;
   $('build').disabled = locked || (!files && !iso);
   $('cancel').hidden = !worker;
   $('clear').disabled = locked; $('save').disabled = locked;
@@ -76,17 +78,29 @@ function launchWorker(phase, context, selection) {
 
 $('choose').onclick = () => $('folder').click();
 $('choose-iso').onclick = () => $('iso').click();
+function configureLanguages(languages) {
+  if (!languages?.length) throw new Error('No supported dialogue language was found. Select the complete PC copy, including all discs.');
+  $('game-language').replaceChildren(...languages.map(code => {
+    const option = document.createElement('option');
+    option.value = code; option.textContent = languageProfile(code).name; return option;
+  }));
+  $('language-choice').hidden = languages.length < 2;
+}
 $('iso').onchange = async () => {
   if (worker || saving || clearing || selecting || !$('iso').files.length) return;
   error(''); files = null; iso = null; selecting = true; busy();
   $('selection').textContent = 'Reading disc image…';
   try {
-    const selected = $('iso').files[0];
-    const layout = await detectISO(await readISO(selected));
+    const selected = [...$('iso').files];
+    const inputStorage = await createBuildStorage('hit-run-3ds-input');
+    await inputStorage.clear();
+    const layout = await readGameImages(selected, {storage: inputStorage,
+      onProgress: event => { $('selection').textContent = event.detail || 'Checking your copy…'; }});
     if (layout.kind === 'unknown') throw new Error('This PC image uses an unsupported installer. You can select its installed game folder instead.');
     if (layout.kind === 'installed') validateInput(layout.files);
-    iso = selected;
-    $('selection').textContent = `${selected.name} · ${formatSize(selected.size)}`;
+    configureLanguages(layout.languages);
+    iso = {layout, inputs: new Map(selected.map((file, index) => [`${index}/${file.name}`, file]))};
+    $('selection').textContent = `${selected.map(file => file.name).join(' + ')} · ${languageProfile($('game-language').value).name}`;
     $('selection').classList.add('valid'); $('status').textContent = 'Ready. The builder will reuse verified completed steps for this copy.';
   } catch (reason) { $('selection').textContent = 'The image could not be opened.'; $('selection').classList.remove('valid'); error(reason.message); }
   finally { selecting = false; busy(); }
@@ -96,8 +110,9 @@ $('folder').onchange = () => {
   error(''); files = null; iso = null;
   try {
     const chosen = [...$('folder').files], summary = validateInput(chosen);
+    configureLanguages(summary.languages);
     files = chosen;
-    $('selection').textContent = `${chosen[0].webkitRelativePath.split('/')[0]} · ${summary.fileCount.toLocaleString()} files`;
+    $('selection').textContent = `${chosen[0].webkitRelativePath.split('/')[0]} · ${summary.fileCount.toLocaleString()} files · ${summary.languageName}`;
     $('selection').classList.add('valid'); $('status').textContent = 'Your PC copy is ready. Completed steps can be reused.';
   } catch (reason) { $('selection').textContent = 'This folder is not ready to build.'; $('selection').classList.remove('valid'); error(reason.message); }
   busy();
@@ -116,7 +131,7 @@ $('build').onclick = async () => {
   wakeLock?.addEventListener('release', () => { wakeLock = null; });
   try { await navigator.storage.persist?.(); } catch {}
   starting = false;
-  launchWorker('inspect', null, {files, iso, execution: browserProfile()});
+  launchWorker('inspect', null, {files, source: iso, language: $('game-language').value, execution: browserProfile()});
 };
 $('cancel').onclick = async () => {
   await stopWorker(); $('status').textContent = 'Build cancelled. Select the same copy to reuse completed steps.';
@@ -147,7 +162,10 @@ $('clear').onclick = async () => {
   clearing = true; busy();
   try {
     const directory = await navigator.storage.getDirectory();
-    await directory.removeEntry('hit-run-3ds-build', {recursive: true});
+    for (const name of ['hit-run-3ds-build', 'hit-run-3ds-input']) {
+      try { await directory.removeEntry(name, {recursive: true}); } catch (reason) { if (reason.name !== 'NotFoundError') throw reason; }
+    }
+    files = iso = null; $('selection').textContent = 'No game selected'; $('language-choice').hidden = true;
     result = null; report = null; $('result').hidden = true;
     $('status').textContent = 'Temporary build files cleared. Your original game files are unchanged.';
   } catch (reason) { if (reason.name !== 'NotFoundError') error(reason.message); }

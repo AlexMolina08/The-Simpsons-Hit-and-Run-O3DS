@@ -63,6 +63,12 @@ export async function prepareV12Assets({files, pyodide, recipe, storage, checkpo
   await pyodide.runPythonAsync(semantics);
   const prepare = pyodide.globals.get('prepare_stage'), semantic = pyodide.globals.get('semantic_fingerprint');
   const expected = new Map(Object.entries(recipe.expectedFiles).map(([path, item]) => [path.toLowerCase(), item]));
+  const hud = [...source].find(([path]) => path.toLowerCase() === 'art/frontend/scrooby/ingame.p3d')?.[1];
+  if (hud) {
+    const sourceHash = hex(await crypto.subtle.digest('SHA-256', await hud.arrayBuffer()));
+    const variant = recipe.hudVariants?.[sourceHash];
+    if (variant) expected.set('art/frontend/scrooby/ingame.p3d', variant);
+  }
   const plans = [
     ['cars', ([path]) => /^art\/cars\/[^/]+\.p3d$/i.test(path)],
     ['characters', ([path]) => /^art\/chars\/[^/]+_m\.p3d$/i.test(path)],

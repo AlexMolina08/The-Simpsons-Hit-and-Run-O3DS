@@ -18,6 +18,8 @@ def digest(path):
 
 def prepare(elf, cache, native_index, output):
     settings = cache.read_text()
+    if not re.search(r'^SRR2_REGION:STRING=PAL$', settings, re.M):
+        raise ValueError('The multilingual runtime requires the PAL dialogue scripts')
     for flag in ('NATIVE_BENCH', 'OPTIONAL_DIAG', 'CAUSAL_DIAG', 'MEMORY_DIAG',
                  'COARSE_POOLS', 'RECURRING_PROFILE', 'MAIN_PROFILE',
                  'SUBMIT_PROFILE', 'VEHICLE_PROFILE', 'GPU_SKIN_AB', 'GPU_SKIN_METRICS'):
@@ -42,6 +44,7 @@ def prepare(elf, cache, native_index, output):
         cmake_cache_sha256=digest(target_cache), accepted_native_index_sha256=digest(native_index),
         native_bench=False, runtime_profile=False, receiver_hook=False,
         early_opaque_queue=True, visual_features_default=255, streaming_policy=1,
+        languages=['en', 'fr', 'es'], language_config_version=1,
         source_tree_dirty=bool(dirty),
         fixed_startup_budget=budget, release_elf_hardware_exercised=False,
         status='Normal build; partial streaming improvements; remaining scenery gaps documented; not published')

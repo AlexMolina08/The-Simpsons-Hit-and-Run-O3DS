@@ -1,0 +1,11 @@
+{
+  "version": 1,
+  "hudVariants": {
+    "efff25344795f0a7c57dc3a3d0ce931a3020fc28517acedc4c3a9a0b629279f6": {
+      "sha256": "cb570de7c2b3da622130e6a185eece27c8d2a47d525d519f5fa43c47e73a84a1",
+      "semantic_sha256": "e2b7751082a59ee530ce37b2607c8801936b22e7939d857a147cc371f0d73f9c",
+      "bytes": 1324067,
+      "source_language": "fr"
+    }
+  }
+}

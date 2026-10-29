@@ -1,6 +1,7 @@
 /** Bounded ISO9660/Joliet inventory. File contents remain slices of the ISO. */
 // Record layouts: ECMA-119 sections 8/9 and Annex C (Joliet).
 // https://ecma-international.org/publications-and-standards/standards/ecma-119/
+import {LANGUAGES, availableLanguages} from './languages.mjs';
 
 const SECTOR_BYTES = 2048;
 const SIGNATURE = [67, 68, 48, 48, 49]; // CD001
@@ -167,16 +168,21 @@ export async function detectISO(files) {
   for (const [key, item] of lower) {
     if (key !== 'scripts.rcf' && !key.endsWith('/scripts.rcf')) continue;
     const prefix = key.slice(0, -'scripts.rcf'.length);
-    if (lower.has(`${prefix}dialog.rcf`) && lower.has(`${prefix}art/frontend/scrooby/bootup.p3d`)) {
+    if (LANGUAGES.some(item => lower.has(`${prefix}${item.archive}`)) && lower.has(`${prefix}art/frontend/scrooby/bootup.p3d`)) {
       installed.push({lower: prefix, original: item.path.slice(0, -'scripts.rcf'.length)});
     }
   }
   if (installed.length > 1) throw new Error('The ISO contains multiple game copies. Select one installed game folder.');
   if (installed.length) {
     const prefix = installed[0];
-    return {kind: 'installed', root: prefix.original.slice(0, -1), files: new Map([...files]
+    const installedFiles = new Map([...files]
       .filter(([name]) => name.toLowerCase().startsWith(prefix.lower))
-      .map(([name, file]) => [name.slice(prefix.original.length), file]))};
+      .map(([name, file]) => [name.slice(prefix.original.length), file]));
+    return {kind: 'installed', root: prefix.original.slice(0, -1), files: installedFiles,
+      languages: availableLanguages(installedFiles).map(item => item.code)};
+  }
+  if (lower.has('data1.cab') && lower.has('data1.hdr')) {
+    return {kind: 'installshield', files, languages: availableLanguages(files).map(item => item.code)};
   }
   const setups = [...lower.values()].filter(({path}) => /(^|\/)setup\.exe$/i.test(path));
   const archives = [], slices = [];
@@ -187,7 +193,9 @@ export async function detectISO(files) {
     if (head[0] === 65 && head[1] === 114 && head[2] === 67 && head[3] === 1) archives.push(item);
   }
   if (setups.length === 1 && archives.length && slices.length) {
-    return {kind: 'inno-freearc', files, setup: setups[0], archives, slices};
+    const languages = LANGUAGES.filter(item => [...lower.keys()].some(path =>
+      path.endsWith(`elamigos-${({en: 'english-polish', fr: 'french', es: 'spanish'})[item.code]}.bin`))).map(item => item.code);
+    return {kind: 'inno-freearc', files, setup: setups[0], archives, slices, languages};
   }
   return {kind: 'unknown', files};
 }

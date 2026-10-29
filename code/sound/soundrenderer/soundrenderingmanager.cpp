@@ -16,6 +16,7 @@
 // Included Files
 //=============================================================================
 
+#include <presentation/language.h>
 #include <radobject.hpp>
 #include <raddebug.hpp>
 #include <radfile.hpp>
@@ -743,7 +744,15 @@ void daSoundRenderingManager::QueueCementFileRegistration()
 
     if( !m_languageSelected )
     {
+#ifdef RAD_3DS
+        const Language::Language language = Language::GetHardwareLanguage();
+        m_currentLanguage = language == Language::FRENCH ? DIALOGUE_LANGUAGE_FRENCH :
+            language == Language::SPANISH ? DIALOGUE_LANGUAGE_SPANISH : DIALOGUE_LANGUAGE_ENGLISH;
+        registerDialogueCementFiles(language == Language::FRENCH ? s_FrenchDialogue :
+            language == Language::SPANISH ? s_SpanishDialogue : s_EnglishDialogue);
+#else
         registerDialogueCementFiles( s_EnglishDialogue );
+#endif
         m_languageSelected = true;
     }
 
@@ -813,6 +822,11 @@ void daSoundRenderingManager::SetLanguage( Scrooby::XLLanguage language )
             rAssertMsg( false, "Language not supported by sound system" );
             break;
     }
+
+#ifdef RAD_3DS
+    // GUI selects its language before bootup registers any dialogue archive.
+    if(!m_languageSelected) return;
+#endif
 
     if( m_currentLanguage == oldLanguage )
     {

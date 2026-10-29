@@ -38,6 +38,31 @@
 //========================================
 
 #include <presentation/language.h>
+#ifdef RAD_3DS
+#include <cstdio>
+#include <cstring>
+
+static Language::Language PackagedLanguage()
+{
+    static bool initialized = false;
+    static Language::Language selected = Language::ENGLISH;
+    if(!initialized)
+    {
+        initialized = true;
+        FILE* file = fopen("romfs:/game-language.txt", "rb");
+        if(!file) file = fopen("game-language.txt", "rb");
+        if(file)
+        {
+            char code[5] = {};
+            const size_t bytes = fread(code, 1, 4, file);
+            fclose(file);
+            if((bytes == 2 || (bytes == 3 && code[2] == '\n')) && code[0] == 'f' && code[1] == 'r') selected = Language::FRENCH;
+            else if((bytes == 2 || (bytes == 3 && code[2] == '\n')) && code[0] == 'e' && code[1] == 's') selected = Language::SPANISH;
+        }
+    }
+    return selected;
+}
+#endif
 
 //*****************************************************************************
 //
@@ -64,6 +89,9 @@ namespace Language{
 //=============================================================================
 Language GetHardwareLanguage()
 {
+#ifdef RAD_3DS
+    return PackagedLanguage();
+#endif
     #ifdef RAD_PS2
     ////////////////////////////////////////////////////////////
     // PS2

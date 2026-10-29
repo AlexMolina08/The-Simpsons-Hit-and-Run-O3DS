@@ -31,6 +31,25 @@ def read_json(path):
     return json.loads(path.read_text())
 
 
+def dialogue_keys():
+    result = {}
+    for code, name in (('en', 'english'), ('fr', 'french'), ('es', 'spanish')):
+        script = (ROOT/f'code/sound/soundrenderer/scripts/{name}.cpp').read_text()
+        paths = re.findall(r'\{\s*"[^"]+",\s*"([^"]+\.rsd)"\s*\}', script)
+        require(bool(paths), f'The {name} dialogue script has no resource index')
+        keys = set()
+        for path in paths:
+            value = 0
+            for character in path.replace('/', '\\'):
+                byte = ord(character)
+                if byte < 97:
+                    byte += 32
+                value = (31 * value + byte) & 0xffffffff
+            keys.add(value)
+        result[code] = sorted(keys)
+    return result
+
+
 def require(condition, message):
     if not condition:
         raise ValueError(message)
@@ -46,6 +65,9 @@ def validate_runtime(provenance=DEFAULT_PROVENANCE, native_index=None, runtime=N
     require(metadata.get('early_opaque_queue') is True, 'Accepted stereo submission improvement is missing')
     require(metadata.get('version') == '1.2', 'The browser builder requires the accepted v1.2 runtime')
     require(metadata.get('streaming_policy') == 1, 'Rebuild v1.2 with the committed streaming fixes')
+    require(metadata.get('language_config_version') == 1 and
+            metadata.get('languages') == ['en', 'fr', 'es'],
+            'Build the multilingual v1.2 runtime before browser packaging')
     require(metadata.get('source_tree_dirty') is False, 'Commit and rebuild the v1.2 runtime before browser packaging')
     require(re.fullmatch(r'[0-9a-f]{40}', metadata.get('source_commit', '')),
             'The accepted runtime has no complete source commit')
@@ -63,6 +85,8 @@ def validate_runtime(provenance=DEFAULT_PROVENANCE, native_index=None, runtime=N
     cache_path = provenance.parent / 'CMakeCache.txt'
     require(digest(cache_path) == metadata.get('cmake_cache_sha256'), 'Accepted runtime CMake cache hash mismatch')
     cache = cache_path.read_text()
+    require(re.search(r'^SRR2_REGION:STRING=PAL$', cache, re.M),
+            'The multilingual runtime requires the PAL dialogue scripts')
     off = ['SRR2_MICROPROFILE'] + ['SRR2_OLD3DS_' + field for field in (
         'NATIVE_BENCH', 'OPTIONAL_DIAG', 'CAUSAL_DIAG', 'MEMORY_DIAG', 'COARSE_POOLS',
         'RECURRING_PROFILE', 'MAIN_PROFILE', 'SUBMIT_PROFILE', 'VEHICLE_PROFILE',
@@ -196,6 +220,8 @@ def generate_recipe(provenance=DEFAULT_PROVENANCE, overlay=DEFAULT_OVERLAY,
                        'sourceManifestSHA256': hashlib.sha256(source_manifest).hexdigest(),
                        'exactOutputChecksRequireMatchingInputs': True},
         'streamingPolicy': {'version': 1, 'roadFiles': list(RELEASE_FILES), 'chunkBodiesUnchanged': True},
+        'hudVariants': read_json(ROOT/'browser-builder/engine-conversion/localized-assets.json')['hudVariants'],
+        'dialogueKeys': dialogue_keys(),
         'overlayCounts': counts, 'requiredOverrides': changes, 'expectedFiles': expected,
     }
 

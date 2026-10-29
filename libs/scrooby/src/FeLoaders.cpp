@@ -1333,16 +1333,16 @@ tEntity* FeTextBibleLoader::LoadLanguage( tChunkFile* file, tEntityStore* store 
     file->GetData((void*)rValue->m_buffer, rValue->m_bufferSize/2, tFile::WORD );
 #ifdef SRR2_OLD_3DS
     // Rebuild owned strings once, preserving writable buffers used by GUI code.
-    // English is the asset set supplied for this port; other languages retain
-    // their source text rather than silently receiving English translations.
-    if(languageID == 'E')
+    // Adapt handheld controls in the source language; preserve narrative text
+    // and Unicode glyphs from the selected retail text bible.
+    if(languageID == 'E' || languageID == 'F' || languageID == 'S')
     {
         unsigned words = 0;
         for(unsigned i = 0; i < rValue->m_numStrings; ++i)
         {
             const unsigned short* text = rValue->m_buffer + rValue->m_offsets[i] / 2;
-            const char* replacement = Scrooby3DSControls::Replacement(rValue->m_hashes[i], rValue->m_modulo, text);
-            if(replacement) words += strlen(replacement) + 1;
+            const char* replacement = Scrooby3DSControls::Replacement(rValue->m_hashes[i], rValue->m_modulo, text, languageID);
+            if(replacement) words += Scrooby3DSControls::Length(replacement) + 1;
             else { while(*text++) ++words; ++words; }
         }
         unsigned short* native = new unsigned short[words];
@@ -1350,9 +1350,9 @@ tEntity* FeTextBibleLoader::LoadLanguage( tChunkFile* file, tEntityStore* store 
         for(unsigned i = 0; i < rValue->m_numStrings; ++i)
         {
             const unsigned short* text = rValue->m_buffer + rValue->m_offsets[i] / 2;
-            const char* replacement = Scrooby3DSControls::Replacement(rValue->m_hashes[i], rValue->m_modulo, text);
+            const char* replacement = Scrooby3DSControls::Replacement(rValue->m_hashes[i], rValue->m_modulo, text, languageID);
             rValue->m_offsets[i] = cursor * 2;
-            if(replacement) { while(*replacement) native[cursor++] = (unsigned char)*replacement++; }
+            if(replacement) { cursor += Scrooby3DSControls::Copy(native + cursor,replacement); }
             else { while(*text) native[cursor++] = *text++; }
             native[cursor++] = 0;
         }

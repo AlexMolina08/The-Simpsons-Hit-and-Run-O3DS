@@ -1,4 +1,5 @@
 /** Prepare a complete CIA asset set from user-selected PC files, locally. */
+import {selectLanguage, availableLanguages} from './languages.mjs';
 
 export const REQUIRED_MOVIES = Object.freeze([
   'credits', 'fmv1A', 'fmv2', 'fmv3', 'fmv4', 'fmv5', 'fmv6', 'fmv7',
@@ -63,12 +64,13 @@ function movieNames(selected) {
 }
 
 /** Validate the full supported PC layout before downloading conversion tools. */
-export function validateInput(input) {
+export function validateInput(input, language) {
   const selected = lookupFiles(input);
+  const selectedLanguage = selectLanguage(selected.files, language);
   const required = [
     'art/frontend/scrooby/bootup.p3d', 'art/frontend/scrooby/frontend.p3d',
     'art/frontend/scrooby/resource/pure3d/logo_anim.p3d',
-    'scripts.rcf', 'dialog.rcf', 'music00.rcf', 'music01.rcf', 'music02.rcf', 'music03.rcf',
+    'scripts.rcf', selectedLanguage.archive, 'music00.rcf', 'music01.rcf', 'music02.rcf', 'music03.rcf',
     ...REQUIRED_MOVIES.map(name => `movies/${name}.rmv`),
   ];
   const missing = required.filter(path => !selected.get(path));
@@ -88,7 +90,8 @@ export function validateInput(input) {
   }));
   const movies = movieNames(selected);
   const movieBytes = movies.reduce((sum, name) => sum + selected.get(`movies/${name}.rmv`).size, 0);
-  return {fileCount: originalFiles.size + movies.length,
+  return {language: selectedLanguage.code, languageName: selectedLanguage.name,
+    languages: availableLanguages(selected.files).map(item => item.code), fileCount: originalFiles.size + movies.length,
     inputBytes: [...originalFiles.values()].reduce((sum, file) => sum + file.size, 0) + movieBytes,
     movieCount: movies.length};
 }
@@ -132,6 +135,25 @@ export function crc32(bytes) {
 }
 
 /** Match prepare_home_menu.archive_member, including its legacy case hash. */
+export async function validateDialogue(archive, requiredKeys) {
+  if (!Array.isArray(requiredKeys) || !requiredKeys.length) throw new Error('The builder is missing its dialogue resource index.');
+  const size = fileSize(archive), header = await bytesOf(archive, 0, 48);
+  if (header.length !== 48 || !textDecoder.decode(header).startsWith('RADCORE CEMENT LIBRARY') || header[34] !== 0) throw new Error('The dialogue archive is unsupported or damaged.');
+  const offset = new DataView(header.buffer, header.byteOffset, header.byteLength).getUint32(44, true);
+  if (offset + 16 > size) throw new Error('The dialogue directory points outside its archive.');
+  const block = await bytesOf(archive, offset, offset + 16), count = new DataView(block.buffer, block.byteOffset, block.byteLength).getUint32(0, true);
+  if (count > 100000 || offset + 16 + count * 12 > size) throw new Error('The dialogue directory is damaged.');
+  const directory = await bytesOf(archive, offset + 16, offset + 16 + count * 12), view = new DataView(directory.buffer, directory.byteOffset, directory.byteLength);
+  const keys = new Set();
+  for (let index = 0; index < count; index++) {
+    const position = view.getUint32(index * 12 + 4, true), length = view.getUint32(index * 12 + 8, true);
+    if (length && position + length <= size) keys.add(view.getUint32(index * 12, true));
+  }
+  const missing = requiredKeys.filter(key => !keys.has(key));
+  if (missing.length) throw new Error(`The selected dialogue archive is incomplete or belongs to another language (${missing.length} required sounds missing).`);
+  return {required: requiredKeys.length, present: requiredKeys.length, missing: 0};
+}
+
 export async function archiveMember(archive, name) {
   const size = fileSize(archive);
   const header = await bytesOf(archive, 0, 48);
@@ -186,7 +208,7 @@ function frameCount(result) {
 }
 
 /** Keep the native converter's frame rate, letterboxing, sound and tail handling. */
-export async function convertMovie(source, stem, runFFmpeg) {
+export async function convertMovie(source, stem, runFFmpeg, language = 'en') {
   const inputName = `${stem}.rmv`;
   const input = [{name: inputName, data: source}];
   // The reusable FFmpeg core retains its log level after earlier conversions.
@@ -194,6 +216,10 @@ export async function convertMovie(source, stem, runFFmpeg) {
   const probeLogs = logLines(probe);
   if (!probeLogs.some(line => line.includes('Video:'))) throw new Error(`${inputName} has no supported video stream.`);
   const hasAudio = probeLogs.some(line => line.includes('Audio:'));
+  const trackCount = probeLogs.filter(line => line.includes('Audio:')).length;
+  // Story cinematics share one video with E/F/G/S tracks; logos have one track.
+  const audioTrack = trackCount > 1 ? ({en: 0, fr: 1, es: 3})[language] : 0;
+  if (hasAudio && (audioTrack === undefined || audioTrack >= trackCount)) throw new Error(`${inputName} has no ${language} audio track.`);
   const videoName = `${stem}.m1v`, audioName = `${stem}.pcm`;
   const video = await mediaCommand(runFFmpeg, {
     inputs: input, args: ['-hide_banner', '-loglevel', 'error', '-i', inputName, '-an', '-vf', VIDEO_FILTER,
@@ -203,7 +229,7 @@ export async function convertMovie(source, stem, runFFmpeg) {
   let audioFile = new Uint8Array(0);
   if (hasAudio) {
     const audio = await mediaCommand(runFFmpeg, {
-      inputs: input, args: ['-hide_banner', '-loglevel', 'error', '-i', inputName, '-vn', '-map', '0:a:0',
+      inputs: input, args: ['-hide_banner', '-loglevel', 'error', '-i', inputName, '-vn', '-map', `0:a:${audioTrack}`,
         '-ac', '2', '-ar', '32000', '-c:a', 'pcm_s16le', '-f', 's16le', audioName], outputs: [audioName],
     });
     audioFile = toolOutput(audio, audioName);
@@ -239,7 +265,8 @@ export async function convertMovie(source, stem, runFFmpeg) {
   view.setUint16(32, audioBytes ? 2 : 0, true);
   view.setUint32(36, MOVIE_HEADER_SIZE, true); view.setUint32(40, audioBytes, true);
   view.setUint32(44, MOVIE_HEADER_SIZE + audioBytes, true); view.setUint32(48, videoBytes, true);
-  return {blob: new Blob([header, audioFile, videoFile]), frames, audioBytes, videoBytes};
+  return {blob: new Blob([header, audioFile, videoFile]), frames, audioBytes, videoBytes,
+    audioTrack: hasAudio ? audioTrack : null};
 }
 
 /** Check the same HOME Menu cue format and peak bounds as the native builder. */
@@ -378,10 +405,12 @@ function checkAbort(signal) {
  * referenced unchanged, and no user game bytes are sent over the network.
  */
 export async function prepareGameAssets({files: input, tools, pyodide, profile, writeOutput, onProgress = () => {}, signal,
-  phase = 'all', previous = null, checkpoints = null}) {
-  const summary = validateInput(input), selected = lookupFiles(input);
+  phase = 'all', previous = null, checkpoints = null, language}) {
+  const summary = validateInput(input, language), selected = lookupFiles(input);
+  const selectedLanguage = selectLanguage(selected.files, summary.language);
   const files = previous?.files ? new Map(previous.files) : new Map([...selected.files].filter(([path]) => {
     const key = path.toLowerCase();
+    if (/^dialog[fgs]?\.rcf$/.test(key)) return key === selectedLanguage.archive;
     return path.split('/').at(-1).toLowerCase() !== 'temp.err' &&
       (/^(art|scripts|sound)\//.test(key) || (!key.includes('/') && key.endsWith('.rcf')));
   }));
@@ -393,6 +422,7 @@ export async function prepareGameAssets({files: input, tools, pyodide, profile, 
     files.set(path, file);
     return file;
   };
+  await persist('game-language.txt', new Blob([`${selectedLanguage.code}\n`]));
   if (phase === 'all' || phase === 'textures') {
     const cached = await checkpoints?.read('native-textures');
     if (cached) {
@@ -410,7 +440,7 @@ export async function prepareGameAssets({files: input, tools, pyodide, profile, 
 
   if (phase === 'all' || phase === 'media') {
 
-  const dialog = selected.get('dialog.rcf');
+  const dialog = selected.get(selectedLanguage.archive);
   for (let index = 0; index < GREETINGS.length; index++) {
     checkAbort(signal);
     const cached = await checkpoints?.read(`greeting-${index}`);
@@ -488,9 +518,10 @@ export async function prepareGameAssets({files: input, tools, pyodide, profile, 
       onProgress({stage: 'movies', completed: index + 1, total: movies.length, detail: `Reused ${stem}`});
       continue;
     }
-    const movie = await convertMovie(selected.get(`movies/${stem}.rmv`), stem, tools.runFFmpeg);
+    const movie = await convertMovie(selected.get(`movies/${stem}.rmv`), stem, tools.runFFmpeg, selectedLanguage.code);
     const path = `movies/${stem}.3dm`, file = await persist(path, movie.blob);
-    const metadata = {file: `${stem}.3dm`, frames: movie.frames, audioBytes: movie.audioBytes, videoBytes: movie.videoBytes};
+    const metadata = {file: `${stem}.3dm`, frames: movie.frames, audioBytes: movie.audioBytes,
+      videoBytes: movie.videoBytes, language: selectedLanguage.code, audioTrack: movie.audioTrack};
     movieReport.push(metadata);
     await checkpoints?.commit(`movie-${stem}`, new Map([[path, file]]), metadata);
     onProgress({stage: 'movies', completed: index + 1, total: movies.length, detail: `Converted ${stem}`});

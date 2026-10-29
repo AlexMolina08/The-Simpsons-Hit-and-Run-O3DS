@@ -2,6 +2,7 @@
 # stay disabled; command-line -D options may override this initial cache.
 set(SRR2_OLD_3DS ON CACHE BOOL "Target original 3DS" FORCE)
 set(SRR2_3DS_MOVIES ON CACHE BOOL "Enable converted movies" FORCE)
+set(SRR2_REGION PAL CACHE STRING "Compile retail English, French and Spanish scripts" FORCE)
 foreach(feature
     AREA_MEMBERSHIP
     BONE_ONCE

@@ -1,3 +1,7 @@
+#ifdef SRR2_OLD_3DS
+#include <3dscontrols.h>
+#include <FeTextBible.h>
+#endif
 #include <main/old3dsmainprofile.h>
 #ifdef RAD_3DS
 #include <main/graphics3ds.h>
@@ -1877,7 +1881,11 @@ namespace
 
     void Ascii(tFont* font,const char* text,float x,float baseline,float height,tColour colour,float width=290)
     {
-        P3D_UNICODE unicode[128];p3d::AsciiToUnicode(text,unicode,128);
+        P3D_UNICODE unicode[128];
+        const char* caption = Scrooby3DSControls::Caption(text,FeTextBible::GetCurrentLanguageID());
+        if(caption && Scrooby3DSControls::Length(caption) < 128) {
+            const unsigned words = Scrooby3DSControls::Copy(unicode,caption); unicode[words] = 0;
+        } else p3d::AsciiToUnicode(text,unicode,128);
         BottomLabel(font,unicode,x,baseline,height,colour,width);
     }
 
