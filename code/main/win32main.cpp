@@ -99,11 +99,20 @@ extern "C" {
 unsigned int __stacksize__
 __attribute__((used, retain, section(".data.__stacksize__")))
 = 2 * 1024 * 1024;
+#ifdef SRR2_OLD3DS_WORLD_RESIDENCY
+// All seven maps use a 26/32 MiB split within the same 58 MiB heap budget.
+u32 __ctru_linear_heap_size = 32 * 1024 * 1024;
+#else
 u32 __ctru_linear_heap_size = 28 * 1024 * 1024;
+#endif
 #ifdef SRR2_OLD_3DS
 // Bound emulation to a 64 MiB application budget, including executable and
 // linear memory. Do not let an emulator's larger homebrew region hide overflow.
+#ifdef SRR2_OLD3DS_WORLD_RESIDENCY
+u32 __ctru_heap_size = 26 * 1024 * 1024;
+#else
 u32 __ctru_heap_size = 30 * 1024 * 1024;
+#endif
 #endif
 }
 #endif
@@ -113,6 +122,7 @@ u32 __ctru_heap_size = 30 * 1024 * 1024;
 //========================================
 #include <main/game.h>
 #include <main/nativebench.h>
+#include <main/worldresidency.h>
 #include <main/win32platform.h>
 #include <main/singletons.h>
 #include <main/commandlineoptions.h>
@@ -214,6 +224,9 @@ extern "C" int main( int argc, char *argv[] )
     ProcessCommandLineArgumentsFromFile();
 #ifdef SRR2_OLD3DS_NATIVE_BENCH
     NativeBench::Init(argc,argv);
+#endif
+#ifdef SRR2_OLD3DS_WORLD_RESIDENCY
+    WorldResidency::Init();
 #endif
 #ifdef SRR2_OLD_3DS
     printf("OLD3DS_INIT commandline_complete\n");

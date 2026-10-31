@@ -65,13 +65,13 @@ public:
 
    }
 
-   void AllocateAll(int inSize)
+   void AllocateAll(int inSize, int intersectCapacity = 0)
    {
       MEMTRACK_PUSH_GROUP( "Devin's world" );       
       mWorldSphereElems.Allocate(2);
       mSEntityElems.Allocate(inSize); 
       mSPhysElems.Allocate(inSize/2);   
-      mIntersectElems.Allocate(inSize/4);
+      mIntersectElems.Allocate(intersectCapacity ? intersectCapacity : inSize/4);
       mDPhysElems.Allocate(inSize);
       mFenceElems.Allocate(inSize);
       mAnimCollElems.Allocate(inSize/4);

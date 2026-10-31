@@ -13,6 +13,7 @@
 // System Includes
 //========================================
 // Foundation Tech
+#include <main/nativebench.h>
 #include <radmath/radmath.hpp>
 #include <raddebug.hpp>
 #include <string.h>
@@ -52,6 +53,48 @@
 #include <presentation/gui/utility/hudmap.h>
 
 static const char FREE_CAR_SECTION[] = "FreeCar";
+#ifdef SRR2_OLD3DS_NATIVE_BENCH
+bool g_old3dsParkedSectionRemove=true;
+static unsigned parkedSectionRemovals=0,parkedRemovalFallbacks=0;
+extern "C" void old3dsDumpParkedRemoval(FILE* file)
+{
+    fprintf(file,"NATIVE_PARKED_REMOVAL enabled=%u section_removals=%u fallbacks=%u whole_session=1\n",
+        g_old3dsParkedSectionRemove,parkedSectionRemovals,parkedRemovalFallbacks);
+}
+#endif
+#ifdef SRR2_OLD_3DS
+static void RemoveParkedLocator(CarStartLocator* locator,tUID sectionUID)
+{
+    // AddLocator records the section loading this newly constructed locator.
+    // Its completed request publishes the locator into that one section before
+    // this event. Avoid scanning every resident section for each parking point.
+#ifdef SRR2_OLD3DS_NATIVE_BENCH
+    if(g_old3dsParkedSectionRemove)
+#endif
+    {
+        tEntityTable* section=p3d::inventory->GetSection(sectionUID);
+        if(section){
+            radLoadHashedStore::Iterator it(section);
+            for(IRefCount* item=it.First(locator->GetUID());item;item=it.Next()){
+                if(item==locator){
+                    section->Remove(locator);
+#ifdef SRR2_OLD3DS_NATIVE_BENCH
+                    ++parkedSectionRemovals;
+#endif
+                    return;
+                }
+            }
+        }
+    }
+    // Preserve the original lookup if a loader did not publish the expected
+    // section or identity. No locator is dropped or left unowned on that path.
+#ifdef SRR2_OLD3DS_NATIVE_BENCH
+    ++parkedRemovalFallbacks;
+#endif
+    p3d::inventory->Remove(locator);
+}
+#endif
+
 
 //TODO: SHOULD I USE VT_USER?
 
@@ -195,7 +238,8 @@ void ParkedCarManager::HandleEvent( EventEnum id, void* pEventData )
                             TrafficManager::GetInstance()->GenerateRandomColour( colour );
                             car->mGeometryVehicle->SetTrafficBodyColour( colour );
 
-                            int added = GetVehicleCentral()->AddVehicleToActiveList( car );
+                            int added;
+                            { NB_SCOPE(LoadParkedAdd); added = GetVehicleCentral()->AddVehicleToActiveList( car ); }
                             rAssert( added != -1 );
                             //info->mActiveListIndex = added;
 
@@ -206,7 +250,7 @@ void ParkedCarManager::HandleEvent( EventEnum id, void* pEventData )
 
                             car->SetResetFacingInRadians( mLocators[ which ]->GetRotation() );
 
-                            car->Reset();
+                            { NB_SCOPE(LoadParkedReset); car->Reset(); }
 
                             car->GetSimState()->SetControl( sim::simSimulationCtrl );
 
@@ -222,7 +266,12 @@ void ParkedCarManager::HandleEvent( EventEnum id, void* pEventData )
                 //Remove all the locators
                 for ( i = 0; i < mNumLocators; ++i )
                 {
+                    NB_SCOPE(LoadParkedRemove);
+#ifdef SRR2_OLD_3DS
+                    RemoveParkedLocator(mLocators[i],mLoadingZoneUID);
+#else
                     p3d::inventory->Remove( mLocators[ i ] );
+#endif
                 }
 
                 //Reset the data.

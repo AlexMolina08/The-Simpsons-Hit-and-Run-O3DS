@@ -79,6 +79,9 @@ public:
    tName& GetCurSectionName();
 #ifdef SRR2_OLD3DS_NATIVE_BENCH
    void GetLoadedWorldCounts(unsigned& sections, unsigned& statics, unsigned& intersects) const;
+   bool HasDynaLoad(tUID uid) const;
+   unsigned SectionCount() const { return mLoadLists.mUseSize; }
+   unsigned SectionCapacity() const { return mLoadLists.mSize; }
 #endif
 
    enum DynaLoadState

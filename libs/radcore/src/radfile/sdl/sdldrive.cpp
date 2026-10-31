@@ -29,8 +29,28 @@
 #include <string.h>
 #include <strings.h>
 #include <errno.h>
+#ifdef RAD_3DS
+#include <malloc.h>
+#endif
 #include <SDL.h>
 #include "casepath.hpp"
+
+#if defined(SRR2_OLD3DS_NATIVE_BENCH) || defined(SRR2_OLD3DS_WORLD_RESIDENCY)
+#include <worldresidencyassets.hpp>
+#endif
+#ifdef SRR2_OLD3DS_NATIVE_BENCH
+extern "C" {unsigned g_old3dsWorldOrderChoice=0;unsigned g_old3dsWorldResidencyChoice=0;}
+static unsigned s_residencyOpens[5][2]={};
+static unsigned s_orderOpens[3][2]={};
+extern "C" void srr2DumpWorldOrder(FILE* file)
+{
+    fprintf(file,"STREAM_RESIDENCY selected=%u fixture=world-residency-01 extended_fixture=world-residency-04 reference_terrain=%u reference_sectors=%u resident_terrain=%u resident_sectors=%u expanded_terrain=%u expanded_sectors=%u read_only=1\n",
+        __atomic_load_n(&g_old3dsWorldResidencyChoice,__ATOMIC_ACQUIRE),s_residencyOpens[1][0],s_residencyOpens[1][1],s_residencyOpens[2][0],s_residencyOpens[2][1],s_residencyOpens[3][0],s_residencyOpens[3][1]);
+    fprintf(file,"STREAM_ASSET_ORDER selected=%u fixture=streaming-order-01 original_z2=%u original_r2=%u ordered_z2=%u ordered_r2=%u read_only=1 baseline_romfs_unchanged=1\n",
+        __atomic_load_n(&g_old3dsWorldOrderChoice,__ATOMIC_ACQUIRE),s_orderOpens[1][0],s_orderOpens[1][1],s_orderOpens[2][0],s_orderOpens[2][1]);
+    fprintf(file,"STREAM_RESIDENCY_ALL terrain=%u sectors=%u levels=7 read_only=1\n",s_residencyOpens[4][0],s_residencyOpens[4][1]);
+}
+#endif
 
 enum { SRR2_MAX_TRACKED_FILES = 64 };
 struct Srr2TrackedFile
@@ -379,7 +399,70 @@ radDrive::CompletionStatus radSdlDrive::OpenFile
     // The default drive expands relative names to absolute SD paths. Resolve
     // read-only game assets in the installed title before the SD fallback.
     static const char dataRoot[] = "sdmc:/3ds/simpsons/";
-    if( flags == OpenExisting && !writeAccess &&
+#ifdef SRR2_OLD3DS_WORLD_RESIDENCY
+    const char* residentRoot=__atomic_load_n(&g_old3dsResidencyRoot,__ATOMIC_ACQUIRE);
+    if(residentRoot && flags==OpenExisting && !writeAccess && strncasecmp(fullName,dataRoot,sizeof(dataRoot)-1)==0){
+        const char* relative=fullName+sizeof(dataRoot)-1;
+        if(!strncasecmp(relative,"art",3) && (relative[3]=='/' || relative[3]=='\\')){
+            const char* name=relative+4;
+            for(const char* canonical:WorldResidencyAssets::Files)if(!strcasecmp(name,canonical)){
+                if(!old3dsWorldResidencyAdmit(WorldResidencyAssets::Level(canonical)))break;
+                char prepared[radFileFilenameMax+1];const int size=snprintf(prepared,sizeof(prepared),"%s/art/%s",residentRoot,canonical);
+                if(size<=0 || unsigned(size)>=sizeof(prepared))return Error;
+                *pHandle=SDL_RWFromFile(prepared,createFlags);
+                // An admitted level cannot mix in an original sector after an
+                // I/O failure beside its already-loaded resident terrain.
+                if(!*pHandle){m_LastError=FileNotFound;return Error;}
+                strcpy(fullName,prepared);break;
+            }
+        }
+    }
+#endif
+#ifdef SRR2_OLD3DS_NATIVE_BENCH
+    // ResidencyFixtureBegin: exact read-only asset allowlist, no SD-game writes.
+    const unsigned residency=__atomic_load_n(&g_old3dsWorldResidencyChoice,__ATOMIC_ACQUIRE);
+    if(residency>=1 && residency<=4 && flags==OpenExisting && !writeAccess &&
+       strncasecmp(fullName,dataRoot,sizeof(dataRoot)-1)==0){
+        const char* relative=fullName+sizeof(dataRoot)-1;
+        if(!strncasecmp(relative,"art",3) && (relative[3]=='/' || relative[3]=='\\')){
+            const char* name=relative+4;
+            static const char* const assets[]={"l2_TERRA.p3d","l2r1.p3d","l2r2.p3d","l2r3.p3d","l2r4.p3d",
+                "l2z1.p3d","l2z2.p3d","l2z3.p3d","l2z4.p3d"};
+            const auto& allAssets=WorldResidencyAssets::Files;
+            const char* const* names=residency==4?allAssets:assets;
+            const unsigned assetsCount=residency==4?sizeof(allAssets)/sizeof(allAssets[0]):sizeof(assets)/sizeof(assets[0]);
+            for(unsigned i=0;i<assetsCount;++i)if(!strcasecmp(name,names[i])){
+                char fixture[radFileFilenameMax+1];
+                const char* directory=residency==4 ? "world-residency-05/all" : residency==3 ? "world-residency-04/opaque" :
+                    residency==1 ? "world-residency-01/reference" : "world-residency-01/resident";
+                const int count=snprintf(fixture,sizeof(fixture),"sdmc:/3ds/hitrun-dev/%s/art/%s",directory,names[i]);
+                if(count<=0 || (unsigned)count>=sizeof(fixture))return Error;
+                *pHandle=SDL_RWFromFile(fixture,createFlags);
+                if(!*pHandle){m_LastError=FileNotFound;return Error;}
+                strcpy(fullName,fixture);__atomic_fetch_add(&s_residencyOpens[residency][strstr(names[i],"_TERRA")?0:1],1u,__ATOMIC_RELAXED);
+                break;
+            }
+        }
+    }
+    // ResidencyFixtureEnd.
+    const unsigned order=__atomic_load_n(&g_old3dsWorldOrderChoice,__ATOMIC_ACQUIRE);
+    if(order>=1 && order<=2 && flags==OpenExisting && !writeAccess &&
+       strncasecmp(fullName,dataRoot,sizeof(dataRoot)-1)==0){
+        const char* name=fullName;
+        for(const char* p=fullName;*p;++p)if(*p=='/' || *p=='\\')name=p+1;
+        const int asset=!strcasecmp(name,"l2z2.p3d")?0:!strcasecmp(name,"l2r2.p3d")?1:-1;
+        if(asset>=0){
+            char fixture[radFileFilenameMax+1];
+            const int count=snprintf(fixture,sizeof(fixture),"sdmc:/3ds/hitrun-dev/streaming-order-01/%s/%s",
+                order==1?"original":"ordered",asset==0?"l2z2.p3d":"l2r2.p3d");
+            if(count<=0 || (unsigned)count>=sizeof(fixture))return Error;
+            *pHandle=SDL_RWFromFile(fixture,createFlags);
+            if(!*pHandle){m_LastError=FileNotFound;return Error;}
+            strcpy(fullName,fixture);__atomic_fetch_add(&s_orderOpens[order][asset],1u,__ATOMIC_RELAXED);
+        }
+    }
+#endif
+    if( !*pHandle && flags == OpenExisting && !writeAccess &&
         strncasecmp( fullName, dataRoot, sizeof( dataRoot ) - 1 ) == 0 )
     {
         char bundled[ radFileFilenameMax + 1 ];
@@ -428,6 +511,16 @@ radDrive::CompletionStatus radSdlDrive::OpenFile
     }
     else
     {
+#ifdef RAD_3DS
+        // Report failed opens without adding observers to successful reads or
+        // frames. A failed SDL allocation must not look like a missing asset.
+        const int failureErrno=errno;
+        const struct mallinfo failureHeap=mallinfo();
+        printf("FILE_OPEN_FAILURE requested=%s resolved=%s drive=%s base=%s mode=%s errno=%d sdl=%s heap_arena=%u heap_used=%u heap_arena_free=%u linear_free=%lu open_files=%u\n",
+            fileName,fullName,m_DriveName,m_DrivePath,createFlags,failureErrno,SDL_GetError(),
+            unsigned(failureHeap.arena),unsigned(failureHeap.uordblks),unsigned(failureHeap.fordblks),
+            (unsigned long)linearSpaceFree(),unsigned(m_OpenFiles));
+#endif
 #ifdef SRR2_OLD3DS_NATIVE_BENCH
         const int openError = errno;
         unsigned tracked = 0;

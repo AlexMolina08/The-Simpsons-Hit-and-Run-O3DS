@@ -42,9 +42,12 @@ See the [installation and update guide](docs/INSTALL.md) for detailed instructio
 | X | Interact or enter/exit a vehicle |
 | Y / R | Attack or handbrake |
 | L + Circle Pad | Move the camera |
+| New 3DS C-stick | Move the camera |
 | L + R | Horn |
 | Select / L + Select | Reset vehicle / change camera |
 | Start | Pause or continue |
+
+The Old 3DS Circle Pad Pro attachment is not supported. Use L + Circle Pad for the camera.
 
 The touch screen shows the map, counters, mission objective and context-sensitive actions. Options include stereoscopic 3D on compatible consoles and a choice of graphics modes. See [graphics modes](docs/GRAPHICS_MODES.md) for details.
 

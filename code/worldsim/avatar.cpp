@@ -19,6 +19,7 @@
 // Project Includes
 //========================================
 #include <worldsim/avatar.h>
+#include <main/worldstreaming.h>
 #include <worldsim/character/character.h>
 #include <worldsim/character/charactertarget.h>
 #include <worldsim/character/charactermanager.h>
@@ -679,6 +680,11 @@ bool Avatar::IsInCar( void ) const
 
 const void Avatar::GetPosition( rmt::Vector& pos ) const
 {
+#ifdef SRR2_OLD3DS_NATIVE_BENCH
+    if(WorldStreaming::flightActive && WorldStreaming::flightAvatar==this) {
+        pos.Set(WorldStreaming::flightPosition[0],WorldStreaming::flightPosition[1],WorldStreaming::flightPosition[2]);return;
+    }
+#endif
     if( this->IsInCar() )
     {
         mpVehicle->GetPosition( &pos );
@@ -730,6 +736,11 @@ const void Avatar::GetNormalizedHeadingSafe( rmt::Vector& heading ) const
 
 const void Avatar::GetVelocity( rmt::Vector& vel ) const
 {
+#ifdef SRR2_OLD3DS_NATIVE_BENCH
+    if(WorldStreaming::flightActive && WorldStreaming::flightAvatar==this) {
+        vel.Set(WorldStreaming::flightVelocity[0],WorldStreaming::flightVelocity[1],WorldStreaming::flightVelocity[2]);return;
+    }
+#endif
     if( this->IsInCar() )
     {
         assert( mpVehicle != NULL );
@@ -747,6 +758,11 @@ const void Avatar::GetVelocity( rmt::Vector& vel ) const
 
 const float Avatar::GetSpeedMps() const
 {
+#ifdef SRR2_OLD3DS_NATIVE_BENCH
+    if(WorldStreaming::flightActive && WorldStreaming::flightAvatar==this) {
+        rmt::Vector velocity(WorldStreaming::flightVelocity[0],WorldStreaming::flightVelocity[1],WorldStreaming::flightVelocity[2]);return velocity.Magnitude();
+    }
+#endif
     if( this->IsInCar() )
     {
         assert( mpVehicle != NULL );

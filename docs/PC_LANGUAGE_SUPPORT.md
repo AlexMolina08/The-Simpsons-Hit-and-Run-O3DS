@@ -1,11 +1,9 @@
 # PC copy language support
 
-The original PC release used three CDs, with regional editions and later
-BestSeller releases. The supplied Spanish image combines InstallShield cabinet
-volumes into one ISO. A filename containing “DVD” does not establish an original
-retail DVD release. The supplied multilingual image is an Inno/FreeArc installer
-with separate language archives. The builder reads data archives; it never runs
-the Windows installer.
+The builder accepts installed PC folders and supported disc or installer images.
+Three-CD releases use split InstallShield cabinets; some images combine those
+volumes. Multilingual Inno/FreeArc installers store languages in separate
+archives. The builder reads these archives without running a Windows installer.
 
 Distribution references: [disc catalogue](https://redump.info/discs?dumper=XTac&sort=version),
 [PC manual](https://vignette3.wikia.nocookie.net/simpsons-hit-and-run/images/3/35/Hit_and_Run_Manual_PC.pdf).
@@ -39,15 +37,13 @@ actual game font where available.
 French HUD artwork is converted from its own source, checked against its own
 accepted fingerprint; the English HUD is never substituted.
 
-## Verification in progress
+## Validation
 
-The supplied French installed folder and Spanish InstallShield image were
-inspected. Spanish cabinet files spanning volumes now extract with matching
-native and WebAssembly hashes. The shared world, character and vehicle sources
-match the English reference. The French HUD requires a distinct verified atlas.
+Cabinet extraction checks each file against its original MD5. Language detection
+requires the selected dialogue archive and movie audio track. Tests also cover
+archive bounds, ZIP checksums, path validation, Unicode controls and tutorial
+layout. French HUD artwork uses its own verified atlas.
 
-Unit tests cover detection, movie track selection, missing dialogue resources,
-archive bounds, ZIP checksums and path validation, Unicode controls and tutorial
-layout. The ARM runtime builds within the fixed 64 MiB startup budget. Full
-browser packaging, emulator presentation and physical-console checks are tracked
-separately; this document will be updated with completed evidence.
+Package integrity, emulator presentation and physical-console gameplay are
+separate checks. A successful extraction or ARM build does not establish that
+all localized screens and missions work on hardware.

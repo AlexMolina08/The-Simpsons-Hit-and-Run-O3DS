@@ -20,6 +20,9 @@
 // Project Includes
 //=================================================
 #include <render/Loaders/IWrappedLoader.h>
+#ifdef SRR2_OLD3DS_NATIVE_BENCH
+#include <cstdio>
+#endif
 
 class tDrawable;
 
@@ -76,6 +79,9 @@ public:
    void AddGlobalEntity(tDrawable* Entity);
    tDrawable* GetGlobalEntity(tUID EntityID) const;
    void ClearGlobalEntities(void);
+#ifdef SRR2_OLD3DS_NATIVE_BENCH
+   void DumpIntegrity(FILE*) const;
+#endif
 
 protected:
    void CoupleAllLoaders();

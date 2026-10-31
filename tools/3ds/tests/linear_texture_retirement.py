@@ -39,6 +39,9 @@ struct picaTexture {
     picaLinearTextureRetirement* linearRetirement=nullptr;
 #ifdef SRR2_OLD3DS_VRAM_TEXTURES
     picaVramAllocation* vramAllocation=nullptr;
+#if defined(SRR2_OLD3DS_NATIVE_BENCH) || defined(SRR2_OLD3DS_WORLD_RESIDENCY)
+    picaVramAllocation* nativeLinearAllocation=nullptr;
+#endif
 #endif
     Context* context=&::context;
     void FreeStaging(){}
@@ -83,6 +86,17 @@ int main() {
     auto* bytes=static_cast<unsigned char*>(retiredVram[0]->data);
     for(unsigned i=0;i<193;++i)assert(bytes[i]==0x75);
     gpuComplete=true;std::free(retiredVram[0]->data);delete retiredVram[0];
+#if defined(SRR2_OLD3DS_NATIVE_BENCH) || defined(SRR2_OLD3DS_WORLD_RESIDENCY)
+    retiredVram.clear();gpuComplete=false;
+    auto* compact=new picaTexture;
+    compact->linearRetirement=PrepareLinearTextureRetirement();
+    compact->tex={std::malloc(97),97};std::memset(compact->tex.data,0x37,97);
+    compact->nativeLinearAllocation=new picaVramAllocation{compact->tex.data};
+    delete compact;
+    assert(deleted==1000 && !retiredLinearTextures && retiredVram.size()==1);
+    for(unsigned i=0;i<97;++i)assert(static_cast<unsigned char*>(retiredVram[0]->data)[i]==0x37);
+    gpuComplete=true;std::free(retiredVram[0]->data);delete retiredVram[0];
+#endif
 #endif
     puts("PASS: production texture destruction preserves queued bytes until fence; exact SDK frees, node failure and empty teardown");
 }
@@ -90,8 +104,8 @@ int main() {
 with tempfile.TemporaryDirectory(prefix='srr-linear-texture-retire-') as temporary:
     folder = Path(temporary)
     (folder / 'test.cpp').write_text(harness + queue + '\n' + destructor + tests)
-    for diagnostics, vram in ((False, False), (True, False), (False, True), (True, True)):
-        flags = (['-DSRR2_OLD3DS_NATIVE_BENCH'] if diagnostics else []) + (['-DSRR2_OLD3DS_VRAM_TEXTURES'] if vram else [])
+    for diagnostics, vram, residency in ((False, False, False), (True, False, False), (False, True, False), (True, True, False), (False, True, True)):
+        flags = (['-DSRR2_OLD3DS_WORLD_RESIDENCY'] if residency else []) + (['-DSRR2_OLD3DS_NATIVE_BENCH'] if diagnostics else []) + (['-DSRR2_OLD3DS_VRAM_TEXTURES'] if vram else [])
         subprocess.run(['clang++', '-std=c++14', '-O2', '-Wall', '-Wextra', '-Werror',
                         '-fsanitize=address,undefined', '-DSRR2_OLD3DS_DRAW_PREP', *flags,
                         str(folder / 'test.cpp'), '-o', str(folder / 'test')], check=True)

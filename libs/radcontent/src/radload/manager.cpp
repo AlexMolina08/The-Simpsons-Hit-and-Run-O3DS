@@ -16,10 +16,48 @@
 
 #ifdef SRR2_OLD3DS_NATIVE_BENCH
 #include <radload/loadtiming.hpp>
+#include <main/worldstreaming.h>
 #include <cstdio>
 namespace {
+// CoreExperimentBegin: change placement only; preserve engine serialization.
+struct LoaderCoreExperiment {
+    int requested=-1;
+    Result budgetSet=-1,budgetGet=-1;
+    Result beforeGet=-1,afterGet=-1;
+    u32 budgetBefore=~0u,budgetAfter=~0u;
+    u8 before[2]={},after[2]={};
+    unsigned observed[4]={};
+    void Request(int core) {
+        requested=core;
+        (void)APT_GetAppCpuTimeLimit(&budgetBefore);
+        budgetSet=APT_SetAppCpuTimeLimit(30);
+        budgetGet=APT_GetAppCpuTimeLimit(&budgetAfter);
+    }
+    void Apply() {
+        if(requested<0) {
+            budgetGet=APT_GetAppCpuTimeLimit(&budgetBefore);
+            budgetAfter=budgetBefore;
+        }
+        beforeGet=svcGetThreadAffinityMask(before,CUR_THREAD_HANDLE,2);
+        afterGet=svcGetThreadAffinityMask(after,CUR_THREAD_HANDLE,2);
+    }
+    int CreationCore() const {return requested>=0 && R_SUCCEEDED(budgetSet) ? requested : -1;}
+    void Restore() {
+        if(requested<0 || !R_SUCCEEDED(budgetSet) || budgetBefore==~0u)return;
+        const Result result=APT_SetAppCpuTimeLimit(budgetBefore);
+        u32 restored=~0u;const Result readback=APT_GetAppCpuTimeLimit(&restored);
+        printf("NATIVE_LOADER_CORE_RESTORE original=%lu actual=%lu set=%08lx get=%08lx after_loader_join=1\n",
+            (unsigned long)budgetBefore,(unsigned long)restored,(unsigned long)result,(unsigned long)readback);
+    }
+    void Sample() {
+        const int core=svcGetProcessorID();
+        if(core>=0 && core<4)__atomic_fetch_add(&observed[core],1u,__ATOMIC_RELAXED);
+    }
+};
+static LoaderCoreExperiment coreExperiment;
+// CoreExperimentEnd.
 radLoadTiming::State workerTiming;
-bool WorkerTimingEnabled(){return NativeBench::serviceProfile && NativeBench::collecting && !NativeBench::OnCaptureThread();}
+bool WorkerTimingEnabled(){return NativeBench::serviceProfile && (NativeBench::collecting || WorldStreaming::passiveActive) && !NativeBench::OnCaptureThread();}
 struct WorkerRegion {
     bool active=false;const char* previous=nullptr;char ownedLabel[96];
     WorkerRegion(const WorkerRegion&)=delete;WorkerRegion& operator=(const WorkerRegion&)=delete;
@@ -27,6 +65,7 @@ struct WorkerRegion {
         if(WorkerTimingEnabled()){
             std::strncpy(ownedLabel,label?label:"unnamed",sizeof(ownedLabel)-1);
             ownedLabel[sizeof(ownedLabel)-1]=0;
+            coreExperiment.Sample();
             previous=workerTiming.Enter(ownedLabel,svcGetSystemTick(),NativeBench::CurrentRouteMs());active=true;
         }
     }
@@ -36,7 +75,7 @@ struct WorkerRegion {
     }}
 };
 void PauseWorkerTiming(){if(WorkerTimingEnabled())workerTiming.Pause(svcGetSystemTick(),NativeBench::CurrentRouteMs());}
-void ResumeWorkerTiming(){if(WorkerTimingEnabled())workerTiming.Resume(svcGetSystemTick());}
+void ResumeWorkerTiming(){if(WorkerTimingEnabled()){coreExperiment.Sample();workerTiming.Resume(svcGetSystemTick());}}
 }
 radLoadTiming::StageRegion::StageRegion(unsigned id){
     if(WorkerTimingEnabled()){
@@ -47,8 +86,25 @@ radLoadTiming::StageRegion::~StageRegion(){if(active){
     if(WorkerTimingEnabled())workerTiming.LeaveStage(previous,svcGetSystemTick(),NativeBench::CurrentRouteMs());
     else workerTiming.CancelStage(previous);
 }}
+extern "C" void radDriveDumpCoreSamples(FILE*);
+extern "C" int radLoadCoreExperimentRequested(){return coreExperiment.requested;}
+extern "C" void radLoadSetCoreExperiment(int core){coreExperiment.Request(core);}
 extern "C" void radLoadDumpWorkerSlices(FILE* file){
+    radDriveDumpCoreSamples(file);
+    fprintf(file,"NATIVE_LOADER_CORE requested=%d budget_before=%lu budget_after=%lu budget_set=%08lx budget_get=%08lx placement_at_creation=1 before_get=%08lx after_get=%08lx before_mask=%u before_padding=%u after_mask=%u after_padding=%u samples_0=%u samples_1=%u samples_2=%u samples_3=%u main_mutex_serialized=1 placement_only=1\n",
+        coreExperiment.requested,(unsigned long)coreExperiment.budgetBefore,(unsigned long)coreExperiment.budgetAfter,
+        (unsigned long)coreExperiment.budgetSet,(unsigned long)coreExperiment.budgetGet,
+        (unsigned long)coreExperiment.beforeGet,(unsigned long)coreExperiment.afterGet,
+        coreExperiment.before[0],coreExperiment.before[1],coreExperiment.after[0],coreExperiment.after[1],
+        coreExperiment.observed[0],coreExperiment.observed[1],coreExperiment.observed[2],coreExperiment.observed[3]);
     fprintf(file,"NATIVE_LOAD_WORKER enabled=%u records=%u samples=%u main_mutex_serialized=1 excludes_yielded_time=1 wall_not_cpu=1 diagnostic_only=1\n",NativeBench::serviceProfile,workerTiming.count,workerTiming.samples);
+    fprintf(file,"NATIVE_LOAD_TOTAL_CONFIG files=%u files_lost=%u disjoint_phases=1 excludes_yielded_time=1 wall_not_cpu=1\n",workerTiming.fileCount,workerTiming.filesLost);
+    const char* phases[]={"chunk","native_texture","native_hash","native_open","native_read_verify","texture_allocate","texture_decode","texture_flush","skin_input","skin_prepare","native_seek"};
+    for(unsigned i=0;i<workerTiming.fileCount;++i) {
+        const auto& total=workerTiming.files[i];
+        for(unsigned phase=0;phase<11;++phase)if(total.ticks[phase])
+            fprintf(file,"NATIVE_LOAD_TOTAL file=%s phase=%s active_ms=%.5f slices=%u\n",total.label,phases[phase],total.ticks[phase]*1000.0/SYSCLOCK_ARM11,total.slices);
+    }
     for(unsigned i=0;i<workerTiming.count;++i){const auto& s=workerTiming.longest[i];
         const char* phase="chunk";
         switch(s.stage){
@@ -139,6 +195,12 @@ m_pMutex( NULL )
 
     ::radThreadCreateMutex( &m_pMutex );
     m_pMutex->Lock();
+#ifdef SRR2_OLD3DS_NATIVE_BENCH
+    if(coreExperiment.CreationCore()>=0)
+        ::radThreadCreateThreadOnCore(&m_pThread,radLoadManager::LoadThreadEntry,static_cast<void*>(this),
+            IRadThread::PriorityNormal,init.loadThreadStackSize,RADMEMORY_ALLOC_DEFAULT,coreExperiment.CreationCore());
+    else
+#endif
     ::radThreadCreateThread( &m_pThread, radLoadManager::LoadThreadEntry, static_cast<void*>(this), IRadThread::PriorityNormal, init.loadThreadStackSize );
 
 #ifdef RADLOAD_GATHER_STATS
@@ -377,6 +439,9 @@ void radLoadManager::Load( const char* filename, radLoadRequest** request )
 unsigned int radLoadManager::LoadThreadEntry( void* data )
 {
     radLoadManager* manager = static_cast<radLoadManager*>( data );
+#ifdef SRR2_OLD3DS_NATIVE_BENCH
+    coreExperiment.Apply();
+#endif
     manager->InternalService();
     return 0;
 }
@@ -461,8 +526,8 @@ void radLoadManager::Service()
         WorkerRegion region("completion_callback");
 #endif
         radLoadCallback* callback = m_pCallbacks->Pop();
-        callback->Done();
-        callback->Release();
+        { NB_SCOPE(LoadCallbackDone); callback->Done(); }
+        { NB_SCOPE(LoadCallbackRelease); callback->Release(); }
     }
 
 
@@ -518,6 +583,20 @@ void radLoadManager::ReclaimAfterWait()
 #endif
 }
 
+#ifdef SRR2_OLD3DS_NATIVE_BENCH
+void radLoadManager::WaitForRawRead(IRadThreadSemaphore* completion)
+{
+    const bool worker=radThreadGetActiveThread()==m_pThread;
+    rAssert(worker);
+    if(!worker){completion->Wait();return;}
+    PauseWorkerTiming();
+    m_pMutex->Unlock();
+    completion->Wait();
+    m_pMutex->Lock();
+    ResumeWorkerTiming();
+}
+#endif
+
 void radLoadManager::Terminate()
 {
     m_pFileLoaders->Release();
@@ -529,6 +608,10 @@ void radLoadManager::Terminate()
     m_pMutex->Unlock();
     m_pThread->WaitForTermination();
     m_pThread->Release();
+#ifdef SRR2_OLD3DS_NATIVE_BENCH
+    // A core-1 loader must finish before its application CPU time is restored.
+    coreExperiment.Restore();
+#endif
 
     m_pMutex->Release();
 

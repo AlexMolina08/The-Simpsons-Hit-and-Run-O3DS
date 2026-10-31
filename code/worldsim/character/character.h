@@ -158,6 +158,9 @@ public: // MEMBERS
     choreo::Puppet* GetPuppet( void ) const;
 
     void SetDrawable( CharacterRenderable* pDrawablePose );
+#ifdef SRR2_OLD3DS_NATIVE_BENCH
+    bool NativeBenchModelReady() const;
+#endif
     
     virtual void PreSimUpdate(float timeins);
     virtual void UpdateRoot( float timeins );

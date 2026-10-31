@@ -1690,6 +1690,7 @@ namespace
 
     tSprite* UIAsset(const char* name)
     {
+        O3_MAIN_SCOPE(HudAsset);
         // Reuse loaded retail sprites. Release project references on manager
         // changes, before the next level competes for Old 3DS texture memory.
         struct Slot {tUID id;tSprite* sprite;};
@@ -1731,6 +1732,7 @@ namespace
 
     void Gradient(float l,float t,float r,float b,tColour top,tColour bottom)
     {
+        O3_MAIN_SCOPE(HudShape);
         FlushUI();
         static pddiShader* shader=NULL;
         if(!shader){shader=p3d::device->NewShader("simple");shader->AddRef();
@@ -1744,6 +1746,7 @@ namespace
 
     void Rounded(float l,float t,float r,float b,tColour top,tColour bottom)
     {
+        O3_MAIN_SCOPE(HudShape);
         FlushUI();
         static pddiShader* shader=NULL;
         if(!shader){shader=p3d::device->NewShader("simple");shader->AddRef();
@@ -2244,6 +2247,7 @@ namespace
     public:
         explicit NativeViewPass(tView* target):view(target),previous(p3d::context->GetView())
         {
+            O3_MAIN_SCOPE(HudView);
             p3d::pddi->PushState(PDDI_STATE_RENDER);p3d::pddi->PushState(PDDI_STATE_VIEW);
             p3d::stack->Push();
             const unsigned clear=view->GetClearMask();view->SetClearMask(0);
@@ -2252,6 +2256,7 @@ namespace
         void End()
         {
             if(!view)return;
+            O3_MAIN_SCOPE(HudView);
             view->EndRender();p3d::context->SetView(previous);p3d::stack->Pop();
             p3d::pddi->PopState(PDDI_STATE_VIEW);p3d::pddi->PopState(PDDI_STATE_RENDER);view=NULL;
         }
@@ -2341,6 +2346,53 @@ namespace
         // 320-wide Scrooby space fills a 400-wide LCD; compensate to retain art proportions.
         RetailArt(art,160,133,art->GetWidth()*scale*0.8f,art->GetHeight()*scale);
         nativePass.End();
+    }
+
+    tFont* StartupFont()
+    {
+        CGuiManager* manager=GetGuiSystem()->GetCurrentManager();
+        Scrooby::Project* project=manager?manager->GetScroobyProject():NULL;
+        // The PC boot manager does not create a BootupLoad window. Its shared
+        // project resources still own the text fonts throughout this screen.
+        Scrooby::Screen* resource=project?project->GetScreen("BootupLoad"):NULL;
+        Scrooby::Text* label=resource?FindText(resource,"Loading"):NULL;
+        if(!label){resource=project?project->GetScreen("Message"):NULL;label=resource?FindText(resource,"Message"):NULL;}
+        return label?label->GetFont():NULL;
+    }
+
+    void DrawUpperStartupVersion(tView* view,CGuiScreen* screen)
+    {
+        if(!view || !screen || !screen->IsRunning() || screen->GetWindowID()!=CGuiWindow::GUI_SCREEN_ID_LICENSE)return;
+        tFont* font=StartupFont();
+        if(!font || font->GetFontHeight()<=0)return;
+        NativeViewPass nativePass(view);
+        p3d::pddi->EnableZBuffer(false);p3d::pddi->SetCullMode(PDDI_CULL_NONE);
+        p3d::pddi->SetCamera(0.1f,10,1.5708f,4.0f/3);p3d::pddi->SetProjectionMode(PDDI_PROJECTION_PERSPECTIVE);
+        p3d::stack->LoadIdentity();p3d::stack->Translate(-0.4f,-0.375f,0.5f);
+        p3d::stack->Scale(0.8f,1,1);
+        // Reuse the boot project's font; no new asset or gameplay overlay.
+        P3D_UNICODE version[]={'v','1','.','2','.','0',0};
+        const float height=10,width=font->GetTextWidth(version)*height/font->GetFontHeight();
+        BottomLabel(font,version,352-width,232,height,White,80);
+        nativePass.End();
+    }
+
+    void DrawBottomStartupAttribution(tView* view)
+    {
+        tFont* font=StartupFont();
+        if(!view || !font || font->GetFontHeight()<=0 || !picaBottomScreenInterfaceBegin())return;
+        NativeViewPass nativePass(view);
+        p3d::pddi->EnableZBuffer(false);p3d::pddi->SetCullMode(PDDI_CULL_NONE);
+        p3d::pddi->SetCamera(0.1f,10,1.5708f,4.0f/3);p3d::pddi->SetProjectionMode(PDDI_PROJECTION_PERSPECTIVE);
+        p3d::stack->LoadIdentity();p3d::stack->Translate(-0.5f,-0.375f,0.5f);
+        // A small port-source credit keeps redistributed builds identifiable.
+        const char* lines[]={"3DS port by AlexMolina08","github.com/AlexMolina08"};
+        for(unsigned i=0;i<2;++i){
+            P3D_UNICODE attribution[64];NativeCaption(lines[i],attribution,64);
+            const float height=10,width=font->GetTextWidth(attribution)*height/font->GetFontHeight();
+            BottomLabel(font,attribution,312-width,219+13*i,height,tColour(170,174,182),304);
+        }
+        nativePass.End();picaBottomScreenEnd();
     }
 
     void DrawUpperCredits(tView* view,CGuiScreen* screen)
@@ -2614,6 +2666,10 @@ namespace
         const bool gallery=id==CGuiWindow::GUI_SCREEN_ID_VIEW_CARDS || id==CGuiWindow::GUI_SCREEN_ID_CARD_GALLERY;
         const bool movie=GetPresentationManager() && GetPresentationManager()->GetFMVPlayer() &&
             GetPresentationManager()->GetFMVPlayer()->IsPlaying();
+        if(view && screen && !movie && screen->IsRunning() && id==CGuiWindow::GUI_SCREEN_ID_LICENSE)
+        {
+            DrawBottomStartupAttribution(view);return;
+        }
         // Cinematics and boot artwork belong to the upper display only.
         if( view == NULL || screen == NULL || movie || (!loading && !tutorial && !stats && !gameStats && !briefing && !messageOnly && !gallery && !conversation && !credits && !screen->HasMenu()) )
         {
@@ -3258,6 +3314,7 @@ void CHudMap::AfterRenderLayers3DS( tView* guiView )
         }
     }
 
+    DrawUpperStartupVersion(guiView,CurrentBottomScreen());
     DrawUpperPreview(guiView,CurrentBottomScreen());
     DrawUpperStats(guiView,CurrentBottomScreen());
     DrawUpperObjective(guiView,CurrentBottomScreen());

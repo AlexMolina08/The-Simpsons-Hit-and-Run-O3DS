@@ -50,6 +50,19 @@
 AllWrappers* AllWrappers::mspInstance = NULL;
 
 static const int NUM_GLOBAL_ENTITIES = 32;
+#ifdef SRR2_OLD3DS_NATIVE_BENCH
+#include <cstdio>
+#include <cstring>
+namespace {
+AllWrappers* expectedWrappers=nullptr;
+IWrappedLoader* expectedLoaders[AllWrappers::msNumWrappers]={};
+void* expectedVtables[AllWrappers::msNumWrappers]={};
+GeometryWrappedLoader* expectedGeometry=nullptr;
+void* expectedGeometryVtable=nullptr;
+unsigned loaderIntegrityFailures=0;
+}
+#endif
+
 
 //************************************************************************
 //
@@ -158,6 +171,13 @@ IWrappedLoader* AllWrappers::mpLoader( int iIndex )
 {
    rAssert( iIndex < msNumWrappers);
 
+#ifdef SRR2_OLD3DS_NATIVE_BENCH
+   if(iIndex==msGeometry && expectedWrappers){
+       void* vtable=nullptr;std::memcpy(&vtable,expectedGeometry,sizeof(vtable));
+       if(this!=expectedWrappers || mpLoaders[iIndex]!=expectedLoaders[iIndex] || vtable!=expectedGeometryVtable)
+           DumpIntegrity(stdout);
+   }
+#endif
    return (mpLoaders[iIndex]);
 }
 
@@ -353,6 +373,10 @@ void AllWrappers::AddGlobalEntity(tDrawable* Entity)
     {
         return;
     }
+#ifdef SRR2_OLD3DS_NATIVE_BENCH
+    if(mNumGlobalEntities>=NUM_GLOBAL_ENTITIES)
+        std::printf("NATIVE_GLOBAL_ENTITY_OVERFLOW count=%d capacity=%d\n",mNumGlobalEntities,NUM_GLOBAL_ENTITIES);
+#endif
     rAssert(mNumGlobalEntities < NUM_GLOBAL_ENTITIES);
     rAssert(GetGlobalEntity(Entity->GetUID()) == 0);
     mpGlobalEntities[mNumGlobalEntities] = Entity;
@@ -409,6 +433,12 @@ AllWrappers::AllWrappers()
    }
    CoupleAllLoaders();
 
+#ifdef SRR2_OLD3DS_NATIVE_BENCH
+   expectedWrappers=this;
+   for(int i=0;i<msNumWrappers;++i){expectedLoaders[i]=mpLoaders[i];std::memcpy(expectedVtables+i,mpLoaders[i],sizeof(void*));}
+   expectedGeometry=static_cast<GeometryWrappedLoader*>(mpLoaders[msGeometry]);
+   std::memcpy(&expectedGeometryVtable,expectedGeometry,sizeof(void*));
+#endif
    mpGlobalEntities = new tDrawable* [NUM_GLOBAL_ENTITIES];
    rAssert(mpGlobalEntities);
    mNumGlobalEntities = 0;
@@ -445,3 +475,23 @@ AllWrappers::~AllWrappers()
     delete mpGlobalEntities;
     mpGlobalEntities = 0;
 }
+
+#ifdef SRR2_OLD3DS_NATIVE_BENCH
+void AllWrappers::DumpIntegrity(FILE* file) const
+{
+    unsigned changed=0,vtables=0;
+    if(this!=expectedWrappers)changed=~0u;
+    else for(unsigned i=0;i<msNumWrappers;++i){
+        if(mpLoaders[i]!=expectedLoaders[i])changed|=1u<<i;
+        else{void* vtable=nullptr;std::memcpy(&vtable,mpLoaders[i],sizeof(vtable));if(vtable!=expectedVtables[i])vtables|=1u<<i;}
+    }
+    void* geometryVtable=nullptr;
+    if(expectedGeometry)std::memcpy(&geometryVtable,expectedGeometry,sizeof(geometryVtable));
+    const bool geometryBad=geometryVtable!=expectedGeometryVtable;
+    loaderIntegrityFailures+=changed || vtables || geometryBad;
+    std::fprintf(file,"NATIVE_WRAPPER_INTEGRITY instance=%p expected_instance=%p geometry=%p expected_geometry=%p changed_slots=%08x changed_vtables=%08x geometry_vtable=%p expected_vtable=%p failures=%u global_entities=%d capacity=%d\n",
+        static_cast<const void*>(this),static_cast<void*>(expectedWrappers),
+        this==expectedWrappers?static_cast<void*>(mpLoaders[msGeometry]):nullptr,static_cast<void*>(expectedLoaders[msGeometry]),
+        changed,vtables,geometryVtable,expectedGeometryVtable,loaderIntegrityFailures,mNumGlobalEntities,NUM_GLOBAL_ENTITIES);
+}
+#endif

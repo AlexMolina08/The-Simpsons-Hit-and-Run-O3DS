@@ -20,7 +20,7 @@ const char* names[]={"game_update","world_layer","world_scene","opaque","translu
     "material_capture","material_prerender","uniform_capture","light_rebuild","prim_display","geometry_capture",
     "begin_prepared","flush_prepared","frame_begin","viewport","vehicle_update","store_joints","physics_update",
     "physics_substep","characters_update","poser_assign","poser_fill",
-    "hud_interface","hud_radar","hud_sprite","hud_font","hud_wrap","hud_art"};
+    "hud_interface","hud_radar","hud_sprite","hud_font","hud_wrap","hud_art","resident_lookup","ground_query","hud_asset","hud_shape","hud_view","hud_target"};
 static_assert(sizeof(names)/sizeof(names[0])==Count,"Every profiler stage needs one label");
 }
 void Configure(bool value)

@@ -6,13 +6,15 @@
 
 struct picaVramAllocation;
 struct picaLinearTextureRetirement;
-#if defined(SRR2_OLD3DS_NATIVE_BENCH) && defined(SRR2_OLD3DS_VRAM_TEXTURES)
+#if (defined(SRR2_OLD3DS_NATIVE_BENCH) || defined(SRR2_OLD3DS_WORLD_RESIDENCY)) && defined(SRR2_OLD3DS_VRAM_TEXTURES)
 extern bool g_picaVramCapturePromote,g_picaVramCopyDiagnostics;
 extern bool g_picaVramCompact;
+extern bool g_picaLinearCompact;
 #endif
 #if defined(SRR2_OLD3DS_NATIVE_BENCH) && defined(SRR2_OLD3DS_NATIVE_TEXTURE_BUNDLE)
 extern bool g_picaNativeExactWorldFallback;
 extern bool g_picaNativeBundleUnbuffered;
+extern bool g_picaNativeBundleCoalesced;
 #endif
 #ifdef SRR2_OLD3DS_NATIVE_TEXTURES
 struct picaNativeTextureStats { unsigned hits,misses,invalid,bytes,cost[3][5]; };
@@ -81,6 +83,7 @@ protected:
 #ifdef SRR2_OLD3DS_NATIVE_ETC1
     // Preserve the original mip-allocation and VRAM-budget policy while testing
     // compressed transfer/sampling. The backing allocation retains this size.
+    // Diagnostic linear compaction keeps this value for later full-size writes.
     unsigned nativeAllocationBytes=0;
 #endif
     void FreeStaging(void);
@@ -90,6 +93,11 @@ protected:
 #ifdef SRR2_OLD3DS_VRAM_TEXTURES
     void TryPromoteVram();
     picaVramAllocation* vramAllocation;
+#if defined(SRR2_OLD3DS_NATIVE_BENCH) || defined(SRR2_OLD3DS_WORLD_RESIDENCY)
+    // Read-only compact linear bytes use the same completed-frame retirement
+    // queue as VRAM. A later upload must first allocate original-size storage.
+    picaVramAllocation* nativeLinearAllocation;
+#endif
     void* reuploadLinear;
     // Same one-byte field: 0 excluded, 1 ordinary, 2 private world lightmap.
     unsigned char vramEligible;

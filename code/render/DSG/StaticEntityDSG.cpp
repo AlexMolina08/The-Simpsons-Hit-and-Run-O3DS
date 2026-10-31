@@ -16,6 +16,11 @@
 // Project Includes
 //========================================
 #include <render/DSG/StaticEntityDSG.h>
+#include <main/worldstreaming.h>
+#include <main/worldresidency.h>
+#ifdef SRR2_OLD3DS_NATIVE_BENCH
+#include <main/old3dsdiag.h>
+#endif
 #include <memory/srrmemory.h>
 #include <p3d/utility.hpp>
 #ifdef SRR2_OLD3DS_VISUAL_UPGRADE
@@ -224,8 +229,14 @@ void StaticEntityDSG::Display()
 #ifdef PROFILER_ENABLED
     char profileName[] = "  StaticEntityDSG Display";
 #endif
+#if defined(SRR2_OLD3DS_NATIVE_BENCH) || defined(SRR2_OLD3DS_WORLD_RESIDENCY)
+    if(!WorldResidency::Visible(this))return;
+#endif
     if(IS_DRAW_LONG) return;
     DSG_BEGIN_PROFILE(profileName)
+#ifdef SRR2_OLD3DS_NATIVE_BENCH
+    const unsigned streamDrawStart=g_old3dsDrawCalls;
+#endif
 
     if(mIsGeo & IS_SHADOW)
     {
@@ -237,6 +248,9 @@ void StaticEntityDSG::Display()
     {
         mpDrawstuff->Display();
     }
+#ifdef SRR2_OLD3DS_NATIVE_BENCH
+    WorldStreaming::Displayed(this,g_old3dsDrawCalls-streamDrawStart);
+#endif
     DSG_END_PROFILE(profileName)
 }
 

@@ -22,7 +22,7 @@ PYTHON_MODULES = (
     'prepare_character_occlusion.py', 'prepare_vehicle_reflections.py',
     'prepare_scene_occlusion.py', 'prepare_world_sun.py', 'pack_world_sun.py',
     'prepare_sprite_atlases.py', 'prepare_landmark_visibility.py',
-    'prepare_streaming_order.py',
+    'prepare_world_residency.py', 'prepare_stream_probes.py', 'prepare_streaming_order.py',
 )
 PYTHON_PACKAGES = ('pillow', 'numpy')
 CAR_MODELS = (
@@ -198,8 +198,45 @@ def _round_scene(data, source_hash, record):
     return bytes(result), len(seen)
 
 
+def _prepare_resident_level(art, overlay, work, destination, level, landmarks,
+                            resource_references=None, resource_fingerprint=None):
+    """Prepare one resident map while preserving its original v1.2 assets."""
+    import prepare_world_residency as resident
+    records = [(item['name_key'], item['geometry_key']) for item in landmarks['selected']]
+    resident.prepare(art, overlay, int(level), work, opaque_world=True,
+                     max_linear_bytes=64*1024*1024, additional_landmarks=records,
+                     resource_references=resource_references, resource_fingerprint=resource_fingerprint)
+    for path in (work/'art').iterdir():
+        _copy(path, destination/'art'/path.name)
+    _copy(work/'resident-visibility.bin', destination/f'resident-visibility{level}.bin')
+    profile = (work/'landmark-visibility.bin').read_bytes()
+    return {'level': level, 'profile': list(struct.iter_unpack('<II', profile[16:])),
+            'files': {item['path']: {'bytes': item['bytes'], 'sha256': item['sha256']}
+                      for item in _outputs(destination)}}
+
+
+def _finalize_residency(levels, destination, native_bundle_sha256):
+    """Publish the complete inventory only after every map has a result."""
+    from prepare_world_residency import admission_bytes
+    if not levels or sorted(str(item['level']) for item in levels) != list('1234567'):
+        raise ValueError('All seven maps must be prepared before finalizing complete scenery.')
+    records = sorted({tuple(record) for item in levels for record in item['profile']})
+    if len(records) > 448:
+        raise ValueError('The complete scenery index exceeds its capacity.')
+    binary = struct.pack('<4sIII', b'LMV1', 1, len(records), 8)+b''.join(
+        struct.pack('<II', *record) for record in records)
+    files = {path: entry for item in levels for path, entry in item['files'].items()}
+    files['landmark-visibility.bin'] = {'bytes': len(binary), 'sha256': hashlib.sha256(binary).hexdigest()}
+    admission = admission_bytes(files, native_bundle_sha256)
+    destination.mkdir()
+    (destination/'landmark-visibility.bin').write_bytes(binary)
+    (destination/'asset-admission.bin').write_bytes(admission)
+
+
 def prepare_stage(stage, source_root, output_root, level=None, occlusion=None,
-                  progress=None, landmark_levels=None, rounding=None):
+                  progress=None, landmark_levels=None, rounding=None, residency=False,
+                  residency_levels=None, native_bundle_sha256=None,
+                  residency_resources=None, resource_fingerprint=None):
     """Prepare one bounded stage and return output paths/hashes plus small metadata.
 
     Stages: cars, characters, hud, world (one level), landmarks. The world result
@@ -326,12 +363,21 @@ def prepare_stage(stage, source_root, output_root, level=None, occlusion=None,
             if level == '2':
                 from prepare_streaming_order import apply_release_order
                 metadata['streaming_road_order'] = apply_release_order(output/'art')
+            if residency:
+                references = (json.loads(residency_resources) if isinstance(residency_resources, str)
+                              else residency_resources)
+                metadata['residency'] = _prepare_resident_level(
+                    art, output/'art', work/'resident', output/'world-residency',
+                    level, metadata['landmarks'], references, resource_fingerprint)
             metadata['level'] = level
         elif stage == 'landmarks':
             _notify(progress, stage, 'Preparing distant scenery')
             if landmark_levels is None:
                 landmark_levels = [_choose_landmarks(_art(source), value) for value in '1234567']
             _write_landmarks(landmark_levels, output)
+            if residency:
+                levels = json.loads(residency_levels) if isinstance(residency_levels, str) else residency_levels
+                _finalize_residency(levels, output/'world-residency', native_bundle_sha256)
         else:
             raise ValueError(f'Unknown v1.2 preparation stage: {stage}')
     outputs = _outputs(output)

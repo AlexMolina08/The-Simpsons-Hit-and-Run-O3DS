@@ -579,7 +579,7 @@ void picaDisplay::BeginFrame(void)
         }
         if(stereoThisFrame)
         {
-            ++stereoFrames;
+            ++stereoFrames;NativeBench::ReloadStereoFrame();
             if(slider < minimumStereoSlider) minimumStereoSlider = slider;
             if(slider > maximumStereoSlider) maximumStereoSlider = slider;
         }
@@ -649,7 +649,7 @@ void picaDisplay::FinishTopSegment(void)
     if(earlyWorldCommands || hasTail)
     {
 #ifdef SRR2_OLD3DS_NATIVE_BENCH
-        ++stereoSegments;
+        ++stereoSegments;NativeBench::ReloadStereoSegment();
         if(earlyWorldCommands)picaAuditStereoScene(earlyWorldCommands,earlyWorldWords);
         if(hasTail)picaAuditStereoScene(sceneBuf,sceneSize);
 #endif

@@ -485,13 +485,15 @@ void CGuiScreenLetterBox::InitOutro()
     g_TopIn.Deactivate();
     g_BottomIn.Deactivate();
     bool sundayDrive   = GetGameplayManager()->IsSundayDrive();
-    int  numStages     = GetGameplayManager()->GetCurrentMission()->GetNumStages();
-    int  currentIndex  = GetGameplayManager()->GetCurrentMission()->GetCurrentStageIndex();
+    // Restart/teardown can clear the stage before the dialogue screen exits.
+    // Keep the normal outro cleanup, but do not query an expired objective.
     Mission* mission   = GetGameplayManager()->GetCurrentMission();
-    MissionStage* stage = mission->GetCurrentStage();
-    MissionObjective* obj = stage->GetObjective();
-    bool pattyAndSelma = obj->IsPattyAndSelmaDialog();
-    bool raceDialog    = obj->IsRaceDialog();
+    int  numStages     = mission ? mission->GetNumStages() : 0;
+    int  currentIndex  = mission ? mission->GetCurrentStageIndex() : -1;
+    MissionStage* stage = mission ? mission->GetCurrentStage() : NULL;
+    MissionObjective* obj = stage ? stage->GetObjective() : NULL;
+    bool pattyAndSelma = obj && obj->IsPattyAndSelmaDialog();
+    bool raceDialog    = obj && obj->IsRaceDialog();
     
     g_BottomClose.SetNextTransition( NULL );
 
@@ -508,7 +510,7 @@ void CGuiScreenLetterBox::InitOutro()
     }
     else
     {
-        if( ( sundayDrive && (currentIndex >= numStages - 1) ) || pattyAndSelma || raceDialog )
+        if( ( stage && sundayDrive && (currentIndex >= numStages - 1) ) || pattyAndSelma || raceDialog )
         {
             g_TopClose.Activate();
             g_BottomClose.Activate();

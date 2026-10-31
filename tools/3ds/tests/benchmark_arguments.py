@@ -2,7 +2,10 @@
 """Exercise actual benchmark argument parsing, including long-route duration."""
 from pathlib import Path
 import subprocess,tempfile
-root=Path(__file__).resolve().parents[3];text=(root/'code/main/nativebench.cpp').read_text();a=text.index('static char runIdentity[');b=text.index('void Init(',a);fragment=text[a:b]
+root=Path(__file__).resolve().parents[3];text=(root/'code/main/nativebench.cpp').read_text();a=text.index('static char runIdentity[');b=text.index('struct PassiveFrame',a);fragment=text[a:b]
+cache_source=(root/'libs/pure3d/pddi/pica/texture.cpp').read_text()
+ca=cache_source.index('unsigned Mode(){return mode;}');cb=cache_source.index('void Start(unsigned level)',ca)
+cache_policy=cache_source[ca:cb]
 with tempfile.TemporaryDirectory(prefix='srr-bench-args-') as directory:
  p=Path(directory);cpp=p/'test.cpp'
  cpp.write_text('''#include <cassert>
@@ -11,14 +14,63 @@ with tempfile.TemporaryDirectory(prefix='srr-bench-args-') as directory:
 #include <cstdio>
 #include <cmath>
 #include <initializer_list>
+#include <main/worldstressplan.h>
+static WorldStress::Plan reloadPlan;
+static bool worldResidencyOverride=false,irisCapture=false;
+namespace rmt {struct Vector {float x,y,z;};}
+static rmt::Vector roadAnchor={};static bool fixedRoadAnchor=false,residencyCpuProbe=false,missionNpcProbe=false;static unsigned suspensionProbe=0;
+namespace WorldResidency {static bool lookupCache=true;void CacheLookup(bool enabled){lookupCache=enabled;}}
+
 static float smallObjectCullSquared=4000.0f;static unsigned roadDirection=0,trafficLimit=0;static unsigned earlyWorldQueue=0;static bool stereoClip=false;static bool portraitActor=false,portraitNPC=false,portraitTraffic=false,portraitPlayerObserver=false,g_old3dsPreparedAudio=false,g_old3dsPreparedAudioShort=false;static char portraitModel[32]={},portraitActorModel[32]="male6";static float stereoTestSlider=-1,portraitDistance=1,portraitBearing=45;
-static bool g_picaNativeExactWorldFallback=false,g_picaNativeBundleUnbuffered=false,g_picaVramCompact=false;
+static bool g_old3dsParkedSectionRemove=true;
+static bool g_picaNativeExactWorldFallback=false,g_picaNativeBundleUnbuffered=false,g_picaNativeBundleCoalesced=false,g_picaVramCompact=false,g_picaLinearCompact=false;
+static unsigned g_old3dsWorldOrderChoice=0,g_old3dsWorldResidencyChoice=0;
+static int loaderCore=-1;
+void radLoadSetCoreExperiment(int core){loaderCore=core;}
+int radLoadCoreExperimentRequested(){return loaderCore;}
+namespace picaNativeLevel {unsigned mode=0;bool attempted=false;
+'''+cache_policy+'''
+}
+namespace picaNativeRead {bool enabled=false;}
 namespace Old3dsPerformance { unsigned mode=1; }
 namespace HandheldHudCadence { bool boostPickupAnimations=true; }
 namespace Old3dsRecurring { bool requested=false,focusDropWindow=false;unsigned stationaryMs=0,windowStartMs=15000,windowEndMs=18000; }
 static unsigned seconds=25,warmup=8,seed=1;static bool hold=false,reload=false,serviceProfile=false,afterRouteCapture=false,vehicleProfile=false,g_picaSkinPrepareYield=false,g_old3dsTrafficFacingOnly=false,g_old3dsAdpcmPrune=false,g_old3dsAdpcmVerify=false,g_old3dsAdpcmFast=false;
 '''+fragment+'''
 int main(){
+ assert(ParseRunArgument("bench_mission_npc_probe=1") && missionNpcProbe);
+ assert(!ParseRunArgument("bench_mission_npc_probe=1junk") && missionNpcProbe);
+ assert(ParseRunArgument("bench_mission_npc_probe=0") && !missionNpcProbe);
+ assert(ParseRunArgument("bench_suspension_probe=1") && suspensionProbe);
+ assert(!ParseRunArgument("bench_suspension_probe=1junk") && suspensionProbe);
+ assert(ParseRunArgument("bench_suspension_probe=2") && suspensionProbe==2);
+ assert(ParseRunArgument("bench_suspension_probe=0") && !suspensionProbe);
+ assert(ParseRunArgument("bench_loader_core=0") && loaderCore==0);
+ assert(ParseRunArgument("bench_loader_core=1") && loaderCore==1);
+ assert(!ParseRunArgument("bench_loader_core=2") && loaderCore==1);
+ assert(!ParseRunArgument("bench_loader_core=1junk") && loaderCore==1);
+#ifdef SRR2_OLD3DS_LEVEL_CACHE
+ assert(!ParseRunArgument("bench_native_cache=1") && picaNativeLevel::Mode()==0);
+ assert(ParseRunArgument("bench_loader_core=0"));
+ assert(ParseRunArgument("bench_native_cache=1") && picaNativeLevel::Mode()==1 && loaderCore==0);
+ assert(ParseRunArgument("bench_native_cache=2") && picaNativeLevel::Mode()==2);
+ assert(!ParseRunArgument("bench_loader_core=1") && loaderCore==0);
+ assert(!ParseRunArgument("bench_native_cache=3") && picaNativeLevel::Mode()==2);
+ assert(!ParseRunArgument("bench_native_cache=2junk") && picaNativeLevel::Mode()==2);
+ assert(ParseRunArgument("bench_native_cache=0") && picaNativeLevel::Mode()==0);
+#else
+ assert(!ParseRunArgument("bench_native_cache=1"));
+#endif
+
+
+ assert(ParseRunArgument("bench_world_residency=1") && g_old3dsWorldResidencyChoice==1);
+ assert(ParseRunArgument("bench_world_residency=2") && g_old3dsWorldResidencyChoice==2);
+ assert(ParseRunArgument("bench_world_residency=3") && g_old3dsWorldResidencyChoice==3);
+ assert(ParseRunArgument("bench_world_residency=4") && g_old3dsWorldResidencyChoice==4);
+ assert(!ParseRunArgument("bench_world_residency=5") && g_old3dsWorldResidencyChoice==4);
+ assert(!ParseRunArgument("bench_world_residency=2junk") && g_old3dsWorldResidencyChoice==4);
+ assert(ParseRunArgument("bench_world_residency=0") && g_old3dsWorldResidencyChoice==0);
+
  assert(ParseRunArgument("bench_quality=0")&&Old3dsPerformance::mode==0);
  assert(ParseRunArgument("bench_quality=2")&&Old3dsPerformance::mode==2);
  assert(ParseRunArgument("bench_quality=7")&&Old3dsPerformance::mode==7);
@@ -32,8 +84,50 @@ int main(){
  assert(ParseRunArgument("bench_warmup=3")&&warmup==3);
  assert(ParseRunArgument("bench_hold=1")&&hold);
  assert(ParseRunArgument("bench_reload=1")&&reload);
+ assert(ParseRunArgument("bench_reload_plan=4:7,1:2,7:7") && reloadPlan.count==3 && reloadPlan.levels[0]==3 && reloadPlan.missions[2]==6);
+ assert(!ParseRunArgument("bench_reload_plan=4:7,8:1") && reloadPlan.count==3);
+ assert(ParseRunArgument("bench_iris_capture=1") && irisCapture);
+ assert(ParseRunArgument("bench_iris_capture=0") && !irisCapture);
+ assert(!ParseRunArgument("bench_iris_capture=1junk"));
+ assert(ParseRunArgument("bench_reload_active=1") && reloadPlan.activeMission);
+ assert(ParseRunArgument("bench_reload_active=0") && !reloadPlan.activeMission);
+ assert(!ParseRunArgument("bench_reload_active=1junk"));
+ assert(ParseRunArgument("bench_reload_interior=1") && reloadPlan.interior);
+ assert(ParseRunArgument("bench_reload_interior=0") && !reloadPlan.interior);
+ assert(!ParseRunArgument("bench_reload_interior=1junk"));
+ assert(ParseRunArgument("bench_reload_teleport=1") && reloadPlan.teleport);
+ assert(ParseRunArgument("bench_reload_teleport=0") && !reloadPlan.teleport);
+ assert(!ParseRunArgument("bench_reload_teleport=1junk"));
+ assert(ParseRunArgument("bench_reload_reset=1") && reloadPlan.resetMission);
+ assert(ParseRunArgument("bench_reload_reset=0") && !reloadPlan.resetMission);
+ assert(!ParseRunArgument("bench_reload_reset=1junk"));
+ assert(ParseRunArgument("bench_reload_dwell=3") && reloadPlan.dwellMs==3000);
+ assert(!ParseRunArgument("bench_reload_dwell=2") && reloadPlan.dwellMs==3000);
+ assert(!ParseRunArgument("bench_reload_dwell=3junk") && reloadPlan.dwellMs==3000);
+
  assert(ParseRunArgument("bench_seed=231171")&&seed==231171);
+ assert(ParseRunArgument("bench_resident_lookup_cache=0")&&!WorldResidency::lookupCache);
+ assert(ParseRunArgument("bench_resident_lookup_cache=1")&&WorldResidency::lookupCache);
+ assert(!ParseRunArgument("bench_resident_lookup_cache=1junk")&&WorldResidency::lookupCache);
+ assert(!ParseRunArgument("bench_resident_lookup_cache=2")&&WorldResidency::lookupCache);
+ assert(ParseRunArgument("bench_residency_cpu_probe=1")&&residencyCpuProbe&&seed==231171);
+ assert(ParseRunArgument("bench_residency_cpu_probe=0")&&!residencyCpuProbe);
+ assert(!ParseRunArgument("bench_residency_cpu_probe=2"));
+ assert(ParseRunArgument("bench_road_anchor=19.85,7.518,5")&&fixedRoadAnchor);
+ assert(roadAnchor.x>19.84f&&roadAnchor.x<19.86f&&roadAnchor.z==5);
+ for(const char* invalid:{"","1,2","1,2,3x","1,2,3,4","nan,1,2","1,inf,2","-10001,1,2"}){
+  char argument[128];snprintf(argument,sizeof(argument),"bench_road_anchor=%s",invalid);
+  assert(!ParseRunArgument(argument)&&roadAnchor.z==5&&roadAnchor.x>19.84f);
+ }
+
  assert(ParseRunArgument("bench_trial=physical-test")&&!strcmp(runIdentity,"physical-test"));
+ assert(ParseRunArgument("bench_world_order=1")&&g_old3dsWorldOrderChoice==1);
+ assert(ParseRunArgument("bench_world_order=2")&&g_old3dsWorldOrderChoice==2);
+ assert(!ParseRunArgument("bench_world_order=3")&&g_old3dsWorldOrderChoice==2);
+ assert(ParseRunArgument("bench_world_order=0")&&g_old3dsWorldOrderChoice==0);
+ assert(ParseRunArgument("bench_native_async=1")&&picaNativeRead::enabled);
+ assert(ParseRunArgument("bench_native_async=0")&&!picaNativeRead::enabled);
+ assert(!ParseRunArgument("bench_native_async=1junk")&&!picaNativeRead::enabled);
 #ifdef SRR2_OLD3DS_RECURRING_PROFILE
  assert(Old3dsRecurring::windowStartMs==15000&&Old3dsRecurring::windowEndMs==18000);
  assert(ParseRunArgument("bench_recurring_window=43000,47000"));
@@ -94,6 +188,10 @@ int main(){
 #ifdef SRR2_OLD3DS_VRAM_TEXTURES
  assert(ParseRunArgument("bench_vram_compact=1")&&g_picaVramCompact);
  assert(ParseRunArgument("bench_vram_compact=0")&&!g_picaVramCompact);
+ assert(ParseRunArgument("bench_linear_compact=1")&&g_picaLinearCompact);
+ assert(!ParseRunArgument("bench_linear_compact=2")&&g_picaLinearCompact);
+ assert(!ParseRunArgument("bench_linear_compact=1junk")&&g_picaLinearCompact);
+ assert(ParseRunArgument("bench_linear_compact=0")&&!g_picaLinearCompact);
 
 #endif
  assert(ParseRunArgument("bench_small_distance=100")&&smallObjectCullSquared==10000);
@@ -105,6 +203,13 @@ int main(){
  for(unsigned limit=1;limit<=5;++limit){char argument[64];snprintf(argument,sizeof(argument),"bench_traffic_limit=%u",limit);assert(ParseRunArgument(argument)&&trafficLimit==limit);}
  for(const char* invalid:{"bench_traffic_limit=0","bench_traffic_limit=6","bench_traffic_limit=nan","bench_traffic_limit=3x"})assert(!ParseRunArgument(invalid)&&trafficLimit==5);
 #if defined(SRR2_OLD3DS_NATIVE_TEXTURE_BUNDLE) && defined(SRR2_OLD3DS_NATIVE_ETC1)
+ assert(ParseRunArgument("bench_parked_section_remove=0")&&!g_old3dsParkedSectionRemove);
+ assert(ParseRunArgument("bench_parked_section_remove=1")&&g_old3dsParkedSectionRemove);
+ assert(!ParseRunArgument("bench_parked_section_remove=2"));
+ assert(ParseRunArgument("bench_native_coalesced=1")&&g_picaNativeBundleCoalesced);
+ assert(ParseRunArgument("bench_native_coalesced=0")&&!g_picaNativeBundleCoalesced);
+ assert(!ParseRunArgument("bench_native_coalesced=2"));
+ assert(!ParseRunArgument("bench_native_coalesced=1junk"));
  assert(ParseRunArgument("bench_native_unbuffered=1")&&g_picaNativeBundleUnbuffered);
  assert(ParseRunArgument("bench_native_unbuffered=0")&&!g_picaNativeBundleUnbuffered);
  assert(ParseRunArgument("bench_exact_world_cache=1")&&g_picaNativeExactWorldFallback);
@@ -121,6 +226,7 @@ int main(){
 }
 ''')
  for enabled in (False,True):
-  subprocess.run(['c++','-std=c++17','-DSRR2_OLD3DS_VRAM_TEXTURES','-DSRR2_OLD3DS_NATIVE_TEXTURE_BUNDLE','-DSRR2_OLD3DS_NATIVE_ETC1','-DSRR2_OLD3DS_PREPARED_AUDIO','-DSRR2_OLD3DS_GPU_SKIN_SUPPORT','-DSRR2_OLD3DS_NATIVE_TEXTURE_BUNDLE','-DSRR2_OLD3DS_BOTTOM_MAP_15HZ',*(['-DSRR2_OLD3DS_RECURRING_PROFILE'] if enabled else []),'-fsanitize=address,undefined',str(cpp),'-o',str(p/'test')],check=True)
-  subprocess.run([str(p/'test')],check=True)
+  for cache_enabled in (False,True):
+   subprocess.run(['c++','-std=c++17','-I'+str(root/'code'),'-DSRR2_OLD3DS_VRAM_TEXTURES','-DSRR2_OLD3DS_NATIVE_TEXTURE_BUNDLE','-DSRR2_OLD3DS_NATIVE_ETC1','-DSRR2_OLD3DS_PREPARED_AUDIO','-DSRR2_OLD3DS_GPU_SKIN_SUPPORT','-DSRR2_OLD3DS_NATIVE_TEXTURE_BUNDLE','-DSRR2_OLD3DS_BOTTOM_MAP_15HZ',*(['-DSRR2_OLD3DS_RECURRING_PROFILE'] if enabled else []),*(['-DSRR2_OLD3DS_LEVEL_CACHE'] if cache_enabled else []),'-fsanitize=address,undefined',str(cpp),'-o',str(p/'test')],check=True)
+   subprocess.run([str(p/'test')],check=True)
 print('PASS: production argument parsing with recurring profiling compiled on and off, bounded window validation and unchanged defaults.')

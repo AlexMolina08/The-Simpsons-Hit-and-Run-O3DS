@@ -1,8 +1,13 @@
+#include <main/worldresidency.h>
 #ifdef SRR2_OLD3DS_VISUAL_UPGRADE
 #include <pddi/pica/contactshadow.hpp>
 #include <pddi/pica/visualstyle.hpp>
 #endif
 #include <main/old3dsrecurring.h>
+#include <main/worldstreaming.h>
+#ifdef SRR2_OLD3DS_NATIVE_BENCH
+#include <main/nativebench.h>
+#endif
 #include <main/old3dspools.h>
 #include <main/old3dsmainprofile.h>
 //========================================================================
@@ -30,7 +35,6 @@
 #include <mission/gameplaymanager.h>
 #include <interiors/interiormanager.h>
 #endif
-
 //========================================
 // Project Includes
 //========================================
@@ -546,6 +550,15 @@ void WorldRenderLayer::AddGuts( IntersectDSG* ipIntersectDSG )
 void WorldRenderLayer::AddGuts( StaticEntityDSG* ipStaticEntityDSG )
 {
    mpWorldScene->Add( ipStaticEntityDSG );
+#if defined(SRR2_OLD3DS_NATIVE_BENCH) || defined(SRR2_OLD3DS_WORLD_RESIDENCY)
+   if(mDynaLoadState==msLoad)
+   {
+       WorldResidency::Bind(static_cast<radInt64>(GetCurSectionName().GetUID()),ipStaticEntityDSG);
+#ifdef SRR2_OLD3DS_NATIVE_BENCH
+       WorldStreaming::Loaded(static_cast<radInt64>(GetCurSectionName().GetUID()),ipStaticEntityDSG);
+#endif
+   }
+#endif
 
    if(mDynaLoadState==msLoad)
    {
@@ -1047,6 +1060,12 @@ void WorldRenderLayer::DeactivateWS(tUID iUID)
 //========================================================================
 void WorldRenderLayer::NullifyGuts()
 {
+#if defined(SRR2_OLD3DS_NATIVE_BENCH) || defined(SRR2_OLD3DS_WORLD_RESIDENCY)
+   WorldResidency::Reset();
+#endif
+#ifdef SRR2_OLD3DS_NATIVE_BENCH
+   WorldStreaming::ResetResidents();
+#endif
    RenderLayer::NullifyGuts();
 //   RenderLayer::DumpGuts();
 
@@ -1104,7 +1123,13 @@ MEMTRACK_PUSH_GROUP( "WorldRenderLayer" );
    int i;
    for(i=0;i<7;i++)
    {
+#if defined(SRR2_OLD3DS_NATIVE_BENCH) || defined(SRR2_OLD3DS_WORLD_RESIDENCY)
+      // The private fixture and complete production sets consolidate every ground
+      // intersection into the permanent section. Dynamic lists retain capacity.
+      mStaticLoadLists[i].AllocateAll(mnLoadListRefs,i==0 ? WorldResidency::GroundCapacity() : 0);
+#else
       mStaticLoadLists[i].AllocateAll(mnLoadListRefs);
+#endif
       mLoadLists[i] = &(mStaticLoadLists[i]);
    }
 
@@ -1145,6 +1170,9 @@ void WorldRenderLayer::DoPostStaticLoad()
 //========================================================================
 void WorldRenderLayer::DumpAllDynaLoads( unsigned int start, SwapArray<tRefCounted*>& irEntityDeletionList )
 {
+#if defined(SRR2_OLD3DS_NATIVE_BENCH) || defined(SRR2_OLD3DS_WORLD_RESIDENCY)
+    if(start<=1)WorldResidency::ClearDemand();
+#endif
     GetEventManager()->TriggerEvent( EVENT_INTERIOR_DUMPED );
 
     rTuneAssert(mQdDump==false);
@@ -1192,6 +1220,13 @@ void WorldRenderLayer::DumpDynaLoad(tName& irGiveItAFuckinName, SwapArray<tRefCo
       {
 BEGIN_PROFILE( "Remove Searches" );
 
+#if defined(SRR2_OLD3DS_NATIVE_BENCH) || defined(SRR2_OLD3DS_WORLD_RESIDENCY)
+         WorldResidency::Unloaded(static_cast<radInt64>(irGiveItAFuckinName.GetUID()));
+#endif
+#ifdef SRR2_OLD3DS_NATIVE_BENCH
+         WorldStreaming::EventUID("unload",static_cast<radInt64>(irGiveItAFuckinName.GetUID()));
+         WorldStreaming::Unloaded(static_cast<radInt64>(irGiveItAFuckinName.GetUID()));
+#endif
          GetEventManager()->TriggerEvent( EVENT_DUMP_DYNA_SECTION, (void*)(&(mLoadLists[i]->mGiveItAFuckinName)) );
          //////////////////////////////////////////////////////////////////////////
          // WorldSpheres
@@ -1599,6 +1634,13 @@ END_PROFILE( "Cleanup" );
 //
 //========================================================================
 #ifdef SRR2_OLD3DS_NATIVE_BENCH
+static unsigned s_worldLoadStarted=0;
+bool WorldRenderLayer::HasDynaLoad(tUID uid) const
+{
+    for(int i=0;i<mLoadLists.mUseSize;++i)
+        if(mLoadLists[i]->mGiveItAFuckinName.GetUID()==uid) return true;
+    return false;
+}
 void WorldRenderLayer::GetLoadedWorldCounts(unsigned& sections, unsigned& statics, unsigned& intersects) const
 {
     sections=statics=intersects=0;
@@ -1637,6 +1679,10 @@ bool WorldRenderLayer::DoPreDynaLoad(tName& irGiveItAFuckinName)//tUID iUID)
       mCurLoadIndex  = mLoadLists.mUseSize-1; 
 	  rReleasePrintf("CurLoadIndex is %d\n", mCurLoadIndex );
       mDynaLoadState = msLoad;
+#ifdef SRR2_OLD3DS_NATIVE_BENCH
+      s_worldLoadStarted=radTimeGetMilliseconds();
+      WorldStreaming::EventUID("section_reserved",static_cast<radInt64>(irGiveItAFuckinName.GetUID()));
+#endif
       HeapMgr()->PushHeap( GMA_LEVEL_OTHER );
       mLoadLists[mCurLoadIndex]->mGiveItAFuckinName= irGiveItAFuckinName;
       //mLoadLists[mCurLoadIndex]->ClearAll();
@@ -1668,6 +1714,12 @@ bool WorldRenderLayer::DoPreDynaLoad(tName& irGiveItAFuckinName)//tUID iUID)
 void WorldRenderLayer::DoPostDynaLoad()
 {
    rAssert(mDynaLoadState != msNoLoad);
+#ifdef SRR2_OLD3DS_NATIVE_BENCH
+   if(mCurLoadIndex>=0 && mDynaLoadState==msLoad) {
+       WorldStreaming::EventUID("section_complete",static_cast<radInt64>(GetCurSectionName().GetUID()));
+       WorldStreaming::ObserveLoad(radTimeGetMilliseconds()-s_worldLoadStarted);
+   }
+#endif
    mDynaLoadState = msNoLoad;
    mCurLoadUID = 0;
 
@@ -1774,6 +1826,9 @@ void WorldRenderLayer::OnWorldRenderLayerInit()
 //========================================================================
 void WorldRenderLayer::DumpAllDynaLoads()
 {
+#if defined(SRR2_OLD3DS_NATIVE_BENCH) || defined(SRR2_OLD3DS_WORLD_RESIDENCY)
+    WorldResidency::Reset();
+#endif
     GetEventManager()->TriggerEvent( EVENT_INTERIOR_DUMPED );
 
     int start = 0;
@@ -1805,6 +1860,9 @@ void WorldRenderLayer::DumpDynaLoad(tName& irGiveItAFuckinName)
    {
       if( mLoadLists[i]->mGiveItAFuckinName.GetUID() == irGiveItAFuckinName.GetUID() )
       {
+#if defined(SRR2_OLD3DS_NATIVE_BENCH) || defined(SRR2_OLD3DS_WORLD_RESIDENCY)
+         WorldResidency::Unloaded(static_cast<radInt64>(irGiveItAFuckinName.GetUID()));
+#endif
          GetEventManager()->TriggerEvent( EVENT_DUMP_DYNA_SECTION, (void*)(&(mLoadLists[i]->mGiveItAFuckinName)) );
 
          //////////////////////////////////////////////////////////////////////////

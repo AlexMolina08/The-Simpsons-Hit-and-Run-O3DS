@@ -1,3 +1,4 @@
+#include <main/worldresidency.h>
 #include <main/nativebench.h>
 #ifdef SRR2_OLD_3DS
 extern "C" void picaWorldOpaqueQueue(void);
@@ -1121,6 +1122,9 @@ BEGIN_PROFILE("list construction")
         //////////////////////////////////////////////////////////////////////////
         for( i= mStaticTreeWalker.rCurrent().mSEntityElems.mUseSize-1; i>-1; i-- )
         {
+#if defined(SRR2_OLD3DS_NATIVE_BENCH) || defined(SRR2_OLD3DS_WORLD_RESIDENCY)
+            if(!WorldResidency::Visible(mStaticTreeWalker.rCurrent().mSEntityElems[i]))continue;
+#endif
 #ifdef ZSORT_RENDER
             mStaticTreeWalker.rCurrent().mSEntityElems[i]->GetBoundingSphere(&ObjectSphere);
 #ifdef SRR2_OLD3DS_VISUAL_UPGRADE
@@ -2015,6 +2019,12 @@ void WorldScene::Place( IntersectDSG* ipIntersectDSG )
    //mStaticTreeWalker.Place( (ISpatialProxyAA&)DrawableSP, mStaticEntities[i] );
    //mStaticTreeWalker.rSeekNode((ISpatialProxyAA&)DrawableSP).mIntersectElems.Add(ipIntersectDSG);
    SpatialNode* pSpatialNode = &(mStaticTreeWalker.rSeekNode((ISpatialProxyAA&)DrawableSP));
+#if defined(SRR2_OLD3DS_NATIVE_BENCH) || defined(SRR2_OLD3DS_WORLD_RESIDENCY)
+   if(pSpatialNode->mIntersectElems.mUseSize>=pSpatialNode->mIntersectElems.mSize)
+   {
+       WorldResidency::PlacementFailure(true);return;
+   }
+#endif
    pSpatialNode->mIntersectElems.Add(ipIntersectDSG);
    ipIntersectDSG->mpSpatialNode = pSpatialNode;
 }
@@ -2067,6 +2077,9 @@ void WorldScene::Place(    StaticEntityDSG*  ipStaticEntity )
        pSpatialNode = &(mStaticTreeWalker.rIthNode(0));
        if( ! pSpatialNode->mSEntityElems.Add(ipStaticEntity) )
        {
+#if defined(SRR2_OLD3DS_NATIVE_BENCH) || defined(SRR2_OLD3DS_WORLD_RESIDENCY)
+           WorldResidency::PlacementFailure(false);return;
+#endif
            rTuneAssert(false);
        }
        else

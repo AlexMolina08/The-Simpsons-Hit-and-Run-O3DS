@@ -10,6 +10,16 @@
 #include "pch.hpp"
 #include "drivethread.hpp"
 #include "requests.hpp"
+#if defined(RAD_3DS) && defined(SRR2_OLD3DS_NATIVE_BENCH)
+#include <3ds.h>
+#include <stdio.h>
+static unsigned s_driveCoreSamples[4]={};
+extern "C" void radDriveDumpCoreSamples(FILE* file)
+{
+    fprintf(file,"NATIVE_DRIVE_CORE samples_0=%u samples_1=%u samples_2=%u samples_3=%u scope=whole_session sample=before_request wall_not_cpu=1\n",
+        s_driveCoreSamples[0],s_driveCoreSamples[1],s_driveCoreSamples[2],s_driveCoreSamples[3]);
+}
+#endif
 
 //=============================================================================
 // Static Member Functions
@@ -49,6 +59,10 @@ unsigned int radDriveThread::DriveThreadEntry( void* userData )
         radRequest* request = parent->NextRequest( &priority );
         rAssertMsg( request != NULL, "radDriveThread: thread synchronization error" );
 
+#if defined(RAD_3DS) && defined(SRR2_OLD3DS_NATIVE_BENCH)
+        const int core=svcGetProcessorID();
+        if(core>=0 && core<4)__atomic_fetch_add(&s_driveCoreSamples[core],1u,__ATOMIC_RELAXED);
+#endif
         parent->SetCurrentRequest( request );
         
         radDrive::CompletionStatus completionStatus;

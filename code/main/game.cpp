@@ -23,6 +23,11 @@ unsigned Old3dsPerformance::mode = 7;
 // Standard Library
 #include <stdlib.h>
 #include <main/nativebench.h>
+#include <main/worldstreaming.h>
+#include <main/worldresidency.h>
+#ifdef SRR2_OLD3DS_WORLD_RESIDENCY
+#include <mission/gameplaymanager.h>
+#endif
 #ifdef SRR2_OLD_3DS
 #include <pddi/pica/gpuuploadguard.hpp>
 extern "C" void (*g_picaGpuWaitHook)(int lend);
@@ -660,7 +665,11 @@ void Game::Run()
             O3ExperimentArm((hidKeysHeld() & KEY_X)!=0);
         else
 #endif
-        if(ctx == CONTEXT_PAUSE && (hidKeysDown() & KEY_SELECT))
+        if(ctx == CONTEXT_PAUSE && (hidKeysDown() & KEY_SELECT)
+#ifdef SRR2_OLD3DS_NATIVE_BENCH
+           && !WorldStreaming::passive
+#endif
+          )
         {
             const unsigned dumpStart = radTimeGetMilliseconds();
             const u64 dumpStartTick = svcGetSystemTick();
@@ -835,6 +844,10 @@ void Game::Run()
 #ifdef RAD_3DS
         // Ignore a clock anomaly or long suspension before it reaches animations.
         if (elapsed > 1000u) elapsed = 20u;
+#endif
+#ifdef SRR2_OLD3DS_WORLD_RESIDENCY
+        if(ctx==CONTEXT_GAMEPLAY && GetGameplayManager())
+            WorldResidency::Gameplay(unsigned(GetGameplayManager()->GetCurrentLevelIndex())+1);
 #endif
 #ifdef SRR2_OLD3DS_NATIVE_BENCH
         elapsed=NativeBench::Begin(elapsed,ctx);

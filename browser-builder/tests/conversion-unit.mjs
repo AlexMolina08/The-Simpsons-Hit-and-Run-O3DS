@@ -1,6 +1,25 @@
 import assert from 'node:assert/strict';
 import {File} from 'node:buffer';
 import {archiveMember, convertMovie, crc32, normalizeInputFiles, OPTIONAL_MOVIES, REQUIRED_MOVIES, validateInput} from '../engine-conversion/conversion.mjs';
+import {worldResidencySettings} from '../engine-conversion/world-residency.mjs';
+
+assert.deepEqual(worldResidencySettings({expectedFiles: {}}), {enabled: false, nativeBundleSHA256: null});
+const residentFiles = Object.fromEntries([
+  'asset-admission.bin', 'landmark-visibility.bin',
+  ...Array.from({length: 7}, (_, i) => `resident-visibility${i + 1}.bin`),
+  ...Array.from({length: 79}, (_, i) => `art/fixture${i}.p3d`),
+].map(name => [`world-residency/${name}`, {}]));
+const residentRecipe = {expectedFiles: residentFiles, runtime: {worldResidency: true}, nativeTextures: {sha256: 'a'.repeat(64)},
+  worldResidencyResources: {format: 1, levels: Object.fromEntries(Array.from({length: 7}, (_, i) => [i + 1, {}]))}};
+// The native bundle is separate metadata, not one of the visual overlay files.
+assert.equal(worldResidencySettings(residentRecipe).nativeBundleSHA256, 'a'.repeat(64));
+for (const invalid of [
+  {...residentRecipe, nativeTextures: {}},
+  {...residentRecipe, nativeTextures: {sha256: 'invalid'}},
+  {...residentRecipe, runtime: {}},
+  {...residentRecipe, expectedFiles: {}},
+  {...residentRecipe, expectedFiles: Object.fromEntries(Object.entries(residentFiles).slice(1))},
+]) assert.throws(() => worldResidencySettings(invalid));
 
 // A fixed legacy RCF key, obtained independently with the existing native reader.
 const archive = new Uint8Array(82), directory = new DataView(archive.buffer);

@@ -6,6 +6,8 @@
 #include <pddi/pica/gpuuploadguard.hpp>
 #ifdef SRR2_OLD3DS_NATIVE_BENCH
 #include <radloadtiming.hpp>
+#include <pddi/pica/nativereadahead.hpp>
+namespace picaNativeRead {Hooks hooks;bool enabled=false;}
 #endif
 #if defined(SRR2_OLD3DS_NATIVE_BENCH) && defined(SRR2_OLD3DS_VRAM_TEXTURES)
 #include <main/nativebench.h>
@@ -17,6 +19,7 @@
 
 #include <pddi/base/debug.hpp>
 #include <pddi/gl/decompress.h>
+#include <cstring>
 
 #ifdef SRR2_OLD3DS_NATIVE_TEXTURES
 #include <pddi/pica/nativetexture.hpp>
@@ -32,12 +35,14 @@ bool g_picaNativeBundleEnabled=true;
 #ifdef SRR2_OLD3DS_NATIVE_BENCH
 bool g_picaNativeExactWorldFallback=false;
 bool g_picaNativeBundleUnbuffered=false;
+bool g_picaNativeBundleCoalesced=false;
+static unsigned nativeCoalescedRecords=0,nativeCoalescedFallbacks=0;
 static unsigned nativeBundleOpens=0,nativeBundleUnbufferedOpens=0;
 static unsigned nativeExactWorldHits=0;
 #endif
 
 namespace {
-FILE* OpenNativeBundle()
+FILE* OpenNativeBundleWithBuffering(bool unbuffered)
 {
     char bundled[128];
     snprintf(bundled,sizeof(bundled),"romfs:/%s",picaNativeBundle::BundlePath);
@@ -48,42 +53,217 @@ FILE* OpenNativeBundle()
     if(file){
 #ifdef SRR2_OLD3DS_NATIVE_BENCH
         __atomic_fetch_add(&nativeBundleOpens,1u,__ATOMIC_RELAXED);
-        if(g_picaNativeBundleUnbuffered){
+        if(unbuffered){
             (void)setvbuf(file,nullptr,_IONBF,0);
             __atomic_fetch_add(&nativeBundleUnbufferedOpens,1u,__ATOMIC_RELAXED);
         }
         else
+#else
+        (void)unbuffered;
 #endif
         (void)setvbuf(file,nullptr,_IOFBF,32768);
     }
     return file;
 }
+FILE* OpenNativeBundle() {
+#ifdef SRR2_OLD3DS_NATIVE_BENCH
+    return OpenNativeBundleWithBuffering(g_picaNativeBundleUnbuffered);
+#else
+    return OpenNativeBundleWithBuffering(false);
+#endif
+}
+#ifdef SRR2_OLD3DS_NATIVE_BENCH
+FILE* OpenCoalescedNativeBundle(){return OpenNativeBundleWithBuffering(true);}
+#endif
 struct NativeBundleSlot {void* owner=nullptr;FILE* file=nullptr;bool active=false;};
 NativeBundleSlot bundleSlots[2];
+#ifdef SRR2_OLD3DS_NATIVE_BENCH
+NativeBundleSlot coalescedBundleSlots[2];
+#endif
 struct NativeBundleFile {
     FILE* file=nullptr;NativeBundleSlot* slot=nullptr;
-    NativeBundleFile(){
+    NativeBundleFile(NativeBundleSlot* selectedSlots=bundleSlots,FILE* (*openFile)()=OpenNativeBundle){
 #ifdef SRR2_OLD3DS_NATIVE_BENCH
         radLoadTiming::StageRegion open(radLoadTiming::NativeTextureOpen);
 #endif
         void* tls=getThreadLocalStorage();
-        for(auto& candidate:bundleSlots){
+        for(unsigned i=0;i<2;++i){
+            auto& candidate=selectedSlots[i];
             void* owner=__atomic_load_n(&candidate.owner,__ATOMIC_ACQUIRE);
             if(!owner){void* empty=nullptr;
                 if(__atomic_compare_exchange_n(&candidate.owner,&empty,tls,false,__ATOMIC_ACQ_REL,__ATOMIC_ACQUIRE))owner=tls;
             }
             if(owner!=tls || candidate.active)continue;
             candidate.active=true;slot=&candidate;
-            if(!candidate.file)candidate.file=OpenNativeBundle();
+            if(!candidate.file)candidate.file=openFile();
             file=candidate.file;return;
         }
         // Reentrancy or additional resource threads use an independent cursor.
         // Never hold a shared FILE lock across a cooperative loader yield.
-        file=OpenNativeBundle();
+        file=openFile();
     }
     ~NativeBundleFile(){if(slot)slot->active=false;else if(file)fclose(file);}
 };
 }
+#ifdef SRR2_OLD3DS_WORLD_RESIDENCY
+extern "C" const char* old3dsNativeBundleHash(){return picaNativeBundle::BundleSHA256;}
+extern "C" const char* old3dsNativeBundlePath(){return picaNativeBundle::BundlePath;}
+extern "C" unsigned old3dsNativeBundleBytes(){return picaNativeBundle::BundleBytes;}
+#endif
+#ifdef SRR2_OLD3DS_LEVEL_CACHE
+#include <pddi/pica/nativelevelcache.hpp>
+#include <malloc.h>
+extern "C" u32 __ctru_heap_size;
+extern "C" int radLoadCoreExperimentRequested();
+extern "C" void radLoadSetCoreExperiment(int);
+namespace picaNativeLevel {
+namespace {
+constexpr unsigned RuntimeMaximum=2*1024*1024,NormalReserve=4*1024*1024;
+enum State {Off,Direct,Reading,Ready,Failed};
+unsigned mode=0,state=Off,error=0;
+bool attempted=false;
+Info info;
+unsigned char header[HeaderBytes]={};
+unsigned char* index=nullptr;
+unsigned char* body=nullptr;
+Thread worker=nullptr;
+AVSHA* digestContext=nullptr;
+char path[96]={};
+unsigned coreSamples[4]={},readCalls=0,readBytes=0,pendingFrames=0;
+unsigned hits=0,hitBytes=0,misses=0,pendingLookups=0,invalid=0;
+unsigned admissionChecked=0,admissionFree=0;
+u64 startTick=0,doneTick=0;
+NativeBundleSlot diskSlots[2];
+struct Hash {
+    bool operator()(const void* input,size_t bytes,unsigned char* output) {
+        if(!digestContext || av_sha_init(digestContext,256))return false;
+        av_sha_update(digestContext,static_cast<const unsigned char*>(input),bytes);
+        av_sha_final(digestContext,output);return true;
+    }
+};
+void SampleCore() {
+    const int core=svcGetProcessorID();
+    if(core>=0 && core<4)++coreSamples[core];
+}
+// CacheWorkerBegin: only owned raw bytes, stdio and private SHA state. No engine
+// objects, allocator selection, world registration, yield hook or GPU calls.
+void RunWorker(void*) {
+    SampleCore();
+    FILE* file=std::fopen(path,"rb");
+    unsigned char actual[HeaderBytes];
+    bool valid=file && std::fread(actual,1,sizeof(actual),file)==sizeof(actual) &&
+        !std::memcmp(actual,header,sizeof(header));
+    unsigned offset=0;
+    const unsigned bytes=info.bytes-HeaderBytes;
+    while(valid && offset<bytes) {
+        const unsigned count=bytes-offset<32768?bytes-offset:32768;
+        SampleCore();++readCalls;
+        valid=std::fread(body+offset,1,count,file)==count;
+        if(valid){offset+=count;readBytes+=count;}
+    }
+    if(valid)valid=std::fgetc(file)==EOF && !std::ferror(file);
+    if(file)std::fclose(file);
+    Hash hash;
+    if(valid)valid=Verify(header,info,body,hash);
+    if(!valid)error=7;
+    doneTick=svcGetSystemTick();
+    __atomic_store_n(&state,valid?Ready:Failed,__ATOMIC_RELEASE);
+    threadExit(0);
+}
+// CacheWorkerEnd.
+FILE* OpenDisk() {return std::fopen(path,"rb");}
+struct View {const unsigned char* memory=nullptr;unsigned fileOffset=0;bool valid=false;};
+View Resolve(const char* key,unsigned bytes) {
+    const unsigned current=__atomic_load_n(&state,__ATOMIC_ACQUIRE);
+    if(current==Reading){++pendingLookups;return {};}
+    if(!index || (current!=Direct && current!=Ready))return {};
+    const unsigned char* entry=Find(info,index,key,bytes);
+    if(!entry){++misses;return {};}
+    const unsigned offset=info.payloadOffset+Word(entry+32);
+    return {current==Ready?body+offset-HeaderBytes:nullptr,offset,true};
+}
+void Record(bool valid,unsigned bytes) {
+    if(valid){++hits;hitBytes+=bytes;}else ++invalid;
+}
+}
+unsigned Mode(){return mode;}
+bool SetMode(unsigned selected) {
+    if(selected>2 || attempted || (selected && radLoadCoreExperimentRequested()==1))return false;
+    mode=selected;
+    // Both direct-file and staged comparisons receive the same CPU allocation
+    // and a core-0 loader. Only staging creates the independent core-1 worker.
+    if(mode)radLoadSetCoreExperiment(0);
+    return true;
+}
+void Start(unsigned level) {
+    if(!mode || attempted)return;
+    attempted=true;
+    auto reject=[](unsigned reason) {
+        error=reason;std::free(index);index=nullptr;std::free(body);body=nullptr;
+        av_free(digestContext);digestContext=nullptr;
+        __atomic_store_n(&state,Failed,__ATOMIC_RELEASE);
+    };
+    if(level<1 || level>7){reject(1);return;}
+    const int length=std::snprintf(path,sizeof(path),"sdmc:/3ds/hitrun-dev/native-cache-01/level%u.nsc",level);
+    if(length<=0 || unsigned(length)>=sizeof(path)){reject(1);return;}
+    FILE* file=std::fopen(path,"rb");
+    bool valid=file && std::fread(header,1,sizeof(header),file)==sizeof(header) &&
+        Header(header,sizeof(header),info) && info.level==level && info.bytes<=RuntimeMaximum;
+    if(valid) {
+        valid=!std::fseek(file,0,SEEK_END) && std::ftell(file)==long(info.bytes) &&
+            !std::fseek(file,HeaderBytes,SEEK_SET);
+    }
+    if(valid) {
+        index=static_cast<unsigned char*>(std::malloc(info.count*EntryBytes));
+        valid=index && std::fread(index,EntryBytes,info.count,file)==info.count &&
+            Index(info,index,info.count*EntryBytes);
+    }
+    if(file)std::fclose(file);
+    if(!valid){reject(2);return;}
+    if(mode==1){__atomic_store_n(&state,Direct,__ATOMIC_RELEASE);return;}
+    const unsigned bytes=info.bytes-HeaderBytes;
+    // Reserve includes the worker stack and stdio/hash overhead. This is an
+    // admission check, not a guarantee about later transient allocation peaks.
+    const unsigned used=mallinfo().uordblks;
+    admissionChecked=1;admissionFree=used<__ctru_heap_size?__ctru_heap_size-used:0;
+    if(admissionFree<bytes+NormalReserve+128*1024){reject(3);return;}
+    body=static_cast<unsigned char*>(std::malloc(bytes));
+    digestContext=av_sha_alloc();
+    if(!body || !digestContext){reject(4);return;}
+    startTick=svcGetSystemTick();
+    __atomic_store_n(&state,Reading,__ATOMIC_RELEASE);
+    worker=threadCreate(RunWorker,nullptr,64*1024,0x30,1,false);
+    if(!worker){reject(5);return;}
+}
+void Tick() {
+    const unsigned current=__atomic_load_n(&state,__ATOMIC_ACQUIRE);
+    if(current==Reading)++pendingFrames;
+    if(worker && current!=Reading && R_SUCCEEDED(threadJoin(worker,0))) {
+        threadFree(worker);worker=nullptr;
+        av_free(digestContext);digestContext=nullptr;
+        if(current==Failed){std::free(body);body=nullptr;}
+    }
+}
+void Finish() {
+    if(worker) {
+        if(R_FAILED(threadJoin(worker,U64_MAX)))return;
+        threadFree(worker);worker=nullptr;
+        av_free(digestContext);digestContext=nullptr;
+    }
+    // Keep immutable bytes and any active direct cursor alive until process
+    // exit: a cooperatively paused loader may still own a source view.
+}
+void Dump(FILE* file) {
+    std::fprintf(file,"NATIVE_LEVEL_CACHE mode=%u state=%u error=%u level=%u records=%u file_bytes=%u body_bytes=%u hits=%u hit_bytes=%u misses=%u pending_lookups=%u invalid=%u worker_core0=%u worker_core1=%u worker_core2=%u worker_core3=%u read_calls=%u read_bytes=%u cpu_loop_begins_pending=%u admission_checked=%u admission_capacity_minus_used=%u prepare_timed=%u prepare_wall_ms=%.5f wall_not_cpu=1 source_and_body_validation_retained=1 main_engine_mutex_not_used_by_worker=1\n",
+        mode,__atomic_load_n(&state,__ATOMIC_ACQUIRE),error,info.level,info.count,info.bytes,
+        body?info.bytes-HeaderBytes:0,hits,hitBytes,misses,pendingLookups,invalid,
+        coreSamples[0],coreSamples[1],coreSamples[2],coreSamples[3],readCalls,readBytes,pendingFrames,
+        admissionChecked,admissionFree,doneTick && startTick,
+        doneTick && startTick?(doneTick-startTick)*1000.0/SYSCLOCK_ARM11:0.0);
+}
+}
+#endif
+
 #endif
 bool g_picaNativeTexturesEnabled=true;
 #ifdef SRR2_OLD3DS_NATIVE_ETC1
@@ -166,6 +346,9 @@ extern "C" void picaDumpNativeTextures(FILE* f)
 #ifdef SRR2_OLD3DS_NATIVE_BENCH
     fprintf(f,"NATIVE_TEXTURE_EXACT_FALLBACK enabled=%u hits=%u accepted_etc_hits_preferred=1 original_format_and_mips=1 scope=whole_session\n",
         g_picaNativeExactWorldFallback,__atomic_load_n(&nativeExactWorldHits,__ATOMIC_RELAXED));
+    fprintf(f,"NATIVE_TEXTURE_COALESCED enabled=%u records=%u fallbacks=%u max_read_bytes=32768 extra_allocation_bytes=0\n",
+        g_picaNativeBundleCoalesced,__atomic_load_n(&nativeCoalescedRecords,__ATOMIC_RELAXED),
+        __atomic_load_n(&nativeCoalescedFallbacks,__ATOMIC_RELAXED));
     fprintf(f,"NATIVE_TEXTURE_IO unbuffered=%u opens=%u unbuffered_opens=%u\n",
         g_picaNativeBundleUnbuffered,
         __atomic_load_n(&nativeBundleOpens,__ATOMIC_RELAXED),__atomic_load_n(&nativeBundleUnbufferedOpens,__ATOMIC_RELAXED));
@@ -238,16 +421,28 @@ extern "C" void C3Di_RenderQueueWaitDone(void);
 #ifdef SRR2_OLD3DS_VRAM_TEXTURES
 // Ownership nodes are allocated before GPU submission. Retirement never allocates
 // or overwrites GPU-visible bytes; context's completed-frame fence reclaims them.
-struct picaVramAllocation { picaVramAllocation* next; void* data; unsigned bytes; };
+struct picaVramAllocation { picaVramAllocation* next; void* data; unsigned bytes;
+#if defined(SRR2_OLD3DS_NATIVE_BENCH) || defined(SRR2_OLD3DS_WORLD_RESIDENCY)
+    bool linear;
+#endif
+};
 static picaVramAllocation* retiredVram;
 static unsigned vramTextureBytes, vramTexturePeak, vramTextureCopies;
 static unsigned vramTextureEligible, vramTextureInFrame, vramTextureFailures;
 #ifdef SRR2_OLD3DS_NATIVE_BENCH
 static unsigned vramTextureHandoffSkipped;
 bool g_picaVramCapturePromote=true,g_picaVramCopyDiagnostics=false;
-bool g_picaVramCompact=false;
-static unsigned vramCompactCopies=0,vramCompactSaved=0;
 static unsigned vramCaptureSkipped,vramCaptureCopies,vramCaptureAllocUs,vramCaptureCopyUs,vramCaptureReleaseUs,vramCaptureMaxUs,vramCaptureMaxCopyUs;
+#endif
+#if defined(SRR2_OLD3DS_NATIVE_BENCH) || defined(SRR2_OLD3DS_WORLD_RESIDENCY)
+#ifdef SRR2_OLD3DS_WORLD_RESIDENCY
+bool g_picaVramCompact=true,g_picaLinearCompact=true;
+extern "C" bool old3dsResidencyTexturePolicy(){return g_picaNativeBundleEnabled && g_picaVramCompact && g_picaLinearCompact;}
+#else
+bool g_picaVramCompact=false,g_picaLinearCompact=false;
+#endif
+static unsigned vramCompactCopies=0,vramCompactSaved=0;
+static unsigned linearCompactCopies=0,linearCompactSaved=0,linearCompactLive=0,linearCompactFailures=0;
 #endif
 static void RetireVram(picaVramAllocation* allocation)
 {
@@ -258,9 +453,32 @@ extern "C" void picaReclaimVramTextures()
     while(retiredVram)
     {
         picaVramAllocation* node=retiredVram;retiredVram=node->next;
-        vramTextureBytes-=node->bytes;vramFree(node->data);free(node);
+#if defined(SRR2_OLD3DS_NATIVE_BENCH) || defined(SRR2_OLD3DS_WORLD_RESIDENCY)
+        if(node->linear){linearCompactLive-=node->bytes;linearFree(node->data);}
+        else
+#endif
+        {vramTextureBytes-=node->bytes;vramFree(node->data);}
+        free(node);
     }
 }
+#if defined(SRR2_OLD3DS_NATIVE_BENCH) || defined(SRR2_OLD3DS_WORLD_RESIDENCY)
+// The caller has verified a first, unpublished native upload. Failure retains
+// the original allocation. Never shrink an already published texture in place.
+static bool CompactNativeLinear(void*& data,unsigned originalBytes,unsigned bytes,
+                                picaVramAllocation*& owner)
+{
+    if(!g_picaLinearCompact || owner || !data || !bytes || bytes>=originalBytes)return false;
+    picaVramAllocation* node=static_cast<picaVramAllocation*>(malloc(sizeof(picaVramAllocation)));
+    if(!node){++linearCompactFailures;return false;}
+    node->data=linearAlloc(bytes);
+    if(!node->data){free(node);++linearCompactFailures;return false;}
+    std::memcpy(node->data,data,bytes);
+    linearFree(data);data=node->data;
+    node->bytes=bytes;node->next=nullptr;node->linear=true;owner=node;
+    ++linearCompactCopies;linearCompactSaved+=originalBytes-bytes;linearCompactLive+=bytes;
+    return true;
+}
+#endif
 extern "C" void picaDumpVramTextures()
 {
 #if defined(SRR2_OLD3DS_DRAW_PREP) && defined(SRR2_OLD3DS_NATIVE_BENCH)
@@ -274,21 +492,37 @@ extern "C" void picaDumpVramTextures()
     printf("OLD3DS_VRAM_HANDOFF upload_guard=1 skipped=%u scope=whole_session\n",vramTextureHandoffSkipped);
     printf("OLD3DS_VRAM_CAPTURE promote=%u diagnostics=%u skipped=%u copies=%u alloc_us=%u copy_us=%u release_us=%u maximum_us=%u maximum_copy_us=%u measured_route_only=1 wall_not_cpu=1\n",g_picaVramCapturePromote,g_picaVramCopyDiagnostics,vramCaptureSkipped,vramCaptureCopies,vramCaptureAllocUs,vramCaptureCopyUs,vramCaptureReleaseUs,vramCaptureMaxUs,vramCaptureMaxCopyUs);
     printf("OLD3DS_VRAM_COMPACT enabled=%u copies=%u cumulative_saved_bytes=%u live_accounting_uses_actual_bytes=1 formats_and_mips_unchanged=1\n",g_picaVramCompact,vramCompactCopies,vramCompactSaved);
+    printf("OLD3DS_LINEAR_COMPACT enabled=%u copies=%u cumulative_saved_bytes=%u live_bytes=%u failures=%u first_publication_only=1 original_capacity_reupload=1 fenced_retirement=1\n",g_picaLinearCompact,linearCompactCopies,linearCompactSaved,linearCompactLive,linearCompactFailures);
 #endif
 }
 class picaVramUpload
 {
     C3D_Tex& tex;picaVramAllocation*& owner;void*& pending;bool& valid;
     void* previous;bool previousValid,complete;
+#if defined(SRR2_OLD3DS_NATIVE_BENCH) || defined(SRR2_OLD3DS_WORLD_RESIDENCY)
+    picaVramAllocation** linearOwner;
+#endif
 public:
-    picaVramUpload(C3D_Tex& t,picaVramAllocation*& o,void*& p,bool& v):
+    picaVramUpload(C3D_Tex& t,picaVramAllocation*& o,void*& p,bool& v
+#if defined(SRR2_OLD3DS_NATIVE_BENCH) || defined(SRR2_OLD3DS_WORLD_RESIDENCY)
+        ,picaVramAllocation** linear=nullptr
+#endif
+        ):
         tex(t),owner(o),pending(p),valid(v),previous(t.data),previousValid(v),complete(false)
+#if defined(SRR2_OLD3DS_NATIVE_BENCH) || defined(SRR2_OLD3DS_WORLD_RESIDENCY)
+        ,linearOwner(linear)
+#endif
         {if(pending)tex.data=pending;}
     void Complete(){complete=true;}
     ~picaVramUpload()
     {
         if(!pending)return;
-        if(complete){RetireVram(owner);owner=NULL;}
+        if(complete){
+            if(owner){RetireVram(owner);owner=NULL;}
+#if defined(SRR2_OLD3DS_NATIVE_BENCH) || defined(SRR2_OLD3DS_WORLD_RESIDENCY)
+            if(linearOwner && *linearOwner){RetireVram(*linearOwner);*linearOwner=nullptr;}
+#endif
+        }
         else {linearFree(pending);tex.data=previous;valid=previousValid;}
         pending=NULL;
     }
@@ -314,7 +548,7 @@ void picaTexture::TryPromoteVram()
     const unsigned copyBytes=C3D_TexCalcTotalSize(tex.size,tex.maxLevel);
 #ifdef SRR2_OLD3DS_NATIVE_ETC1
     const unsigned eligibleBytes=nativeAllocationBytes?nativeAllocationBytes:copyBytes;
-#ifdef SRR2_OLD3DS_NATIVE_BENCH
+#if defined(SRR2_OLD3DS_NATIVE_BENCH) || defined(SRR2_OLD3DS_WORLD_RESIDENCY)
     const unsigned bytes=g_picaVramCompact && hwFormat==GPU_ETC1?copyBytes:eligibleBytes;
 #else
     const unsigned bytes=eligibleBytes;
@@ -338,6 +572,9 @@ void picaTexture::TryPromoteVram()
     node->data=vramAlloc(bytes);
     if(!node->data){free(node);++vramTextureFailures;return;}
     node->bytes=bytes;node->next=NULL;
+#if defined(SRR2_OLD3DS_NATIVE_BENCH) || defined(SRR2_OLD3DS_WORLD_RESIDENCY)
+    node->linear=false;
+#endif
     // UploadLevel already flushed every mip. This is a raw byte copy, with no
     // display-transfer format conversion, resampling or color quantization.
 #ifdef SRR2_OLD3DS_NATIVE_BENCH
@@ -348,6 +585,14 @@ void picaTexture::TryPromoteVram()
     const u64 releaseStart=timed?svcGetSystemTick():0;
 #endif
     linearFree(tex.data);tex.data=node->data;vramAllocation=node;
+#if defined(SRR2_OLD3DS_NATIVE_BENCH) || defined(SRR2_OLD3DS_WORLD_RESIDENCY)
+    // The synchronous copy completed while this first upload was unpublished.
+    // Its compact linear ownership node no longer needs deferred retirement.
+    if(nativeLinearAllocation){
+        linearCompactLive-=nativeLinearAllocation->bytes;
+        free(nativeLinearAllocation);nativeLinearAllocation=nullptr;
+    }
+#endif
 #ifdef SRR2_OLD3DS_NATIVE_BENCH
     if(timed){
         const u64 end=svcGetSystemTick();
@@ -452,6 +697,9 @@ picaTexture::picaTexture(picaContext* c)
     priority     = 15;
 #ifdef SRR2_OLD3DS_VRAM_TEXTURES
     vramAllocation=NULL;reuploadLinear=NULL;vramEligible=vramUploaded=false;
+#if defined(SRR2_OLD3DS_NATIVE_BENCH) || defined(SRR2_OLD3DS_WORLD_RESIDENCY)
+    nativeLinearAllocation=nullptr;
+#endif
 #endif
     created      = false;
 #ifdef SRR2_OLD3DS_DRAW_PREP
@@ -476,6 +724,9 @@ picaTexture::~picaTexture()
     {
 #ifdef SRR2_OLD3DS_VRAM_TEXTURES
         if(vramAllocation){RetireVram(vramAllocation);vramAllocation=NULL;}
+#if defined(SRR2_OLD3DS_NATIVE_BENCH) || defined(SRR2_OLD3DS_WORLD_RESIDENCY)
+        else if(nativeLinearAllocation){RetireVram(nativeLinearAllocation);nativeLinearAllocation=nullptr;}
+#endif
         else
 #endif
 #ifdef SRR2_OLD3DS_DRAW_PREP
@@ -739,7 +990,11 @@ pddiLockInfo* picaTexture::Lock(int mipMap, pddiRect* rect)
 #ifdef SRR2_OLD3DS_VRAM_TEXTURES
     // A later full upload demotes to CPU-writable linear storage. Allocate before
     // granting the lock; failure leaves the previous texture and ownership intact.
-    if(mipMap==0 && vramAllocation && !reuploadLinear)
+    if(mipMap==0 && (vramAllocation
+#if defined(SRR2_OLD3DS_NATIVE_BENCH) || defined(SRR2_OLD3DS_WORLD_RESIDENCY)
+        || nativeLinearAllocation
+#endif
+        ) && !reuploadLinear)
     {
         unsigned bytes=C3D_TexCalcTotalSize(tex.size,tex.maxLevel);
 #ifdef SRR2_OLD3DS_NATIVE_ETC1
@@ -780,7 +1035,11 @@ void picaTexture::UploadLevel(int mipLevel)
     O3ExperimentTimer causalTimer(O3E_TEXTURE);
 #endif
 #ifdef SRR2_OLD3DS_VRAM_TEXTURES
-    picaVramUpload vramUpload(tex,vramAllocation,reuploadLinear,valid);
+    picaVramUpload vramUpload(tex,vramAllocation,reuploadLinear,valid
+#if defined(SRR2_OLD3DS_NATIVE_BENCH) || defined(SRR2_OLD3DS_WORLD_RESIDENCY)
+        ,&nativeLinearAllocation
+#endif
+        );
 #endif
 #ifdef SRR2_OLD3DS_NATIVE_TEXTURES
     if(mipLevel==0 && !valid && nativeEligible && UploadPrepared())
@@ -1180,6 +1439,10 @@ bool picaTexture::ReadPrepared(const void* source,unsigned sourceBytes,unsigned 
         // Change the unpublished descriptor only after full identity and body
         // verification. Failure leaves the original allocation/format intact.
         if(ok && etc){
+#if (defined(SRR2_OLD3DS_NATIVE_BENCH) || defined(SRR2_OLD3DS_WORLD_RESIDENCY)) && defined(SRR2_OLD3DS_VRAM_TEXTURES)
+            if(!valid && !vramAllocation)
+                CompactNativeLinear(tex.data,nativeAllocationBytes,bytes,nativeLinearAllocation);
+#endif
             hwFormat=GPU_ETC1;tex.fmt=GPU_ETC1;tex.size=size;
             // Match C3D_TexInitWithParams: ETC1 also requires the sampler's
             // dedicated hardware mode bit. Keep the existing wrap/filter bits.
@@ -1212,6 +1475,81 @@ bool picaTexture::ReadPrepared(const void* source,unsigned sourceBytes,unsigned 
         }
 #endif
         if(!entry){cost.outcome=1;NativeTextureMiss(header);return false;}
+#ifdef SRR2_OLD3DS_LEVEL_CACHE
+        const auto cached=picaNativeLevel::Resolve(key,entry->bytes);
+        if(cached.valid) {
+            bool ok=false;
+            if(cached.memory) {
+                picaNativeLevel::MemorySource memory{cached.memory,entry->bytes};
+                NativeTextureCost::Phase phase(cost,NativeTextureCost::ReadCheck);
+                ok=picaNativeTexture::ReadSource(memory,header,bytes,tex.data,hash,g_picaYieldHook);
+            }
+            else {
+                const unsigned previous=cost.Select(NativeTextureCost::Open);
+                NativeBundleFile input(picaNativeLevel::diskSlots,picaNativeLevel::OpenDisk);
+                bool positioned;
+                {radLoadTiming::StageRegion seek(radLoadTiming::NativeTextureSeek);
+                 positioned=input.file && !std::fseek(input.file,cached.fileOffset,SEEK_SET);}
+                cost.Select(previous);
+                {NativeTextureCost::Phase phase(cost,NativeTextureCost::ReadCheck);
+                 if(positioned)ok=picaNativeTexture::Read(input.file,header,bytes,tex.data,hash,g_picaYieldHook,false);}
+            }
+            picaNativeLevel::Record(ok,bytes);
+            if(ok) {
+                cost.outcome=0;
+                __atomic_fetch_add(&nativeTextureHits,1u,__ATOMIC_RELAXED);
+                __atomic_fetch_add(&nativeTextureBytes,bytes,__ATOMIC_RELAXED);
+                return publish(true);
+            }
+        }
+#endif
+#ifdef SRR2_OLD3DS_NATIVE_BENCH
+        if(picaNativeRead::enabled){
+            picaNativeRead::Stream raw(picaNativeRead::hooks,picaNativeBundle::BundlePath,
+                picaNativeBundle::BundleBytes,entry->offset,entry->bytes);
+            if(raw.Ready()){
+                bool ok;
+                {NativeTextureCost::Phase phase(cost,NativeTextureCost::ReadCheck);
+                 ok=picaNativeTexture::ReadSource(raw,header,bytes,tex.data,hash,g_picaYieldHook);}
+                cost.outcome=ok?0:2;
+                if(ok){__atomic_fetch_add(&nativeTextureHits,1u,__ATOMIC_RELAXED);__atomic_fetch_add(&nativeTextureBytes,bytes,__ATOMIC_RELAXED);}
+                else __atomic_fetch_add(&nativeTextureInvalid,1u,__ATOMIC_RELAXED);
+                return publish(ok);
+            }
+        }
+#endif
+#if defined(SRR2_OLD3DS_NATIVE_BENCH) && defined(SRR2_OLD3DS_NATIVE_ETC1) && defined(SRR2_OLD3DS_VRAM_TEXTURES)
+        if(g_picaNativeBundleCoalesced){
+            // Never borrow queued GPU storage, compact storage or a later upload.
+            // The tail is no longer read when publish() may compact the allocation.
+            const bool unpublished=etc && !valid && !vramAllocation &&
+                !nativeLinearAllocation && !reuploadLinear && tex.fmt!=GPU_ETC1;
+            unsigned char* scratch=picaNativeTexture::RecordScratch(tex.data,
+                nativeAllocationBytes,bytes,entry->bytes,unpublished);
+            if(scratch){
+                __atomic_fetch_add(&nativeCoalescedRecords,1u,__ATOMIC_RELAXED);
+                const unsigned previous=cost.Select(NativeTextureCost::Open);
+                NativeBundleFile input(coalescedBundleSlots,OpenCoalescedNativeBundle);
+                bool positioned;
+                {radLoadTiming::StageRegion seek(radLoadTiming::NativeTextureSeek);
+                 positioned=input.file && entry->bytes<=picaNativeBundle::BundleBytes &&
+                    entry->offset<=picaNativeBundle::BundleBytes-entry->bytes &&
+                    !std::fseek(input.file,entry->offset,SEEK_SET);}
+                cost.Select(previous);
+                bool ok=false;
+                {NativeTextureCost::Phase phase(cost,NativeTextureCost::ReadCheck);
+                 if(positioned && std::fread(scratch,1,entry->bytes,input.file)==entry->bytes && !std::ferror(input.file)){
+                    picaNativeTexture::MemorySource memory{scratch,entry->bytes};
+                    ok=picaNativeTexture::ReadSource(memory,header,bytes,tex.data,hash,g_picaYieldHook);
+                 }}
+                cost.outcome=ok?0:2;
+                if(ok){__atomic_fetch_add(&nativeTextureHits,1u,__ATOMIC_RELAXED);__atomic_fetch_add(&nativeTextureBytes,bytes,__ATOMIC_RELAXED);}
+                else __atomic_fetch_add(&nativeTextureInvalid,1u,__ATOMIC_RELAXED);
+                return publish(ok);
+            }
+            __atomic_fetch_add(&nativeCoalescedFallbacks,1u,__ATOMIC_RELAXED);
+        }
+#endif
         const unsigned previous=cost.Select(NativeTextureCost::Open);
         NativeBundleFile input;
         bool positioned;

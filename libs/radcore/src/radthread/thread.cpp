@@ -108,6 +108,14 @@ void radThreadCreateThread
                                             priority, stackSize );
 }
 
+#if defined(RAD_3DS) && defined(SRR2_OLD3DS_NATIVE_BENCH)
+void radThreadCreateThreadOnCore(IRadThread** out, RADTHREADENTRY entry, void* data,
+    IRadThread::Priority priority, unsigned stack, radMemoryAllocator allocator, int core)
+{
+    *out = new(allocator) radThread(entry,data,priority,stack,core);
+}
+#endif
+
 //=============================================================================
 // Function:    radThreadGetActiveThread
 //=============================================================================
@@ -537,6 +545,9 @@ radThread::radThread
     void*                   userData, 
     IRadThread::Priority    priority, 
     unsigned int            stackSize
+#if defined(RAD_3DS) && defined(SRR2_OLD3DS_NATIVE_BENCH)
+    , int core
+#endif
 )
     :
         m_ReferenceCount( 1 ),
@@ -578,8 +589,26 @@ radThread::radThread
     // 65536-byte request by 1024 silently prevents its thread from starting.
     // Keep headroom for the native file decoder and C++ call chains.
     const size_t nativeStackSize = stackSize < 128 * 1024 ? 128 * 1024 : stackSize;
+    // NativeCoreCreateBegin: select the core at creation; retail kernels may
+    // reject runtime affinity changes. Preserve the existing SDL fallback.
+    m_ThreadHandle = nullptr;
+#if defined(SRR2_OLD3DS_NATIVE_BENCH)
+    if(core==0 || core==1) {
+        s32 priority=0x30;
+        svcGetThreadPriority(&priority,CUR_THREAD_HANDLE);
+        m_NativeCoreThread=threadCreate(InternalNativeCoreEntry,this,nativeStackSize,priority,core,false);
+        printf("RAD_THREAD_CORE requested=%d created=%u fallback=%u stack_bytes=%lu\n",
+            core,m_NativeCoreThread!=nullptr,m_NativeCoreThread==nullptr,(unsigned long)nativeStackSize);
+    }
+    if(!m_NativeCoreThread)
+#endif
     m_ThreadHandle = SDL_CreateThreadWithStackSize(InternalThreadEntry, /*name*/nullptr, nativeStackSize, this);
-    if(m_ThreadHandle == NULL)
+    // NativeCoreCreateEnd.
+    if(m_ThreadHandle == NULL
+#ifdef SRR2_OLD3DS_NATIVE_BENCH
+       && !m_NativeCoreThread
+#endif
+       )
     {
         fprintf(stderr, "radThread: cannot create %lu-byte stack: %s\n",
             (unsigned long)nativeStackSize, SDL_GetError());
@@ -737,6 +766,15 @@ radThread::~radThread( void )
 //
 // Notes:
 //------------------------------------------------------------------------------
+
+#if defined(RAD_3DS) && defined(SRR2_OLD3DS_NATIVE_BENCH)
+void radThread::InternalNativeCoreEntry(void* param)
+{
+    InternalThreadEntry(param);
+    SDL_TLSCleanup();
+    threadExit(0);
+}
+#endif
 
 int radThread::InternalThreadEntry( void* param )
 {
@@ -897,6 +935,17 @@ bool radThread::IsRunning
 
 unsigned int radThread::WaitForTermination( void )
 {
+#if defined(RAD_3DS) && defined(SRR2_OLD3DS_NATIVE_BENCH)
+    if(m_NativeCoreThread) {
+        Thread thread=static_cast<Thread>(m_NativeCoreThread);
+        const Result joined=threadJoin(thread,U64_MAX);
+        if(R_FAILED(joined))abort();
+        const unsigned result=m_ReturnCode;
+        threadFree(thread);
+        m_NativeCoreThread=nullptr;
+        return result;
+    }
+#endif
     int ret;
     SDL_WaitThread(m_ThreadHandle, &ret);
     return ret;

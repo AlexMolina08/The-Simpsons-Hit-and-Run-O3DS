@@ -77,6 +77,19 @@ extern "C" void picaBottomScreenEnd(void);
 #include <worldsim/character/charactermanager.h>
 
 #include <main/game.h>
+#include <main/worldstreaming.h>
+#include <main/nativebench.h>
+#ifdef SRR2_OLD3DS_NATIVE_BENCH
+#include <loading/worldpriority.h>
+#include <malloc.h>
+#include <3ds.h>
+extern "C" u32 __ctru_heap_size;
+static char s_prefetchZone[96]={};
+static bool s_prefetchLoading=false;
+static int s_prefetchCallback=0;
+static unsigned s_prefetchReadyAt=0;
+static bool s_prefetchRetained=false;
+#endif
 #include <main/platform.h>
 
 #include <memory/srrmemory.h>
@@ -408,6 +421,9 @@ bool RenderManager::LoadAllNeededData
 {
     mbLoadZonesDumped = false;
     mDoneInitialLoad  = false;
+#ifdef SRR2_OLD3DS_NATIVE_BENCH
+    s_prefetchZone[0]=0; s_prefetchLoading=false;s_prefetchRetained=false;
+#endif
 
    //MS7
    //static int sFuckinCompilerWontShutUp = isLayer;
@@ -1057,13 +1073,34 @@ void RenderManager::OnChunkLoaded
 void RenderManager::OnProcessRequestsComplete( void* pUserData )
 {
    rAssert( pUserData != NULL );
+#ifdef SRR2_OLD3DS_NATIVE_BENCH
+   if(pUserData==&s_prefetchCallback) {
+       pWorldRenderLayer()->DoPostDynaLoad();
+       s_prefetchLoading=false; mbDynaLoading=false;
+       s_prefetchReadyAt=radTimeGetMilliseconds();
+       WorldStreaming::Event("prefetch_ready",s_prefetchZone);
+       if(mbLoadZonesDumped) { s_prefetchZone[0]=0;mbLoadZonesDumped=false;mZELs.ClearUse(); }
+       if(mZELs.mUseSize) {
+#ifdef SRR2_OLD_3DS
+           ZoneEventLocator* pending=mZELs.TakeNext();
+#else
+           ZoneEventLocator* pending=mZELs[0];mZELs.RemoveKeepOrder(0);
+#endif
+           mbDrivingTooFastLoad=true;
+           HandleEvent((EventEnum)(EVENT_LOCATOR+LocatorEvent::DYNAMIC_ZONE),pending);
+       } else {
+           AllWrappers::GetInstance()->mLoader(AllWrappers::msBillboard).ModRegdListener(this,RenderEnums::IgnoreGuts);
+       }
+       return;
+   }
+#endif
 
     //
     // When done queued loading, Ignore any new geo's loaded through the 
     // LoaderWrappers
     //
     //AllWrappers::GetInstance()->mLoader( AllWrappers::msGeometry ).ModRegdListener( this, RenderEnums::LevelSlot | RenderEnums::IgnoreGuts );
-    GetEventManager()->TriggerEvent( EVENT_DYNAMIC_ZONE_LOAD_ENDED );
+    { NB_SCOPE(LoadZoneEvent); GetEventManager()->TriggerEvent( EVENT_DYNAMIC_ZONE_LOAD_ENDED ); }
 #ifndef RAD_RELEASE
     FinishedZone();
 #endif
@@ -1078,7 +1115,7 @@ void RenderManager::OnProcessRequestsComplete( void* pUserData )
         static char spSomeDamnFile[128];
         int i = ((*(int*)pUserData) & RenderEnums::ZoneMask) >> RenderEnums::ZoneShift;
 
-        mpRenderLayers[(*(int*)pUserData) & RenderEnums::LayerOnlyMask]->DoPostDynaLoad();
+        { NB_SCOPE(LoadZonePost); mpRenderLayers[(*(int*)pUserData) & RenderEnums::LayerOnlyMask]->DoPostDynaLoad(); }
 
         bool alreadyLoaded=true;
 
@@ -1087,7 +1124,7 @@ void RenderManager::OnProcessRequestsComplete( void* pUserData )
             rReleasePrintf("Zone Loading Ended: %s\n",mpZEL->GetLoadZone(i));
             //HeapMgr()->DumpHeapStats(true);
             tUID tempUID = tName::MakeUID(mpZEL->GetLoadZone(i));
-            GetEventManager()->TriggerEvent( EVENT_NAMED_DYNAMIC_ZONE_LOAD_ENDED, &tempUID );
+            { NB_SCOPE(LoadZoneNamed); GetEventManager()->TriggerEvent( EVENT_NAMED_DYNAMIC_ZONE_LOAD_ENDED, &tempUID ); }
             
             if( mbLoadZonesDumped )
             {
@@ -1100,7 +1137,7 @@ void RenderManager::OnProcessRequestsComplete( void* pUserData )
                 // (through a mission reset). Then, on completion, it would dump the load 
                 // (with the doPost above) and start loading all the other zones listed in the ZEL.
                 //
-                mZELs.mUseSize = 0;   
+                mZELs.ClearUse();
                 i = mpZEL->GetNumLoadZones();
                 rReleasePrintf("***All LoadZones Dumped; ZEL's cancelled.***\n");
                 
@@ -1115,7 +1152,7 @@ void RenderManager::OnProcessRequestsComplete( void* pUserData )
                     GiveItAFuckinName.SetText(mpZEL->GetLoadZone(i));
                     HeapMgr()->PopHeap ( GMA_TEMP);
 
-                    alreadyLoaded= ! mpRenderLayers[RenderEnums::LevelSlot]->DoPreDynaLoad(GiveItAFuckinName);
+                    { NB_SCOPE(LoadZonePre); alreadyLoaded= ! mpRenderLayers[RenderEnums::LevelSlot]->DoPreDynaLoad(GiveItAFuckinName); }
                 }
             }
 
@@ -1232,8 +1269,12 @@ END_PROFILE( "Add Requests Int" );
                 //
                 if( mZELs.mUseSize != 0 )
                 {
+#ifdef SRR2_OLD_3DS
+                    mpZEL = mZELs.TakeNext();
+#else
                     mpZEL = mZELs[0];
                     mZELs.RemoveKeepOrder(0);
+#endif
 
                     (*(int*)pUserData) &= ~RenderEnums::ZoneMask;
                     (*(int*)pUserData) |= 0<<RenderEnums::ZoneShift;
@@ -1268,6 +1309,79 @@ END_PROFILE( "Add Requests Int" );
 // Constraints: None.
 //
 //========================================================================
+#ifdef SRR2_OLD3DS_NATIVE_BENCH
+bool RenderManager::RetainWorldZone(const char* name,ZoneEventLocator* incoming)
+{
+    if(!WorldStreaming::worldRetention || !mDoneInitialLoad || s_prefetchZone[0] ||
+       incoming->IsInteriorLoad() || !WorldPriority::Exterior(name) || strlen(name)>=sizeof(s_prefetchZone))return false;
+    WorldRenderLayer* world=pWorldRenderLayer();
+    if(!world->HasDynaLoad(tName::MakeUID(name)))return false;
+    // Retention may avoid a needless unload/reload, but never adds to the peak
+    // of another incoming demand load. Both policies share one extra section.
+    for(int n=0;n<incoming->GetNumLoadZones();++n)
+        if(!strcmp(name,incoming->GetLoadZone(n)) ||
+           !world->HasDynaLoad(tName::MakeUID(incoming->GetLoadZone(n))))return false;
+    const unsigned used=mallinfo().uordblks;
+    const unsigned normal=used<__ctru_heap_size?__ctru_heap_size-used:0;
+    if(!WorldStreaming::Admit(world->SectionCount(),world->SectionCapacity(),normal,linearSpaceFree()))return false;
+    strcpy(s_prefetchZone,name);s_prefetchRetained=true;s_prefetchReadyAt=radTimeGetMilliseconds();
+    WorldStreaming::Event("warm_retained",name);return true;
+}
+bool RenderManager::CanPrefetchZone(ZoneEventLocator* locator)
+{
+    if(!locator || locator->IsInteriorLoad()) return false;
+    for(int i=0;i<locator->GetNumLoadZones();++i) {
+        const char* name=locator->GetLoadZone(i);
+        // Only exterior world art participates. Interiors and mission assets retain demand loading.
+        if(!WorldPriority::Exterior(name)) continue;
+        if(!strcmp(name,s_prefetchZone) || !pWorldRenderLayer()->HasDynaLoad(tName::MakeUID(name))) return true;
+    }
+    return false;
+}
+void RenderManager::UpdateWorldPrefetch(ZoneEventLocator* locator,unsigned now)
+{
+    if((!WorldStreaming::predictive && !WorldStreaming::worldRetention) || s_prefetchLoading || mbDynaLoading || !mDoneInitialLoad) return;
+    if(s_prefetchRetained && s_prefetchZone[0]) {
+        const unsigned used=mallinfo().uordblks;
+        const unsigned normal=used<__ctru_heap_size?__ctru_heap_size-used:0;
+        if(now-s_prefetchReadyAt<20000u && normal>=6u*1024*1024 && linearSpaceFree()>=2u*1024*1024)return;
+        tName zone(s_prefetchZone);WorldStreaming::Event("warm_expired",s_prefetchZone);
+        s_prefetchZone[0]=0;s_prefetchRetained=false;
+        pWorldRenderLayer()->DumpDynaLoad(zone,mEntityDeletionList);return;
+    }
+    if(!WorldStreaming::predictive)return;
+    if(s_prefetchZone[0]) {
+        bool relevant=false;
+        if(locator) for(int i=0;i<locator->GetNumLoadZones();++i)
+            relevant=relevant || !strcmp(s_prefetchZone,locator->GetLoadZone(i));
+        if(relevant) { s_prefetchReadyAt=now;return; }
+        if(now-s_prefetchReadyAt<(locator?1500u:4000u)) return;
+        tName zone(s_prefetchZone);
+        WorldStreaming::Event("prefetch_expired",s_prefetchZone);
+        s_prefetchZone[0]=0;
+        pWorldRenderLayer()->DumpDynaLoad(zone,mEntityDeletionList);
+        return; // Retire through the normal deletion path before another admission.
+    }
+    if(!CanPrefetchZone(locator) || GetLoadingManager()->IsLoading() || mEntityDeletionList.mUseSize) return;
+    WorldRenderLayer* world=pWorldRenderLayer();
+    const unsigned used=mallinfo().uordblks;
+    const unsigned normal=used<__ctru_heap_size?__ctru_heap_size-used:0;
+    if(!WorldStreaming::Admit(world->SectionCount(),world->SectionCapacity(),normal,linearSpaceFree())) return;
+    for(int i=0;i<locator->GetNumLoadZones();++i) {
+        const char* name=locator->GetLoadZone(i);
+        if(!WorldPriority::Exterior(name) || strlen(name)>=sizeof(s_prefetchZone)) continue;
+        tName zone(name); if(world->HasDynaLoad(zone.GetUID())) continue;
+        strcpy(s_prefetchZone,name);
+        s_prefetchLoading=true;mbDynaLoading=true;s_prefetchRetained=false;
+        WorldStreaming::Event("prefetch_request",name);
+        world->DoPreDynaLoad(zone);
+        RedirectChunks(RenderEnums::LevelSlot);
+        char file[128];snprintf(file,sizeof(file),"art\\%s",name);
+        GetLoadingManager()->AddRequest(FILEHANDLER_PURE3D,file,GMA_LEVEL_ZONE,name,NULL,this,&s_prefetchCallback);
+        return;
+    }
+}
+#endif
 void RenderManager::DoPostLevelLoad()
 {
     //////////////////////////////////////////////////////////////////////////
@@ -1430,6 +1544,10 @@ BEGIN_PROFILE( "RenderManager HandleEvent" );
    case EVENT_LOCATOR+LocatorEvent::OCCLUSION_ZONE:
    {
        OcclusionLocator* pOccLocator = ((OcclusionLocator*)pEventData);
+#ifdef SRR2_OLD3DS_NATIVE_BENCH
+       WorldStreaming::EventUID(pOccLocator->GetPlayerEntered()?"occlusion_enter":"occlusion_exit",
+           static_cast<radInt64>(pOccLocator->GetUID()));
+#endif
        SpatialTreeIter& rTreeWalker = pWorldScene()->mStaticTreeWalker; 
 
        SphereSP occSphere;
@@ -1514,6 +1632,10 @@ BEGIN_PROFILE( "RenderManager HandleEvent" );
          }*/
          if(pZEL->GetPlayerEntered()||mbDrivingTooFastLoad)
          {
+#ifdef SRR2_OLD3DS_NATIVE_BENCH
+            if(!mbDrivingTooFastLoad)for(int n=0;n<pZEL->GetNumLoadZones();++n)
+                WorldStreaming::Event("trigger_enter",pZEL->GetLoadZone(n));
+#endif
             if(pZEL->IsInteriorLoad())
             {
                 InteriorLoadedEventData data;
@@ -1544,12 +1666,49 @@ END_PROFILE( "RenderManager HandleEvent" );
             if(mbDynaLoading == true)
             {
                 rReleasePrintf("Driving TOO FAST: Adding to queue.\n");
+#ifdef SRR2_OLD_3DS
+                bool activeDemand=true;
+#ifdef SRR2_OLD3DS_NATIVE_BENCH
+                activeDemand=!s_prefetchLoading;
+#endif
+                if(!mZELs.Add(pZEL,activeDemand)){
+                    rReleasePrintf("WORLD_ZONE_QUEUE allocation_failed stopping_game=1\n");
+                    Game::GetInstance()->Stop();
+                }
+#else
                 mZELs.Add((ZoneEventLocator*&)pEventData);
+#endif
 END_PROFILE( "RenderManager HandleEvent" );
                 return;
             }
 
+#ifdef SRR2_OLD3DS_NATIVE_BENCH
+             if(s_prefetchZone[0]) {
+                 tName zone(s_prefetchZone);
+                 bool needed=false;
+                 for(int n=0;n<pZEL->GetNumLoadZones();++n)
+                     needed=needed || zone.GetUID()==tName::MakeUID(pZEL->GetLoadZone(n));
+                 for(int n=0;n<pZEL->GetNumDumpZones();++n)
+                     if(zone.GetUID()==tName::MakeUID(pZEL->GetDumpZone(n))) needed=false;
+                 WorldStreaming::Event(s_prefetchRetained?(needed?"warm_consumed":"warm_discarded"):
+                     (needed?"prefetch_consumed":"prefetch_discarded"),s_prefetchZone);
+                 s_prefetchZone[0]=0;
+                 if(!needed) pWorldRenderLayer()->DumpDynaLoad(zone,mEntityDeletionList);
+                 else if(!s_prefetchRetained) {
+                     // Deliver demand semantics at the real locator, never at prediction.
+                     GetEventManager()->TriggerEvent(EVENT_DYNAMIC_ZONE_LOAD_ENDED);
+                     tUID uid=zone.GetUID();
+                     GetEventManager()->TriggerEvent(EVENT_NAMED_DYNAMIC_ZONE_LOAD_ENDED,&uid);
+                 }
+                 s_prefetchRetained=false;
+             }
+             for(int n=0;n<pZEL->GetNumLoadZones();++n)
+                 WorldStreaming::Event("demand",pZEL->GetLoadZone(n));
+#endif
              mbDrivingTooFastLoad = false;
+#ifdef SRR2_OLD_3DS
+             mZELs.SetActive(pZEL);
+#endif
              mpZEL = (ZoneEventLocator*)pEventData;
 
              //If we're not currently loading
@@ -1580,6 +1739,9 @@ BEGIN_PROFILE( "Dump Zones" );
                HeapMgr()->PopHeap ( GMA_TEMP);
 
                //mpRenderLayers[msLayer & RenderEnums::LayerOnlyMask]->DumpDynaLoad(GiveItAFuckinName);
+#ifdef SRR2_OLD3DS_NATIVE_BENCH
+               if(RetainWorldZone(mpZEL->GetDumpZone(i),mpZEL))continue;
+#endif
                mpRenderLayers[RenderEnums::LevelSlot]->DumpDynaLoad(GiveItAFuckinName, mEntityDeletionList);
             }
 
@@ -1660,8 +1822,12 @@ END_PROFILE( "Add Requests Int" );
                 rReleasePrintf("Nothing to load in that Zone, checking for others...\n");
                 if( mZELs.mUseSize != 0 )
                 {
+#ifdef SRR2_OLD_3DS
+                    mpZEL = mZELs.TakeNext();
+#else
                     mpZEL = mZELs[0];
                     mZELs.RemoveKeepOrder(0);
+#endif
 
                     msLayer &= ~RenderEnums::ZoneMask;
                     msLayer |= i<<RenderEnums::ZoneShift;
@@ -2097,3 +2263,11 @@ RenderManager::AvgTimeCounter::GetAverageTimePerFrame()const
     return mElapsedTimeSum / ELAPSED_TIME_ARRAY_SIZE;
 }
 
+
+#ifdef SRR2_OLD_3DS
+void RenderManager::DumpZoneQueue(FILE* file) const
+{
+    std::fprintf(file,"WORLD_ZONE_QUEUE pending=%u capacity=%u peak=%u duplicates=%u growths=%u failures=%u owned_locators=1 adjacent_only_coalescing=1\n",
+        mZELs.mUseSize,mZELs.mSize,mZELs.peak,mZELs.duplicates,mZELs.growths,mZELs.failures);
+}
+#endif

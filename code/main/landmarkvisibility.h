@@ -3,6 +3,12 @@
 #include <cstdint>
 #include <cstdio>
 #include <cstring>
+#ifdef SRR2_OLD3DS_WORLD_RESIDENCY
+#include <worldresidencyassets.hpp>
+#endif
+#ifdef SRR2_OLD3DS_NATIVE_BENCH
+extern "C" unsigned g_old3dsWorldResidencyChoice;
+#endif
 
 namespace Old3dsLandmark {
 #ifdef SRR2_OLD3DS_VISUAL_UPGRADE
@@ -27,6 +33,17 @@ struct PreparedProfile {
     {
         if(attempted) return;
         attempted=true;
+#ifdef SRR2_OLD3DS_WORLD_RESIDENCY
+        char residentProfile[256];const char* root=__atomic_load_n(&g_old3dsResidencyRoot,__ATOMIC_ACQUIRE);
+        if(root){const int length=std::snprintf(residentProfile,sizeof(residentProfile),"%s/landmark-visibility.bin",root);if(length<=0 || unsigned(length)>=sizeof(residentProfile))return;path=residentProfile;}
+#endif
+#ifdef SRR2_OLD3DS_NATIVE_BENCH
+        const unsigned residency=__atomic_load_n(&g_old3dsWorldResidencyChoice,__ATOMIC_ACQUIRE);
+        if(residency==1)path="sdmc:/3ds/hitrun-dev/world-residency-01/reference/landmark-visibility.bin";
+        if(residency==2)path="sdmc:/3ds/hitrun-dev/world-residency-01/resident/landmark-visibility.bin";
+        if(residency==3)path="sdmc:/3ds/hitrun-dev/world-residency-04/opaque/landmark-visibility.bin";
+        if(residency==4)path="sdmc:/3ds/hitrun-dev/world-residency-05/all/landmark-visibility.bin";
+#endif
         FILE* file=std::fopen(path,"rb");
         if(!file) return;
         std::uint32_t header[4];

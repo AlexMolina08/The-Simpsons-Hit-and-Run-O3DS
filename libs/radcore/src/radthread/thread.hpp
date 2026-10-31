@@ -159,7 +159,11 @@ class radThread : public IRadThread,
     radThread( RADTHREADENTRY       pEntryFunction,
                void*                userData, 
                IRadThread::Priority priority, 
-               unsigned int         stackSize );
+               unsigned int         stackSize
+#if defined(RAD_3DS) && defined(SRR2_OLD3DS_NATIVE_BENCH)
+               , int core = -1
+#endif
+               );
 
     radThread( void );
     ~radThread( void );
@@ -224,6 +228,10 @@ class radThread : public IRadThread,
     // These statics are the actual thread OS specific entry points.
     // 
     static int InternalThreadEntry( void* param );
+#if defined(RAD_3DS) && defined(SRR2_OLD3DS_NATIVE_BENCH)
+    static void InternalNativeCoreEntry(void* param);
+    void* m_NativeCoreThread = nullptr;
+#endif
 
     //
     // This member maintains the reference count of this object.

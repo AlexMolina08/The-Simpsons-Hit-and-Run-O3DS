@@ -119,6 +119,10 @@ public:
 
     // NON-STATICS
 
+#ifdef SRR2_OLD3DS_NATIVE_BENCH
+    void GetPopulationCounts(unsigned& active,unsigned& visible) const;
+    int SelectReadyModel(int preferred);
+#endif
     void Init(); // Initializes pedmanager itself; called from GamePlayContext::OnStart()
     void Update( unsigned int milliseconds ); // called once per frame by GamePlayContext::Update()
 

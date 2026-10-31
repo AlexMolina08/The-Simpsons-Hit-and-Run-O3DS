@@ -21,6 +21,8 @@ extern "C" unsigned g_p3dMainThreadId = 0;
 #include <string.h>
 #ifdef SRR2_OLD3DS_NATIVE_BENCH
 #include <radloadtiming.hpp>
+#include <pddi/pica/nativereadahead.hpp>
+#include <radfile.hpp>
 #endif
 
 #ifdef P3D_TRACK_LOAD_STATS
@@ -1030,12 +1032,56 @@ static void p3dPicaGpuWait( int lend )
     }
 }
 
+#ifdef SRR2_OLD3DS_NATIVE_BENCH
+extern "C" unsigned g_picaPresentedFrames;
+static unsigned nativeIoOpens=0,nativeIoReads=0,nativeIoBytes=0,nativeIoTurns=0,nativeIoFrames=0,nativeIoErrors=0;
+static u64 nativeIoTicks=0;
+static void p3dNativeWait(IRadFile* file)
+{
+    if(file->CheckForCompletion())return;
+    IRadThreadSemaphore* complete=nullptr;radThreadCreateSemaphore(&complete,0);
+    file->AddCompletionEvent(complete);++nativeIoTurns;
+    // The drive signals directly after its range request. Sleep with the engine
+    // mutex released; do not poll or require a main-thread completion callback.
+    radLoad->WaitForRawRead(complete);complete->Release();
+}
+static void* p3dNativeOpen(const char* path,unsigned expectedBytes)
+{
+    u32 thread=0;svcGetThreadId(&thread,CUR_THREAD_HANDLE);
+    if(!g_p3dMainThreadId || thread==g_p3dMainThreadId || !p3d::loadManager || !radLoad)return nullptr;
+    IRadFile* file=nullptr;radFileOpen(&file,path,false,OpenExisting,NormalPriority,0,RADMEMORY_ALLOC_DEFAULT);
+    if(!file)return nullptr;
+    ++nativeIoOpens;p3dNativeWait(file);
+    if(!file->IsOpen() || file->GetSize()!=expectedBytes){++nativeIoErrors;file->Release();return nullptr;}
+    return file;
+}
+static bool p3dNativeRead(void* handle,unsigned offset,void* buffer,unsigned bytes)
+{
+    IRadFile* file=static_cast<IRadFile*>(handle);
+    if(!file || bytes>picaNativeRead::BufferBytes || offset>file->GetSize() || bytes>file->GetSize()-offset){++nativeIoErrors;return false;}
+    const u64 start=svcGetSystemTick();const unsigned frames=g_picaPresentedFrames;
+    file->SetPositionAsync(offset);file->ReadAsync(buffer,bytes);p3dNativeWait(file);
+    nativeIoTicks+=svcGetSystemTick()-start;nativeIoFrames+=g_picaPresentedFrames-frames;
+    ++nativeIoReads;nativeIoBytes+=bytes;
+    const bool ok=file->GetLastError()==Success;if(!ok)++nativeIoErrors;return ok;
+}
+static void p3dNativeClose(void* file){static_cast<IRadFile*>(file)->Release();}
+extern "C" void p3dDumpNativeReader(FILE* file)
+{
+    fprintf(file,"NATIVE_RAW_READER enabled=%u buffer_bytes=%u maximum_pending=1 extra_threads=0 wait_handoffs_release_engine_mutex=1 completion_event=1 busy_poll=0 opens=%u ranges=%u bytes=%u handoffs=%u presented_while_pending=%u wait_ms=%.5f errors=%u wall_not_cpu=1\n",
+        picaNativeRead::enabled,picaNativeRead::BufferBytes,nativeIoOpens,nativeIoReads,nativeIoBytes,nativeIoTurns,nativeIoFrames,nativeIoTicks*1000.0/SYSCLOCK_ARM11,nativeIoErrors);
+}
+#endif
+
 struct p3dPicaYieldInstaller
 {
     p3dPicaYieldInstaller()
     {
         g_picaYieldHook   = p3dPicaYield;
         g_picaGpuWaitHook = p3dPicaGpuWait;
+#ifdef SRR2_OLD3DS_NATIVE_BENCH
+        picaNativeRead::hooks={p3dNativeOpen,p3dNativeRead,p3dNativeClose};
+#endif
     }
 };
 static p3dPicaYieldInstaller s_p3dPicaYieldInstaller;

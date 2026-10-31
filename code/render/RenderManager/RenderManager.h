@@ -23,6 +23,10 @@
 //=================================================
 //#include <render/RenderManager/RenderLayer.h>
 #include <render/Culling/SwapArray.h>
+#ifdef SRR2_OLD_3DS
+#include <render/RenderManager/worldzonequeue.h>
+#include <cstdio>
+#endif
 #include <render/Enums/RenderEnums.h>
 #include <render/Loaders/ChunkListenerCallback.h>
 #include <loading/loadingmanager.h>
@@ -111,6 +115,11 @@ public:
    // LoadingManager::ProcessRequestsCallback's
    ///////////////////////////////////////////////////////////////////////
    void OnProcessRequestsComplete( void* pUserData );
+#ifdef SRR2_OLD3DS_NATIVE_BENCH
+   bool RetainWorldZone(const char*,ZoneEventLocator*);
+   bool CanPrefetchZone(ZoneEventLocator*);
+   void UpdateWorldPrefetch(ZoneEventLocator*, unsigned now);
+#endif
    bool DoneInitialLoad();
    void DoPostLevelLoad();
 
@@ -123,6 +132,10 @@ public:
    void MunchDelList(unsigned howManyMicroseconds);
 
    SwapArray<tRefCounted*> mEntityDeletionList;
+#ifdef SRR2_OLD_3DS
+   bool ZoneQueueFailed() const{return mZELs.Failed();}
+   void DumpZoneQueue(FILE*) const;
+#endif
    void SetBlurAlpha( float alpha ) { mBlurAlpha = alpha; }
 private:
    //Initialize the mpLayers
@@ -147,7 +160,11 @@ private:
 
    bool mDoneInitialLoad;
    
+#ifdef SRR2_OLD_3DS
+   WorldZoneQueue<ZoneEventLocator> mZELs;
+#else
    SwapArray<ZoneEventLocator*> mZELs;
+#endif
    ZoneEventLocator* mpZEL;
    bool mbDynaLoading;
    bool mbFirstDynamicZone;

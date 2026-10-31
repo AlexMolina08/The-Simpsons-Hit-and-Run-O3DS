@@ -18,6 +18,14 @@
 #include <pddi/pica/nativecontext.h>
 #endif
 #include <main/nativebench.h>
+#include <main/worldstressplan.h>
+#include <main/worldinteriorstress.h>
+#include <new>
+#include <main/worldstreaming.h>
+#include <main/worldresidency.h>
+#include <render/Loaders/AllWrappers.h>
+#include <worldresidencyassets.hpp>
+#include <pddi/pica/nativereadahead.hpp>
 #include <pddi/pica/visualstyle.hpp>
 #include <pddi/pica/skinning.hpp>
 #ifdef SRR2_OLD3DS_VISUAL_UPGRADE
@@ -33,12 +41,15 @@
 #include <worldsim/avatarmanager.h>
 #include <worldsim/vehiclecentral.h>
 #include <worldsim/traffic/trafficmanager.h>
+#include <worldsim/ped/pedestrianmanager.h>
 #include <events/eventmanager.h>
 #include <poser/poseengine.hpp>
 #include <worldsim/character/character.h>
 #include <worldsim/character/charactermanager.h>
 #include <worldsim/redbrick/vehicle.h>
 #include <mission/gameplaymanager.h>
+#include <mission/missionmanager.h>
+#include <mission/mission.h>
 #include <meta/triggervolumetracker.h>
 #include <meta/triggervolume.h>
 #include <meta/zoneeventlocator.h>
@@ -65,6 +76,8 @@ namespace picaCharacterOcclusion { extern unsigned groups,vertices,misses; }
 #endif
 #include <presentation/gui/guisystem.h>
 #include <presentation/gui/ingame/guimanageringame.h>
+#include <presentation/gui/ingame/guiscreenmissionload.h>
+#include <presentation/gui/ingame/guiscreeniriswipe.h>
 #include <roads/road.h>
 #include <roads/roadsegment.h>
 #include <roads/intersection.h>
@@ -144,8 +157,19 @@ extern bool g_picaNativeTextureDiagnostics;
 static picaNativeTextureStats nativeTextureCaptureBegin={},nativeTextureCaptureEnd={};
 extern "C" void picaDumpNativeTextures(FILE*);
 extern "C" void radLoadDumpWorkerSlices(FILE*);
+extern "C" void radLoadSetCoreExperiment(int);
+#ifdef SRR2_OLD3DS_LEVEL_CACHE
+#include <pddi/pica/nativelevelcache.hpp>
+#endif
+extern "C" void p3dDumpNativeReader(FILE*);
+extern bool g_old3dsParkedSectionRemove;
+extern "C" void old3dsDumpParkedRemoval(FILE*);
+extern "C" unsigned g_old3dsWorldOrderChoice;
+extern "C" unsigned g_old3dsWorldResidencyChoice;
+extern "C" void srr2DumpWorldOrder(FILE*);
 #endif
 extern "C" unsigned g_picaPresentedFrames;
+extern "C" void picaDumpStereoDiagnostics(FILE*);
 extern bool g_old3dsTrafficFacingOnly;
 #ifdef SRR2_OLD3DS_WHEEL_LOD
 extern bool g_old3dsWheelBatch;
@@ -191,7 +215,9 @@ struct Record {
 #endif
  unsigned nativeContext, frame, elapsed, context, period, realElapsed, stage[Count],exclusive[Count],count[CountC];
  unsigned work,draws,vertices,linear,heapUsed,loading,substeps,check,behavior,presentBegin,presentEnd;
- unsigned route, pairs, areas, entities;
+ unsigned route, pairs, areas, entities,residencyPolicy;
+ float carPosition[3],carVertical,carAngular;unsigned carInPhysics,carRest,physicsLimit;
+ float cameraPosition[3],cameraTarget[3]; unsigned activePeds,frustumPeds;
  unsigned skinBudgetFallbacks, skinBudgetVertices; float position[3],speed,gpu; unsigned incar; };
 static Record* records=nullptr;
 static Record current;
@@ -206,6 +232,9 @@ static u64 totalWork,traceTicks,scopeCalibration;
 static unsigned verifyAll,verifyAllFailures;
 static bool hold=false,reload=false,visualCapture=false,afterRouteCapture=false;
 static bool sceneAudit=false,placementRelocated=false,placementGround=false;
+static bool residencyCpuProbe=false,missionNpcProbe=false;
+static unsigned suspensionProbe=0,lastSuspensionStep=0;
+static bool incidentWorldPrepared=false;
 static rmt::Vector placementPlayer,placementOriginalCar,placementCar;
 struct SceneSample { unsigned route,sections,statics,intersects,pending,ground; float x,y,z; };
 static SceneSample sceneSamples[64];
@@ -223,7 +252,7 @@ static void SampleScene(unsigned route)
  sample.route=route;
  GetRenderManager()->pWorldRenderLayer()->GetLoadedWorldCounts(sample.sections,sample.statics,sample.intersects);
  sample.pending=GetLoadingManager()->GetNumCurrentRequests();
- rmt::Vector position=GetGameplayManager()->GetCurrentVehicle()->GetPosition(),normal,ground;
+ rmt::Vector position,normal,ground;GetAvatarManager()->GetAvatarForPlayer(0)->GetPosition(position);
  sample.x=position.x;sample.y=position.y;sample.z=position.z;
  position.y+=2.0f;bool found=false;
  GetIntersectManager()->FindIntersection(position,found,normal,ground);
@@ -256,6 +285,9 @@ static unsigned earlyWorldQueue=2;
 static bool stereoClip=false;
 static float smallObjectCullSquared=4000.0f;
 float SmallObjectCullSquared(){return smallObjectCullSquared;}
+// Alternate only the substep limit after placement. No resets or force/pose
+// writes occur during the capture; the same simulation evolves continuously.
+unsigned SuspensionStep(unsigned accepted){lastSuspensionStep=suspensionProbe==1?(((elapsedMs/10000u)&1u)?25u:50u):accepted;return lastSuspensionStep;}
 bool StereoClip(){return stereoClip;}
 bool EarlyWorldQueue(){return earlyWorldQueue!=0;}
 unsigned EarlyWorldQueuePhase(){return earlyWorldQueue;}
@@ -270,6 +302,20 @@ static bool nativeUniforms=false;
 #endif
 static unsigned reloadPhase=0,reloadMs=0,reloadDispatches=0,reloadObservedLevels=0;
 static bool reloadPauseRequested=false;
+static WorldStress::Plan reloadPlan;
+static WorldStress::FrameStats* reloadStats=nullptr;
+static bool reloadEntered[WorldStress::Plan::Capacity+1]={},reloadSampling=false;
+static bool reloadReset[WorldStress::Plan::Capacity+1]={};
+static bool reloadTeleported[WorldStress::Plan::Capacity+1]={};
+static bool reloadInteriorDone[WorldStress::Plan::Capacity+1]={};
+static bool reloadMissionRequested[WorldStress::Plan::Capacity+1]={};
+static unsigned reloadReportMs=0;
+static WorldStress::PhaseWatchdog reloadPhaseWatchdog;
+static bool worldResidencyOverride=false,irisCapture=false;
+static unsigned irisClosedFrames=0,irisCaptures=0;
+static ZoneEventLocator* reloadTeleportLocators[WorldStress::Plan::Capacity+1]={};
+static u64 reloadPeriod=0;
+
 static bool enabled=true,replay=false,placed=false,done=false,aborted=false;
 static u64 benchmarkStart,initializationTick=0,placementTick=0;
 #ifdef SRR2_OLD3DS_NATIVE_CONTEXT
@@ -283,7 +329,7 @@ static unsigned contextFastBegin=0,contextFallbackBegin=0,contextWordsBegin=0;
 static unsigned contextFastEnd=0,contextFallbackEnd=0,contextWordsEnd=0;
 #endif
 static Scope* top;
-static const char* names[Count]={"update","render","stream","service","file_service","debug_service","sound_service","file_lock","file_callback","file_error","file_user_callback","sound_buffer_complete","sound_encode","sound_encode_kernel","load_handoff","load_callback","load_yield","load_lock"};
+static const char* names[Count]={"update","render","stream","service","file_service","debug_service","sound_service","file_lock","file_callback","file_error","file_user_callback","sound_buffer_complete","sound_encode","sound_encode_kernel","load_handoff","load_callback","load_yield","load_lock","load_callback_done","load_callback_release","load_user_callback","load_handler_release","load_next_request","load_zone_event","load_zone_post","load_zone_named","load_zone_pre","load_parked_add","load_parked_reset","load_parked_remove"};
 static_assert(sizeof(names)/sizeof(names[0])==Count,"Every benchmark stage needs one name");
 // Sparse development-only SD breadcrumbs survive a forced console restart.
 // Formatting and I/O perturb the route; enabled captures are never FPS evidence.
@@ -302,13 +348,20 @@ void Scope::EndScope(){if(!start)return;u64 end=svcGetSystemTick(),dt=end-start;
  if(parent)parent->child+=dt;top=parent;Checkpoint("leave",stage);}
 bool ResidentShaders(){return residentShaders;}
 unsigned LoaderSliceUs(){return loaderSliceUs;}
-bool IdleLoaderWait(){return true;}
+bool WorldResidencyOverridden(){return worldResidencyOverride;}
+unsigned WorldResidencyChoice(){return __atomic_load_n(&g_old3dsWorldResidencyChoice,__ATOMIC_ACQUIRE);}
+
+void ReloadStereoFrame(){if(reloadSampling && reloadStats && reloadPhase<=reloadPlan.count)++reloadStats[reloadPhase].stereoFrames;}
+void ReloadStereoSegment(){if(reloadSampling && reloadStats && reloadPhase<=reloadPlan.count)++reloadStats[reloadPhase].stereoSegments;}
+bool IdleLoaderWait(){return WorldStreaming::idleLoader;}
 unsigned CurrentRouteMs(){return elapsedMs;}
 bool NativeUniforms(){return nativeUniforms;}
 // Benchmark-only input driver. Follow immutable road points through the normal
 // controller; never move world objects or change simulation/traffic state.
 static bool roadRoute=false;
 static unsigned roadDirection=0;
+static bool fixedRoadAnchor=false;
+static rmt::Vector roadAnchor;
 static rmt::Vector roadPoints[512],roadLastPosition;
 static unsigned roadPointCount=0,roadPoint=0,roadStalledMs=0,roadReverseMs=0,roadRecoveries=0;
 static float roadDistance=0,roadPlannedDistance=0;
@@ -355,7 +408,13 @@ static bool BuildRoadRoute(Vehicle* vehicle)
     const float dx=b.x-a.x,dz=b.z-a.z,n=std::sqrt(dx*dx+dz*dz);
     if(n<.01f)continue;
     // A dead end needs a U-turn. Prefer every ordinary continuation first.
-    const float alignment=(dx*heading.x+dz*heading.z)/n-(candidate==road?3.0f:0.0f);
+    float alignment=(dx*heading.x+dz*heading.z)/n-(candidate==road?3.0f:0.0f);
+    if(WorldStreaming::traversal) {
+     const float turn=std::atan2(heading.z*dx-heading.x*dz,heading.x*dx+heading.z*dz);
+     const bool left=WorldStreaming::traversal==1 || (WorldStreaming::traversal==3 && ((roads+seed)%2));
+     const float desired=roads%3==0?0.f:(left?.95f:-.95f);
+     alignment=-std::fabs(turn-desired)-(candidate==road?4.f:0.f);
+    }
     if(alignment>best){best=alignment;next=candidate;nextForward=!group;}
    }
   }
@@ -381,7 +440,7 @@ static void UpdateRoadInput(Vehicle* vehicle,unsigned elapsed)
  float steering=angle/.6f;if(steering>1)steering=1;if(steering<-1)steering=-1;
  roadSteer=int(steering*26000);
  const float speed=vehicle->mSpeed;
- const float desired=std::fabs(angle)>.6f?9.f:18.f;
+ const float desired=std::fabs(angle)>.6f?9.f:WorldStreaming::cruiseSpeed;
  roadGas=speed<desired;roadBrake=speed>desired+3.f;
  if(roadReverseMs){
   roadReverseMs=elapsed>=roadReverseMs?0:roadReverseMs-elapsed;
@@ -477,6 +536,26 @@ static bool ParseRunArgument(const char* argument)
  else if(!strncmp(argument,warm,sizeof(warm)-1))warmup=strtoul(argument+sizeof(warm)-1,nullptr,10);
  else if(!strncmp(argument,keep,sizeof(keep)-1))hold=atoi(argument+sizeof(keep)-1)!=0;
  else if(!strncmp(argument,restart,sizeof(restart)-1))reload=atoi(argument+sizeof(restart)-1)!=0;
+ else if(!strncmp(argument,"bench_reload_plan=",18)){
+  if(!reloadPlan.Parse(argument+18))return false;
+  reload=true;
+ }
+ else if(!strcmp(argument,"bench_iris_capture=1"))irisCapture=true;
+ else if(!strcmp(argument,"bench_iris_capture=0"))irisCapture=false;
+ else if(!strcmp(argument,"bench_reload_active=1"))reloadPlan.activeMission=true;
+ else if(!strcmp(argument,"bench_reload_active=0"))reloadPlan.activeMission=false;
+ else if(!strcmp(argument,"bench_reload_interior=1"))reloadPlan.interior=true;
+ else if(!strcmp(argument,"bench_reload_interior=0"))reloadPlan.interior=false;
+ else if(!strcmp(argument,"bench_reload_teleport=1"))reloadPlan.teleport=true;
+ else if(!strcmp(argument,"bench_reload_teleport=0"))reloadPlan.teleport=false;
+ else if(!strcmp(argument,"bench_reload_reset=1"))reloadPlan.resetMission=true;
+ else if(!strcmp(argument,"bench_reload_reset=0"))reloadPlan.resetMission=false;
+ else if(!strncmp(argument,"bench_reload_dwell=",19)){
+  char* end=nullptr;const char* value=argument+19;const unsigned long seconds=strtoul(value,&end,10);
+  if(end==value || *end || seconds<3 || seconds>30)return false;
+  reloadPlan.dwellMs=unsigned(seconds)*1000;
+ }
+
  else if(!strncmp(argument,random,sizeof(random)-1))seed=strtoul(argument+sizeof(random)-1,nullptr,10);
  else if(!strncmp(argument,"bench_quality=",14))Old3dsPerformance::mode=strtoul(argument+14,nullptr,10)%8;
 #ifdef SRR2_OLD3DS_PREPARED_AUDIO
@@ -496,6 +575,24 @@ static bool ParseRunArgument(const char* argument)
   if(value==end || *end || !std::isfinite(distance) || distance<64 || distance>240)return false;
   smallObjectCullSquared=distance*distance;
  }
+ else if(!strcmp(argument,"bench_mission_npc_probe=1"))missionNpcProbe=true;
+ else if(!strcmp(argument,"bench_mission_npc_probe=0"))missionNpcProbe=false;
+ else if(!strcmp(argument,"bench_suspension_probe=2"))suspensionProbe=2;
+ else if(!strcmp(argument,"bench_suspension_probe=1"))suspensionProbe=1;
+ else if(!strcmp(argument,"bench_suspension_probe=0"))suspensionProbe=0;
+ else if(!strcmp(argument,"bench_parked_section_remove=1"))g_old3dsParkedSectionRemove=true;
+ else if(!strcmp(argument,"bench_parked_section_remove=0"))g_old3dsParkedSectionRemove=false;
+ else if(!strcmp(argument,"bench_residency_cpu_probe=1"))residencyCpuProbe=true;
+ else if(!strcmp(argument,"bench_residency_cpu_probe=0"))residencyCpuProbe=false;
+ else if(!strcmp(argument,"bench_resident_lookup_cache=0"))WorldResidency::CacheLookup(false);
+ else if(!strcmp(argument,"bench_resident_lookup_cache=1"))WorldResidency::CacheLookup(true);
+ else if(!strncmp(argument,"bench_road_anchor=",18)){
+  rmt::Vector anchor;char trailing=0;
+  if(sscanf(argument+18,"%f,%f,%f%c",&anchor.x,&anchor.y,&anchor.z,&trailing)!=3 ||
+     !std::isfinite(anchor.x) || !std::isfinite(anchor.y) || !std::isfinite(anchor.z) ||
+     std::fabs(anchor.x)>10000 || std::fabs(anchor.y)>10000 || std::fabs(anchor.z)>10000)return false;
+  roadAnchor=anchor;fixedRoadAnchor=true;
+ }
  else if(!strncmp(argument,"bench_road_direction=",21)){
   const char* value=argument+21;
   if(!strcmp(value,"forward"))roadDirection=1;
@@ -505,6 +602,10 @@ static bool ParseRunArgument(const char* argument)
  }
 #ifdef SRR2_OLD3DS_VRAM_TEXTURES
  else if(!strncmp(argument,"bench_vram_compact=",19))g_picaVramCompact=atoi(argument+19)!=0;
+#ifdef SRR2_OLD3DS_NATIVE_ETC1
+ else if(!strcmp(argument,"bench_linear_compact=0"))g_picaLinearCompact=false;
+ else if(!strcmp(argument,"bench_linear_compact=1"))g_picaLinearCompact=true;
+#endif
 
 #endif
  else if(!strncmp(argument,"bench_traffic_limit=",20)){
@@ -515,7 +616,31 @@ static bool ParseRunArgument(const char* argument)
 #if defined(SRR2_OLD3DS_NATIVE_TEXTURE_BUNDLE) && defined(SRR2_OLD3DS_NATIVE_ETC1)
  else if(!strncmp(argument,"bench_exact_world_cache=",24))g_picaNativeExactWorldFallback=atoi(argument+24)!=0;
  else if(!strncmp(argument,"bench_native_unbuffered=",24))g_picaNativeBundleUnbuffered=atoi(argument+24)!=0;
+ else if(!strcmp(argument,"bench_native_coalesced=1"))g_picaNativeBundleCoalesced=true;
+ else if(!strcmp(argument,"bench_native_coalesced=0"))g_picaNativeBundleCoalesced=false;
+ else if(!strcmp(argument,"bench_native_async=1"))picaNativeRead::enabled=true;
+ else if(!strcmp(argument,"bench_native_async=0"))picaNativeRead::enabled=false;
 #endif
+#ifdef SRR2_OLD3DS_LEVEL_CACHE
+ else if(!strcmp(argument,"bench_native_cache=0"))return picaNativeLevel::SetMode(0);
+ else if(!strcmp(argument,"bench_native_cache=1"))return picaNativeLevel::SetMode(1);
+ else if(!strcmp(argument,"bench_native_cache=2"))return picaNativeLevel::SetMode(2);
+#endif
+ else if(!strcmp(argument,"bench_loader_core=0"))radLoadSetCoreExperiment(0);
+ else if(!strcmp(argument,"bench_loader_core=1")) {
+#ifdef SRR2_OLD3DS_LEVEL_CACHE
+  if(picaNativeLevel::Mode())return false;
+#endif
+  radLoadSetCoreExperiment(1);
+ }
+ else if(!strcmp(argument,"bench_world_residency=0")){worldResidencyOverride=true;__atomic_store_n(&g_old3dsWorldResidencyChoice,0u,__ATOMIC_RELEASE);}
+ else if(!strcmp(argument,"bench_world_residency=1")){worldResidencyOverride=true;__atomic_store_n(&g_old3dsWorldResidencyChoice,1u,__ATOMIC_RELEASE);}
+ else if(!strcmp(argument,"bench_world_residency=2")){worldResidencyOverride=true;__atomic_store_n(&g_old3dsWorldResidencyChoice,2u,__ATOMIC_RELEASE);}
+ else if(!strcmp(argument,"bench_world_residency=3")){worldResidencyOverride=true;__atomic_store_n(&g_old3dsWorldResidencyChoice,3u,__ATOMIC_RELEASE);}
+ else if(!strcmp(argument,"bench_world_residency=4")){worldResidencyOverride=true;__atomic_store_n(&g_old3dsWorldResidencyChoice,4u,__ATOMIC_RELEASE);}
+ else if(!strcmp(argument,"bench_world_order=0"))__atomic_store_n(&g_old3dsWorldOrderChoice,0u,__ATOMIC_RELEASE);
+ else if(!strcmp(argument,"bench_world_order=1"))__atomic_store_n(&g_old3dsWorldOrderChoice,1u,__ATOMIC_RELEASE);
+ else if(!strcmp(argument,"bench_world_order=2"))__atomic_store_n(&g_old3dsWorldOrderChoice,2u,__ATOMIC_RELEASE);
 #ifdef SRR2_OLD3DS_NATIVE_CONTEXT
  else if(!strncmp(argument,"bench_fog_reuse=",16))picaNativeEnableFogReuse(atoi(argument+16)!=0);
 #endif
@@ -556,6 +681,69 @@ static bool ParseRunArgument(const char* argument)
  else return false;
  return true;
 }
+struct PassiveFrame { unsigned ms,context,period,work,linear,queued;float x,y,z,speed; };
+static constexpr unsigned PassiveCapacity=2048;
+static PassiveFrame* passiveFrames=nullptr;
+static unsigned passiveCount=0,passiveMs=0,passiveContext=0,passiveLastGameplay=0;
+static u64 passiveStart=0,passivePrevious=0;
+static bool passiveMarked=false;
+static void PassiveBegin(int context)
+{
+    const u64 now=svcGetSystemTick();
+    passiveMs=unsigned((now-passiveStart)*1000/SYSCLOCK_ARM11);elapsedMs=passiveMs;
+    passiveContext=context;WorldStreaming::passiveActive=context==CONTEXT_GAMEPLAY;
+    WorldStreaming::BeginFrame(passiveMs,0.f);
+}
+static bool PassiveEnd(u64 work,int context)
+{
+    const u64 now=svcGetSystemTick();
+    if(WorldStreaming::passiveActive)WorldStreaming::EndFrame();
+    if(passiveFrames && WorldStreaming::passiveActive) {
+        passiveLastGameplay=passiveMs;
+        PassiveFrame& r=passiveFrames[passiveCount++%PassiveCapacity];r={};
+        r.ms=passiveMs;r.context=context;r.period=unsigned(now-passivePrevious);r.work=unsigned(work);
+        r.linear=linearSpaceFree();r.queued=GetLoadingManager()->GetNumCurrentRequests();
+        if(WorldStreaming::passiveActive) {
+            Avatar* a=GetAvatarManager()->GetAvatarForPlayer(0);rmt::Vector p;a->GetPosition(p);
+            r.x=p.x;r.y=p.y;r.z=p.z;r.speed=a->GetSpeedMps();
+        }
+    }
+    passivePrevious=now;
+    const u32 marker=KEY_START|KEY_SELECT;
+    if((hidKeysHeld()&marker)==marker) {
+        passiveMarked=true;WorldStreaming::MarkerImage();return true;
+    }
+    return false;
+}
+static void DumpPassive()
+{
+    WorldStreaming::passiveActive=false;
+    FILE* f=fopen("native-" SRR2_OLD3DS_BUILD_ID ".log","w");if(!f)return;
+    fprintf(f,"NATIVE_RUN id=%s passive=1\n",runIdentity);
+    fprintf(f,"PASSIVE_CONFIG no_automatic_input=1 no_placement=1 no_fixed_seed=1 no_fixed_step=1 marker=%u window_ms=20000 performance_comparison=0\n",passiveMarked);
+    Avatar* recordedAvatar=GetAvatarManager()->GetAvatarForPlayer(0);
+    Vehicle* recordedCar=recordedAvatar && recordedAvatar->IsInCar()?recordedAvatar->GetVehicle():nullptr;
+    fprintf(f,"PASSIVE_VEHICLE incar=%u model=%s\n",recordedCar!=nullptr,recordedCar?recordedCar->GetName():"none");
+    WorldResidency::Dump(f);GetRenderManager()->DumpZoneQueue(f);WorldStreaming::Dump(f,runIdentity);
+    picaDumpStereoDiagnostics(f);
+#ifdef SRR2_OLD3DS_NATIVE_TEXTURES
+    picaDumpNativeTextures(f);
+    radLoadDumpWorkerSlices(f);
+#ifdef SRR2_OLD3DS_LEVEL_CACHE
+ picaNativeLevel::Finish();picaNativeLevel::Dump(f);
+#endif
+    p3dDumpNativeReader(f);
+ old3dsDumpParkedRemoval(f);
+    srr2DumpWorldOrder(f);
+#endif
+    fprintf(f,"PASSIVE_WINDOW reference_ms=%u marker_ms=%u pause_gap_ms=%u marker_context=%u gameplay_frames_only=1\n",passiveLastGameplay,passiveMs,passiveMs-passiveLastGameplay,passiveContext);
+    for(unsigned i=passiveCount>PassiveCapacity?passiveCount-PassiveCapacity:0;i<passiveCount;++i) {
+        const PassiveFrame& r=passiveFrames[i%PassiveCapacity];if(passiveLastGameplay-r.ms>20000)continue;
+        fprintf(f,"PASSIVE_FRAME ms=%u context=%u period_ms=%.4f work_ms=%.4f linear=%u queued=%u x=%.5f y=%.5f z=%.5f speed=%.5f\n",r.ms,r.context,r.period*1000.0/SYSCLOCK_ARM11,r.work*1000.0/SYSCLOCK_ARM11,r.linear,r.queued,r.x,r.y,r.z,r.speed);
+    }
+    for(unsigned slot=0;slot<4;++slot)fprintf(f,"NATIVE_SAVE_FIXTURE id=%08x slot=%u bytes=%u fnv1a=%08x personal_save_writes=0\n",saveFixture,slot+1,fixtureBytes[slot],fixtureHash[slot]);
+    fprintf(f,"PASSIVE_CAPTURE_END marked=%u time_ms=%u frames=%u\n",passiveMarked,passiveMs,passiveCount);fclose(f);
+}
 void Init(int argc,char** argv){
  captureTls=getThreadLocalStorage();
  initializationTick=svcGetSystemTick();
@@ -563,6 +751,25 @@ void Init(int argc,char** argv){
  Old3dsVehicleProfile::CaptureEnabled()=false;
 #endif
  if(!PrepareSaveFixtures()){printf("NATIVE_AUTOMATION save_fixture_failed abort=1\n");aborted=done=true;return;}
+ for(int i=1;i<argc;++i)if(!strcmp(argv[i],"bench_passive=1"))WorldStreaming::passive=true;
+ if(WorldStreaming::passive) {
+    enabled=false;serviceProfile=true;WorldStreaming::audit=true;WorldStreaming::predictive=false;
+    for(int i=1;i<argc;++i) {
+        if(!strcmp(argv[i],"bench_idle_loader=0"))WorldStreaming::idleLoader=false;
+        if(!strcmp(argv[i],"bench_idle_loader=1"))WorldStreaming::idleLoader=true;
+    }
+    for(int i=1;i<argc;++i)if(!strncmp(argv[i],"bench_trial=",12) ||
+        !strncmp(argv[i],"bench_world_residency=",22) ||
+        !strncmp(argv[i],"bench_loader_core=",18) ||
+        !strncmp(argv[i],"bench_vram_compact=",19) ||
+        !strncmp(argv[i],"bench_linear_compact=",21) ||
+        !strncmp(argv[i],"bench_native_cache=",19))ParseRunArgument(argv[i]);
+    WorldResidency::Init();WorldStreaming::Init();passiveFrames=static_cast<PassiveFrame*>(calloc(PassiveCapacity,sizeof(PassiveFrame)));
+    passiveStart=passivePrevious=svcGetSystemTick();
+    printf("PASSIVE_LAUNCH trial=%s marker=START_SELECT original_saves_protected=1\n",runIdentity);
+    return;
+ }
+
  FILE* f=fopen("native-automation.txt","r");
  // This development-only build defaults to the real-time route without SD setup.
  if(f){
@@ -642,6 +849,7 @@ void Init(int argc,char** argv){
  Old3dsPools::Configure(0);
 #endif
  for(int i=1;i<argc;++i){
+  if(WorldStreaming::ParseArgument(argv[i]))continue;
   if(ParseRunArgument(argv[i]))continue;
 #ifdef SRR2_OLD3DS_GEOMETRY_INPUT
   static const char geometryArgument[]="bench_geometry_input=";
@@ -743,12 +951,19 @@ void Init(int argc,char** argv){
 #ifdef SRR2_OLD3DS_BOTTOM_MAP_15HZ
  HandheldHudCadence::enabled=bottomMapMode!=0;
 #endif
+ WorldResidency::Init();WorldStreaming::Init();
  const unsigned minimumSeconds=portrait?1u:5u,minimumWarmup=portrait?0u:3u;
  if(seconds<minimumSeconds||seconds>(roadRoute?120u:25u))seconds=25;
  if(warmup<minimumWarmup||warmup>60)warmup=8;if(step<1||step>100)step=67;
  // Use the existing normal heap after libctru startup, not additional BSS.
  recordCapacity=RouteRecordCapacity(seconds,Graphics3DS::TargetFPS());
  records=static_cast<Record*>(calloc(recordCapacity,sizeof(Record)));
+ if(reload){
+  reloadStats=static_cast<WorldStress::FrameStats*>(malloc((reloadPlan.count+1)*sizeof(WorldStress::FrameStats)));
+  if(!reloadStats){enabled=false;aborted=done=true;printf("NATIVE_AUTOMATION reload_stats_allocation_failed abort=1\n");return;}
+  for(unsigned i=0;i<=reloadPlan.count;++i)::new(static_cast<void*>(reloadStats+i)) WorldStress::FrameStats();
+ }
+
  printf("NATIVE_LAUNCH id=%s mode=%s seconds=%u checkpoint_io=%u\n",runIdentity,replay?"replay":"realtime",seconds,checkpointIO);
  if(!records){enabled=false;aborted=true;done=true;
   printf("NATIVE_AUTOMATION allocation_failed bytes=%u abort=1\n",unsigned(recordCapacity*sizeof(Record)));return;}
@@ -758,9 +973,168 @@ void Init(int argc,char** argv){
  CommandLineOptions::HandleOption(a);CommandLineOptions::HandleOption(b);CommandLineOptions::HandleOption(c);
 }
 unsigned Seed(unsigned fallback){return enabled?seed:fallback;}
+static bool PrepareIncidentWorld()
+{
+ // The reported revisit had Z2 resident before its unload. Recreate that known
+ // initial state before warmup; measured traversal never waits for resources.
+ TriggerVolumeTracker* tracker=GetTriggerVolumeTracker();
+ for(unsigned i=0;i<tracker->GetNumTriggers();++i){
+  Locator* locator=tracker->GetTrigger(i)->GetLocator();
+  if(!locator || locator->GetDataType()!=LocatorType::DYNAMIC_ZONE)continue;
+  auto* zone=static_cast<ZoneEventLocator*>(locator);
+  if(zone->IsInteriorLoad())continue;
+  unsigned mask=0;
+  for(int n=0;n<zone->GetNumLoadZones();++n){const char* name=zone->GetLoadZone(n);
+   if(!strcmp(name,"l2z2.p3d"))mask|=1;
+   if(!strcmp(name,"l2z1.p3d"))mask|=2;
+   if(!strcmp(name,"l2r1.p3d"))mask|=4;
+   if(!strcmp(name,"l2r4.p3d"))mask|=8;
+  }
+  if(mask==15){zone->Trigger(0,true);return true;}
+ }
+ return false;
+}
+static void UpdateStreamingFlight(Avatar*,unsigned);
+// Diagnostic warp follows the engine's debug-teleport protocol: request a
+// real authored zone, then reset the physical vehicle/character on a real road.
+// Owned locator copies outlive queued callbacks and level heap changes.
+static bool ReloadTeleport(unsigned phase)
+{
+ Avatar* avatar=GetAvatarManager()->GetAvatarForPlayer(0);if(!avatar || !avatar->GetCharacter())return false;
+ rmt::Vector from;avatar->GetPosition(from);ZoneEventLocator* selected=nullptr;
+ rmt::Vector target,facing;float farthest=150.f*150.f;
+ TriggerVolumeTracker* tracker=GetTriggerVolumeTracker();const unsigned map=unsigned(GetGameplayManager()->GetCurrentLevelIndex())+1;
+ for(unsigned i=0;i<tracker->GetNumTriggers();++i){
+  TriggerVolume* volume=tracker->GetTrigger(i);Locator* locator=volume->GetLocator();
+  if(!locator || locator->GetDataType()!=LocatorType::DYNAMIC_ZONE)continue;
+  auto* zone=static_cast<ZoneEventLocator*>(locator);if(zone->IsInteriorLoad() || zone->IsInteriorDump() || !zone->GetNumLoadZones())continue;
+  bool exterior=true;
+  for(int n=0;n<zone->GetNumLoadZones();++n)exterior=exterior && WorldResidencyAssets::Sector(map,WorldResidencyAssets::LowerUID(zone->GetLoadZone(n)));
+  if(!exterior)continue;
+  RoadSegment* road=nullptr;float roadDistance=0;GetIntersectManager()->FindClosestRoad(volume->GetPosition(),60.f,road,roadDistance);if(!road)continue;
+  rmt::Vector position,a,b;road->GetPosition(.5f,.5f,&position);const float distance=(position-from).MagnitudeSqr();if(distance<=farthest)continue;
+  rmt::Vector probe=position,normal,ground;bool hit=false;probe.y+=3.f;GetIntersectManager()->FindIntersection(probe,hit,normal,ground);if(!hit)continue;
+  road->GetPosition(0,.5f,&a);road->GetPosition(1,.5f,&b);selected=zone;target=position;facing=b-a;farthest=distance;
+ }
+ char zoneText[254];if(!WorldStress::ExteriorZoneText(selected,zoneText))return false;
+ auto* owned=new(GMA_PERSISTENT) ZoneEventLocator();if(!owned)return false;owned->AddRef();
+ owned->SetZoneSize(unsigned(std::strlen(zoneText))+1);owned->SetZone(zoneText);owned->SetPlayerEntered();reloadTeleportLocators[phase]=owned;
+ if(owned->GetNumLoadZones()!=selected->GetNumLoadZones() || owned->GetNumDumpZones()!=selected->GetNumDumpZones()
+    || owned->GetNumLWSActivates()!=selected->GetNumLWSActivates() || owned->GetNumLWSDeactivates()!=selected->GetNumLWSDeactivates())return false;
+ GetRenderManager()->mpLayer(RenderEnums::LevelSlot)->DumpAllDynaLoads(1,GetRenderManager()->mEntityDeletionList);
+ GetEventManager()->TriggerEvent(EVENT_FIRST_DYNAMIC_ZONE_START,owned);
+ Character* character=avatar->GetCharacter();
+ if(character->IsInCar() && character->GetTargetVehicle()){
+  Vehicle* vehicle=character->GetTargetVehicle();vehicle->SetInitialPositionGroundOffsetAutoAdjust(&target);
+  vehicle->mResetFacingRadians=std::atan2(facing.x,facing.z);vehicle->Reset(true,false);
+ }else character->RelocateAndReset(target,std::atan2(facing.x,facing.z));
+ GetSuperCamManager()->GetSCC(0)->NoTransition();GetSuperCamManager()->GetSCC(0)->DoCameraCut();
+ printf("NATIVE_RELOAD_ACTION phase=%u action=teleport level=%u distance=%.3f x=%.5f y=%.5f z=%.5f\n",phase,map,std::sqrt(farthest),target.x,target.y,target.z);
+ return true;
+}
+
+// Exercise the production mission-actor model lifetime without advancing or
+// fabricating mission stages. Three different actors cover the script's maximum
+// simultaneous NPC count. Level 2 uses the authored bm2_svt blood-mission
+// locator; other maps use an independent distant point on their road route.
+// All teleports precede arrival checks.
+static Character* missionProbeActors[3]={};
+static const char* missionProbeModels[3]={"teen","moe","grandpa"};
+static bool missionProbeStarted=false,missionProbeArrived=false,missionProbeRemoved=false;
+static unsigned missionProbeFarReady=0;
+static const char* missionProbeFailure="none";
+static unsigned missionProbeGroundRejects=0;
+static rmt::Vector missionProbeOrigin(45.79897f,6.876108f,-52.38862f);
+static void DumpVisualEye(FILE*,gfx3dSide_t,const char*,gfxScreen_t,bool);
+static bool MissionNPCProbeStep(unsigned ms)
+{
+    auto* manager=GetCharacterManager();auto* avatar=GetAvatarManager()->GetAvatarForPlayer(0);
+    Character* player=avatar?avatar->GetCharacter():nullptr;
+    auto fail=[](const char* reason){missionProbeFailure=reason;return false;};
+    if(!player || portraitLevel<1 || portraitLevel>7)return fail("invalid_player_or_level");
+    if(!missionProbeStarted){
+        if(player->IsInCar())GetAvatarManager()->PutCharacterOnGround(player,GetGameplayManager()->GetCurrentVehicle());
+        rmt::Vector farPosition(163.32f,10.548828f,308.04f);
+        if(portraitLevel!=2){
+            if(!roadPointCount)return fail("missing_road_route");
+            farPosition=roadPoints[0];float farthest=175.f*175.f;bool selected=false;
+            // Route endpoints can lie over bridges or outside a loaded collision
+            // patch. Choose the farthest point with real ground rather than
+            // treating one unsuitable endpoint as a game failure.
+            for(unsigned i=1;i<roadPointCount;++i){
+                const float distance=(roadPoints[i]-farPosition).MagnitudeSqr();
+                if(distance<=farthest)continue;
+                rmt::Vector probe=roadPoints[i],normal,ground;probe.y+=2.f;bool found=false;
+                GetIntersectManager()->FindIntersection(probe,found,normal,ground);
+                if(!found){++missionProbeGroundRejects;continue;}
+                farthest=distance;missionProbeOrigin=roadPoints[i];missionProbeOrigin.y=ground.y;selected=true;
+            }
+            if(!selected)return fail("no_distant_ground");
+        }
+        player->RelocateAndReset(farPosition,0.f);
+        avatar->SetCameraTargetToCharacter(true);
+        for(unsigned i=0;i<3;++i){
+            char name[32];std::snprintf(name,sizeof(name),"resident_mission_probe_%u",i);
+            Character* actor=manager->AddCharacter(CharacterManager::NPC,name,missionProbeModels[i],"npd",nullptr);
+            if(!actor)return fail("actor_creation_failed");
+            actor->AddRef();missionProbeActors[i]=actor;actor->SetRole(Character::ROLE_MISSION);
+            rmt::Vector position=missionProbeOrigin;position.x+=2.5f*i;
+            actor->RelocateAndReset(position,0.f);actor->AddToWorldScene();manager->SetGarbage(actor,false);
+        }
+        missionProbeStarted=true;
+        float minimumDistance=1.e30f;rmt::Vector actualPlayer;player->GetPosition(actualPlayer);
+        for(auto* actor:missionProbeActors){rmt::Vector position;actor->GetPosition(position);const float distance=(position-actualPlayer).Magnitude();if(distance<minimumDistance)minimumDistance=distance;}
+        std::printf("NATIVE_MISSION_NPC_PROBE phase=spawn level=%u actors=3 player_distance_min=%.3f active_role=MISSION performance_capture=0\n",portraitLevel,minimumDistance);
+        if(minimumDistance<=150.f)return fail("insufficient_actor_distance");
+        Old3dsMemoryDump(stdout);
+    }
+    if(ms>=6000 && !missionProbeFarReady){
+        for(unsigned i=0;i<3;++i){
+            if(!manager->IsModelLoaded(missionProbeModels[i]) || !missionProbeActors[i]->NativeBenchModelReady()){
+                std::printf("NATIVE_MISSION_NPC_PROBE phase=far_ready failed_model=%s ready=0 abort=1\n",missionProbeModels[i]);return fail("far_model_not_ready");
+            }
+        }
+        missionProbeFarReady=3;
+        std::printf("NATIVE_MISSION_NPC_PROBE phase=far_ready ready=3 actors=3\n");Old3dsMemoryDump(stdout);
+    }
+    if(ms>=8000 && !missionProbeArrived){
+        rmt::Vector position=missionProbeOrigin;position.z+=8.f;player->RelocateAndReset(position,0.f);
+        SuperCamCentral* central=GetSuperCamManager()->GetSCC(0);
+        StaticCam* camera=static_cast<StaticCam*>(central->GetSuperCam(SuperCam::STATIC_CAM));
+        if(!camera){camera=new StaticCam();central->RegisterSuperCam(camera);}
+        camera->SetTarget(player->GetTarget());camera->SetTracking(false);
+        position=missionProbeOrigin;position.x+=2.5f;position.y+=1.1f;camera->SetTargetOffset(position);
+        position.z+=6.f;position.y+=.5f;camera->SetPosition(position);camera->SetMaxFOV(1.35f);camera->SetFOV(1.35f);
+        central->SelectSuperCam(camera,SuperCamCentral::CUT|SuperCamCentral::FORCE);
+        for(unsigned i=0;i<3;++i)if(!missionProbeActors[i]->NativeBenchModelReady())return fail("arrival_model_not_ready");
+        missionProbeArrived=true;
+        std::printf("NATIVE_MISSION_NPC_PROBE phase=arrival ready=3 actors=3 invisible_placeholders=0\n");
+    }
+    if(ms>=12000 && !missionProbeRemoved){
+        for(unsigned i=0;i<3;++i)if(!missionProbeActors[i]->NativeBenchModelReady())return fail("visible_model_not_ready");
+        FILE* image=fopen("sdmc:/3ds/hitrun-dev/mission-npc-probe-frame.log","w");
+        if(image){C3D_FrameSync();DumpVisualEye(image,GFX_LEFT,"mission-npc-visible",GFX_TOP,false);fclose(image);}
+        for(auto*& actor:missionProbeActors){manager->RemoveCharacter(actor);actor->Release();actor=nullptr;}
+        missionProbeRemoved=true;
+        std::printf("NATIVE_MISSION_NPC_PROBE phase=remove actors=0\n");Old3dsMemoryDump(stdout);
+    }
+    if(ms>=17000 && missionProbeRemoved){
+        for(unsigned i=0;i<3;++i){char name[32];std::snprintf(name,sizeof(name),"resident_mission_probe_%u",i);if(manager->GetCharacterByName(name))return fail("actor_cleanup_failed");}
+    }
+    return true;
+}
+
 unsigned Begin(unsigned elapsed,int context){
+ if(context==CONTEXT_GAMEPLAY)WorldResidency::Gameplay(unsigned(GetGameplayManager()->GetCurrentLevelIndex())+1);
+#ifdef SRR2_OLD3DS_LEVEL_CACHE
+ if(context==CONTEXT_GAMEPLAY && picaNativeLevel::Mode())
+    picaNativeLevel::Start(unsigned(GetGameplayManager()->GetCurrentLevelIndex())+1);
+ picaNativeLevel::Tick();
+#endif
+ if(WorldStreaming::passive){PassiveBegin(context);return elapsed;}
  trafficVisible=0;
  u64 now=svcGetSystemTick();
+ reloadPeriod=lastBeginTick?now-lastBeginTick:0;reloadSampling=false;
  if(previousCaptured){unsigned ticks=(unsigned)(now-lastBeginTick);records[(recordCount-1)%recordCapacity].period=ticks;periodSum+=ticks;++periodSamples;previousCaptured=false;}
  lastBeginTick=now;
  collecting=false;
@@ -775,31 +1149,82 @@ unsigned Begin(unsigned elapsed,int context){
      loading?(routeReady?O3MemoryStreaming:O3MemoryLoading):routeReady?O3MemoryRoute:O3MemoryWarmup);
 #endif
  if(done){
-  if(reload && reloadPhase<3){
+  if(reload && now-benchmarkStart>static_cast<u64>(reloadPlan.WatchdogSeconds())*SYSCLOCK_ARM11){aborted=true;reloadPhase=reloadPlan.count+1;return elapsed;}
+  if(reload && reloadPhase<=reloadPlan.count && reloadPhaseWatchdog.Expired(reloadPhase,now,SYSCLOCK_ARM11)){
+   printf("NATIVE_AUTOMATION reload_phase_timeout phase=%u seconds=%u abort=1\n",reloadPhase,WorldStress::PhaseWatchdog::Seconds);
+   aborted=true;reloadPhase=reloadPlan.count+1;return elapsed;
+  }
+  if(reload && reloadPhase>0 && reloadPhase<=reloadPlan.count && reloadPlan.interior && reloadEntered[reloadPhase] && !reloadInteriorDone[reloadPhase]){
+   const int progress=WorldInteriorStress::Step(reloadPhase,elapsed,context);reloadMs=0;
+   if(progress<0){aborted=true;reloadPhase=reloadPlan.count+1;}
+   else if(progress>0){reloadInteriorDone[reloadPhase]=true;++reloadStats[reloadPhase].interiors;}
+   return elapsed;
+  }
+  if(reload && reloadPhase<reloadPlan.count+1){
    CGuiManagerInGame* manager=GetGuiSystem()->GetInGameManager();
-   if(context==CONTEXT_GAMEPLAY && !GetLoadingManager()->IsLoading()){
-    const int expected=reloadPhase==1?RenderEnums::L1:RenderEnums::L2;
-    if((int)GetGameplayManager()->GetCurrentLevelIndex()==expected){
-     reloadObservedLevels|=1u<<expected;
-     reloadMs+=elapsed;
-     if(reloadPhase==0 || reloadMs>=10000){
-      if(reloadPhase==2)reloadPhase=3;
+   auto* gameplay=GetGameplayManager();auto* mission=gameplay?gameplay->GetCurrentMission():nullptr;
+   reloadReportMs+=elapsed;
+   if(reloadReportMs>=30000){reloadReportMs=0;printf("NATIVE_RELOAD_WAIT phase=%u context=%d loading=%u loading_state=%u gui=%d name=%s sunday_drive=%u linear=%u\n",reloadPhase,context,GetLoadingManager()->IsLoading(),gameplay && mission?unsigned(GetMissionManager()->GetLoadingState()):~0u,manager?int(manager->GetCurrentScreen()):-1,mission?mission->GetName():"none",gameplay && mission?gameplay->IsSundayDrive():true,linearSpaceFree());}
+   if(manager && gameplay && mission && reloadPlan.activeMission && manager->IsLoadingNewMission() && manager->GetCurrentWindow() && manager->GetCurrentWindow()->IsRunning()
+      && !GetLoadingManager()->IsLoading() && GetMissionManager()->GetLoadingState()==MissionManager::STATE_INVALID){
+    auto* screen=static_cast<CGuiScreenMissionLoad*>(manager->GetCurrentWindow());
+    if(screen->IsLoadDone())screen->HandleMessage(GUI_MSG_CONTROLLER_SELECT);
+   }
+   // The engine state and initialized stage establish mission readiness.
+   // Background streaming still advances gameplay and its mission timers; it
+   // must also advance this dwell clock and appear in the frame statistics.
+   // In-game GUI ownership disappears during normal level teardown.
+   if(manager && gameplay && mission && context==CONTEXT_GAMEPLAY
+      && GetMissionManager()->GetLoadingState()==MissionManager::STATE_INVALID && !GetMissionManager()->InResetState()
+      && mission->GetNumStages()>0 && mission->GetCurrentStage()){
+    const unsigned expected=reloadPhase?reloadPlan.levels[reloadPhase-1]:(portraitLevel?portraitLevel-1:1);
+    const bool missionMatches=!reloadPhase || unsigned(GetGameplayManager()->GetCurrentMissionIndex())==reloadPlan.missions[reloadPhase-1];
+    if(unsigned(GetGameplayManager()->GetCurrentLevelIndex())==expected && missionMatches){
+     if(reloadPhase && reloadPlan.activeMission && GetGameplayManager()->IsSundayDrive()){
+      if(!reloadMissionRequested[reloadPhase]){reloadMissionRequested[reloadPhase]=true;reloadMs=0;GetGameplayManager()->NextMission();printf("NATIVE_RELOAD_ACTION phase=%u action=start_mission\n",reloadPhase);}
+      return elapsed;
+     }
+     reloadObservedLevels|=1u<<expected;reloadMs+=elapsed;
+     if(!reloadEntered[reloadPhase]){
+      GetAllWrappers()->DumpIntegrity(stdout);Old3dsMemoryDump(stdout);
+      reloadEntered[reloadPhase]=true;
+      if(reloadPhase){const auto status=WorldResidency::Status(expected+1);auto& stats=reloadStats[reloadPhase];
+       stats.missionActive=!GetGameplayManager()->IsSundayDrive();stats.residentExpected=status.expected;stats.residentBound=status.bound;stats.residentBad=status.bad;stats.residentWanted=status.wanted;}
+      printf("NATIVE_RELOAD_ENTER phase=%u level=%u mission=%u mission_index=%u name=%s stages=%d\n",reloadPhase,expected+1,unsigned(GetGameplayManager()->GetCurrentMissionIndex())+1-(expected==0?1:0),unsigned(GetGameplayManager()->GetCurrentMissionIndex()),GetGameplayManager()->GetCurrentMission()->GetName(),GetGameplayManager()->GetCurrentMission()->GetNumStages());
+     }else reloadSampling=reloadPhase!=0;
+     if(reloadPhase && reloadPlan.interior && !reloadInteriorDone[reloadPhase])return elapsed;
+     if(reloadPhase && reloadPlan.teleport && !reloadTeleported[reloadPhase]){
+      reloadTeleported[reloadPhase]=true;reloadSampling=false;reloadMs=0;
+      if(!ReloadTeleport(reloadPhase)){printf("NATIVE_RELOAD_ACTION phase=%u action=teleport_failed\n",reloadPhase);aborted=true;reloadPhase=reloadPlan.count+1;}
+      else ++reloadStats[reloadPhase].teleports;
+      return elapsed;
+     }
+     if(reloadPhase && reloadPlan.resetMission && !reloadReset[reloadPhase] && reloadMs>=reloadPlan.dwellMs/2){
+      reloadReset[reloadPhase]=true;reloadSampling=false;reloadMs=0;++reloadStats[reloadPhase].resets;
+      // Use the normal restart path, including dynamic-zone teardown and the
+      // mission's own reset/teleport logic; do not force invalid stage order.
+      GetGameplayManager()->RestartCurrentMission();
+      printf("NATIVE_RELOAD_ACTION phase=%u action=restart\n",reloadPhase);
+      return elapsed;
+     }
+     if(reloadPhase==0 || reloadMs>=reloadPlan.dwellMs){
+      reloadSampling=false;
+      if(reloadPhase==reloadPlan.count)reloadPhase=reloadPlan.count+1;
       else if(!reloadPauseRequested){
-       // Mission Select normally enters PauseContext before requesting reload.
-       // Its OnStop owns teardown and publication of the next level/mission.
+       // Use the same PauseContext teardown and Mission Select publication
+       // path as a player, rather than directly changing level ownership.
        manager->HandleMessage(GUI_MSG_PAUSE_INGAME);reloadPauseRequested=true;
       }
      }
     }
    }
-   if(reloadPauseRequested && context==CONTEXT_PAUSE && manager->GetCurrentWindow()
+   if(manager && reloadPauseRequested && context==CONTEXT_PAUSE && manager->GetCurrentWindow()
        && manager->GetCurrentWindow()->IsRunning()){
-    manager->HandleMessage(GUI_MSG_QUIT_INGAME_FOR_RELOAD,
-        reloadPhase==0?RenderEnums::L1:RenderEnums::L2,RenderEnums::M2);
+    manager->HandleMessage(GUI_MSG_QUIT_INGAME_FOR_RELOAD,reloadPlan.levels[reloadPhase],reloadPlan.missions[reloadPhase]);
     ++reloadPhase;++reloadDispatches;reloadMs=0;reloadPauseRequested=false;
    }
   }
-  if(reload && now-benchmarkStart>300ULL*SYSCLOCK_ARM11){aborted=true;reloadPhase=3;}
+
   return elapsed;
  }
  if(!benchmarkStart)benchmarkStart=now;
@@ -821,6 +1246,10 @@ unsigned Begin(unsigned elapsed,int context){
  if(!placed){
  stableMs+=dt;
  if(GetLoadingManager()->IsLoading()||!avatar||!avatar->GetCharacter()||!GetGameplayManager()->GetCurrentVehicle()){if(!replay)stableMs=0;return dt;}
+ if(WorldStreaming::incidentRoute==3 && !incidentWorldPrepared){
+  if(!WorldStreaming::fly || portraitLevel!=2 || !PrepareIncidentWorld()){aborted=done=true;return dt;}
+  incidentWorldPrepared=true;stableMs=0;return dt;
+ }
  if(portrait && portraitActor && !portraitActorSwapped){
   // A photo actor uses the existing costume loader and generic pedestrian rig.
   // It cannot deactivate with the ambient pedestrian population. Route tests
@@ -873,14 +1302,17 @@ unsigned Begin(unsigned elapsed,int context){
  // the measured drive still uses normal inputs, traffic and collision physics.
  Vehicle* setupCar=GetGameplayManager()->GetCurrentVehicle();
  avatar->GetPosition(placementPlayer);placementOriginalCar=setupCar->GetPosition();
- if(!casinoAnchor && ((roadRoute && !portrait) ||
+ if(!casinoAnchor && (fixedRoadAnchor || (roadRoute && !portrait) ||
     (placementOriginalCar-placementPlayer).MagnitudeSqr()>40.0f*40.0f)){
   RoadSegment* segment=nullptr;float distance=0;
-  GetIntersectManager()->FindClosestRoad(placementPlayer,30.0f,segment,distance);
+  // Paired captures use one explicit pre-capture road anchor. Loading timing
+  // can otherwise move the idle player enough to choose another nearby road.
+  const rmt::Vector reference=fixedRoadAnchor?roadAnchor:placementPlayer;
+  GetIntersectManager()->FindClosestRoad(reference,30.0f,segment,distance);
   if(!segment){aborted=done=true;return dt;}
   rmt::Vector a,b,facing;segment->GetPosition(0,.5f,&a);segment->GetPosition(1,.5f,&b);
   const rmt::Vector edge=b-a;const float length=edge.MagnitudeSqr();
-  float fraction=length>0?(placementPlayer-a).Dot(edge)/length:.5f;
+  float fraction=length>0?(reference-a).Dot(edge)/length:.5f;
   if(fraction<0)fraction=0;if(fraction>1)fraction=1;
   rmt::Vector position;segment->GetPosition(fraction,.5f,&position);
   avatar->GetCharacter()->GetFacing(facing);
@@ -909,6 +1341,11 @@ unsigned Begin(unsigned elapsed,int context){
   avatar->SetCameraTargetToCharacter(true);
   Character* character=avatar->GetCharacter();
   rmt::Vector position;character->GetPosition(position);
+  if(suspensionProbe){
+   Vehicle* car=GetGameplayManager()->GetCurrentVehicle();
+   position=car->GetPosition();const rmt::Vector side=car->GetFacing();
+   position.x+=3.0f*side.z;position.z-=3.0f*side.x;
+  }
   character->RelocateAndReset(position,0.0f);
  if(portrait && portraitTraffic && portraitVehicleIndex<0){
   rmt::Vector player;avatar->GetPosition(player);float nearest=35.0f*35.0f;
@@ -949,6 +1386,44 @@ unsigned Begin(unsigned elapsed,int context){
  }
  placed=true;placementTick=svcGetSystemTick();
  if(roadRoute && !portrait && !BuildRoadRoute(GetGameplayManager()->GetCurrentVehicle())){aborted=done=true;return dt;}
+ if(WorldStreaming::incidentRoute) {
+  if(portraitLevel!=2){aborted=done=true;return dt;}
+  rmt::Vector continuation[512];const unsigned continuationCount=roadPointCount;
+  for(unsigned n=0;n<continuationCount;++n)continuation[n]=roadPoints[n];
+  // Preserve the observed westward approach rather than allowing the road
+  // graph's branch choice to take a detour before the recorded failure.
+  const rmt::Vector firstAnchors[]={{111.78008f,6.65482f,-1.76482f},
+      {63.50772f,6.65482f,-5.18919f},{-75.89345f,6.65482f,-18.26584f},
+      {-136.80171f,6.65482f,-4.13719f},{-225.f,6.799f,10.f}};
+  rmt::Vector anchors[8];unsigned anchorCount=5;
+  for(unsigned n=0;n<5;++n)anchors[n]=firstAnchors[n];
+  if(WorldStreaming::incidentRoute>=2) {
+   const rmt::Vector recorded[]={{111.68709f,6.65f,-25.60642f},{63.36959f,6.65f,-5.61141f},
+       {-75.75313f,6.65f,-16.89366f},{-142.44412f,6.65f,-10.15073f},
+       {-190.52652f,6.8f,3.65597f},{-242.33736f,6.8f,25.12462f},
+       {-237.47864f,7.0459f,121.82870f},{-237.72217f,6.83887f,128.11456f}};
+   anchorCount=8;for(unsigned n=0;n<8;++n)anchors[n]=recorded[n];
+  }
+  roadPointCount=1;roadPoints[0]=GetGameplayManager()->GetCurrentVehicle()->GetPosition();
+  roadPlannedDistance=0.f;
+  if(WorldStreaming::incidentRoute==3){
+   // A northbound excursion crosses the recorded Z2 dump gate, then returns
+   // through the recorded demand route. Both variants start with the same art.
+   const rmt::Vector prefix[]={{137.23523f,6.65f,210.f},{137.23523f,6.65f,192.18851f}};
+   for(const auto& point:prefix){roadPlannedDistance+=std::sqrt((point-roadPoints[roadPointCount-1]).MagnitudeSqr());roadPoints[roadPointCount++]=point;}
+  }
+  for(unsigned n=0;n<anchorCount;++n){const auto& anchor=anchors[n];roadPlannedDistance+=std::sqrt((anchor-roadPoints[roadPointCount-1]).MagnitudeSqr());roadPoints[roadPointCount++]=anchor;}
+  if(!WorldStreaming::fly) {
+   unsigned join=0;float nearest=1e30f;
+   for(unsigned n=0;n<continuationCount;++n){const float distance=(continuation[n]-anchors[anchorCount-1]).MagnitudeSqr();if(distance<nearest){nearest=distance;join=n;}}
+   if(nearest>40.f*40.f){aborted=done=true;return dt;}
+   for(unsigned n=join+1;n<continuationCount && roadPointCount<512;++n){
+    roadPlannedDistance+=std::sqrt((continuation[n]-roadPoints[roadPointCount-1]).MagnitudeSqr());roadPoints[roadPointCount++]=continuation[n];
+   }
+  }
+  roadPoint=1;
+ }
+
  }
  // Portraits follow the existing subject rather than letting a walking NPC
  // leave a fixed camera behind. This diagnostic view is never performance proof.
@@ -997,6 +1472,7 @@ unsigned Begin(unsigned elapsed,int context){
   }
  }
  if(warmMs<warmup*1000){warmMs+=dt;return dt;}
+ if(missionNpcProbe && !MissionNPCProbeStep(elapsedMs)){aborted=done=true;return dt;}
 #if defined(SRR2_OLD3DS_VEHICLE_PROFILE) || defined(SRR2_OLD3DS_NATIVE_BENCH)
  // Only measured route work contributes to the phase estimates. Loading and
  // warmup have different vehicle populations and must not bias the cost pool.
@@ -1010,7 +1486,8 @@ unsigned Begin(unsigned elapsed,int context){
 #ifdef SRR2_OLD3DS_NATIVE_TEXTURES
  if(!frame)picaSnapshotNativeTextures(nativeTextureCaptureBegin);
 #endif
- if(roadRoute && !portrait){if(elapsedMs<Old3dsRecurring::stationaryMs){roadGas=0;roadBrake=0;roadSteer=0;}else UpdateRoadInput(GetGameplayManager()->GetCurrentVehicle(),dt);}
+ if(WorldStreaming::fly)UpdateStreamingFlight(avatar,dt);
+ if(roadRoute && !portrait && !WorldStreaming::fly){if(elapsedMs<Old3dsRecurring::stationaryMs){roadGas=0;roadBrake=0;roadSteer=0;}else UpdateRoadInput(GetGameplayManager()->GetCurrentVehicle(),dt);}
  if(aborted)return dt;
  memset(&current,0,sizeof(current));memset(counters,0,sizeof(counters));
 #ifdef SRR2_OLD3DS_BOTTOM_MAP_15HZ
@@ -1023,6 +1500,13 @@ unsigned Begin(unsigned elapsed,int context){
  Old3dsPools::Begin(frame+1);
 #endif
  current.route=routeMs;current.frame=++frame;current.elapsed=dt;current.realElapsed=elapsed;current.context=context;
+ // This diagnostic changes only equivalent lookup strategies. Randomization
+ // stays outside simulation RNG and records treatment on the same moving frame.
+ if(residencyCpuProbe){
+  unsigned policy=frame*0x7feb352du;policy^=policy>>16;policy*=0x846ca68bu;policy^=policy>>16;
+  WorldResidency::CacheLookup((policy&1)!=0);
+ }
+ current.residencyPolicy=WorldResidency::CachePolicy();
 #ifdef SRR2_OLD3DS_NATIVE_CONTEXT
  // Deterministic per-frame randomization avoids separate-run traffic confounding.
  unsigned choice=frame*0x9e3779b9u;choice^=choice>>16;choice*=0x85ebca6bu;choice^=choice>>13;
@@ -1034,6 +1518,14 @@ unsigned Begin(unsigned elapsed,int context){
 #endif
  if(sceneAudit && elapsedMs>=sceneNextMs){SampleScene(elapsedMs);sceneNextMs=elapsedMs+SceneAuditIntervalMs();}
  routeMs=elapsedMs;elapsedMs+=dt;collecting=true;top=0;behaviorHash=2166136261u;
+ WorldStreaming::BeginFrame(routeMs,roadDistance);
+ if(WorldStreaming::fly && WorldStreaming::flightCpuUs) {
+  // Model the measured extra main-thread work of the captured real drive.
+  // This reservation is stress diagnosis, never gameplay performance evidence.
+  const u64 start=svcGetSystemTick(),budget=u64(WorldStreaming::flightCpuUs)*SYSCLOCK_ARM11/1000000;
+  while(svcGetSystemTick()-start<budget){}
+ }
+
  Checkpoint("enter",-1);
  pairStart=g_old3dsCollisionPairs;areaStart=g_old3dsPhysicsAreas;entityStart=entityCalls();
  current.presentBegin=g_picaPresentedFrames;
@@ -1048,8 +1540,52 @@ unsigned Begin(unsigned elapsed,int context){
  Old3dsRecurring::Begin(frame,routeMs,collecting);
  return dt;
 }
+static void UpdateStreamingFlight(Avatar* avatar,unsigned dt)
+{
+ static rmt::Vector position;
+ if(!WorldStreaming::flightActive)position=GetGameplayManager()->GetCurrentVehicle()->GetPosition();
+ float remaining=frame?WorldStreaming::flightSpeed*dt*.001f:0.f;
+ rmt::Vector heading(0.f,0.f,1.f);
+ while(roadPoint<roadPointCount) {
+  const rmt::Vector delta=roadPoints[roadPoint]-position;const float length=std::sqrt(delta.MagnitudeSqr());
+  if(length<.01f){++roadPoint;continue;}
+  heading=delta*(1.f/length);
+  if(remaining<length){position+=heading*remaining;roadDistance+=remaining;break;}
+  position=roadPoints[roadPoint++];remaining-=length;roadDistance+=length;
+ }
+ if(roadPoint>=roadPointCount) {
+  if(!WorldStreaming::incidentRoute){roadPathExhausted=true;aborted=done=true;return;}
+  heading.Set(WorldStreaming::incidentRoute==2?0.f:-1.f,0.f,WorldStreaming::incidentRoute==2?1.f:0.f);
+ }
+
+ WorldStreaming::flightActive=true;WorldStreaming::flightAvatar=avatar;
+ for(unsigned i=0;i<3;++i){WorldStreaming::flightPosition[i]=position[i];WorldStreaming::flightVelocity[i]=heading[i]*(roadPoint<roadPointCount?WorldStreaming::flightSpeed:0.f);}
+ SuperCamCentral* central=GetSuperCamManager()->GetSCC(0);
+ StaticCam* camera=static_cast<StaticCam*>(central->GetSuperCam(SuperCam::STATIC_CAM));
+ if(!camera){camera=new StaticCam();central->RegisterSuperCam(camera);}
+ // Four fixed bearings inspect forward, right, behind and left. Camera turns
+ // never change the streaming origin or wait for incomplete resource requests.
+ const unsigned bearing=WorldStreaming::cameraSweep?(elapsedMs/3000)%4:0;
+ rmt::Vector view=heading;
+ if(bearing==1)view.Set(heading.z,0.f,-heading.x);
+ else if(bearing==2)view=-heading;
+ else if(bearing==3)view.Set(-heading.z,0.f,heading.x);
+ camera->SetTarget(GetGameplayManager()->GetCurrentVehicle());camera->SetTracking(false);
+ camera->SetPosition(position+rmt::Vector(0.f,3.f,0.f)-view*4.f);
+ camera->SetTargetOffset(position+rmt::Vector(0.f,1.f,0.f)+view*20.f);
+ camera->SetTargetLag(1.f);camera->SetMaxFOV(WorldStreaming::flightFov);camera->SetFOV(WorldStreaming::flightFov);
+ if(central->GetActiveSuperCam()!=camera)central->SelectSuperCam(camera,SuperCamCentral::CUT|SuperCamCentral::FORCE);
+}
 static unsigned hashFloat(unsigned h,float f){unsigned v;memcpy(&v,&f,4);return (h^v)*16777619u;}
 bool End(u64 work,int context){
+ if(irisCapture){
+  auto* manager=GetGuiSystem()->GetInGameManager();auto* window=manager?manager->GetCurrentWindow():nullptr;
+  const bool closed=window && window->GetWindowID()==CGuiWindow::GUI_SCREEN_ID_IRIS_WIPE && window->IsRunning() && CGuiScreenIrisWipe::IsIrisClosed();
+  if(closed){if(++irisClosedFrames==3 && irisCaptures<8){WorldStreaming::MarkerImage();++irisCaptures;printf("NATIVE_IRIS_CAPTURE index=%u closed_frames=%u source=display_capture performance_capture=0\n",irisCaptures,irisClosedFrames);}}
+  else irisClosedFrames=0;
+ }
+ if(WorldResidency::Failed() || GetRenderManager()->ZoneQueueFailed()){aborted=done=true;return true;}
+ if(WorldStreaming::passive)return PassiveEnd(work,context);
  Old3dsRecurring::End();
 #ifdef SRR2_OLD3DS_COARSE_POOLS
  Old3dsPools::End();
@@ -1057,10 +1593,20 @@ bool End(u64 work,int context){
 #ifdef SRR2_OLD3DS_MAIN_PROFILE
  Old3dsMainProfile::EndFrame(work);
 #endif
- if(!collecting)return aborted || (done && reload && reloadPhase==3 && !hold);Checkpoint("leave",-1);u64 overhead=svcGetSystemTick();collecting=false;
+ if(reloadSampling && reloadStats && context==CONTEXT_GAMEPLAY && reloadPhase<=reloadPlan.count){
+  auto* gameplay=GetGameplayManager();auto* mission=gameplay?gameplay->GetCurrentMission():nullptr;
+  reloadStats[reloadPhase].Sample(reloadPeriod,work,SYSCLOCK_ARM11,linearSpaceFree(),
+      GetLoadingManager()->GetNumCurrentRequests(),GetVehicleCentral()->GetNumVehicles(),mission?mission->GetCurrentStageIndex():-1);
+ }
+ if(!collecting)return aborted || (done && reload && reloadPhase==reloadPlan.count+1 && !hold);Checkpoint("leave",-1);u64 overhead=svcGetSystemTick();collecting=false;
 #if defined(SRR2_OLD3DS_VEHICLE_PROFILE) || defined(SRR2_OLD3DS_NATIVE_BENCH)
  Old3dsVehicleProfile::CaptureEnabled()=false;
 #endif
+ WorldStreaming::EndFrame();
+ PedestrianManager::GetInstance()->GetPopulationCounts(current.activePeds,current.frustumPeds);
+ tPointCamera* streamCamera=GetSuperCamManager()->GetSCC(0)->GetCamera();
+ const rmt::Vector streamPosition=streamCamera->GetPosition(),streamTarget=streamCamera->GetTarget();
+ for(unsigned i=0;i<3;++i){current.cameraPosition[i]=streamPosition[i];current.cameraTarget[i]=streamTarget[i];}
  const unsigned activeTraffic=unsigned(TrafficManager::GetInstance()->GetNumActiveTraffic());
  ++trafficFrames;trafficActiveTotal+=activeTraffic;trafficVisibleTotal+=trafficVisible;
  if(activeTraffic>trafficActiveMaximum)trafficActiveMaximum=activeTraffic;
@@ -1086,6 +1632,16 @@ bool End(u64 work,int context){
  memcpy(current.count,counters,sizeof(counters));Avatar* a=GetAvatarManager()->GetAvatarForPlayer(0);
  if(a){rmt::Vector p;a->GetPosition(p);current.position[0]=p.x;current.position[1]=p.y;current.position[2]=p.z;current.speed=a->GetSpeedMps();current.incar=a->IsInCar();
  rmt::Vector v;a->GetVelocity(v);unsigned h=2166136261u;h=hashFloat(h,p.x);h=hashFloat(h,p.y);h=hashFloat(h,p.z);h=hashFloat(h,v.x);h=hashFloat(h,v.y);h=hashFloat(h,v.z);current.check=h;}
+ if(suspensionProbe){
+  current.physicsLimit=lastSuspensionStep;
+  Vehicle* car=GetGameplayManager()->GetCurrentVehicle();
+  if(car && car->GetSimState()){
+   const rmt::Vector p=car->GetPosition();for(unsigned i=0;i<3;++i)current.carPosition[i]=p[i];
+   current.carVertical=car->GetSimState()->GetLinearVelocity().y;
+   current.carAngular=car->GetSimState()->GetAngularVelocity().Magnitude();
+   current.carInPhysics=car->mUsingInCarPhysics;current.carRest=car->mAtRestAsFarAsTriggersAreConcerned;
+  }
+ }
  current.behavior=behaviorHash;current.gpu=C3D_GetDrawingTime();unsigned us=(unsigned)(work*1000000ULL/SYSCLOCK_ARM11);unsigned bin=us/250;if(bin>=Bins)bin=Bins-1;++hist[bin];
  ++samples;totalWork+=work;if(us>33333)++misses;if(us>maximum)maximum=us;
  records[recordCount++%recordCapacity]=current;previousCaptured=true;if(recordCount>recordCapacity)++overwritten;
@@ -1102,7 +1658,7 @@ bool End(u64 work,int context){
 // Development-only native framebuffer readback after the route has stopped.
 // The SDK exposes the renderable back buffer, so its age is deliberately not
 // treated as a displayed frame identity. Never use this capture for FPS proof.
-static void DumpVisualEye(FILE* f,gfx3dSide_t eye,const char* tag,gfxScreen_t screen=GFX_TOP)
+static void DumpVisualEye(FILE* f,gfx3dSide_t eye,const char* tag,gfxScreen_t screen=GFX_TOP,bool afterRoute=true)
 {
  u16 width=0,height=0;
  const GSPGPU_FramebufferFormat format=gfxGetScreenFormat(screen);
@@ -1110,7 +1666,7 @@ static void DumpVisualEye(FILE* f,gfx3dSide_t eye,const char* tag,gfxScreen_t sc
  const unsigned bytes=unsigned(width)*height*3;
  const bool valid=pixels && format==GSP_BGR8_OES && width==240 && (screen==GFX_BOTTOM?height==320:(height==400 || height==800)) &&
      R_SUCCEEDED(GSPGPU_InvalidateDataCache(pixels,bytes));
- fprintf(f,"%s enabled=1 valid=%u screen=%s raw_width=%u raw_height=%u format=%u back_buffer=1 age_unknown=1 after_route=1 performance_capture=0\n",tag,valid,screen==GFX_BOTTOM?"bottom":"top",width,height,unsigned(format));
+ fprintf(f,"%s enabled=1 valid=%u screen=%s raw_width=%u raw_height=%u format=%u back_buffer=1 age_unknown=1 after_route=%u performance_capture=0\n",tag,valid,screen==GFX_BOTTOM?"bottom":"top",width,height,unsigned(format),unsigned(afterRoute));
  if(!valid)return;
  static const char hex[]="0123456789abcdef";
  char line[513];
@@ -1132,7 +1688,7 @@ static void DumpVisual(FILE* f)
  DumpVisualEye(f,GFX_LEFT,"NATIVE_VISUAL_BOTTOM",GFX_BOTTOM);
 }
 extern "C" void picaDumpStereoDiagnostics(FILE*);
-void Dump(){if(!enabled)return;
+void Dump(){if(WorldStreaming::passive){DumpPassive();return;}if(!enabled)return;
  FILE*f=fopen("native-" SRR2_OLD3DS_BUILD_ID ".log","w");if(!f)return;
  unsigned optionalDiagnostics=0,memoryDiagnostics=0;
 #ifdef SRR2_OLD3DS_OPTIONAL_DIAG
@@ -1155,12 +1711,19 @@ void Dump(){if(!enabled)return;
  fprintf(f,"NATIVE_SKIN_LOAD_SLICES enabled=%u checkpoints=%u vertex_interval=64 whole_session=1 unchanged_vertex_bytes=1\n",g_picaSkinPrepareYield,g_picaSkinPrepareCheckpoints);
 #endif
  radLoadDumpWorkerSlices(f);
+#ifdef SRR2_OLD3DS_LEVEL_CACHE
+ picaNativeLevel::Finish();picaNativeLevel::Dump(f);
+#endif
+ p3dDumpNativeReader(f);
+ old3dsDumpParkedRemoval(f);
+ srr2DumpWorldOrder(f);
 #ifdef SRR2_OLD3DS_SPRITE_ATLAS
  fprintf(f,"NATIVE_SPRITE_ATLAS enabled=%u loaded=%u applied=%u batched=%u avoided_tile_draws=%u source_geometry_unchanged=1\n",p3dSpriteAtlas::enabled,p3dSpriteAtlas::loaded,p3dSpriteAtlas::applied,p3dSpriteAtlas::batched,p3dSpriteAtlas::avoided);
  fprintf(f,"NATIVE_SPRITE_ATLAS_REJECTIONS textures=%u shape=%u tile=%u format=%u\n",p3dSpriteAtlas::texturesLoaded,p3dSpriteAtlas::rejectShape,p3dSpriteAtlas::rejectTile,p3dSpriteAtlas::rejectFormat);
  fprintf(f,"NATIVE_SPRITE_ATLAS_MIPS enabled=%u pixel_review_required=%u\n",p3dSpriteAtlas::allowMipmaps,p3dSpriteAtlas::allowMipmaps);
  p3dSpriteAtlas::DumpSprites(f);
 #endif
+ WorldResidency::Dump(f);GetRenderManager()->DumpZoneQueue(f);WorldStreaming::Dump(f,runIdentity);
  fprintf(f,"NATIVE_RUN id=%s warmup_seconds=%u\n",runIdentity,warmup);
  fprintf(f,"NATIVE_PLACEMENT level=%u mission=%u relocated=%u ground=%u player_x=%.5f player_y=%.5f player_z=%.5f original_car_x=%.5f original_car_y=%.5f original_car_z=%.5f car_x=%.5f car_y=%.5f car_z=%.5f\n",unsigned(GetGameplayManager()->GetCurrentLevelIndex())+1,unsigned(GetGameplayManager()->GetCurrentMissionIndex()),placementRelocated,placementGround,placementPlayer.x,placementPlayer.y,placementPlayer.z,placementOriginalCar.x,placementOriginalCar.y,placementOriginalCar.z,placementCar.x,placementCar.y,placementCar.z);
  fprintf(f,"NATIVE_SCENE_AUDIT enabled=%u samples=%u missing_ground=%u performance_capture=%u interval_ms=%u first_route_ms=%u last_route_ms=%u requested_ms=%u\n",sceneAudit,sceneSampleCount,sceneMissingGround,!sceneAudit,SceneAuditIntervalMs(),sceneSampleCount?sceneSamples[0].route:0,sceneSampleCount?sceneSamples[sceneSampleCount-1].route:0,seconds*1000);
@@ -1198,7 +1761,7 @@ void Dump(){if(!enabled)return;
 #ifdef SRR2_OLD3DS_SUBMIT_PROFILE
  nativeBenchDumpSubmissionProfile(f);
 #endif
- fprintf(f,"NATIVE_BUILD id=%s scenario=%s mode=%s seed=%u step_ms=%u seconds=%u gate=%u selected_render=%u selected_physics=%u aborted=%u detail=%u validate=%u hold=%u render=%u physics=%u record_bytes=%u capacity=%u overwritten=%u scope_pair_ns=%.3f\n",SRR2_OLD3DS_BUILD_ID,portrait?"character-portrait":roadRoute?"loaded-level-road-v3":"loaded-level-drive-v2",replay?"replay":"realtime",seed,step,seconds,0u,0u,0u,aborted,detail,validation,hold,
+ fprintf(f,"NATIVE_BUILD id=%s scenario=%s mode=%s seed=%u step_ms=%u seconds=%u gate=%u selected_render=%u selected_physics=%u aborted=%u detail=%u validate=%u hold=%u render=%u physics=%u record_bytes=%u capacity=%u overwritten=%u scope_pair_ns=%.3f\n",SRR2_OLD3DS_BUILD_ID,portrait?"character-portrait":WorldStreaming::manual?"loaded-level-manual-v1":roadRoute?"loaded-level-road-v3":"loaded-level-drive-v2",replay?"replay":"realtime",seed,step,seconds,0u,0u,0u,aborted,detail,validation,hold,
 #ifdef SRR2_OLD3DS_NATIVE_RENDER
  1u,
 #else
@@ -1263,6 +1826,22 @@ void Dump(){if(!enabled)return;
  }
  fprintf(f,"NATIVE_PORTRAIT_SUBJECT npc_requested=%u npc_index=%d actor_override=%s\n",portraitNPC,portraitNPCIndex,portraitActor?portraitActorModel:"none");
  if(GetGameplayManager()->GetCurrentVehicle())fprintf(f,"NATIVE_CURRENT_VEHICLE name=%s\n",GetGameplayManager()->GetCurrentVehicle()->GetName());
+
+ // Post-capture actor state rules out model-retention work as a hidden cost.
+ // No actor iteration or timing instrumentation is added to measured frames.
+ {unsigned actors=0,farActors=0,farReady=0;rmt::Vector observer;
+  auto* avatar=GetAvatarManager()->GetAvatarForPlayer(0);
+  if(avatar){avatar->GetPosition(observer);
+   for(unsigned i=0;i<unsigned(CharacterManager::GetMaxCharacters());++i){
+    Character* character=GetCharacterManager()->GetCharacter(i);
+    if(!character || character->GetRole()!=Character::ROLE_MISSION)continue;
+    ++actors;rmt::Vector position;character->GetPosition(position);
+    if((position-observer).MagnitudeSqr()>150.f*150.f){++farActors;if(character->NativeBenchModelReady())++farReady;}
+   }
+  }
+  fprintf(f,"NATIVE_MISSION_MODELS actors=%u far_actors=%u far_real_models=%u post_capture=1 measured_frame_work_added=0\n",actors,farActors,farReady);
+ }
+
  if(portrait && placed){
   Character* subject=portraitNPCIndex>=0?GetCharacterManager()->GetCharacter(portraitNPCIndex):GetAvatarManager()->GetAvatarForPlayer(0)->GetCharacter();
   tPointCamera* camera=GetSuperCamManager()->GetSCC(0)->GetCamera();
@@ -1300,9 +1879,27 @@ void Dump(){if(!enabled)return;
  fprintf(f,"NATIVE_PERIOD samples=%u mean_us=%.3f fps=%.6f\n",periodSamples,periodSamples?(double)periodSum*1e6/SYSCLOCK_ARM11/periodSamples:0,periodSum?(double)periodSamples*SYSCLOCK_ARM11/periodSum:0);
  fprintf(f,"NATIVE_LOAD_WINDOW placement_valid=%u boot_to_placement_us=%.3f includes_initialization_and_loading=1 includes_realtime_stability_ms=%u excludes_netloader_transfer=1\n",
      placementTick!=0,placementTick?(placementTick-initializationTick)*1000000.0/SYSCLOCK_ARM11:0,replay?0u:3000u);
- fprintf(f,"NATIVE_ROUTE road=%u points=%u point=%u distance=%.3f recoveries=%u planned_distance=%.3f built_roads=%u path_exhausted=%u input_only=1\n",roadRoute,roadPointCount,roadPoint,roadDistance,roadRecoveries,roadPlannedDistance,roadBuiltCount,roadPathExhausted);
+ fprintf(f,"STREAM_FLIGHT_STRESS cpu_reserve_us=%u fov=%.6f modeled_workload=1 gameplay_performance=0\n",WorldStreaming::flightCpuUs,WorldStreaming::flightFov);
+ fprintf(f,"STREAM_REVISIT_SETUP requested=%u world_prepared=%u before_warmup=1 resource_barriers_during_traversal=0\n",WorldStreaming::incidentRoute==3,incidentWorldPrepared);
+ fprintf(f,"STREAM_FLIGHT enabled=%u speed_mps=%.3f collisions=0 focus_and_camera=1 gameplay_performance=0 incident_route=%u idle_loader=%u\n",WorldStreaming::fly,WorldStreaming::flightSpeed,WorldStreaming::incidentRoute,WorldStreaming::idleLoader);
+ fprintf(f,"NATIVE_ROUTE road=%u points=%u point=%u distance=%.3f recoveries=%u planned_distance=%.3f built_roads=%u path_exhausted=%u input_only=%u\n",roadRoute,roadPointCount,roadPoint,roadDistance,roadRecoveries,roadPlannedDistance,roadBuiltCount,roadPathExhausted,!WorldStreaming::fly);
+ for(unsigned i=0;i<roadPointCount;++i)
+  fprintf(f,"STREAM_WAYPOINT index=%u x=%.5f y=%.5f z=%.5f\n",i,roadPoints[i].x,roadPoints[i].y,roadPoints[i].z);
  fprintf(f,"NATIVE_ROUTE_SETUP direction_override=%u initial_facing_radians=%.8f\n",roadDirection,GetGameplayManager()->GetCurrentVehicle()?GetGameplayManager()->GetCurrentVehicle()->mResetFacingRadians:0.0f);
+ fprintf(f,"NATIVE_ROUTE_ANCHOR requested=%u x=%.5f y=%.5f z=%.5f before_capture=1\n",fixedRoadAnchor,roadAnchor.x,roadAnchor.y,roadAnchor.z);
  fprintf(f,"NATIVE_REPLAY drains=%u timeouts=%u reload=%u reload_phase=%u reload_dispatches=%u reload_observed_levels=%u\n",replayDrains,drainTimeouts,reload,reloadPhase,reloadDispatches,reloadObservedLevels);
+ fprintf(f,"NATIVE_IRIS_AUDIT requested=%u captures=%u performance_capture=0\n",irisCapture,irisCaptures);
+ fprintf(f,"NATIVE_RELOAD_PLAN custom=%u destinations=%u dwell_ms=%u watchdog_seconds=%u\n",reloadPlan.custom,reloadPlan.count,reloadPlan.dwellMs,reloadPlan.WatchdogSeconds());
+ if(reloadStats)for(unsigned i=1;i<=reloadPlan.count;++i){const auto& stats=reloadStats[i];
+  fprintf(f,"NATIVE_RELOAD_FRAMES phase=%u level=%u mission=%u entered=%u frames=%u fps=%.4f mean_work_ms=%.4f p95_upper_ms=%.3f p99_upper_ms=%.3f max_ms=%.3f over_50ms=%u linear_min=%u resets=%u teleports=%u interiors=%u mission_active=%u streaming_frames=%u vehicles_peak=%u stage_first=%d stage_last=%d stage_maximum=%d stereo_frames=%u stereo_segments=%u resident_expected=%u resident_bound=%u resident_bad=%u resident_wanted=%08x histogram_width_ms=2 memory_instrumented=%u\n",
+   i,reloadPlan.levels[i-1]+1,reloadPlan.MissionNumber(i-1),reloadEntered[i],stats.samples,
+   stats.period?double(stats.samples)*SYSCLOCK_ARM11/stats.period:0.,stats.samples?double(stats.work)*1000./SYSCLOCK_ARM11/stats.samples:0.,
+   stats.PercentileUs(95)/1000.,stats.PercentileUs(99)/1000.,stats.maximumUs/1000.,stats.over50,stats.samples?stats.linearMinimum:0,stats.resets,stats.teleports,stats.interiors,stats.missionActive,stats.streamingFrames,stats.vehiclesPeak,stats.stageFirst,stats.stageLast,stats.stageMaximum,stats.stereoFrames,stats.stereoSegments,stats.residentExpected,stats.residentBound,stats.residentBad,stats.residentWanted,memoryDiagnostics);
+ }
+
+ fprintf(f,"NATIVE_MISSION_NPC_PROBE requested=%u far_ready=%u arrived=%u removed=%u actors=3 performance_capture=0 failure=%s ground_rejects=%u\n",missionNpcProbe,missionProbeFarReady,missionProbeArrived,missionProbeRemoved,missionProbeFailure,missionProbeGroundRejects);
+ fprintf(f,"NATIVE_SUSPENSION_PROBE enabled=%u phase_ms=10000 alternate_max_ms=25 moving_performance_evidence=0\n",suspensionProbe);
+ fprintf(f,"NATIVE_RESIDENCY_CPU_PROBE randomized=%u policies=2 simulation_rng_unchanged=1 geometry_unchanged=1 per_object_timers=0\n",residencyCpuProbe);
  fprintf(f,"NATIVE_VERIFY calls=%u failures=%u\n",verifyAll,verifyAllFailures);
  fprintf(f,"NATIVE_COUNTERS 0=timed_scope_calls 1=adpcm_clips 2=adpcm_pcm_samples\n");
  fprintf(f,"NATIVE_SUMMARY frames=%u mean_us=%.3f max_us=%u deadline_misses=%u bookkeeping_us=%.3f complete=%u\n",samples,samples?(double)totalWork*1000000/SYSCLOCK_ARM11/samples:0,maximum,misses,(double)traceTicks*1000000/SYSCLOCK_ARM11,done && !aborted);
@@ -1313,6 +1910,10 @@ void Dump(){if(!enabled)return;
  fprintf(f," bottom_map=%u bottom_draws=%u",r.bottomMapEnabled,r.bottomMapDraws);
 #endif
  fprintf(f," heap_used=%u submit_begin=%u submit_end=%u",r.heapUsed,r.presentBegin,r.presentEnd);
+ fprintf(f," residency_lookup_cache=%u",r.residencyPolicy&1);
+ if(suspensionProbe)fprintf(f," car_x=%.6f car_y=%.6f car_z=%.6f car_vertical_mps=%.6f car_angular_rps=%.6f car_in_physics=%u car_rest=%u physics_limit_ms=%u suspension_phase=%u",
+    r.carPosition[0],r.carPosition[1],r.carPosition[2],r.carVertical,r.carAngular,r.carInPhysics,r.carRest,r.physicsLimit,(r.route/10000u)&1u);
+ fprintf(f," camera_x=%.5f camera_y=%.5f camera_z=%.5f target_x=%.5f target_y=%.5f target_z=%.5f active_peds=%u frustum_peds=%u",r.cameraPosition[0],r.cameraPosition[1],r.cameraPosition[2],r.cameraTarget[0],r.cameraTarget[1],r.cameraTarget[2],r.activePeds,r.frustumPeds);
  fprintf(f," skin_budget_groups=%u skin_budget_vertices=%u",r.skinBudgetFallbacks,r.skinBudgetVertices);
  for(unsigned j=0;j<Count;++j)fprintf(f," %s_us=%.3f %s_ex_us=%.3f",names[j],(double)r.stage[j]*1000000/SYSCLOCK_ARM11,names[j],(double)r.exclusive[j]*1000000/SYSCLOCK_ARM11);
  for(unsigned j=0;j<CountC;++j)fprintf(f," count_%u=%u",j,r.count[j]);fprintf(f,"\n");}
@@ -1320,16 +1921,27 @@ void Dump(){if(!enabled)return;
  fprintf(f,"NATIVE_BOTTOM_POLICY mode=%u block_frames=24 randomized=%u policy_seed=%u simulation_rng_unchanged=1\n",bottomMapMode,bottomMapMode==2,bottomMapSeed);
  HandheldHudCadence::Dump(f);
  #endif
- Old3dsCadence::Dump(f);Old3dsMemoryDump(f);DumpVisual(f);fprintf(f,"NATIVE_CAPTURE_END frames=%u complete=%u\n",samples,done && !aborted);fclose(f);
+ Old3dsCadence::Dump(f);Old3dsMemoryDump(f);DumpVisual(f);fprintf(f,"NATIVE_CAPTURE_END frames=%u complete=%u\n",samples,done && !aborted && (!reload || reloadPhase==reloadPlan.count+1));fclose(f);
 }
 int Input(bool axis,int id,int original){
  if(!enabled||done)return original;if(!placed||warmMs<warmup*1000||done)return 0;
- if(portrait)return 0;
+ if(portrait || suspensionProbe || missionNpcProbe)return 0;
+ if(WorldStreaming::manual)return original;
  // Driving-only route: retain the established first 25 seconds of inputs.
  // No exit, walking, return navigation, reset or forced mount during capture.
  if(roadRoute){
   if(routeMs<Old3dsRecurring::stationaryMs)return !axis && id==SDL_CONTROLLER_BUTTON_Y;
-  if(axis)return id==SDL_CONTROLLER_AXIS_LEFTX?roadSteer:0;
+  if(axis) {
+   if(id==SDL_CONTROLLER_AXIS_LEFTX)return roadSteer;
+   if(WorldStreaming::cameraSweep && id==SDL_CONTROLLER_AXIS_RIGHTX) {
+    // Equal distance windows, independent of FPS: brief looks to both sides.
+    const unsigned phase=unsigned(roadDistance/60.f)%4;
+    return phase==1?26000:phase==3?-26000:0;
+   }
+   return 0;
+  }
+  if(WorldStreaming::cameraSweep && id==SDL_CONTROLLER_BUTTON_DPAD_DOWN)
+   return unsigned(roadDistance/60.f)%8==4;
   if(id==SDL_CONTROLLER_BUTTON_A)return roadGas;
   if(id==SDL_CONTROLLER_BUTTON_B)return roadBrake;
   return 0;

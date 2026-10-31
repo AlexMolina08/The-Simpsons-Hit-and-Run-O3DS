@@ -22,6 +22,10 @@
 // Project Includes
 //========================================
 #include <events/eventmanager.h>
+#if defined(SRR2_OLD3DS_NATIVE_BENCH) || defined(SRR2_OLD3DS_WORLD_RESIDENCY)
+#include <main/worldresidency.h>
+#include <meta/zoneeventlocator.h>
+#endif
 #include <events/eventlistener.h>
 #include <memory/srrmemory.h>
 
@@ -248,6 +252,13 @@ void EventManager::RemoveAll( EventListener* pListener )
 //==============================================================================
 int EventManager::TriggerEvent( EventEnum id, void* pEventData ) const
 {
+#if defined(SRR2_OLD3DS_NATIVE_BENCH) || defined(SRR2_OLD3DS_WORLD_RESIDENCY)
+    // Real dispatch includes mission starts and teleports. Deferred rendering
+    // replays call HandleEvent directly and cannot overwrite newer demand.
+    if(pEventData && (id==EVENT_FIRST_DYNAMIC_ZONE_START ||
+                     id==EVENT_LOCATOR+LocatorEvent::DYNAMIC_ZONE))
+        WorldResidency::Trigger(static_cast<ZoneEventLocator*>(pEventData),0);
+#endif
     const ListenerVector& listeners = mListenerMap[id];
     
     ListenerVector::const_iterator iter = listeners.begin();

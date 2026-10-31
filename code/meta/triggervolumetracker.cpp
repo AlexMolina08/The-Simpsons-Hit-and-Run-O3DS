@@ -25,6 +25,12 @@
 // Project Includes
 //========================================
 #include <meta/triggervolumetracker.h>
+#include <main/worldstreaming.h>
+#include <render/RenderManager/RenderManager.h>
+#include <main/streamingpolicy.h>
+#ifdef SRR2_OLD3DS_NATIVE_BENCH
+#include <interiors/interiormanager.h>
+#endif
 #include <meta/triggervolume.h>
 #include <meta/triggerlocator.h>
 #include <meta/locatorevents.h>
@@ -335,6 +341,35 @@ BEGIN_PROFILE("Trigger Tracker");
         CheckForActiveVolumes( i, center, radius );
     }
 
+#ifdef SRR2_OLD3DS_NATIVE_BENCH
+    const unsigned now=radTimeGetMilliseconds();
+    if(WorldStreaming::ScanDue(now) && GetGameplayManager()->GetGameType()!=GameplayManager::GT_SUPERSPRINT) {
+        Avatar* avatar=GetAvatarManager()->GetAvatarForPlayer(0);
+        ZoneEventLocator* best=nullptr; float bestScore=1e30f;
+        if(WorldStreaming::predictive && !GetInteriorManager()->IsInside()) {
+            rmt::Vector position,velocity;
+            avatar->GetPosition(position);avatar->GetVelocity(velocity);
+            const float speed=avatar->GetSpeedMps();
+            const rmt::Vector sweep=velocity*WorldStreaming::LeadSeconds(speed);
+            for(unsigned n=0;n<mTriggerCount;++n) {
+                TriggerVolume* volume=mTriggerVolumes[n];
+                Locator* locator=volume->GetLocator();
+                if(!locator || locator->GetDataType()!=LocatorType::DYNAMIC_ZONE ||
+                   !locator->GetFlag(Locator::ACTIVE) || volume->IsPlayerTracking(0)) continue;
+                ZoneEventLocator* zone=static_cast<ZoneEventLocator*>(locator);
+                if(!GetRenderManager()->CanPrefetchZone(zone)) continue;
+                rmt::Sphere bounds;volume->GetBoundingSphere(&bounds);
+                const rmt::Vector delta=bounds.centre-position;
+                const float score=StreamingPolicy::NominationRank(delta.x,delta.y,delta.z,bounds.radius,
+                    sweep.x,sweep.y,sweep.z,[&](float t,float radius){
+                        return volume->IntersectsSphere(position+sweep*t,radius);
+                    });
+                if(score<bestScore) {bestScore=score;best=zone;}
+            }
+        }
+        GetRenderManager()->UpdateWorldPrefetch(best,now);
+    }
+#endif
     VehicleCentral* vc = GetVehicleCentral();
 
     for ( i = 0; i < mNumRegisteredAI; ++i )
@@ -1270,7 +1305,11 @@ void TriggerVolumeTracker::TestVolume( TriggerVolume* vol,
          GetAvatarManager()->GetAvatarForPlayer( playerID )->IsInCar() &&
          ( loc && loc->GetDataType() != LocatorType::OCCLUSION ) )
     {
-        if ( GetGameplayManager()->GetGameType() == GameplayManager::GT_SUPERSPRINT )
+        if ( GetGameplayManager()->GetGameType() == GameplayManager::GT_SUPERSPRINT
+#ifdef SRR2_OLD3DS_NATIVE_BENCH
+             || WorldStreaming::flightActive
+#endif
+           )
         {
             collision = (!loc || loc->GetFlag( Locator::ACTIVE )) && vol->IntersectsSphere( center, 1.5f );
         }

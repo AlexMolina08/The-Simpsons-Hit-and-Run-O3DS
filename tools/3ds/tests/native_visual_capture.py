@@ -4,7 +4,12 @@ from pathlib import Path
 import re,subprocess,tempfile
 root=Path(__file__).resolve().parents[3]
 source=(root/'code/main/nativebench.cpp').read_text()
-function=source[source.index('static void DumpVisualEye(FILE* f'):source.index('void Dump(){if(!enabled)return;')]
+def method(signature):
+ start=source.index(signature);end=source.index('{',start)+1;depth=1
+ while depth:
+  depth+=(source[end]=='{')-(source[end]=='}');end+=1
+ return source[start:end]
+function=method('static void DumpVisualEye(FILE* f')+'\n'+method('static void DumpVisual(FILE* f')
 audit=source[source.index('bool StereoVisualAudit(){'):source.index('\n',source.index('bool StereoVisualAudit(){'))]
 fixture=r'''
 #include <cstdio>

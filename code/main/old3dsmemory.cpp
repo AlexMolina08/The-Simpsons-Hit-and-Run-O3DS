@@ -24,6 +24,8 @@ extern "C" {
 // these existing counters needs no free-list walk and cannot miss a transient
 // arena peak between sampled mallinfo observations. Custom heaps/SVC mappings
 // remain outside this allocator-owned commitment bound.
+extern char* fake_heap_start;
+extern char* fake_heap_end;
 extern unsigned long __malloc_max_sbrked_mem;
 extern unsigned long __malloc_max_total_mem;
 void __malloc_lock(struct _reent*);
@@ -94,6 +96,8 @@ void Old3dsMemoryDump(FILE* file)
         (unsigned long)osGetMemRegionSize(MEMREGION_APPLICATION),(unsigned long)osGetMemRegionFree(MEMREGION_APPLICATION),osGetApplicationMemType(),sampleStride,observations,sampleStride>1);
     fprintf(file,"NATIVE_MEMORY_ALLOCATOR_MAXIMA newlib_sbrk_peak=%lu newlib_total_peak=%lu sampled_used_within_commitment=%u sampled_arena_within_commitment=%u at_dump_entry=1 heap_walk=0 coverage=newlib_commitment_not_custom_heaps_or_svc performance_capture=0\n",
         sbrkPeak,totalPeak,peak<=totalPeak,arenaPeak<=sbrkPeak);
+    fprintf(file,"NATIVE_MEMORY_CAPACITY normal_allocator_bytes=%lu normal_start=%p normal_end=%p excludes_main_stack_and_tls=1\n",
+        (unsigned long)(fake_heap_end-fake_heap_start),static_cast<void*>(fake_heap_start),static_cast<void*>(fake_heap_end));
     const char* names[]={"startup","loading","warmup","route","route_streaming","reload"};
     for(unsigned i=0;i<O3MemoryPhaseCount;++i)fprintf(file,
         "NATIVE_MEMORY_PHASE phase=%s normal_used_peak=%u normal_arena_peak=%u linear_free_min=%u linear_observations=%u boundary=main_frame_context_and_loading_queue performance_capture=0\n",

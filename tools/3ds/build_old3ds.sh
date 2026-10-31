@@ -65,6 +65,11 @@ cmake -S "$source_root" -B "$build" -C "$source_root/cmake/old3ds-release.cmake"
     "-DSDL2_DIR=$prefix/lib/cmake/SDL2" \
     "-DPNG_LIBRARY=$prefix/lib/liblibpng16_static.a" "-DPNG_PNG_INCLUDE_DIR=$prefix/include" \
     "-DZLIB_LIBRARY=$zlib" "-DZLIB_INCLUDE_DIR=$prefix/include" "$@"
+if grep -q '^SRR2_OLD3DS_WORLD_RESIDENCY:BOOL=ON$' "$build/CMakeCache.txt"; then
+    python3 "$repo/tools/3ds/install_world_residency.py" \
+        --data "$repo/sdcard/3ds/simpsons" \
+        --native-bundle "$repo/sdcard/3ds/simpsons/native146.bundle"
+fi
 cmake --build "$build" -j "$jobs"
 mkdir -p "$repo/out/old3ds"
 attributes=$("$DEVKITPRO/devkitARM/bin/arm-none-eabi-readelf" -A "$build/code/SRR2.elf")

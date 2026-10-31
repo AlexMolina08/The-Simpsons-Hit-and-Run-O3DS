@@ -132,10 +132,10 @@ notices, prepare a fresh output directory:
 python3 browser-builder/scripts/prepare-site.py --out /path/to/empty/site-output
 ```
 
-The Level 2 world stage applies the two tested road-first file permutations after
-visual preparation. Original chunk bodies and accepted visual features remain
-unchanged. This reduces a demonstrated ground gap; remaining streaming limits
-are documented in [the investigation](../docs/OLD3DS_WORLD_STREAMING.md).
+After visual preparation, the world stage prepares resident exterior scenery
+for all seven levels. Original files remain available for whole-level fallback,
+and authored zone visibility remains active. See [world loading](../docs/OLD3DS_WORLD_STREAMING.md)
+for the format, runtime behavior and performance limits.
 
 The generated directory contains the runtime, processing tools, corresponding
 tool source and static application files. The script rejects completed CIAs and

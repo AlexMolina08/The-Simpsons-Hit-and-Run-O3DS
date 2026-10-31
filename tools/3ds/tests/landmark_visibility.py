@@ -13,6 +13,7 @@ fixture=r'''
 extern const char* profilePath;
 #define OLD3DS_LANDMARK_PROFILE_PATH profilePath
 #include <main/landmarkvisibility.h>
+extern "C" {unsigned g_old3dsWorldResidencyChoice=0;}
 #include <cassert>
 #include <vector>
 #include <cstring>

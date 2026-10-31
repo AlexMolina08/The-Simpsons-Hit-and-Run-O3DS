@@ -108,6 +108,12 @@ void CommandLineOptions::HandleOption( const char* const optionIn )
                        "*** WARNING: Too many commandline options!" );
 
     char option[ 256 ];
+    // Diagnostic mission plans are parsed separately from legacy options.
+    // Leave long arguments intact for that parser without overflowing here.
+    if( optionIn == NULL || optionIn[0] == '\0' || strlen( optionIn ) >= sizeof( option ) )
+    {
+        return;
+    }
     strcpy( option, optionIn );
     rReleasePrintf( "Commandline Option: %s\n", option );
 

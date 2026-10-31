@@ -216,6 +216,12 @@ void radThreadCreateThread( IRadThread**         ppThread,
 // This function is invoked to the the currently running thread. This can be used to initially
 // get the main thread of execution.
 //
+#if defined(RAD_3DS) && defined(SRR2_OLD3DS_NATIVE_BENCH)
+// Private loader placement experiment; normal RAD threads keep their SDL path.
+void radThreadCreateThreadOnCore(IRadThread**, RADTHREADENTRY, void*, IRadThread::Priority,
+                                unsigned int, radMemoryAllocator, int core);
+#endif
+
 IRadThread* radThreadGetActiveThread( void );
 
 //

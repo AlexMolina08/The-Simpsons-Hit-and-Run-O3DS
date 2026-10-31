@@ -1220,6 +1220,16 @@ void CharacterManager::GarbageCollect(bool ignoreDist)
                     continue;
                 }
                 
+#ifdef SRR2_OLD_3DS
+                // An active objective owns ROLE_MISSION actors. Keep their
+                // requested model during a long approach instead of swapping
+                // it for the invisible npd placeholder beyond 150 metres.
+                // The original garbage branch still handles stage teardown.
+                const bool keepMissionModel = mpCharacter[i]->GetRole() == Character::ROLE_MISSION;
+#else
+                const bool keepMissionModel = false;
+#endif
+
                 bool suppressLoad = false;
 
                 if(mpCharacter[i]->GetRole() == Character::ROLE_ACTIVE_BONUS)
@@ -1256,13 +1266,13 @@ void CharacterManager::GarbageCollect(bool ignoreDist)
                         }
                     }
                 } 
-                else if (mLoaded[i] && (fDist > 150) && mpCharacter[i]->mbAllowUnload)
+                else if (mLoaded[i] && (fDist > 150) && mpCharacter[i]->mbAllowUnload && !keepMissionModel)
                 {
                     InternalSwapData(mpCharacter[i], "npd", "npd");
                     mLoaded[i] = false;
                     mpCharacter[i]->RemoveFromPhysics();
                 } 
-                else if (!mLoaded[i] && (fDist < 150) && !suppressLoad)
+                else if (!mLoaded[i] && ((fDist < 150) || keepMissionModel) && !suppressLoad)
                 {
                     if( !CommandLineOptions::Get( CLO_NO_PEDS ) )
                         InternalSwapData(mpCharacter[i], mRealModelNames[i], mRealAnimNames[i]);

@@ -57,22 +57,52 @@ template<class Hash> bool Key(const Description& d,const void* source,Hash& hash
     if(!hash(source,d.sourceBytes,header+44))return false;
     return HeaderKey(hash,header,hex);
 }
-template<class Hash> bool Read(FILE* f,const unsigned char* expected,unsigned bytes,
+// Only a first, unpublished allocation may lend its unused tail to wire bytes.
+// Keep source and destination disjoint and bound each filesystem request.
+inline unsigned char* RecordScratch(void* allocation,unsigned capacity,unsigned bodyBytes,
+                                    unsigned recordBytes,bool unpublished)
+{
+    if(!unpublished || !allocation || !bodyBytes || bodyBytes>capacity ||
+       recordBytes<HeaderBytes || recordBytes>32768 ||
+       recordBytes-HeaderBytes!=bodyBytes || recordBytes>capacity-bodyBytes)return nullptr;
+    return static_cast<unsigned char*>(allocation)+capacity-recordBytes;
+}
+struct MemorySource {
+    const unsigned char* data;unsigned size,cursor=0;
+    size_t Read(void* output,size_t bytes) {
+        const size_t count=bytes<size-cursor?bytes:size-cursor;
+        if(count)std::memcpy(output,data+cursor,count);
+        cursor+=unsigned(count);return count;
+    }
+    bool Failed()const{return false;}
+};
+template<class Source,class Hash> bool ReadSource(Source& source,const unsigned char* expected,unsigned bytes,
                               void* destination,Hash& hash,void (*yield)()=nullptr,bool exactFile=true)
 {
     unsigned char header[HeaderBytes],digest[32];
     // Validate the allocation-specific descriptor and source content before
     // touching the destination. An incomplete/corrupt body is never published.
-    if(fread(header,1,sizeof(header),f)!=sizeof(header) || memcmp(header,expected,76))return false;
+    if(source.Read(header,sizeof(header))!=sizeof(header) || memcmp(header,expected,76))return false;
     unsigned offset=0;
     while(offset<bytes)
     {
         const unsigned remaining=bytes-offset,chunk=remaining<32768?remaining:32768;
-        if(fread(static_cast<unsigned char*>(destination)+offset,1,chunk,f)!=chunk)return false;
+        if(source.Read(static_cast<unsigned char*>(destination)+offset,chunk)!=chunk)return false;
         offset+=chunk;if(yield)yield();
     }
-    if((exactFile && fgetc(f)!=EOF) || ferror(f))return false;
+    unsigned char extra;
+    if((exactFile && source.Read(&extra,1)!=0) || source.Failed())return false;
     return hash(destination,bytes,digest) && !memcmp(digest,header+76,32);
+}
+template<class Hash> bool Read(FILE* f,const unsigned char* expected,unsigned bytes,
+                              void* destination,Hash& hash,void (*yield)()=nullptr,bool exactFile=true)
+{
+    struct FileSource {
+        FILE* file;
+        size_t Read(void* output,size_t count){return fread(output,1,count,file);}
+        bool Failed()const{return ferror(file)!=0;}
+    } source{f};
+    return ReadSource(source,expected,bytes,destination,hash,yield,exactFile);
 }
 }
 #endif

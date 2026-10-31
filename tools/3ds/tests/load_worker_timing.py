@@ -22,6 +22,7 @@ constexpr double SYSCLOCK_ARM11=268000000.0;
 #include <radload/loadtiming.hpp>
 static uint64_t now=10;static unsigned reads=0;
 uint64_t svcGetSystemTick(){++reads;return now;}
+namespace WorldStreaming {bool passiveActive=false;}
 namespace NativeBench {
 bool serviceProfile=true,collecting=true,main=false;
 bool OnCaptureThread(){return main;}unsigned CurrentRouteMs(){return 123;}
@@ -39,6 +40,8 @@ int main(){
  assert(workerTiming.longest[0].ticks==7);
  assert(!strcmp(workerTiming.longest[0].label,"art/chars/test.p3d"));
  uint64_t sum=0;for(unsigned i=0;i<workerTiming.count;++i)sum+=workerTiming.longest[i].ticks;
+ uint64_t active=0;for(unsigned i=0;i<workerTiming.fileCount;++i)for(unsigned p=0;p<11;++p)active+=workerTiming.files[i].ticks[p];
+ assert(active==21 && workerTiming.filesLost==0);
  assert(sum==21); // Excludes the 985 and 992 ticks spent yielded to main.
  char owned[]="original_filename";
  {WorkerRegion safe(owned);strcpy(owned,"changed");now+=100;}
@@ -68,6 +71,18 @@ int main(){
  NativeBench::serviceProfile=true;NativeBench::main=true;
  {WorkerRegion foreign("main");radLoadTiming::StageRegion chunk(1);PauseWorkerTiming();ResumeWorkerTiming();}
  assert(reads==before);
+ NativeBench::main=false;NativeBench::collecting=false;
+ {WorkerRegion idle("not_collecting");now+=1;}
+ assert(reads==before);
+ WorldStreaming::passiveActive=true;
+ {WorkerRegion passive("passive_streaming");now+=17;}
+ assert(reads>before);
+ bool passiveSeen=false;for(unsigned i=0;i<workerTiming.count;++i)
+  passiveSeen|=!strcmp(workerTiming.longest[i].label,"passive_streaming")&&workerTiming.longest[i].ticks==17;
+ assert(passiveSeen);WorldStreaming::passiveActive=false;
+ auto passiveReads=reads;
+ {WorkerRegion idle("passive_paused");PauseWorkerTiming();ResumeWorkerTiming();}
+ assert(reads==passiveReads);
  radLoadTiming::State bounded;
  for(unsigned i=1;i<=40;++i){bounded.Enter("longest",100*i,0);bounded.Leave(nullptr,100*i+i,0);}
  assert(bounded.count==16 && bounded.samples==40 && bounded.longest[0].ticks==40);

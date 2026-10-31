@@ -4809,6 +4809,13 @@ void Character::SetSwatch( int swatchNum )
     mpCharacterRenderable->SetSwatch( swatchNum );
 }
 
+#ifdef SRR2_OLD3DS_NATIVE_BENCH
+bool Character::NativeBenchModelReady() const
+{
+    return mpCharacterRenderable && mpCharacterRenderable->GetDrawable();
+}
+#endif
+
 void Character::SetDrawable( CharacterRenderable* pDrawable )
 {
     if(mpCharacterRenderable)

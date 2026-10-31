@@ -13,6 +13,9 @@
 //                  2001/01/07      MP      Altered for new loading/rendering methods
 //
 //===========================================================================
+#ifdef SRR2_OLD_3DS
+extern "C" int g_picaWorldScaleAllowed;
+#endif
 #include <p3d/anim/multicontroller.hpp>
 #include <p3d/camera.hpp>
 #include <p3d/drawable.hpp>
@@ -509,7 +512,20 @@ void FePure3dObject::Render()
     rAssert( m_RuntimeDrawable != NULL );
     // Frontend cameras include extreme close-ups authored for a flat TV.
     // Keep them at screen depth; dedicated vehicle previews opt in to stereo.
+#ifdef SRR2_OLD_3DS
+    // GUI models retain authored material lighting even during gameplay.
+    // The flat world path otherwise turns an untextured black iris white.
+    {
+        struct GuiModelLighting {
+            int previous;
+            GuiModelLighting():previous(g_picaWorldScaleAllowed){g_picaWorldScaleAllowed=0;}
+            ~GuiModelLighting(){g_picaWorldScaleAllowed=previous;}
+        } lighting;
+        m_RuntimeDrawable->Display();
+    }
+#else
     m_RuntimeDrawable->Display();
+#endif
 
     // restore everything we changed
     //

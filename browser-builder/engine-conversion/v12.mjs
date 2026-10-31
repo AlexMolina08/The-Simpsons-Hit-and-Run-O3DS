@@ -2,12 +2,13 @@
 import createOcclusion from '../vendor/occlusion.mjs';
 import createAudioEncoder from '../vendor/v12-audio.mjs';
 import {buildAudioCache} from './audio-cache.mjs';
+import {worldResidencySettings, validateResidencyAdmission} from './world-residency.mjs';
 
 export const VISUAL_PYTHON_MODULES = Object.freeze([
   'prepare_character_detail.py', 'strip_character_detail.py', 'prepare_character_occlusion.py',
   'prepare_vehicle_reflections.py', 'prepare_scene_occlusion.py', 'prepare_world_sun.py',
   'pack_world_sun.py', 'prepare_sprite_atlases.py', 'prepare_landmark_visibility.py',
-  'prepare_streaming_order.py',
+  'prepare_world_residency.py', 'prepare_stream_probes.py', 'prepare_streaming_order.py',
 ]);
 const text = new TextDecoder();
 const hex = value => [...new Uint8Array(value)].map(byte => byte.toString(16).padStart(2, '0')).join('');
@@ -52,7 +53,8 @@ async function stageInputs(pyodide, inputs, canonicalNames) {
 }
 
 export async function prepareV12Assets({files, pyodide, recipe, storage, checkpoints, rounding, progress = () => {}}) {
-  const source = new Map(files), all = new Map(), landmarks = [], stages = [];
+  const source = new Map(files), all = new Map(), landmarks = [], residentLevels = [], stages = [];
+  const {enabled: residency, nativeBundleSHA256: nativeBundle} = worldResidencySettings(recipe);
   const canonicalNames = new Map(Object.keys(recipe.knownCopy.sourceFiles).map(path => [path.toLowerCase(), path]));
   const baker = await createRayBaker(progress);
   const code = await (await fetch('./engine-conversion/v12-assets.py')).text();
@@ -80,23 +82,34 @@ export async function prepareV12Assets({files, pyodide, recipe, storage, checkpo
     for (let index = 0; index < plans.length; index++) {
       const [name, match] = plans[index];
       progress({stage: 'visuals', detail: name.startsWith('world') ? `Preparing map ${name.split('-')[1]} of 7` : `Preparing ${name}`, completed: index, total: plans.length});
-      const cached = await checkpoints.read(`v12-${name}`);
+      const checkpoint = `${residency ? 'resident' : 'v12'}-${name}`;
+      const cached = await checkpoints.read(checkpoint);
       if (cached) {
         for (const entry of cached.files) all.set(...entry);
         if (cached.metadata.landmarks) landmarks.push(cached.metadata.landmarks);
+        if (cached.metadata.residency) residentLevels.push(cached.metadata.residency);
         stages.push(cached.metadata); continue;
       }
       await stageInputs(pyodide, [...source].filter(match), canonicalNames);
       const level = name.startsWith('world-') ? name.split('-')[1] : null;
       const result = prepare.callKwargs(name.startsWith('world') ? 'world' : name, '/input', '/prepared', {
+        residency, residency_levels: JSON.stringify(residentLevels), native_bundle_sha256: nativeBundle,
+        residency_resources: residency && level ? JSON.stringify(recipe.worldResidencyResources.levels[level]) : null,
+        resource_fingerprint: residency ? semantic : null,
         level, rounding: rounding ? JSON.stringify(rounding) : null, occlusion: baker, landmark_levels: name === 'landmarks' ? JSON.stringify(landmarks) : null,
         progress: (stage, detail, completed, total) => progress({stage: 'visuals', detail, completed, total}),
       });
       let metadata;
       try { metadata = result.toJs({dict_converter: Object.fromEntries, create_pyproxies: false}); } finally { result.destroy(); }
       const produced = new Map();
+      let admission = null;
       for (const item of metadata.files) {
         const bytes = pyodide.FS.readFile(`/prepared/${item.path}`), accepted = expected.get(item.path.toLowerCase());
+        if (residency && item.path === 'world-residency/asset-admission.bin') {
+          if (!accepted || admission) throw new Error('The map inventory is missing or duplicated.');
+          admission = {path: item.path, bytes};
+          continue;
+        }
         if (!accepted) {
           const original = [...source].find(([path]) => path.toLowerCase() === item.path.toLowerCase())?.[1];
           const originalHash = original && hex(await crypto.subtle.digest('SHA-256', await original.arrayBuffer()));
@@ -112,9 +125,14 @@ export async function prepareV12Assets({files, pyodide, recipe, storage, checkpo
         }
         produced.set(item.path, await storage.write(item.path, new Blob([bytes])));
       }
-      await checkpoints.commit(`v12-${name}`, produced, metadata);
+      if (admission) {
+        await validateResidencyAdmission(admission.bytes, new Map([...all, ...produced]), nativeBundle);
+        produced.set(admission.path, await storage.write(admission.path, new Blob([admission.bytes])));
+      }
+      await checkpoints.commit(checkpoint, produced, metadata);
       for (const entry of produced) all.set(...entry);
       if (metadata.landmarks) landmarks.push(metadata.landmarks);
+      if (metadata.residency) residentLevels.push(metadata.residency);
       stages.push(metadata);
       await pyodide.runPythonAsync("import shutil, gc\nshutil.rmtree('/input', ignore_errors=True)\nshutil.rmtree('/prepared', ignore_errors=True)\ngc.collect()");
     }

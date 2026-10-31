@@ -9,7 +9,7 @@ enum Stage { GameUpdate,WorldLayer,WorldScene,Opaque,Translucent,Geometry,Compos
     MaterialCapture,MaterialPreRender,UniformCapture,LightRebuild,PrimDisplay,GeometryCapture,
     BeginPrepared,FlushPrepared,FrameBegin,Viewport,VehicleUpdate,StoreJoints,PhysicsUpdate,
     PhysicsSubstep,CharactersUpdate,PoserAssign,PoserFill,
-    HudInterface,HudRadar,HudSprite,HudFont,HudWrap,HudArt,Count };
+    HudInterface,HudRadar,HudSprite,HudFont,HudWrap,HudArt,ResidentLookup,GroundQuery,HudAsset,HudShape,HudView,HudTarget,Count };
 extern void* mainTls;
 extern bool enabled;
 struct Scope {

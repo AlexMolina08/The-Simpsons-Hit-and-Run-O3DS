@@ -27,6 +27,9 @@
 
 #include <p3d/anim/multicontroller.hpp>
 #include <p3d/utility.hpp>
+#ifdef SRR2_OLD_3DS
+#include <p3d/shader.hpp>
+#endif
 
 #include <raddebug.hpp> // Foundation
 
@@ -95,6 +98,12 @@ CGuiScreenIrisWipe::CGuiScreenIrisWipe
     }
 
     m_relativeSpeed = DEFAULT_REL_SPEED;
+#ifdef SRR2_OLD_3DS
+    // The iris is an opaque black mask, not a surface reflecting the GUI's
+    // default ambient light. Keep its authored diffuse/emissive black exact.
+    if(tShader* irisShader=p3d::find<tShader>("iris_black"))
+        irisShader->SetColour(PDDI_SP_AMBIENT,tColour(0,0,0,255));
+#endif
 }
 
 

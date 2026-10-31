@@ -57,8 +57,22 @@ int main(){
  }
  assert(reads==6 && current.stage[LoadHandoff]==12 && current.exclusive[LoadHandoff]==2);
  assert(current.stage[LoadYield]==3 && current.stage[LoadLock]==7 && !top);
+ current={};tick=1;reads=0;
+ {Scope parent(LoadCallback);tick+=1;
+  {Scope done(LoadCallbackDone);tick+=2;
+   {Scope user(LoadUserCallback);tick+=17;}
+   {Scope release(LoadHandlerRelease);tick+=3;}
+   {Scope next(LoadNextRequest);tick+=5;}
+  }
+  {Scope release(LoadCallbackRelease);tick+=7;}
+ }
+ assert(current.stage[LoadCallback]==35 && current.stage[LoadCallbackDone]==27);
+ assert(current.stage[LoadUserCallback]==17 && current.stage[LoadHandlerRelease]==3);
+ assert(current.stage[LoadNextRequest]==5 && current.stage[LoadCallbackRelease]==7);
+ assert(current.exclusive[LoadCallbackDone]==2 && !top);
  serviceProfile=false;reads=0;
  {Scope child(LoadHandoff);Scope callback(LoadCallback);Scope yield(LoadYield);Scope lock(LoadLock);}
+ {Scope done(LoadCallbackDone);Scope user(LoadUserCallback);Scope release(LoadHandlerRelease);Scope next(LoadNextRequest);Scope final(LoadCallbackRelease);}
  assert(reads==0 && !top);
  collecting=false;const auto before=reads;
  {Scope parent(Service);{Scope child(FileService);}}

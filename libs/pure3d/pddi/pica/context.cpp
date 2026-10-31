@@ -3336,6 +3336,7 @@ void picaContext::BottomMapPoint(float u, float v, float* bu, float* bv) const
 
 bool picaContext::BeginBottomScreen(float u0, float v0, float u1, float v1, bool fitFrame)
 {
+    O3_MAIN_SCOPE(HudTarget);
     if(bottomPass || (u1 <= u0) || (v1 <= v0) || !display->BeginBottomTarget())
         return false;
 
@@ -3536,6 +3537,7 @@ extern "C" void picaBottomScreenFrame(void)
 
 void picaContext::EndBottomScreen(void)
 {
+    O3_MAIN_SCOPE(HudTarget);
     if(!bottomPass)
         return;
 

@@ -85,6 +85,11 @@ public:
    // Existing alignment padding; collision and gameplay bounds stay unchanged.
    bool mOld3dsLandmark=false;
 #endif
+#if defined(SRR2_OLD3DS_NATIVE_BENCH) || defined(SRR2_OLD3DS_WORLD_RESIDENCY)
+   // One-based immutable catalog index. Fits existing alignment padding on 3DS;
+   // visibility still checks the current UID, binding and authored zone demand.
+   unsigned short mWorldResidencyIndex=0;
+#endif
    tName mShaderName;
    static bool msDeletionsSafe;
 

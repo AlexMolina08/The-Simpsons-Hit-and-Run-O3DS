@@ -22,6 +22,7 @@
 // Project Includes
 //========================================
 #include <loading/p3dfilehandler.h>
+#include <main/worldstreaming.h>
 
 //******************************************************************************
 //
@@ -85,6 +86,10 @@ void P3DFileHandler::LoadFile
     GameMemoryAllocator heap
 )
 {
+#ifdef SRR2_OLD3DS_NATIVE_BENCH
+    WorldStreaming::RequestEvent("dispatch",filename,mcSectionName);
+#endif
+
     rAssert( filename );
     rAssert( pCallback );
 
@@ -117,6 +122,10 @@ void P3DFileHandler::LoadFile
 //==============================================================================
 void P3DFileHandler::Done( tLoadStatus status, tLoadRequest *load )
 {
+#ifdef SRR2_OLD3DS_NATIVE_BENCH
+    WorldStreaming::RequestEvent(status==LOAD_OK?"file_callback_ok":"file_callback_error",mcSectionName,mcSectionName);
+#endif
+
     //
     // Percolate the callback up to the client.
     //

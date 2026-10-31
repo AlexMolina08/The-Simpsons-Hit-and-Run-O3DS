@@ -88,7 +88,8 @@ foreach(feature
     VRAM_TEXTURES
     WHEEL_LOD
     WHEEL_ROTATION_REUSE
-    WHEEL_SKIN_BATCH)
+    WHEEL_SKIN_BATCH
+    WORLD_RESIDENCY)
     set(SRR2_OLD3DS_${feature} ON CACHE BOOL "Old 3DS release feature" FORCE)
 endforeach()
 foreach(feature
@@ -106,3 +107,6 @@ foreach(feature
     set(SRR2_OLD3DS_${feature} OFF CACHE BOOL "Disabled experimental feature" FORCE)
 endforeach()
 set(SRR2_OLD3DS_EXPERIMENT_ID "" CACHE STRING "Diagnostic build identifier" FORCE)
+
+# Shipping builds load the prepared subtree bundled by both packaging paths.
+set(SRR2_OLD3DS_RESIDENCY_ROOT "romfs:/world-residency" CACHE STRING "Prepared resident asset root" FORCE)

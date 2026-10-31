@@ -14,7 +14,8 @@ int main()
         assert(Old3DSInput::CameraAxis(false, axis, 123) == 123);
     }
     // Regression: releasing the modifier with the pad still held must not leave
-    // camera motion latched. Optional Circle Pad Pro input still works normally.
+    // camera motion latched. This checks simulated right-stick values; physical
+    // C-stick and Circle Pad Pro connectivity require separate runtime tests.
     const bool held[] = {false, true, true, false, false};
     const int pad[] = {32767, 32767, -32768, -32768, 0};
     const int movement[] = {32767, 0, 0, -32768, 0};

@@ -1,3 +1,5 @@
+#include <main/worldresidency.h>
+#include <main/nativebench.h>
 //=============================================================================
 // Copyright (C) 2002 Radical Entertainment Ltd.  All rights reserved.
 //
@@ -22,6 +24,7 @@
 // Project Includes
 //========================================
 #include <loading/loadingmanager.h>
+#include <main/worldstreaming.h>
 #include <loading/worldpriority.h>
 #include <loading/filehandlerfactory.h>
 #include <loading/cementfilehandler.h>
@@ -275,11 +278,27 @@ void LoadingManager::AddRequest
     mRequestTail = newTail;
 
 
-#ifdef SRR2_OLD_3DS
-    if(highPriorityWorld && handlerType==FILEHANDLER_PURE3D && heap==GMA_LEVEL_ZONE &&
-       WorldPriority::Exterior(filename)) {
+#if defined(SRR2_OLD3DS_NATIVE_BENCH) || defined(SRR2_OLD3DS_WORLD_RESIDENCY)
+    WorldResidency::InitialDemand(filename);
+#endif
+#ifdef SRR2_OLD3DS_NATIVE_BENCH
+    WorldStreaming::RequestEvent("enqueue",filename,sectionName);
+    if(handlerType==FILEHANDLER_PURE3D && heap==GMA_LEVEL_ZONE && WorldPriority::Exterior(filename)) {
+        const unsigned total=GetNumCurrentRequests();
+        for(unsigned n=0;n<total && n<32;++n)
+            WorldStreaming::QueuedFile(mRequests[(mRequestHead+n)%MAX_REQUESTS].filename,n,total,mLoading && n==0,false);
+        if(highPriorityWorld && WorldStreaming::worldPriority) {
+            WorldPriority::Promote(mRequests,unsigned(mRequestHead),unsigned(mRequestTail),mLoading,
+                [](const LoadingRequest& request){return request.heap==GMA_LEVEL_ZONE && WorldPriority::Exterior(request.filename);});
+            for(unsigned n=0;n<total && n<32;++n)
+                WorldStreaming::QueuedFile(mRequests[(mRequestHead+n)%MAX_REQUESTS].filename,n,total,mLoading && n==0,true);
+        }
+    }
+#elif defined(SRR2_OLD_3DS)
+    if(highPriorityWorld && handlerType==FILEHANDLER_PURE3D &&
+       heap==GMA_LEVEL_ZONE && WorldPriority::Exterior(filename)) {
         WorldPriority::Promote(mRequests,unsigned(mRequestHead),unsigned(mRequestTail),mLoading,
-            [](const LoadingRequest& request){return WorldPriority::Exterior(request.filename) && request.heap==GMA_LEVEL_ZONE;});
+            [](const LoadingRequest& request){return request.heap==GMA_LEVEL_ZONE && WorldPriority::Exterior(request.filename);});
     }
 #else
     (void)highPriorityWorld;
@@ -326,12 +345,13 @@ void LoadingManager::OnLoadFileComplete( void* pUserData )
 
     if(completedCallback)
     {
+        NB_SCOPE(LoadUserCallback);
         completedCallback->OnProcessRequestsComplete(completedData);
     }
 
-    completedHandler->Release();
+    { NB_SCOPE(LoadHandlerRelease); completedHandler->Release(); }
 
-    this->ProcessNextRequest();
+    { NB_SCOPE(LoadNextRequest); this->ProcessNextRequest(); }
 }
 
 

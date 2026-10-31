@@ -18,6 +18,9 @@ def digest(path):
 
 def prepare(elf, cache, native_index, output):
     settings = cache.read_text()
+    residency = bool(re.search(r'^SRR2_OLD3DS_WORLD_RESIDENCY:BOOL=ON$', settings, re.M))
+    if residency and not re.search(r'^SRR2_OLD3DS_RESIDENCY_ROOT:STRING=romfs:/world-residency$', settings, re.M):
+        raise ValueError('Normal residency runtime must use the bundled production root')
     if not re.search(r'^SRR2_REGION:STRING=PAL$', settings, re.M):
         raise ValueError('The multilingual runtime requires the PAL dialogue scripts')
     for flag in ('NATIVE_BENCH', 'OPTIONAL_DIAG', 'CAUSAL_DIAG', 'MEMORY_DIAG',
@@ -44,6 +47,7 @@ def prepare(elf, cache, native_index, output):
         cmake_cache_sha256=digest(target_cache), accepted_native_index_sha256=digest(native_index),
         native_bench=False, runtime_profile=False, receiver_hook=False,
         early_opaque_queue=True, visual_features_default=255, streaming_policy=1,
+        world_residency=residency, world_residency_format=1 if residency else 0,
         languages=['en', 'fr', 'es'], language_config_version=1,
         source_tree_dirty=bool(dirty),
         fixed_startup_budget=budget, release_elf_hardware_exercised=False,

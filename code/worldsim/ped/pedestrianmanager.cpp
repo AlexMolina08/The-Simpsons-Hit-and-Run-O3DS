@@ -1,4 +1,8 @@
 #include <main/old3dsperformance.h>
+#include <main/worldstreaming.h>
+#ifdef SRR2_OLD3DS_NATIVE_BENCH
+#include <loading/loadingmanager.h>
+#endif
 //=============================================================================
 // Copyright (C) 2002 Radical Entertainment Ltd.  All rights reserved.
 //
@@ -743,6 +747,17 @@ bool PedestrianManager::ActivatePed( PathSegment* segment, rmt::Vector spawnPos 
         return false;
     }
 
+#ifdef SRR2_OLD3DS_NATIVE_BENCH
+    if(WorldStreaming::pedestrianReuse && GetLoadingManager()->IsLoading())
+    {
+        // Reuse a ready free model while shared world/model requests are pending.
+        // Selection still respects the current group and each model's limit.
+        const int ready = SelectReadyModel(modelID);
+        if(ready != modelID) WorldStreaming::PedSpawn(WorldStreaming::PedReadyReuse);
+        modelID = ready;
+    }
+#endif
+
     //*** Test ***
     //rDebugPrintf( "Model randomly chosen: %d, %s\n", modelID, mModels[modelID].name );
     //*** Test ***
@@ -1308,24 +1323,80 @@ void PedestrianManager::HandleEvent( EventEnum id, void* pEventData )
 }
 
 
+#ifdef SRR2_OLD3DS_NATIVE_BENCH
+int PedestrianManager::SelectReadyModel(int preferred)
+{
+    int replacement = -1;
+    int entry = mFreePeds.GetHead();
+    while(0 <= entry && entry < DListArray::MAX_ELEMS)
+    {
+        PedestrianStruct* slot = (PedestrianStruct*)mFreePeds.GetDataAt(entry);
+        const int model = GetModelIDByName(slot->modelName);
+        if(model >= 0 && !mModels[model].free &&
+           mModels[model].currCount < mModels[model].maxCount &&
+           GetCharacterManager()->IsModelLoaded(slot->modelName))
+        {
+            if(model == preferred) return preferred;
+            if(replacement < 0) replacement = model;
+        }
+        entry = mFreePeds.GetNextOf(entry);
+    }
+    // Keep the normal load path when the free pool has no usable ready model.
+    return replacement >= 0 ? replacement : preferred;
+}
+void PedestrianManager::GetPopulationCounts(unsigned& active,unsigned& visible) const
+{
+    active=visible=0;
+    for(int i=0;i<MAX_PEDESTRIANS;++i) if(mPeds[i].ped && mPeds[i].ped->GetIsActive()) {
+        ++active;
+        if(mPeds[i].ped->GetCharacter()->mbInAnyonesFrustrum) ++visible;
+    }
+    const unsigned reserved = mActivePeds.GetNumElems();
+    WorldStreaming::PedSlots(reserved,reserved > active ? reserved-active : 0);
+}
+#endif
 void PedestrianManager::AddPeds( rmt::Vector center, float addRadius )
 {
+#ifdef SRR2_OLD3DS_NATIVE_BENCH
+    WorldStreaming::PedSpawn(WorldStreaming::PedRequest);
+#endif
     // Named mission characters do not enter this ambient pedestrian pool.
+    unsigned ambientLimit=Old3dsPerformance::PedestrianLimit();
+#ifdef SRR2_OLD3DS_NATIVE_BENCH
+    if(WorldStreaming::pedestrianLimit) ambientLimit=WorldStreaming::pedestrianLimit;
+#endif
     if( Old3dsPerformance::Enabled() &&
-        mActivePeds.GetNumElems() >= int(Old3dsPerformance::PedestrianLimit()) ) return;
+        mActivePeds.GetNumElems() >= int(ambientLimit) ) {
+#ifdef SRR2_OLD3DS_NATIVE_BENCH
+    WorldStreaming::PedSpawn(WorldStreaming::PedLimit);
+#endif
+        return;
+    }
     if( CommandLineOptions::Get( CLO_NO_PEDS ) )
     {
+#ifdef SRR2_OLD3DS_NATIVE_BENCH
+    WorldStreaming::PedSpawn(WorldStreaming::PedDisabled);
+#endif
+
         return;
     }
 
     if( !mAllowAdd )
     {
+#ifdef SRR2_OLD3DS_NATIVE_BENCH
+    WorldStreaming::PedSpawn(WorldStreaming::PedDisabled);
+#endif
+
         return;
     }
 
     // if no more free pedestrians...
     if( mFreePeds.GetNumElems() <= 0 )
     {
+#ifdef SRR2_OLD3DS_NATIVE_BENCH
+    WorldStreaming::PedSpawn(WorldStreaming::PedNoFree);
+#endif
+
         return;
     }
 
@@ -1346,8 +1417,12 @@ void PedestrianManager::AddPeds( rmt::Vector center, float addRadius )
     //   c) put pedestrian on the segment at the intersection point.
     //   d) set pedestrian's facing/velocity/position, whatever's necessary
     //
-    if(orList.mUseSize == 0)
+    if(orList.mUseSize == 0) {
+#ifdef SRR2_OLD3DS_NATIVE_BENCH
+    WorldStreaming::PedSpawn(WorldStreaming::PedNoPath);
+#endif
         return;
+    }
 
     int which = rand() % orList.mUseSize;
 
@@ -1372,6 +1447,10 @@ void PedestrianManager::AddPeds( rmt::Vector center, float addRadius )
     // if no intersection, a mild surprise. 
     if( numIntersections <= 0 )
     {
+#ifdef SRR2_OLD3DS_NATIVE_BENCH
+    WorldStreaming::PedSpawn(WorldStreaming::PedNoCrossing);
+#endif
+
         return;
     }
     
@@ -1385,6 +1464,9 @@ void PedestrianManager::AddPeds( rmt::Vector center, float addRadius )
 #endif 
 
     bool succeeded = ActivatePed( segment, spawnPos );
+#ifdef SRR2_OLD3DS_NATIVE_BENCH
+    WorldStreaming::PedSpawn(succeeded?WorldStreaming::PedSpawned:WorldStreaming::PedRejected);
+#endif
 #ifdef RAD_DEBUG
     CheckModelCounts();
 #endif 

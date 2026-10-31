@@ -19,6 +19,7 @@ enum radLoadState{ CREATED, QUEUED, LOADING, COMPLETE, CANCELED };
 typedef unsigned int radLoadClassID;
 
 // Forward References
+struct IRadThreadSemaphore;
 struct radLoadInit;
 class ILoadManager;
 class radLoadManagerWrapper;
@@ -136,6 +137,10 @@ public:
 
     virtual void LendDuringWait() { }
     virtual void ReclaimAfterWait() { }
+#ifdef SRR2_OLD3DS_NATIVE_BENCH
+    /// Loader worker only: suspend raw I/O with the engine mutex released.
+    virtual void WaitForRawRead(IRadThreadSemaphore*) = 0;
+#endif
 
     // Allow certian classes access to the base instance pointer
     friend void radLoadInitialize( radLoadInit* init );

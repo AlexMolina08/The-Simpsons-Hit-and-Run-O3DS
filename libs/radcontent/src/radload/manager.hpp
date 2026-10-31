@@ -50,6 +50,9 @@ public:
     void SwitchTasks();
     void LendDuringWait();
     void ReclaimAfterWait();
+#ifdef SRR2_OLD3DS_NATIVE_BENCH
+    void WaitForRawRead(IRadThreadSemaphore*);
+#endif
 
     class QueueItem : public radLoadUpdatableRequest
     {

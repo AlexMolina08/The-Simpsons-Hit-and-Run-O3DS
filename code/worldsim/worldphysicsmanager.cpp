@@ -1,3 +1,5 @@
+#include <main/nativebench.h>
+#include <main/old3dssuspension.h>
 #include <main/old3dsperformance.h>
 #include <main/old3dsrecurring.h>
 #include <main/old3dspools.h>
@@ -46,6 +48,7 @@
 #include <worldsim/groundplanepool.h>
 
 #include <worldsim/avatarmanager.h>
+#include <worldsim/avatar.h>
 #include <worldsim/vehiclecentral.h>
 
 #include <memory/srrmemory.h>
@@ -1230,8 +1233,27 @@ void WorldPhysicsManager::Update(unsigned int timeDeltaMilliSeconds)
 
     // Performance tiers permit larger physics steps. Keep elapsed time,
     // all pre/post updates, contacts and mission timers; subdivide longer stalls.
-    const unsigned stepLimit = Old3dsPerformance::PhysicsStepMilliseconds();
-    if(((mLastTime > stepLimit) && (timeDeltaMilliSeconds > stepLimit)) || (timeDeltaMilliSeconds > 50))
+    unsigned stepLimit = Old3dsPerformance::PhysicsStepMilliseconds();
+#ifdef SRR2_OLD_3DS
+    if(Old3dsPerformance::Enabled() && GetGameplayManager())
+    {
+        Vehicle* car = GetGameplayManager()->GetCurrentVehicle();
+        Avatar* player = GetAvatarManager()->GetAvatarForPlayer(0);
+        if(car && player && player->GetCharacter())
+        {
+            rmt::Vector playerPosition;
+            player->GetPosition(playerPosition);
+            stepLimit = Old3dsSuspension::StepLimit(stepLimit, car->mGas,
+                car->mVelocityCM.x, car->mVelocityCM.z, car->mVehicleUp.y,
+                (playerPosition - car->GetPosition()).MagnitudeSqr());
+        }
+    }
+#endif
+#ifdef SRR2_OLD3DS_NATIVE_BENCH
+    stepLimit = NativeBench::SuspensionStep(stepLimit);
+#endif
+    if((stepLimit == 25 && timeDeltaMilliSeconds > stepLimit) ||
+       ((mLastTime > stepLimit) && (timeDeltaMilliSeconds > stepLimit)) || (timeDeltaMilliSeconds > 50))
     {
         numSubsteps = (timeDeltaMilliSeconds + stepLimit - 1) / stepLimit;
     }
@@ -1250,15 +1272,16 @@ void WorldPhysicsManager::Update(unsigned int timeDeltaMilliSeconds)
 
     mLastTime = timeDeltaMilliSeconds;
 
-    float substep = (float(timeDeltaMilliSeconds) * 0.001f) / float(numSubsteps);
-    float dt = static_cast<float>(timeDeltaMilliSeconds) * 0.001f;
-
     // cap
     if(numSubsteps > 10)
     {
         rReleasePrintf("\nhit 10 substeps!\n");
         numSubsteps = 10;
     }
+
+    float substep = (float(timeDeltaMilliSeconds) * 0.001f) / float(numSubsteps);
+    float dt = static_cast<float>(timeDeltaMilliSeconds) * 0.001f;
+
    
     
     mLoopTime = dt;

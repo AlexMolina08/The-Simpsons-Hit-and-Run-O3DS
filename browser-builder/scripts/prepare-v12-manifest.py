@@ -8,6 +8,7 @@ from pathlib import Path
 import re
 import struct
 import sys
+import tempfile
 
 ROOT = Path(__file__).resolve().parents[2]
 LOCAL = ROOT / 'out/local-dev/visual-upgrade-20261025'
@@ -20,6 +21,7 @@ sys.path.insert(0, str(ROOT/'browser-builder/engine-conversion'))
 from importlib import import_module
 semantic_fingerprint = import_module('asset-semantics').semantic_fingerprint
 from prepare_streaming_order import RELEASE_FILES, release_bytes
+from prepare_world_residency import prepare_all
 
 
 def digest(path):
@@ -80,11 +82,21 @@ def validate_runtime(provenance=DEFAULT_PROVENANCE, native_index=None, runtime=N
                 'The runtime must be the standalone 32-bit ARM ELF, without game RomFS')
         with mmap.mmap(source.fileno(), 0, access=mmap.ACCESS_READ) as data:
             for marker in (b'OLD3DS_PROFILE', b'OLD3DS_DUMP ', b'OLD3DS_DEV_RETURN',
-                           b'bench_route=', b'NATIVE_EARLY_QUEUE', b'NATIVE_BUILD ', b'GPU_SKIN_SUMMARY'):
+                           b'bench_route=', b'NATIVE_EARLY_QUEUE', b'NATIVE_BUILD ', b'GPU_SKIN_SUMMARY',
+                           b'NATIVE_MEMORY diagnostic=', b'NATIVE_MEMORY_ALLOCATOR_MAXIMA',
+                           b'NATIVE_CAPTURE_END', b'PASSIVE_FRAME ms=', b'NATIVE_RESIDENCY_CPU_PROBE', b'NATIVE_TEXTURE_COALESCED', b'NATIVE_PARKED_REMOVAL', b'NATIVE_SUSPENSION_PROBE', b'NATIVE_MISSION_NPC_PROBE', b'NATIVE_MISSION_MODELS'):
                 require(data.find(marker) < 0, f'Instrumented runtime marker: {marker.decode()}')
     cache_path = provenance.parent / 'CMakeCache.txt'
     require(digest(cache_path) == metadata.get('cmake_cache_sha256'), 'Accepted runtime CMake cache hash mismatch')
     cache = cache_path.read_text()
+    residency = bool(re.search(r'^SRR2_OLD3DS_WORLD_RESIDENCY:BOOL=ON$', cache, re.M))
+    require(metadata.get('world_residency', False) is residency,
+            'Runtime residency provenance does not match its CMake cache')
+    if residency:
+        require(metadata.get('world_residency_format') == 1,
+                'Runtime residency format is missing or unsupported')
+        require(re.search(r'^SRR2_OLD3DS_RESIDENCY_ROOT:STRING=romfs:/world-residency$', cache, re.M),
+                'Browser runtime must use the bundled production residency root')
     require(re.search(r'^SRR2_REGION:STRING=PAL$', cache, re.M),
             'The multilingual runtime requires the PAL dialogue scripts')
     off = ['SRR2_MICROPROFILE'] + ['SRR2_OLD3DS_' + field for field in (
@@ -161,6 +173,23 @@ def generate_recipe(provenance=DEFAULT_PROVENANCE, overlay=DEFAULT_OVERLAY,
     require(expected['art/frontend/scrooby/ingame.p3d']['sha256'] == atlas['output_sha256'], 'Accepted HUD atlas hash mismatch')
     require(expected['character-occlusion.bin']['sha256'] == ao['sha256'], 'Accepted character AO hash mismatch')
 
+    # Preserve the accepted base inventory. Add the complete optional subtree
+    # only when the exact runtime declares the matching production feature.
+    if metadata.get('world_residency', False):
+        with tempfile.TemporaryDirectory(prefix='browser-residency-recipe-') as temporary:
+            prepared = Path(temporary)/'world-residency'
+            residency = prepare_all(overlay/'art', None, prepared,
+                                    native_bundle_sha256=bundle_hash[1],
+                                    resource_fingerprint=semantic_fingerprint)
+            for name, entry in residency['files'].items():
+                path = prepared/name
+                item = dict(entry, required=True, change='new')
+                if path.suffix.lower() == '.p3d':
+                    item['semantic_sha256'] = semantic_fingerprint(path.read_bytes())
+                expected['world-residency/'+name] = item
+                changes['world-residency/'+name] = item
+        counts['new'] += len(residency['files'])
+
     # All scene and AO context inputs participate in the known-copy fingerprint.
     # A different occluder can change a bake even when its target file matches.
     context_paths = set(reference.joinpath('art').glob('l[1-7]*.p3d'))
@@ -193,9 +222,12 @@ def generate_recipe(provenance=DEFAULT_PROVENANCE, overlay=DEFAULT_OVERLAY,
         'schemaVersion': 1, 'semanticFingerprintVersion': 1,
         'displayVersion': '1.2', 'ciaVersion': '1.2.0', 'packedVersion': 1056,
         'titleID': '000400000f3a1100', 'visualFeatures': 255,
+        'worldResidencyResources': ({'format': 1, 'levels': residency['resource_references']}
+                                   if metadata.get('world_residency', False) else None),
         'runtime': {'sourceCommit': metadata['source_commit'], 'originalELFSHA256': metadata['elf_sha256'],
                     'cmakeCacheSHA256': metadata['cmake_cache_sha256'], 'diagnosticsEnabled': False,
-                    'receiverHook': False, 'earlyOpaqueQueue': True},
+                    'receiverHook': False, 'earlyOpaqueQueue': True,
+                    'worldResidency': metadata.get('world_residency', False)},
         'nativeTextures': {'path': 'native146.bundle', 'sha256': bundle_hash[1], 'bytes': int(bundle_bytes[1]),
                            'entries': int(bundle_entries[1]), 'indexSHA256': metadata['accepted_native_index_sha256'],
                            'profileSHA256': digest(profile_path)},

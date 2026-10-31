@@ -108,6 +108,30 @@ class CIA:
         raise ValueError('Missing executable code')
 
 
+def verify_residency(cia, recipe):
+    """Verify the complete prepared subtree and its exact packaged-byte inventory."""
+    from prepare_world_residency import admission_bytes, exterior_files
+    prefix = 'world-residency/'
+    names = {name for name in cia.files if name.startswith(prefix)}
+    enabled = recipe['runtime'].get('worldResidency', False)
+    if not enabled:
+        require(not names, 'Resident data reached a runtime without residency')
+        return None
+    required = ({'art/'+name for level in range(1, 8) for name in exterior_files(level)}
+                | {'landmark-visibility.bin', 'asset-admission.bin'}
+                | {f'resident-visibility{level}.bin' for level in range(1, 8)})
+    require(names == {prefix+name.lower() for name in required}, 'Incomplete or unexpected resident subtree')
+    files = {}
+    for name in sorted(required - {'asset-admission.bin'}):
+        offset, size = cia.asset(prefix+name)
+        files[name] = {'bytes': size, 'sha256': digest(cia.stream, offset, size)}
+    marker = admission_bytes(files, recipe['nativeTextures']['sha256'])
+    offset, size = cia.asset(prefix+'asset-admission.bin')
+    require(cia.read(offset, size) == marker, 'Packaged admission does not bind actual map bytes')
+    return {'files': len(required), 'admissionSHA256': hashlib.sha256(marker).hexdigest(),
+            'boundToActualPackagedBytes': True}
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--cia', required=True, type=Path)
@@ -127,6 +151,7 @@ def main():
     spec = importlib.util.spec_from_file_location('asset_semantics', Path(__file__).resolve().parents[1] / 'engine-conversion/asset-semantics.py')
     semantics = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(semantics)
+    residency = verify_residency(cia, recipe)
     required = {name.lower(): record for name, record in recipe['requiredOverrides'].items() if record.get('required') is not False}
     hud = args.game/'art/frontend/scrooby/ingame.p3d'
     if hud.is_file():
@@ -137,11 +162,15 @@ def main():
     archive = {'en': 'dialog.rcf', 'fr': 'dialogf.rcf', 'es': 'dialogs.rcf'}[language]
     offset, size = cia.asset('game-language.txt')
     require(cia.read(offset, size) == (language+'\n').encode(), 'Wrong packaged language')
-    exact = semantic = 0
+    exact = semantic = dynamic_admission = 0
     for name, record in required.items():
         offset, size = cia.asset(name)
         if digest(cia.stream, offset, size) == record['sha256']:
             exact += 1
+        elif name == 'world-residency/asset-admission.bin' and residency:
+            # Its records bind losslessly re-encoded PNG containers, whose raw
+            # sizes/hashes can legitimately differ from the native reference.
+            dynamic_admission += 1
         else:
             require(record.get('semantic_sha256') and semantics.semantic_fingerprint(cia.read(offset, size)) == record['semantic_sha256'], f'Changed v1.2 enhancement: {name}')
             semantic += 1
@@ -183,7 +212,7 @@ def main():
     verification = subprocess.run([str(args.ctrtool), '--intype=cia', '--verify', str(args.cia)], text=True, capture_output=True, check=True)
     log = verification.stdout + verification.stderr
     require('1.2.0 (1056)' in log and not any(('FAIL' in line or 'ERROR' in line) and 'Signature' not in line for line in log.splitlines()), 'Container verification failed')
-    result = {'passed': True, 'ciaBytes': cia.size, 'ciaSHA256': digest(cia.stream, 0, cia.size), 'romfsFiles': len(cia.files), 'requiredExact': exact, 'requiredLosslessPNGEquivalent': semantic, 'copiedPCFilesExact': copied, 'movies': len(movies), 'nativeTextureEntries': recipe['nativeTextures']['entries'], 'nativeTexturesExact': True, 'acceptedExecutableExact': True, 'titleID': recipe['titleID'], 'packedVersion': 1056, 'buildTimings': report['timings'], 'scope': 'Desktop browser artifact and private PC/accepted-asset parity; no console or mobile claim'}
+    result = {'passed': True, 'ciaBytes': cia.size, 'ciaSHA256': digest(cia.stream, 0, cia.size), 'romfsFiles': len(cia.files), 'requiredExact': exact, 'requiredLosslessPNGEquivalent': semantic, 'requiredActualByteAdmission': dynamic_admission, 'worldResidency': residency, 'copiedPCFilesExact': copied, 'movies': len(movies), 'nativeTextureEntries': recipe['nativeTextures']['entries'], 'nativeTexturesExact': True, 'acceptedExecutableExact': True, 'titleID': recipe['titleID'], 'packedVersion': 1056, 'buildTimings': report['timings'], 'scope': 'Desktop browser artifact and private PC/accepted-asset parity; no console or mobile claim'}
     args.out.parent.mkdir(parents=True, exist_ok=True)
     args.out.write_text(json.dumps(result, indent=2) + '\n')
     args.out.with_suffix('.ctrtool.log').write_text(log)

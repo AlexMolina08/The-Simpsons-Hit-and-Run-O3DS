@@ -49,6 +49,9 @@ class tShader;
 class WorldScene : EventListener
 {
 public:
+#ifdef SRR2_OLD3DS_NATIVE_BENCH
+   bool AuditSphereVisibility(rmt::Vector& center,float radius) { return IsSphereInCone(center,radius); }
+#endif
    WorldScene();
    ~WorldScene();
 

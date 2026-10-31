@@ -24,6 +24,7 @@
 #include <debug/profiler.h>
 
 #include <render/IntersectManager/IntersectManager.h>
+#include <main/old3dsmainprofile.h>
 #ifdef SRR2_OLD_3DS
 #include <main/old3dsdiag.h>
 #endif
@@ -979,6 +980,7 @@ IntersectDSG* IntersectManager::FindIntersectionTri
     rmt::Vector& orIntersectNorm
 )
 {
+    O3_MAIN_SCOPE(GroundQuery);
     SpatialNode& rCurrentLeaf = GetRenderManager()->pWorldScene()->mStaticTreeWalker.rSeekLeaf((Vector3f&)irPosn);
 
     rmt::Vector tmpVect, tmpVect2, TriPts[3], TriNorm;//, TriCtr;
@@ -1055,6 +1057,7 @@ IntersectDSG* IntersectManager::FindIntersectionTriNew
     rmt::Vector& orIntersectNorm
 )
 {
+    O3_MAIN_SCOPE(GroundQuery);
     SpatialNode& rCurrentLeaf = GetRenderManager()->pWorldScene()->mStaticTreeWalker.rSeekLeaf((Vector3f&)irPosn);
 
     rmt::Vector tmpVect, tmpVect2, TriPts[3], TriNorm;//, TriCtr;
@@ -1261,6 +1264,7 @@ int IntersectManager::FindIntersection
     rmt::Vector&   orGroundPlanePosn
 )
 {
+    O3_MAIN_SCOPE(GroundQuery);
     SpatialNode& rCurrentLeaf = GetRenderManager()->pWorldScene()->mStaticTreeWalker.rSeekLeaf((Vector3f&)irPosn);
 
     rmt::Vector tmpVect, tmpVect2, TriPts[3], TriNorm;//, TriCtr;

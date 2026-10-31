@@ -53,6 +53,7 @@ jobs:
           node browser-builder/tests/languages-unit.mjs
           node browser-builder/tests/source-input.mjs
           node browser-builder/tests/zip-iso-unit.mjs
+          node browser-builder/tests/world-residency.mjs
       - name: HOME Menu artwork
         run: |
           python3 -m pip install Pillow==10.2.0
@@ -61,3 +62,27 @@ jobs:
         run: |
           python3 tools/3ds/tests/character_form.py
           python3 tools/3ds/tests/distance_haze.py
+      - name: World residency and transition safety
+        run: |
+          python3 -m pip install numpy
+          python3 tools/3ds/tests/world_residency.py
+          python3 tools/3ds/tests/world_residency_fixture.py
+          python3 tools/3ds/tests/world_residency_resolver.py
+          python3 tools/3ds/tests/world_resident_visibility.py
+          python3 tools/3ds/tests/world_tree_placement.py
+          python3 tools/3ds/tests/world_stress_plan.py
+          python3 tools/3ds/tests/world_reload_control.py
+          python3 tools/3ds/tests/world_zone_queue.py
+          python3 tools/3ds/tests/world_residency_install.py
+          python3 tools/3ds/tests/world_residency_provenance.py
+          python3 tools/3ds/tests/world_teleport_zone.py
+          python3 tools/3ds/tests/command_line_bounds.py
+          python3 tools/3ds/tests/iris_lighting.py
+          python3 tools/3ds/tests/letterbox_stage_lifetime.py
+          python3 tools/3ds/tests/linear_texture_retirement.py
+          python3 tools/3ds/tests/etc1_reupload.py
+          python3 tools/3ds/tests/parked_locator_removal.py
+          python3 tools/3ds/tests/mission_npc_residency.py
+          python3 tools/3ds/tests/suspension_stability.py
+          python3 tools/3ds/tests/native_record_scratch.py
+          python3 tools/3ds/tests/native_visual_capture.py
