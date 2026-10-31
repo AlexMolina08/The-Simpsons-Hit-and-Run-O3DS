@@ -35,9 +35,9 @@
     "--disable-avdevice",
     "--disable-postproc",
     "--enable-protocol=file,pipe",
-    "--enable-demuxer=bink,rsd,xmv,mpegvideo,wav,image2,png_pipe,bmp_pipe",
+    "--enable-demuxer=bink,rsd,xmv,ogg,mpegvideo,wav,image2,png_pipe,bmp_pipe",
     "--enable-muxer=mpeg1video,pcm_s16le,wav,null,image2",
-    "--enable-decoder=bink,wmv2,binkaudio_rdft,binkaudio_dct,pcm_s16le,pcm_s16be,pcm_u8,adpcm_ima_rad,adpcm_ima_wav,adpcm_psx,adpcm_dtk,mpeg1video,png,bmp,rawvideo",
+    "--enable-decoder=bink,wmv2,theora,vorbis,binkaudio_rdft,binkaudio_dct,pcm_s16le,pcm_s16be,pcm_u8,adpcm_ima_rad,adpcm_ima_wav,adpcm_psx,adpcm_dtk,mpeg1video,png,bmp,rawvideo",
     "--enable-encoder=mpeg1video,pcm_s16le,wrapped_avframe,png,bmp",
     "--enable-parser=mpegvideo,png",
     "--enable-filter=abuffer,abuffersink,buffer,buffersink,format,aformat,aresample,anull,null,fps,scale,pad,setsar,tpad,loudnorm,afade,areverse,atrim,trim",
@@ -55,15 +55,15 @@
   "files": {
     "ffmpeg-core.mjs": {
       "bytes": 82658,
-      "sha256": "4637137da371c8e2ab84fa9c2769b05eb856ff782c43002509122f28cf213a81"
+      "sha256": "1e176ed3b307c98ae9838fd8380ac2e5d3f411508e42d99decdeb93fdd0e91ad"
     },
     "ffmpeg-core.wasm": {
-      "bytes": 2294791,
-      "sha256": "e59e1618c4229b06eeae9a4a5551f6c5d3ffdf25351ca77b3f7e675c635f50ec"
+      "bytes": 2447573,
+      "sha256": "3fb4af9df19e5ec4c2e77b3e48b8f6c76fad9afcb736607758c1578ace383a9e"
     },
     "ffmpeg-sources.tar.gz": {
-      "bytes": 15953498,
-      "sha256": "ab0d380b886a9b3cbbebb2d53630549e63cc81452f83441330e59c9aa52a6c83"
+      "bytes": 15959582,
+      "sha256": "0b00f420b389bc52f24495e74e69515cccd7dba37da7b2067426e9ee7adea821"
     }
   }
 }

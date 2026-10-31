@@ -2,14 +2,14 @@
   "version": "1.2",
   "packedVersion": 1056,
   "titleID": "000400000f3a1100",
-  "sourceCommit": "08c145d0f0d1b98a08d5e1d524185c7552ada1cd",
-  "originalELFSHA256": "25572ba78c4b27037ce8b4d20ebc935f9f37c5c2971df4047072b998ea591e3c",
-  "runtimeSHA256": "1f285b26ffd45825ac70d00e19d9163acd916d9075ba1ea91030b174a1d4a8c2",
+  "sourceCommit": "72e41072069fe1a1625749e387d1a163ff11d816",
+  "originalELFSHA256": "072e4d9d43864114a13a505e80ac81a6e09d1de95705da2f6dc7cec09ec9756f",
+  "runtimeSHA256": "9e55741c5423fea1bd5c4500d9fecec245b302265ddf817b924507506d8327a1",
   "rsfSHA256": "f9c07188df6b236c7817d1af5a232ae4c3a5ff36751638fc737dc71f4f2ff1ec",
   "textureProfileSHA256": "64a6fc3fb428e4e699cb478ca159fafd250afe50e683223e2ffd3c5e4574801f",
-  "v12RecipeSHA256": "0a881428214cd814cd61ba6d9a62c5cd83b75742b52c85cfd1ae416b972cf753",
+  "v12RecipeSHA256": "a7735f995b0070e41102e84eacdcb302d506b6b9ecfe9fa47081cf4c8383164b",
   "v12RoundingsSHA256": "49e3fe2523d0739a06b9437b568a7e79ba76d169ba47ba22b3e721964f04a077",
-  "buildID": "e21dad36d79440f69aae6f5840af63bb885c858687e716d863b8578bd37a031b",
+  "buildID": "b873540a79f339c5f03ff81498b7e19e32d38009d64806f0405bd6294d4072dd",
   "minimumCIABytes": 1000000000,
   "files": {
     "THIRD_PARTY_NOTICES.md": {
@@ -73,24 +73,28 @@
       "sha256": "2b0d16abf02534c37ab23744ec47d356c0bb0d93b1adddf5feb9145e2d7c2c95"
     },
     "engine-conversion/v12-assets.py": {
-      "bytes": 16636,
-      "sha256": "6f72206e96682b8a42675460340184829fbca5cfb8ce555589c596229240d337"
+      "bytes": 19718,
+      "sha256": "1913acce1fefd78e676c71d9b6666de5c9d95ef18b3f765b47ddd7a8bab661d4"
     },
     "engine-conversion/v12-rounding.json": {
       "bytes": 23958,
       "sha256": "49e3fe2523d0739a06b9437b568a7e79ba76d169ba47ba22b3e721964f04a077"
     },
     "engine-conversion/v12.mjs": {
-      "bytes": 8878,
-      "sha256": "9ec8336d3337d2deb13bbb3dd15a0ae63deaaad73fea53619f6c5437730adbb7"
+      "bytes": 10177,
+      "sha256": "3fd56ec5bf5f286c432fe5a6eeb9f32a28524de8f1cc7c8774a6afc7e7c1c3c3"
+    },
+    "engine-conversion/world-residency.mjs": {
+      "bytes": 3394,
+      "sha256": "1cf5fee7ecedb74dde7e2bf28ada45012c722796c91260488f0fa441617537c3"
     },
     "ffmpeg-manifest.json": {
-      "bytes": 2297,
-      "sha256": "13a566c2f4460d590d718cf984b562932a2fde375284b5b0ff8cc637a099167a"
+      "bytes": 2315,
+      "sha256": "db0a1ab49ee16edf0435075e9f67430ed9c8dd3730d995357deab3fcaa31aab3"
     },
     "ffmpeg-sources.tar.gz": {
-      "bytes": 15953498,
-      "sha256": "ab0d380b886a9b3cbbebb2d53630549e63cc81452f83441330e59c9aa52a6c83"
+      "bytes": 15959582,
+      "sha256": "0b00f420b389bc52f24495e74e69515cccd7dba37da7b2067426e9ee7adea821"
     },
     "freearc-manifest.json": {
       "bytes": 881,
@@ -272,6 +276,10 @@
       "bytes": 5131,
       "sha256": "2b2d3eb6e75cfd015de27d6861081a7302fcd9549f960f553dd343c50f51f00e"
     },
+    "python/prepare_stream_probes.py": {
+      "bytes": 3867,
+      "sha256": "2db680be610e4238c365de26694bd8387633bbdd6d4b290edc3b8f6d65af5b23"
+    },
     "python/prepare_streaming_order.py": {
       "bytes": 7931,
       "sha256": "f9bd124d69dbe291e38e7c4725f673766b621889b7f498c1b830776b5aecfb36"
@@ -279,6 +287,10 @@
     "python/prepare_vehicle_reflections.py": {
       "bytes": 3118,
       "sha256": "6603a6e11a9b6bf5559a7a8010a0112be4fc2809c5fcde5d0a29fe8116570b9c"
+    },
+    "python/prepare_world_residency.py": {
+      "bytes": 29879,
+      "sha256": "a61c8e090fb0909cdd29b0f6602f97ba1d93c0cd321d9382b51b9ef6aa0a8a23"
     },
     "python/prepare_world_sun.py": {
       "bytes": 8801,
@@ -293,8 +305,8 @@
       "sha256": "c26988ad003440081c38e6db60b57b33bf163139a386391a5b1796536f0ca5e8"
     },
     "runtime.elf": {
-      "bytes": 8105116,
-      "sha256": "1f285b26ffd45825ac70d00e19d9163acd916d9075ba1ea91030b174a1d4a8c2"
+      "bytes": 8128764,
+      "sha256": "9e55741c5423fea1bd5c4500d9fecec245b302265ddf817b924507506d8327a1"
     },
     "service-worker.mjs": {
       "bytes": 2353,
@@ -333,8 +345,8 @@
       "sha256": "c77b04c50e3d3d2ef0d5bd364669a4100bac514c421116c73698ca7423c87b12"
     },
     "v12-recipe.json": {
-      "bytes": 451555,
-      "sha256": "0a881428214cd814cd61ba6d9a62c5cd83b75742b52c85cfd1ae416b972cf753"
+      "bytes": 2367096,
+      "sha256": "a7735f995b0070e41102e84eacdcb302d506b6b9ecfe9fa47081cf4c8383164b"
     },
     "vendor/bannertool.mjs": {
       "bytes": 72755,
@@ -354,11 +366,11 @@
     },
     "vendor/ffmpeg-core.js": {
       "bytes": 82658,
-      "sha256": "4637137da371c8e2ab84fa9c2769b05eb856ff782c43002509122f28cf213a81"
+      "sha256": "1e176ed3b307c98ae9838fd8380ac2e5d3f411508e42d99decdeb93fdd0e91ad"
     },
     "vendor/ffmpeg-core.wasm": {
-      "bytes": 2294791,
-      "sha256": "e59e1618c4229b06eeae9a4a5551f6c5d3ffdf25351ca77b3f7e675c635f50ec"
+      "bytes": 2447573,
+      "sha256": "3fb4af9df19e5ec4c2e77b3e48b8f6c76fad9afcb736607758c1578ace383a9e"
     },
     "vendor/freearc-codec.mjs": {
       "bytes": 71205,
