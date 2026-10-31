@@ -69,9 +69,12 @@ Focused checks cover mission-model arrival and cleanup, parked suspension,
 allocation failures, resource integrity and save preservation.
 
 Performance remains a separate limit. Recent 45-second stereo driving stress
-runs averaged about 21–25 FPS across the seven levels. An earlier normal Level 2
-manual drive measured about 26 FPS. These routes differ and do not establish a
-performance comparison or a game-wide 26–30 FPS result.
+runs averaged about 21–25 FPS across the seven levels. Normal release-build Level 2 manual drives measured
+26.23 FPS in mono and 26.46 FPS in stereo. A Level 7 stereo interval measured
+25.45–26.09 FPS within the endpoint timing bounds. Both used bundled residency;
+the required static objects stayed bound and the saves stayed unchanged. These
+routes differ from the stress tests and do not establish a matched performance
+comparison or a game-wide 26–30 FPS result.
 
 Host regression checks under `tools/3ds/tests/` cover admission, native/browser
 asset parity, resource identity, visibility, queue ownership, level teardown,
