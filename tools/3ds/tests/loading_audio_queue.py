@@ -21,6 +21,7 @@ def function(source, signature):
 drive = (root/'libs/radcore/src/radfile/common/drivethread.cpp').read_text()
 requests = (root/'libs/radcore/src/radfile/common/requests.cpp').read_text()
 audio = (root/'libs/radsound/src/radsound/rsdfiledatasource.cpp').read_text()
+files = (root/'libs/radcore/src/radfile/common/file.cpp').read_text()
 start = audio.index('::radFileOpen(')
 audio_open = audio[start:audio.index(');', start)+2]
 start = drive.index('case radDrive::MoreToDo:')
@@ -55,13 +56,25 @@ struct radDrive {
  radCementLibraryList* GetLibraryList(){return &libraries;}
  CompletionStatus OpenFile(const char*,int,bool,int*,unsigned*){return result;}
  Media* GetMediaInfo(){return &media;}int GetLastError(){return Success;}
+ radDriveThread* queue=nullptr;
+ void QueueRequest(radRequest* request,radFilePriority priority){assert(queue);queue->QueueRequest(request,priority,false);}
 };
+using radMemorySpace=int;
+constexpr int radMemorySpace_Null=-1;
 struct radFile {
  radDrive* m_pDrive;const char* m_Filename="art/l2_TERRA.p3d";bool m_WriteAccess=false,m_IsOpen=false;
  radFile* m_pOriginalFile=nullptr;int m_Handle=0;unsigned m_Size=0,m_BaseOffset=0,m_OptimalSize=0;
  struct Cache {unsigned initialized=0;void DoInit(unsigned,const char*){++initialized;}} m_FileCache;
  void AddRef(){}
+ radFilePriority m_Priority=NormalPriority;
+ void ReadAsync(void*,unsigned,radMemorySpace);
 };
+struct FileReadRequest:radRequest {
+ radFile* file;void* target;unsigned bytes;radMemorySpace space;
+ FileReadRequest(radFile* f,void* t,unsigned b,radMemorySpace s):file(f),target(t),bytes(b),space(s){}
+};
+#define rAssert assert
+''' + function(files, 'void radFile::ReadAsync') + r'''
 bool IsStringKey(const char*){return false;}
 #define rAssertMsg(condition,message) assert(condition)
 struct FileOpenRequest {
@@ -110,6 +123,27 @@ int main(){
  assert(queue.NextRequest(&priority)==&music && priority==NormalPriority);
 #endif
  assert(!queue.NextRequest(nullptr));
+ // Subsequent stream refills retain priority, rather than only the initial open.
+ radDrive streamingDrive;streamingDrive.queue=&queue;radFile stream{&streamingDrive};
+ AudioOpen(true);stream.m_Priority=capturedPriority;unsigned char data[32768];
+ for(unsigned refill=1;refill<=64;++refill){
+  queue.QueueRequest(&scenery,NormalPriority,false);
+  stream.ReadAsync(data,refill*256,0);
+#ifdef SRR2_OLD_3DS
+  auto* read=static_cast<FileReadRequest*>(queue.NextRequest(&priority));
+  assert(priority==HighPriority);
+#else
+  assert(queue.NextRequest(&priority)==&scenery && priority==NormalPriority);
+  auto* read=static_cast<FileReadRequest*>(queue.NextRequest(&priority));
+  assert(priority==NormalPriority);
+#endif
+  assert(read->file==&stream && read->target==data && read->bytes==refill*256 && read->space==0);
+  delete read;
+#ifdef SRR2_OLD_3DS
+  assert(queue.NextRequest(&priority)==&scenery && priority==NormalPriority);
+#endif
+  assert(!queue.NextRequest(nullptr));
+ }
  puts("PASS: actual priority argument, pending-open boundary and requeued drive scheduling.");
 }
 '''
