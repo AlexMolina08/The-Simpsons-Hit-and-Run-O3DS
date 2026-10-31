@@ -45,6 +45,30 @@ int main()
     scroll.Drag(20,6,600);assert(scroll.Value(600)==1);
     scroll.Drag(20,5,600);assert(scroll.Value(600)==0);
     scroll.Follow(5,6,0xfffffff0u);assert(scroll.Value(0x68)==1);
+    // Mission seven stays in the same clipped list. Controller selection follows
+    // the viewport, while touch hit testing uses its current animated position.
+    for(int count=1;count<=8;++count){
+        MenuScroll missions;
+        for(int row=0;row<count;++row){
+            const unsigned now=1000+row*200;
+            missions.Follow(row,count,now,MissionPageSize);
+            const auto r=MissionItem(row,missions.Value(now+120));
+            assert(r.top>=MissionViewport.top && r.bottom<=MissionViewport.bottom);
+            assert(MissionHit(160,(r.top+r.bottom)/2,count,missions.Value(now+120))==row);
+        }
+        missions.Follow(0,count,3000,MissionPageSize);
+        assert(missions.Value(3120)==0);
+        missions.Drag(100,count,3200,MissionPageSize);
+        assert(missions.Value(3200)==float(count>MissionPageSize?count-MissionPageSize:0));
+        for(float position=0;position<=MenuScroll::Clamp(100,count,MissionPageSize);position+=0.25f)
+            for(int y=0;y<240;++y)for(int x=0;x<320;++x){
+                int expected=-1;
+                if(MissionViewport.Contains(x,y))
+                    for(int row=0;row<count;++row)if(MissionItem(row,position).Contains(x,y))expected=row;
+                assert(MissionHit(x,y,count,position)==expected);
+                if(y<32 || y>=212)assert(expected==-1);
+            }
+    }
     TouchOwner owner;int screenA=0,screenB=0,menuA=0;
     assert(owner.Update(&screenA,&menuA) && owner.epoch==1);
     assert(!owner.Update(&screenA,&menuA) && owner.epoch==1);

@@ -3513,6 +3513,24 @@ extern "C" bool picaBottomScreenInterfaceBegin(void)
     return s_picaContext && s_picaContext->BeginBottomScreen(0,0,1,1,false);
 }
 
+extern "C" void picaBottomScreenBlack(void)
+{
+    if(!s_picaContext || !s_picaContext->BeginBottomScreen(0,0,1,1,false))return;
+    // Submit a real draw on an otherwise empty display. Memory fill alone does
+    // not bind its framebuffer or replace a preceding cached render surface.
+    s_picaContext->PushState(PDDI_STATE_ALL);
+    s_picaContext->SetViewWindow(0,0,1,1);
+    pddiRect full={0,0,s_picaContext->GetDisplay()->GetWidth(),s_picaContext->GetDisplay()->GetHeight()};
+    s_picaContext->SetScissor(&full);
+    s_picaContext->EnableFog(false);
+    s_picaContext->EnableStencilBuffer(false);
+    s_picaContext->SetColourWrite(true,true,true,true);
+    s_picaContext->SetClearColour(pddiColour(0,0,0));
+    s_picaContext->Clear(PDDI_BUFFER_COLOUR);
+    s_picaContext->PopState(PDDI_STATE_ALL);
+    s_picaContext->EndBottomScreen();
+}
+
 extern "C" void picaBottomScreenPanel(int selection,int count)
 {
     if(s_picaContext)s_picaContext->DrawBottomPanel(selection,count);

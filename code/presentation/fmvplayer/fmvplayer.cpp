@@ -196,7 +196,12 @@ void FMVPlayer::Play()
     {
         AnimationPlayer::Play();
 		FadeScreen(0.0f);
-		p3d::context->SwapBuffers();
+#ifdef RAD_3DS
+    // Movie transitions can close a frame before the regular render loop.
+    // Publish immediate vertices before SwapBuffers submits the GPU commands.
+    p3d::pddi->EndFrame();
+#endif
+    p3d::context->SwapBuffers();
 		p3d::display->SetForceVSync(true);
 #ifdef FINAL
 		m_UserInputHandler->SetEnabled(GetSkippable());
@@ -246,6 +251,11 @@ void FMVPlayer::Stop()
 { 
 	// Force a clear screen.
 	FadeScreen(0.0f);
+#ifdef RAD_3DS
+    // Movie transitions can close a frame before the regular render loop.
+    // Publish immediate vertices before SwapBuffers submits the GPU commands.
+    p3d::pddi->EndFrame();
+#endif
     p3d::context->SwapBuffers();
 	p3d::display->SetForceVSync(false);
     if( this->IsPlaying() && m_refIRadMoviePlayer != NULL )

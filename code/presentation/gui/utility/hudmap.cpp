@@ -105,6 +105,7 @@ extern "C" void picaBottomScreenFrame( void );
 extern "C" void picaBottomScreenStatic( void );
 extern "C" void picaBottomScreenPanel( int selection, int count );
 extern "C" bool picaBottomScreenInterfaceBegin( void );
+extern "C" void picaBottomScreenBlack(void);
 #ifdef SRR2_OLD_3DS
 extern "C" bool picaStereoObjectBegin(float screenDistance);
 extern "C" void picaStereoObjectEnd(void);
@@ -1367,6 +1368,22 @@ namespace
         return s_mainScroll.Value(now);
     }
 
+    picaBottomFrame::MenuScroll s_missionScroll;
+    bool s_missionDragging=false,s_missionFollowing=true;
+    unsigned s_missionEpoch=~0u;
+    int s_missionCount=0;
+    float MissionScrollPosition(int row,int count)
+    {
+        const unsigned now=static_cast<unsigned>(osGetTime());
+        if(s_missionEpoch!=s_touchOwner.epoch || s_missionCount!=count){
+            s_missionEpoch=s_touchOwner.epoch;s_missionCount=count;s_missionDragging=false;s_missionFollowing=true;
+            s_missionScroll=picaBottomFrame::MenuScroll();
+            s_missionScroll.Drag(float(row>=picaBottomFrame::MissionPageSize?row-picaBottomFrame::MissionPageSize+1:0),count,now,picaBottomFrame::MissionPageSize);
+        }
+        if(!s_missionDragging && s_missionFollowing)s_missionScroll.Follow(row,count,now,picaBottomFrame::MissionPageSize);
+        return s_missionScroll.Value(now);
+    }
+
     bool s_phonePreviewVisible=false;
 
     CGuiScreen* CurrentBottomScreen()
@@ -2386,7 +2403,7 @@ namespace
         p3d::pddi->SetCamera(0.1f,10,1.5708f,4.0f/3);p3d::pddi->SetProjectionMode(PDDI_PROJECTION_PERSPECTIVE);
         p3d::stack->LoadIdentity();p3d::stack->Translate(-0.5f,-0.375f,0.5f);
         // A small port-source credit keeps redistributed builds identifiable.
-        const char* lines[]={"3DS port by AlexMolina08","github.com/AlexMolina08"};
+        const char* lines[]={"3DS port by","github.com/AlexMolina08"};
         for(unsigned i=0;i<2;++i){
             P3D_UNICODE attribution[64];NativeCaption(lines[i],attribution,64);
             const float height=10,width=font->GetTextWidth(attribution)*height/font->GetFontHeight();
@@ -2670,6 +2687,7 @@ namespace
         {
             DrawBottomStartupAttribution(view);return;
         }
+        if(movie){picaBottomScreenBlack();return;}
         // Cinematics and boot artwork belong to the upper display only.
         if( view == NULL || screen == NULL || movie || (!loading && !tutorial && !stats && !gameStats && !briefing && !messageOnly && !gallery && !conversation && !credits && !screen->HasMenu()) )
         {
@@ -2694,9 +2712,11 @@ namespace
         const int focus=mainMenu?selection:menu?menu->GetSelection():-1;
         if(s_focusScreen!=screen || s_focusSelection!=focus){s_focusScreen=screen;s_focusSelection=focus;s_focusTick=svcGetSystemTick();s_textScrollDelta=0;}
         const bool grid=PauseGrid(screen),tv=Television(screen);
+        const bool missionList=id==CGuiWindow::GUI_SCREEN_ID_MISSION_SELECT;
         const int pageSize=tv?picaBottomFrame::TVPageSize:6;
-        const int first=grid ? 0 : selectedRow>=0 ? (selectedRow/pageSize)*pageSize : 0;
-        const int visibleRows=grid ? rowCount : rowCount-first<pageSize ? rowCount-first : pageSize;
+        const int first=grid || missionList ? 0 : selectedRow>=0 ? (selectedRow/pageSize)*pageSize : 0;
+        const int visibleRows=grid || missionList ? rowCount : rowCount-first<pageSize ? rowCount-first : pageSize;
+        const float missionScroll=missionList?MissionScrollPosition(selectedRow,rowCount):0;
         if( !picaBottomScreenInterfaceBegin() ) return;
         NativeViewPass nativePass(view);
         picaBottomScreenPanel(-1,0);
@@ -2828,6 +2848,7 @@ namespace
                 if(reason)Wrapped(hintFont,reason->GetStringBuffer(),16,42,288,16,2,White);
                 if(hint)Wrapped(hintFont,hint->GetStringBuffer(),16,80,288,14,2,White);
             }
+            if(missionList)ClipRegion(picaBottomFrame::MissionViewport);
             for( int row=0;row<visibleRows;++row )
             {
                 const int index=rows[first+row];
@@ -2836,8 +2857,9 @@ namespace
                 Scrooby::Text* value=dynamic_cast<Scrooby::Text*>(item->GetItemValue());
                 const bool slider=item->m_slider.m_pPolygon || item->m_slider.m_pImage;
                 const bool separate=value && value!=label;
-                const picaBottomFrame::Rect rect=grid ? picaBottomFrame::PauseItem(row,visibleRows) :
-                    NativeMenuItem(screen,row,visibleRows);
+                const picaBottomFrame::Rect rect=missionList ? picaBottomFrame::MissionItem(row,missionScroll) :
+                    grid ? picaBottomFrame::PauseItem(row,visibleRows) : NativeMenuItem(screen,row,visibleRows);
+                if(missionList && (rect.bottom<=picaBottomFrame::MissionViewport.top || rect.top>=picaBottomFrame::MissionViewport.bottom))continue;
                 if(tv){TVRow(rect,first+row==selectedRow,Pressed(menu,index));
                     if(first+row==selectedRow)DirectionIcon(true,51,(rect.top+rect.bottom)*0.5f);}
                 else Tile(rect,first+row==selectedRow,menu->IsMenuItemEnabled(index),Pressed(menu,index));
@@ -2876,7 +2898,6 @@ namespace
                     if(width>230)width=230;
                     x=(320-width)*0.5f;
                 }
-                const bool missionList=id==CGuiWindow::GUI_SCREEN_ID_MISSION_SELECT;
                 const float valueLeft=tv?rect.right-10-valueWidth:202;
                 BottomLabel(label->GetFont(),label->GetStringBuffer(),x,stacked?rect.top+12:y,height,colour,
                     grid ? rect.right-x-8 : missionList?188:tv?(separate&&!stacked?valueLeft-x-8:slider?120:rect.right-x-8):separate || slider ? 170 : 272);
@@ -2899,7 +2920,15 @@ namespace
                     Disc(left+width*item->m_slider.m_value,middle,radius,White);
                 }
             }
-            if(id==CGuiWindow::GUI_SCREEN_ID_MISSION_SELECT){
+            if(missionList){
+                ClipRegion({0,0,320,240});
+                if(rowCount>picaBottomFrame::MissionPageSize){
+                    const float height=picaBottomFrame::MissionViewport.bottom-picaBottomFrame::MissionViewport.top;
+                    const float thumb=height*picaBottomFrame::MissionPageSize/rowCount;
+                    const float top=picaBottomFrame::MissionViewport.top+(height-thumb)*missionScroll/(rowCount-picaBottomFrame::MissionPageSize);
+                    Fill(307,picaBottomFrame::MissionViewport.top,309,picaBottomFrame::MissionViewport.bottom,tColour(115,105,142,100));
+                    Fill(307,top,309,top+thumb,Gold);
+                }
                 Scrooby::Text* level=FindText(screen->GetScroobyScreen(),"Level");
                 if(level)BottomLabel(hintFont,level->GetStringBuffer(),240,23,15,Gold,48);
                 DirectionIcon(false,226,17);DirectionIcon(true,305,17);
@@ -3156,6 +3185,7 @@ bool CHudMap::HandleMenuInput3DS(CGuiMenu* menu,int rawMessage)
     if(!screen || screen->HasMenu()!=menu || !screen->IsRunning() || menu->HasSelectionBeenMade())return false;
     const bool main=screen->GetWindowID()==CGuiWindow::GUI_SCREEN_ID_MAIN_MENU;
     const bool rewards=Rewards(screen),tv=Television(screen);
+    const bool missionList=screen->GetWindowID()==CGuiWindow::GUI_SCREEN_ID_MISSION_SELECT;
 
     int rows[64];int count=MenuRows(menu,rows);
     const bool sprites=count==0;
@@ -3166,6 +3196,7 @@ bool CHudMap::HandleMenuInput3DS(CGuiMenu* menu,int rawMessage)
     int selected=0;if(!main)for(int i=0;i<count;++i)if(rows[i]==menu->GetSelection())selected=i;
     if(main)selected=picaBottomFrame::MainRow(menu->GetSelectionValue(0),count);
     const eGuiMessage message=static_cast<eGuiMessage>(rawMessage);
+    if(missionList && message>=GUI_MSG_CONTROLLER_UP && message<=GUI_MSG_CONTROLLER_RIGHT)s_missionFollowing=true;
     if(main && menu->GetSelection()==0 && message>=GUI_MSG_CONTROLLER_UP && message<=GUI_MSG_CONTROLLER_RIGHT){
         const int direction=message==GUI_MSG_CONTROLLER_UP || message==GUI_MSG_CONTROLLER_LEFT?-1:1;
         const int next=(selected+direction+count)%count;
@@ -3187,18 +3218,21 @@ bool CHudMap::HandleMenuInput3DS(CGuiMenu* menu,int rawMessage)
     static CGuiMenu* gestureMenu=NULL;static int pressed=-1;
     static bool active=false,sliderDrag=false;static int sliderItem=-1,lastHit=-1,startY=0,lastY=0,lastX=0;
     static picaBottomFrame::TouchEdges edges;static unsigned epoch=~0u;
-    if(gestureMenu!=menu || epoch!=s_touchOwner.epoch){gestureMenu=menu;epoch=s_touchOwner.epoch;pressed=-1;active=false;sliderDrag=false;sliderItem=-1;s_pressedMenu=NULL;s_pressedItem=-1;s_mainDragging=false;edges.Reset((hidKeysHeld()&KEY_TOUCH)!=0);}
+    if(gestureMenu!=menu || epoch!=s_touchOwner.epoch){gestureMenu=menu;epoch=s_touchOwner.epoch;pressed=-1;active=false;sliderDrag=false;sliderItem=-1;s_pressedMenu=NULL;s_pressedItem=-1;s_mainDragging=false;s_missionDragging=false;edges.Reset((hidKeysHeld()&KEY_TOUCH)!=0);}
     edges.Update((hidKeysHeld()&KEY_TOUCH)!=0);
     touchPosition touch;hidTouchRead(&touch);
-    const int pageSize=sprites?8:tv?picaBottomFrame::TVPageSize:6;
-    const int first=main?0:(selected/pageSize)*pageSize,visible=count-first<pageSize?count-first:pageSize;
+    const int pageSize=missionList?picaBottomFrame::MissionPageSize:sprites?8:tv?picaBottomFrame::TVPageSize:6;
+    const int first=main || missionList?0:(selected/pageSize)*pageSize,visible=missionList?count:count-first<pageSize?count-first:pageSize;
     const float mainScroll=main?MainScrollPosition(menu):0;
-    static float mainDragStart=0;static bool mainDragAllowed=false;
+    const float missionScroll=missionList?MissionScrollPosition(selected,count):0;
+    static float mainDragStart=0,missionDragStart=0;
+    static bool mainDragAllowed=false,missionDragAllowed=false;
     int hit=-1;
     if(PauseGrid(screen))hit=picaBottomFrame::PauseHit(touch.px,touch.py,count);
     else for(int row=0;row<visible;++row)
         if(NativeMenuItem(screen,row,visible).Contains(touch.px,touch.py)){hit=row;break;}
     if(main && tv)hit=picaBottomFrame::MainHit(touch.px,touch.py,count,mainScroll);
+    if(missionList)hit=picaBottomFrame::MissionHit(touch.px,touch.py,count,missionScroll);
     if(sprites)hit=tv?picaBottomFrame::TVThumbnailHit(touch.px,touch.py,visible):picaBottomFrame::ThumbnailHit(touch.px,touch.py,visible);
     if(tv && picaBottomFrame::Rect{44,190,276,208}.Contains(touch.px,touch.py))hit=touch.px>=220?
         (screen->IsButtonVisible(BUTTON_ICON_BACK)?201:-1):
@@ -3220,7 +3254,12 @@ bool CHudMap::HandleMenuInput3DS(CGuiMenu* menu,int rawMessage)
             s_mainScroll.Drag(mainDragStart+(startY-lastY)/26.0f,count,static_cast<unsigned>(osGetTime()));
             lastHit=-1;s_pressedMenu=NULL;s_pressedItem=-1;
         }
-        if(active && !s_mainDragging){s_pressedMenu=menu;s_pressedItem=hit==pressed?(main?menu->GetSelectionValue(0):menu->GetSelection()):-1;}
+        if(active && missionDragAllowed && abs(lastY-startY)>6){
+            s_missionDragging=true;s_missionFollowing=false;
+            s_missionScroll.Drag(missionDragStart+(startY-lastY)/float(picaBottomFrame::MenuRowHeight),count,static_cast<unsigned>(osGetTime()),pageSize);
+            lastHit=-1;s_pressedMenu=NULL;s_pressedItem=-1;
+        }
+        if(active && !s_mainDragging && !s_missionDragging){s_pressedMenu=menu;s_pressedItem=hit==pressed?(main?menu->GetSelectionValue(0):menu->GetSelection()):-1;}
 
         if(active && sliderDrag && pressed>=0 && hit==pressed && !main && !sprites && !rewards &&
            hit>=0 && hit<(PauseGrid(screen)?count:visible)){
@@ -3236,11 +3275,14 @@ bool CHudMap::HandleMenuInput3DS(CGuiMenu* menu,int rawMessage)
         active=true;sliderDrag=false;sliderItem=-1;pressed=hit;startY=touch.py;lastY=touch.py;lastX=touch.px;
         if(main){s_mainDragging=false;mainDragStart=mainScroll;}
         mainDragAllowed=main && tv && picaBottomFrame::Rect{44,58,276,188}.Contains(touch.px,touch.py);
+        missionDragAllowed=missionList && picaBottomFrame::MissionViewport.Contains(touch.px,touch.py);
+        if(missionList){s_missionDragging=false;missionDragStart=missionScroll;}
         s_pressedMenu=menu;s_pressedItem=menu->GetSelection();
         if(hit>=0){const int index=PauseGrid(screen)?hit:first+hit;
             if(rewards || hit>=200){s_pressedItem=-1;}
             else if(main){const int value=picaBottomFrame::MainChoice(hit,count);menu->SetHandheldSelection(0);menu->SetSelectionValue(0,value);s_pressedItem=value;}
             else if(menu->IsMenuItemEnabled(rows[index])){
+                if(missionList)s_missionFollowing=true;
                 menu->SetHandheldSelection(rows[index]);
                 GuiMenuItem* item=menu->GetMenuItem(rows[index]);
                 sliderItem=(item->m_slider.m_pPolygon || item->m_slider.m_pImage)?rows[index]:-1;
@@ -3257,12 +3299,26 @@ bool CHudMap::HandleMenuInput3DS(CGuiMenu* menu,int rawMessage)
             else if(selected>=firstRow+5)menu->SetSelectionValue(0,picaBottomFrame::MainChoice(firstRow+4,count));
             return false;
         }
+        if(missionList && s_missionDragging){
+            s_missionDragging=false;
+            const unsigned now=static_cast<unsigned>(osGetTime());
+            const int top=int(s_missionScroll.Value(now)+0.5f);
+            s_missionScroll.Move(float(top),count,now,pageSize);
+            int next=selected<top?top:selected>=top+pageSize?top+pageSize-1:selected;
+            if(!menu->IsMenuItemEnabled(rows[next])){
+                next=-1;
+                for(int row=top;row<count && row<top+pageSize;++row)
+                    if(menu->IsMenuItemEnabled(rows[row])){next=row;break;}
+            }
+            if(next>=0){menu->SetHandheldSelection(rows[next]);s_missionFollowing=true;}
+            return false;
+        }
         if(sliderItem>=0){
             screen->HandleMessage(GUI_MSG_MENU_SLIDER_NOT_CHANGING,sliderItem);
             sliderItem=-1;sliderDrag=false;return false;
         }
         if(Question(screen) && previous<0 && abs(lastY-startY)>20){s_textScrollDelta=lastY<startY?2:-2;return false;}
-        if(!main && !rewards && !PauseGrid(screen) && count>pageSize && abs(lastY-startY)>32){
+        if(!main && !missionList && !rewards && !PauseGrid(screen) && count>pageSize && abs(lastY-startY)>32){
             int next=lastY<startY?first+pageSize:first-1;
             if(next<0)next=0;if(next>=count)next=count-1;
             menu->SetHandheldSelection(rows[next]);return false;

@@ -46,15 +46,23 @@ inline int MainRow(int value,int count){for(int row=0;row<count;++row)if(MainCho
 struct MenuScroll {
     float from=0,target=0;unsigned started=0;
     float Value(unsigned now) const {float t=(now-started)/120.0f;if(t>1)t=1;return from+(target-from)*t*t*(3-2*t);}
-    static float Clamp(float next,int count){const float maximum=count>5?count-5:0;return next<0?0:next>maximum?maximum:next;}
-    void Move(float next,int count,unsigned now){next=Clamp(next,count);if(next!=target){from=Value(now);target=next;started=now;}}
-    void Follow(int row,int count,unsigned now){if(row<target)Move(float(row),count,now);else if(row>=target+5)Move(float(row-4),count,now);}
-    void Drag(float next,int count,unsigned now){from=target=Clamp(next,count);started=now;}
+    static float Clamp(float next,int count,int visible=5){const float maximum=count>visible?count-visible:0;return next<0?0:next>maximum?maximum:next;}
+    void Move(float next,int count,unsigned now,int visible=5){next=Clamp(next,count,visible);if(next!=target){from=Value(now);target=next;started=now;}}
+    void Follow(int row,int count,unsigned now,int visible=5){if(row<target)Move(float(row),count,now,visible);else if(row>=target+visible)Move(float(row-visible+1),count,now,visible);}
+    void Drag(float next,int count,unsigned now,int visible=5){from=target=Clamp(next,count,visible);started=now;}
 };
 inline Rect MainItem(int row,float scroll){const int y=58+row*26-int(scroll*26+0.5f);return {44,y,276,y+24};}
 inline int MainHit(int x,int y,int count,float scroll){
     if(x<44 || x>=276 || y<58 || y>=188)return -1;
     for(int row=0;row<count;++row)if(MainItem(row,scroll).Contains(x,y))return row;
+    return -1;
+}
+constexpr int MissionPageSize=6;
+constexpr Rect MissionViewport={12,40,308,208};
+inline Rect MissionItem(int row,float scroll){const int y=MissionViewport.top+row*MenuRowHeight-int(scroll*MenuRowHeight+0.5f);return {12,y,304,y+MenuRowHeight-4};}
+inline int MissionHit(int x,int y,int count,float scroll){
+    if(!MissionViewport.Contains(x,y))return -1;
+    for(int row=0;row<count;++row)if(MissionItem(row,scroll).Contains(x,y))return row;
     return -1;
 }
 // Original TV artwork leaves this native-pixel glass area clear of its bezel.

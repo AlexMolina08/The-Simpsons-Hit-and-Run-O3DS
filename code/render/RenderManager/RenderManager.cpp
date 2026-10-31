@@ -2,6 +2,7 @@
 extern "C" void picaWorldBegin(void);
 extern "C" void picaWorldEnd(void);
 extern "C" bool picaBottomScreenInterfaceBegin(void);
+extern "C" void picaBottomScreenBlack(void);
 extern "C" void picaBottomScreenEnd(void);
 #endif
 //=============================================================================
@@ -599,7 +600,7 @@ void RenderManager::ContextUpdate( unsigned int iElapsedTime )
 #ifdef SRR2_OLD_3DS
     if(dormantMovieHud)
     {
-        if(picaBottomScreenInterfaceBegin()) picaBottomScreenEnd();
+        picaBottomScreenBlack();
     }
     else
 #endif

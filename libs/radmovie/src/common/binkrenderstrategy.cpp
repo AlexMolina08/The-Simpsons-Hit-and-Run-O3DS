@@ -277,6 +277,24 @@ bool radMovieRenderStrategyBink::Render( void )
     // some camera settings
     p3d::pddi->PushState(PDDI_STATE_ALL);
     p3d::pddi->PushIdentityMatrix(PDDI_MATRIX_MODELVIEW);
+    #ifdef RAD_3DS
+    // A movie owns the whole display, including the unused aspect-ratio bars.
+    // Do not inherit the preceding GUI/world depth, clipping or fog state.
+    p3d::pddi->SetViewWindow(0.0f, 0.0f, 1.0f, 1.0f);
+    pddiRect movieScissor = {0, 0, p3d::display->GetWidth(), p3d::display->GetHeight()};
+    p3d::pddi->SetScissor(&movieScissor);
+    p3d::pddi->SetCamera(0.1f, 10.0f, 1.0f,
+        float(p3d::display->GetWidth()) / p3d::display->GetHeight());
+    p3d::pddi->EnableZBuffer(false);
+    p3d::pddi->SetZWrite(false);
+    p3d::pddi->EnableStencilBuffer(false);
+    p3d::pddi->EnableFog(false);
+    p3d::pddi->SetColourWrite(true, true, true, true);
+    p3d::pddi->SetClearColour(tColour(0, 0, 0));
+    p3d::pddi->Clear(PDDI_BUFFER_COLOUR);
+    m_pShader->SetInt(PDDI_SP_ISLIT, 0);
+    m_pShader->SetInt(PDDI_SP_ALPHATEST, 0);
+    #endif
     #ifdef RAD_WIN32
     p3d::pddi->SetProjectionMode(PDDI_PROJECTION_DEVICE);
     #else

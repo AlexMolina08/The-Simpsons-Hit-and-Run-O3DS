@@ -70,6 +70,16 @@ struct Srr2FileGate
     ~Srr2FileGate() { LightLock_Unlock( &s_FileGate ); }
 };
 
+#ifdef SRR2_OLD3DS_WORLD_RESIDENCY
+// Admission hashes independent, read-only FILE streams. Holding the tracked-file
+// lock here prevents the music streamer from refilling its looping buffer.
+struct Srr2FileGateRelease
+{
+    Srr2FileGateRelease()  { LightLock_Unlock( &s_FileGate ); }
+    ~Srr2FileGateRelease() { LightLock_Lock( &s_FileGate ); }
+};
+#endif
+
 static void srr2TrackOpen( void* handle, const char* path, const char* mode )
 {
     for( int i = 0; i < SRR2_MAX_TRACKED_FILES; i++ )
@@ -406,7 +416,11 @@ radDrive::CompletionStatus radSdlDrive::OpenFile
         if(!strncasecmp(relative,"art",3) && (relative[3]=='/' || relative[3]=='\\')){
             const char* name=relative+4;
             for(const char* canonical:WorldResidencyAssets::Files)if(!strcasecmp(name,canonical)){
-                if(!old3dsWorldResidencyAdmit(WorldResidencyAssets::Level(canonical)))break;
+                const bool admitted = [&] {
+                    Srr2FileGateRelease allowAudioReads;
+                    return old3dsWorldResidencyAdmit(WorldResidencyAssets::Level(canonical));
+                }();
+                if(!admitted)break;
                 char prepared[radFileFilenameMax+1];const int size=snprintf(prepared,sizeof(prepared),"%s/art/%s",residentRoot,canonical);
                 if(size<=0 || unsigned(size)>=sizeof(prepared))return Error;
                 *pHandle=SDL_RWFromFile(prepared,createFlags);
