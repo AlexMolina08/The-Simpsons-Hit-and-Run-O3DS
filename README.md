@@ -2,7 +2,15 @@
 
 A homebrew port for Nintendo 3DS and 2DS, including the original models. It also runs on New 3DS systems. You need your own PC copy of the game.
 
-## Browser builder
+<div align="center">
+  <h2>THE NEXT RELEASE</h2>
+  <h1>The Simpsons: Hit &amp; Run 3DS v1.2</h1>
+  <h1>⏳ <kbd><relative-time datetime="2026-11-01T07:45:00Z">About 12 hours away</relative-time></kbd></h1>
+  <p>Public release planned for 1 November 2026 at 08:45 CET.</p>
+  <p><a href="https://github.com/AlexMolina08/The-Simpsons-Hit-and-Run-O3DS/releases">Watch the releases</a></p>
+</div>
+
+## Experimental browser builder
 
 [Open the browser builder](https://alexmolina08.github.io/The-Simpsons-Hit-and-Run-O3DS/) to create an installable CIA from your PC copy:
 
@@ -10,7 +18,7 @@ A homebrew port for Nintendo 3DS and 2DS, including the original models. It also
 2. If your copy includes several languages, choose the one you want.
 3. Select **Build CIA**, then **Save CIA** when it finishes.
 
-The builder detects English, French and Spanish copies. Your game files stay on your device. Allow at least **8 GB** of free space and keep the tab open while it works.
+The builder is experimental. It detects English, French and Spanish copies. Your game files stay on your device. Allow at least **8 GB** of free space and keep the tab open while it works.
 
 French and Spanish builds are still being validated on hardware. Developers can find setup instructions in [browser-builder/README.md](browser-builder/README.md).
 
