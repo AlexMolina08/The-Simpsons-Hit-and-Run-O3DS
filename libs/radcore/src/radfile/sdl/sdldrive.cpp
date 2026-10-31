@@ -416,11 +416,12 @@ radDrive::CompletionStatus radSdlDrive::OpenFile
         if(!strncasecmp(relative,"art",3) && (relative[3]=='/' || relative[3]=='\\')){
             const char* name=relative+4;
             for(const char* canonical:WorldResidencyAssets::Files)if(!strcasecmp(name,canonical)){
-                const bool admitted = [&] {
+                const int admitted = [&] {
                     Srr2FileGateRelease allowAudioReads;
-                    return old3dsWorldResidencyAdmit(WorldResidencyAssets::Level(canonical));
+                    return old3dsWorldResidencyAdmitStep(WorldResidencyAssets::Level(canonical));
                 }();
-                if(!admitted)break;
+                if(admitted==0)return MoreToDo;
+                if(admitted<0)break;
                 char prepared[radFileFilenameMax+1];const int size=snprintf(prepared,sizeof(prepared),"%s/art/%s",residentRoot,canonical);
                 if(size<=0 || unsigned(size)>=sizeof(prepared))return Error;
                 *pHandle=SDL_RWFromFile(prepared,createFlags);

@@ -17,11 +17,13 @@ code = r'''
 #include <string>
 #include <worldresidencyassets.hpp>
 const char* g_old3dsResidencyRoot=nullptr;
-static bool admitted=true,exists=true;
+static int admitted=1;
+static bool exists=true;
 static unsigned admissionCalls=0,lastLevel=0;
-extern "C" bool old3dsWorldResidencyAdmit(unsigned level){++admissionCalls;lastLevel=level;return admitted;}
+extern "C" int old3dsWorldResidencyAdmitStep(unsigned level){++admissionCalls;lastLevel=level;return admitted;}
+struct Srr2FileGateRelease {};
 static constexpr unsigned radFileFilenameMax=128;
-enum {OpenExisting,CreateAlways,FileNotFound,Error=-1};
+enum {OpenExisting,CreateAlways,FileNotFound,Error=-1,MoreToDo=-2};
 static int m_LastError=0;static std::string opened;
 void* SDL_RWFromFile(const char* path,const char*){opened=path;return exists?reinterpret_cast<void*>(1):nullptr;}
 static int select(const char* path,int flags=OpenExisting,bool writeAccess=false){
@@ -39,7 +41,8 @@ int main(){
  assert(opened=="romfs:/world-residency/art/l2z2.p3d");
  assert(select("sdmc:/3ds/simpsons/ART\\l1_terra.P3D")==1 && lastLevel==1);
  assert(opened=="romfs:/world-residency/art/L1_TERRA.p3d");
- admitted=false;opened.clear();assert(!select(world)&&opened.empty());
+ admitted=0;opened.clear();assert(select(world)==MoreToDo&&opened.empty());
+ admitted=-1;assert(!select(world)&&opened.empty());
  assert(!select("sdmc:/3ds/simpsons/art/l2_TERRA.p3d")&&opened.empty());
  admitted=true;
  for(unsigned i=0;i<7;++i){const char* names[]={"L1_TERRA.p3d","l2_TERRA.p3d","l3_TERRA.p3d","L4_TERRA.p3d","l5_TERRA.p3d","l6_TERRA.p3d","L7_TERRA.p3d"};

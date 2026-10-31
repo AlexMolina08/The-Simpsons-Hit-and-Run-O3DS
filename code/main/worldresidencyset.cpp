@@ -59,23 +59,71 @@ static bool NativeBundle() {
     FILE* file=std::fopen(path,"rb");if(!file)file=std::fopen(old3dsNativeBundlePath(),"rb");
     return HashFile(file,old3dsNativeBundleBytes(),manifest->header+16);
 }
-static bool Admit(unsigned level) {
-    if(level<1 || level>7 || !__atomic_load_n(&g_old3dsResidencyRoot,__ATOMIC_ACQUIRE))return false;
-    unsigned expected=0;
-    if(!__atomic_compare_exchange_n(states+level-1,&expected,1u,false,__ATOMIC_ACQ_REL,__ATOMIC_ACQUIRE)){
-        while(expected==1){svcSleepThread(1000000);expected=__atomic_load_n(states+level-1,__ATOMIC_ACQUIRE);}
-        return expected==2;
-    }
-    bool valid=true;const char* failed="none";
-    // Validate every exterior file for this map before opening even its first
-    // prepared file. A failed level always resolves its entire original set.
-    for(const auto& asset:manifest->records)if(!std::strncmp(asset.path,"art/",4) && WorldResidencyAssets::Level(asset.path+4)==level){
-        if(!HashAsset(asset)){valid=false;failed=asset.path;break;}
-    }
+struct AdmissionJob {
+    unsigned busy=0,record=0,remaining=0;
+    FILE* file=nullptr;
+    AVSHA* hash=nullptr;
+    unsigned char* buffer=nullptr;
+};
+static AdmissionJob jobs[7];
+static constexpr unsigned AdmissionReadBytes=16384;
+struct AdmissionStepLock {
+    unsigned& busy;
+    ~AdmissionStepLock(){__atomic_store_n(&busy,0u,__ATOMIC_RELEASE);}
+};
+static int FinishAdmission(unsigned level,bool valid,const char* failed) {
+    AdmissionJob& job=jobs[level-1];
+    if(job.file)std::fclose(job.file);
+    std::free(job.buffer);av_free(job.hash);
+    job.file=nullptr;job.buffer=nullptr;job.hash=nullptr;
     __atomic_fetch_or(valid?&admitted:&rejected,1u<<(level-1),__ATOMIC_RELEASE);
     __atomic_store_n(states+level-1,valid?2u:3u,__ATOMIC_RELEASE);
     std::printf("WORLD_RESIDENCY_SET level=%u admitted=%u failed=%s original_fallback=%u\n",level,valid,failed,!valid);
-    return valid;
+    return valid?1:-1;
+}
+static int AdmitStep(unsigned level) {
+    if(level<1 || level>7 || !__atomic_load_n(&g_old3dsResidencyRoot,__ATOMIC_ACQUIRE))return -1;
+    unsigned state=__atomic_load_n(states+level-1,__ATOMIC_ACQUIRE);
+    if(state==2 || state==3)return state==2?1:-1;
+    AdmissionJob& job=jobs[level-1];
+    if(__atomic_exchange_n(&job.busy,1u,__ATOMIC_ACQUIRE))return 0;
+    AdmissionStepLock lock{job.busy};
+    state=__atomic_load_n(states+level-1,__ATOMIC_ACQUIRE);
+    if(state==2 || state==3)return state==2?1:-1;
+    __atomic_store_n(states+level-1,1u,__ATOMIC_RELEASE);
+    if(!job.hash){
+        job.hash=av_sha_alloc();job.buffer=static_cast<unsigned char*>(std::malloc(AdmissionReadBytes));
+        if(!job.hash || !job.buffer)return FinishAdmission(level,false,"allocation");
+    }
+    // Requeue the open between bounded reads so high-priority music requests
+    // can use the same drive worker. No prepared file opens before all hashes pass.
+    while(job.record<WorldResidencyAssets::ManifestCount){
+        const auto& asset=manifest->records[job.record];
+        if(std::strncmp(asset.path,"art/",4) || WorldResidencyAssets::Level(asset.path+4)!=level){++job.record;continue;}
+        if(!job.file){
+            char path[256];
+            if(!Path(asset.path,path) || av_sha_init(job.hash,256))return FinishAdmission(level,false,asset.path);
+            job.file=std::fopen(path,"rb");job.remaining=asset.bytes;
+            if(!job.file)return FinishAdmission(level,false,asset.path);
+        }
+        if(job.remaining){
+            const unsigned chunk=job.remaining<AdmissionReadBytes?job.remaining:AdmissionReadBytes;
+            if(std::fread(job.buffer,1,chunk,job.file)!=chunk)return FinishAdmission(level,false,asset.path);
+            av_sha_update(job.hash,job.buffer,chunk);job.remaining-=chunk;
+            if(job.remaining)return 0;
+        }
+        unsigned char actual[32];av_sha_final(job.hash,actual);
+        const bool valid=std::fgetc(job.file)==EOF && !std::ferror(job.file) && !std::memcmp(actual,asset.sha256,32);
+        std::fclose(job.file);job.file=nullptr;
+        if(!valid)return FinishAdmission(level,false,asset.path);
+        ++job.record;return 0;
+    }
+    return FinishAdmission(level,true,"none");
+}
+static bool Admit(unsigned level) {
+    int result;
+    while((result=AdmitStep(level))==0)svcSleepThread(1000000);
+    return result>0;
 }
 }
 bool Open() {
@@ -112,4 +160,5 @@ bool Allows(unsigned level){return level>=1 && level<=7 && (__atomic_load_n(&adm
 void Dump(FILE* file){std::fprintf(file,"WORLD_RESIDENCY_SET opened=%u published=%u admitted=%02x rejected=%02x whole_level_hash_before_open=1\n",opened,__atomic_load_n(&g_old3dsResidencyRoot,__ATOMIC_ACQUIRE)!=nullptr,__atomic_load_n(&admitted,__ATOMIC_ACQUIRE),__atomic_load_n(&rejected,__ATOMIC_ACQUIRE));}
 }
 extern "C" bool old3dsWorldResidencyAdmit(unsigned level){return WorldResidencySet::Admit(level);}
+extern "C" int old3dsWorldResidencyAdmitStep(unsigned level){return WorldResidencySet::AdmitStep(level);}
 #endif

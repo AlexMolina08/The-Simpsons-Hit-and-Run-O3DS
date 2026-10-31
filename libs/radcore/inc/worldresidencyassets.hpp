@@ -3,7 +3,12 @@
 #include <cstdint>
 #include <cstring>
 #ifdef SRR2_OLD3DS_WORLD_RESIDENCY
-extern "C" {extern const char* g_old3dsResidencyRoot;bool old3dsWorldResidencyAdmit(unsigned level);}
+extern "C" {
+extern const char* g_old3dsResidencyRoot;
+bool old3dsWorldResidencyAdmit(unsigned level);
+// Zero requeues a pending open; positive admits the complete level; negative rejects it.
+int old3dsWorldResidencyAdmitStep(unsigned level);
+}
 #endif
 // Canonical retail exterior files. R4 splits into A/B in levels 1 and 4.
 // Keep admission and read-only asset resolution on the same allowlist.

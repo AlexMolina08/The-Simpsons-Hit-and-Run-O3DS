@@ -488,6 +488,11 @@ radDrive::CompletionStatus FileOpenRequest::DoRequest( void )
             &m_pFile->m_Size
         );
 
+#if defined(RAD_3DS) && defined(SRR2_OLD3DS_WORLD_RESIDENCY)
+    // A pending admission must yield without opening an original archive entry.
+    if ( status == radDrive::MoreToDo ) return status;
+#endif
+
     if ( status == radDrive::Complete )
     {
         m_pFile->m_IsOpen = true;

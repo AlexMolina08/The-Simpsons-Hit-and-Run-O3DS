@@ -46,7 +46,11 @@ IRadSoundHalDataSource::State radSoundRsdFileDataSource::GetState( void )
 	            fileName,
 	            false,
 	            OpenExisting,
+#ifdef SRR2_OLD_3DS
+                m_StateInfo.m_InitializedInfo.m_HighPriority ? HighPriority : NormalPriority,
+#else
                 NormalPriority, // m_StateInfo.m_InitializedInfo.m_HighPriority ? HighPriority : NormalPriority,
+#endif
                 0,
                 RADMEMORY_ALLOC_TEMP,
                 radMemorySpace_Local );

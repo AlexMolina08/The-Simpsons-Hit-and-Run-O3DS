@@ -46,6 +46,8 @@ jobs:
         run: python3 tools/3ds/tests/movie_rendering.py
       - name: Music reads during map admission
         run: python3 tools/3ds/tests/residency_audio_gate.py
+      - name: Loading audio request scheduling
+        run: python3 tools/3ds/tests/loading_audio_queue.py
       - name: Newspaper entrance and asynchronous font readiness
         run: python3 tools/3ds/tests/loading_animation.py
       - name: Credits rendering and vertex exhaustion
