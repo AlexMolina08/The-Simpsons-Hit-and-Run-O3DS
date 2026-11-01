@@ -1,6 +1,6 @@
 # The Simpsons: Hit & Run for Nintendo 3DS
 
-A homebrew port for Nintendo 3DS and 2DS, including the original models. It also runs on New 3DS systems. You should own a copy of the original PC game.
+A homebrew port for Nintendo 3DS, 2DS and New 3DS systems. You should own a copy of the original PC game.
 
 ## Features
 
