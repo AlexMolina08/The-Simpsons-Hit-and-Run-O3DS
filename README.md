@@ -1,21 +1,20 @@
 # The Simpsons: Hit & Run for Nintendo 3DS
 
-A homebrew port for Nintendo 3DS and 2DS, including the original models. It also runs on New 3DS systems. You need your own PC copy of the game.
+A homebrew port for Nintendo 3DS and 2DS, including the original models. It also runs on New 3DS systems. You should own a copy of the original PC game.
 
-## v1.2.0
+## Features
 
-- **Smoother world loading:** exterior scenery stays in memory across all seven levels, greatly reducing missing roads and scenery during fast driving and late pop-in.
-- **Sharper presentation:** 800×240 Quality Mode on supported models, improved world lighting, character shading, vehicle reflections and distant landmarks.
-- **Enhanced stereoscopic 3D:** refined depth and camera transitions, with corrected fog and intro-video borders.
-- **Gameplay fixes:** safer mission restarts and level changes, more reliable mission-character visibility, stable parked cars and black vehicle-entry transitions.
-- **Improved menus:** refreshed handheld HUD artwork and a mission list that scrolls with the controller or touch screen.
-- **Local browser builds:** create a CIA from your PC copy, with English, French and Spanish support.
+- **Major graphical improvements:** enhanced lighting, character shading, car reflections and HUD artwork.
+- **800×240 Quality Mode** on supported models.
+- **Smoother performance:** 30 FPS target on original 3DS/2DS; 60 FPS target on New 3DS/New 2DS XL.
+- **Refined stereoscopic 3D:** improved depth and steadier camera transitions.
+- **World-loading fix:** preloaded exterior scenery across all seven levels prevents late map loading during fast driving. Initial loading may take longer.
+- **More languages:** full Spanish 🇪🇸 and French 🇫🇷 text and dubbed voices, alongside English.
+- **Bug fixes and polish:** mission restarts, level transitions, scrollable mission selection, intro videos and parked-car stability.
 
-[Release notes](docs/releases/v1.2.0.md) · [v1.2.0 release](https://github.com/AlexMolina08/The-Simpsons-Hit-and-Run-O3DS/releases/tag/v1.2.0)
+800×240 is wide output in 2D; stereo uses 400×240 per eye. Original 2DS remains at 400×240. Frame rates vary by scene; some distance culling and dynamic-object pop-in remain. See [graphics modes](docs/GRAPHICS_MODES.md).
 
-Quality Mode uses 800×240 wide output in 2D on supported models; the original 2DS remains at 400×240. Stereo uses 400×240 per eye. Some distance culling and dynamic-object pop-in remain; performance varies by scene. See [graphics modes](docs/GRAPHICS_MODES.md).
-
-## Experimental browser builder
+## 🍩 browser builder
 
 [Open the browser builder](https://alexmolina08.github.io/The-Simpsons-Hit-and-Run-O3DS/) to create an installable CIA from your PC copy:
 
@@ -23,7 +22,7 @@ Quality Mode uses 800×240 wide output in 2D on supported models; the original 2
 2. If your copy includes several languages, choose the one you want.
 3. Select **Build CIA**, then **Save CIA** when it finishes.
 
-The builder is experimental. It detects English, French and Spanish copies. Your game files stay on your device. Allow at least **8 GB** of free space and keep the tab open while it works.
+The builder detects English, French and Spanish copies. Your game files stay on your device. Allow at least **8 GB** of free space and keep the tab open while it works.
 
 Developers can find setup instructions and validation details in [browser-builder/README.md](browser-builder/README.md).
 
@@ -72,4 +71,4 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for builds, tests and bug reports. Retail
 
 ## Credits
 
-The original game was developed by Radical Entertainment. This port builds on [x2apic's New 3DS port](https://github.com/x2apic/The-Simpsons-Hit-and-Run-N3DS) and [ZenoArrows' Switch and PS Vita port](https://github.com/ZenoArrows/The-Simpsons-Hit-and-Run). Old 3DS work is maintained by [AlexMolina08](https://github.com/AlexMolina08). Movie playback follows [REGTA-3DSPort-Complete](https://github.com/Epic0522/REGTA-3DSPort-Complete). Built with devkitPro, libctru and Citro3D.
+The original game was developed by Radical Entertainment. This port builds on [x2apic's New 3DS port](https://github.com/x2apic/The-Simpsons-Hit-and-Run-N3DS) and [ZenoArrows' Switch and PS Vita port](https://github.com/ZenoArrows/The-Simpsons-Hit-and-Run). This version is maintained by [AlexMolina08](https://github.com/AlexMolina08). Movie playback follows [REGTA-3DSPort-Complete](https://github.com/Epic0522/REGTA-3DSPort-Complete). Built with devkitPro, libctru and Citro3D.

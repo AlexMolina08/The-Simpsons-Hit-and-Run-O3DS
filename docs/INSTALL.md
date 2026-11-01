@@ -7,7 +7,7 @@ The same CIA supports all models. You need a console with custom firmware and FB
 - **Have created your CIA?** Follow [Install your locally created CIA](#install-your-locally-created-cia).
 - **Have the PC game folder or a PC disc ISO?** Follow [Build from your own PC copy](#build-from-your-own-pc-copy).
 
-Use the experimental [browser builder](https://alexmolina08.github.io/The-Simpsons-Hit-and-Run-O3DS/)
+Use the [browser builder](https://alexmolina08.github.io/The-Simpsons-Hit-and-Run-O3DS/)
 to create a CIA locally from your own PC copy. It needs no desktop tools or game
 uploads. English, French and Spanish are supported when present in your copy.
 
@@ -83,7 +83,7 @@ Your computer backup provides a recovery copy.
 The builder detects English, French and Spanish copies and offers a language choice
 when the selected copy includes more than one. Supported images are read locally;
 installer programs are never executed. If an image is unsupported, select its
-complete installed PC folder. Physical-console language checks are still in progress.
+complete installed PC folder.
 
 **Phones:** use an ISO when the browser cannot select a folder. iPhone and Android
 end-to-end builds remain experimental until physical-device testing is complete.
