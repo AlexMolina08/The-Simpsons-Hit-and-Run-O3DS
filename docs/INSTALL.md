@@ -7,21 +7,20 @@ The same CIA supports all models. You need a console with custom firmware and FB
 - **Have created your CIA?** Follow [Install your locally created CIA](#install-your-locally-created-cia).
 - **Have the PC game folder or a PC disc ISO?** Follow [Build from your own PC copy](#build-from-your-own-pc-copy).
 
-Complete game-data installers are not provided for download. The v1.2 browser
-builder is under validation; its final public host will be GitHub Pages. The
-public link will be added to the project README after testing and publication.
-It creates a CIA locally from your PC copy without desktop tools or game uploads.
+Use the experimental [browser builder](https://alexmolina08.github.io/The-Simpsons-Hit-and-Run-O3DS/)
+to create a CIA locally from your own PC copy. It needs no desktop tools or game
+uploads. English, French and Spanish are supported when present in your copy.
 
 ## Install your locally created CIA
 
 1. Turn off the console and connect its SD card to your computer.
-2. Create **Simpsons-Hit-and-Run-3DS-v1.2.cia** from your PC copy using
+2. Create your CIA from your PC copy using
    [Build from your own PC copy](#build-from-your-own-pc-copy).
 3. Make sure the SD card has at least **4 GB free before copying**. It needs room
    for both the locally created CIA and the installed game. Copy the CIA into `cias`
    at the root of the card. Create that folder if necessary.
 4. Safely eject the card, put it back in the console and turn the console on.
-5. Open **FBI → SD → cias → Simpsons-Hit-and-Run-3DS-v1.2.cia → Install CIA**.
+5. Open **FBI → SD → cias**, select your CIA and choose **Install CIA**.
    Wait until FBI confirms installation has finished.
 6. Exit FBI and launch **The Simpsons: Hit & Run** from the HOME Menu.
 7. After checking the game works, you may delete the installer from `sd:/cias/`.
@@ -42,8 +41,9 @@ files or replace your save folder.
 2. Copy the whole **`3ds/simpsons` folder from your SD card to your computer** as a
    backup. It holds `Save1`–`Save4` and `srr2_settings.ini` when present. Keep this
    backup outside the SD card. Also keep `3ds/dspfirm.cdc` on the card.
-3. Create the new version's CIA from your own PC copy, then copy it to `sd:/cias/`. Keep at least **4 GB free before copying** to allow room
-   for the installer and installation work.
+3. Create the new version's CIA from your own PC copy, then copy it to `sd:/cias/`.
+   Keep at least **4 GB free before copying** to allow room for the installer and
+   installation work.
 4. Put the SD card back in the console. Open **FBI → SD → cias**, select the new
    CIA and choose **Install CIA**. If FBI asks to replace the existing title,
    confirm the replacement. Wait for the success message.
@@ -65,7 +65,7 @@ Your computer backup provides a recovery copy.
 
 ## Build from your own PC copy
 
-1. Once published, open the browser builder using the link in the project README
+1. Open the [browser builder](https://alexmolina08.github.io/The-Simpsons-Hit-and-Run-O3DS/)
    in a current Chrome, Edge or Safari browser. Allow at least **8 GB free** for
    temporary files. Keep the page open and the device awake during the build.
 2. Choose your **PC ISO** or **complete installed PC game folder**. The folder
@@ -76,8 +76,8 @@ Your computer backup provides a recovery copy.
    character detail, HUD artwork, lighting across all seven maps, distant
    landmarks, audio and complete cinematics, then packages the frozen v1.2 game.
 4. Select **Save CIA** and wait for the save or download to finish. You can also
-   save a build report. Keep the completed installer private because it contains
-   data from your PC copy.
+   save a build report. The completed installer contains prepared data from your
+   PC copy.
 5. Follow [Install your locally created CIA](#install-your-locally-created-cia).
 
 The builder detects English, French and Spanish copies and offers a language choice

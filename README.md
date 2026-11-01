@@ -2,7 +2,20 @@
 
 A homebrew port for Nintendo 3DS and 2DS, including the original models. It also runs on New 3DS systems. You need your own PC copy of the game.
 
-## Browser builder
+## v1.2.0
+
+- **Smoother world loading:** exterior scenery stays in memory across all seven levels, greatly reducing missing roads and scenery during fast driving and late pop-in.
+- **Sharper presentation:** 800×240 Quality Mode on supported models, improved world lighting, character shading, vehicle reflections and distant landmarks.
+- **Enhanced stereoscopic 3D:** refined depth and camera transitions, with corrected fog and intro-video borders.
+- **Gameplay fixes:** safer mission restarts and level changes, more reliable mission-character visibility, stable parked cars and black vehicle-entry transitions.
+- **Improved menus:** refreshed handheld HUD artwork and a mission list that scrolls with the controller or touch screen.
+- **Local browser builds:** create a CIA from your PC copy, with English, French and Spanish support.
+
+[Release notes](docs/releases/v1.2.0.md) · [v1.2.0 release](https://github.com/AlexMolina08/The-Simpsons-Hit-and-Run-O3DS/releases/tag/v1.2.0)
+
+Quality Mode uses 800×240 wide output in 2D on supported models; the original 2DS remains at 400×240. Stereo uses 400×240 per eye. Some distance culling and dynamic-object pop-in remain; performance varies by scene. See [graphics modes](docs/GRAPHICS_MODES.md).
+
+## Experimental browser builder
 
 [Open the browser builder](https://alexmolina08.github.io/The-Simpsons-Hit-and-Run-O3DS/) to create an installable CIA from your PC copy:
 
@@ -10,9 +23,9 @@ A homebrew port for Nintendo 3DS and 2DS, including the original models. It also
 2. If your copy includes several languages, choose the one you want.
 3. Select **Build CIA**, then **Save CIA** when it finishes.
 
-The builder detects English, French and Spanish copies. Your game files stay on your device. Allow at least **8 GB** of free space and keep the tab open while it works.
+The builder is experimental. It detects English, French and Spanish copies. Your game files stay on your device. Allow at least **8 GB** of free space and keep the tab open while it works.
 
-French and Spanish builds are still being validated on hardware. Developers can find setup instructions in [browser-builder/README.md](browser-builder/README.md).
+Developers can find setup instructions and validation details in [browser-builder/README.md](browser-builder/README.md).
 
 ## Screenshots
 
@@ -55,7 +68,7 @@ Performance varies by scene; demanding areas can run below 30 FPS on original ha
 
 ## Development
 
-See [CONTRIBUTING.md](CONTRIBUTING.md) for builds, tests and bug reports. Retail game data, DSP firmware and completed installers are not included in this repository.
+See [CONTRIBUTING.md](CONTRIBUTING.md) for builds, tests and bug reports. Retail game data, DSP firmware and completed installers are not included in the source tree.
 
 ## Credits
 
